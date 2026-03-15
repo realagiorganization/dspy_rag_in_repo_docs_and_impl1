@@ -1,0 +1,38 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from .azure import write_deployment_manifest
+from .mcp import discover_mcp_servers
+from .workflow import ask_repository
+
+
+def utility_summary(root: Path) -> str:
+    lines = [
+        "Repository utility surfaces:",
+        "- ask: answer repository-grounded questions",
+        "- discover-mcp: inspect repo-local MCP candidates",
+        "- azure-manifest: write Azure deployment metadata",
+        "- smoke-test: validate the core workflow surfaces",
+        f"- root: {root}",
+    ]
+    return "\n".join(lines)
+
+
+def run_smoke_test(root: Path) -> str:
+    answer = ask_repository("What does this repository research?", root=root)
+    mcp_candidates = discover_mcp_servers(root)
+    manifest_path = write_deployment_manifest(
+        root=root,
+        model_id="sample-ft-model",
+        deployment_name="repo-rag-smoke",
+        endpoint="https://example.services.ai.azure.com/models",
+    )
+    payload = {
+        "answer_contains_repository": "repository" in answer.answer.lower(),
+        "mcp_candidate_count": len(mcp_candidates),
+        "manifest_path": str(manifest_path.relative_to(root)),
+    }
+    return json.dumps(payload, indent=2)
+
