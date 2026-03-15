@@ -35,8 +35,3 @@ jobs:
         env:
           PYTHONPATH: src
         run: python -m repo_rag_lab.cli smoke-test
-
-      - name: Canary failure
-        run: |
-          echo "intentional failure to verify GitHub Actions red-state detection"
-          exit 1
