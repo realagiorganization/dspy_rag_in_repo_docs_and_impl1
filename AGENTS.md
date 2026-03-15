@@ -18,6 +18,7 @@ Agents working in this repository should prefer repository-local utilities over 
 4. If adding a new utility, expose it through both the Python CLI and `Makefile` when practical.
 5. Prefer tests that validate user-facing behavior of the utility, not only internal helper functions.
 6. After every push, inspect GitHub Actions with `gh`, then write a log file into `samples/logs/` summarizing the latest run statuses.
+7. If a permission-gated action is interrupted or blocked, explicitly offer the user the option to make the permission permanent in Codex settings for their user or for this repository before retrying.
 
 ## Validation Expectations
 
