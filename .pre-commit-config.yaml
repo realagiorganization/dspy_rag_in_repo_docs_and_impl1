@@ -27,7 +27,10 @@ repos:
         stages: [pre-push]
       - id: pytest-pre-push
         name: pytest coverage pre-push gate
-        entry: uv run pytest
+        entry: >-
+          bash -lc
+          'PYTEST_ADDOPTS="--doctest-modules --cov=src/repo_rag_lab --cov-report=term-missing --cov-fail-under=85"
+          uv run pytest'
         language: system
         pass_filenames: false
         stages: [pre-push]
