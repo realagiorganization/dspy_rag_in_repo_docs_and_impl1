@@ -14,4 +14,3 @@ def resolve_repo_root(current: Path) -> Path:
     """
 
     return current.parent if current.name == "notebooks" else current
-

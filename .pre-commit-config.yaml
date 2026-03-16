@@ -1,0 +1,39 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check-pre-commit
+        name: ruff pre-commit gate
+        entry: uv run ruff check src tests
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: ruff-format-pre-commit
+        name: ruff format pre-commit gate
+        entry: uv run ruff format --check src tests
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: mypy-pre-push
+        name: mypy pre-push gate
+        entry: uv run mypy src tests
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+      - id: basedpyright-pre-push
+        name: basedpyright pre-push gate
+        entry: uv run basedpyright
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+      - id: pytest-pre-push
+        name: pytest coverage pre-push gate
+        entry: uv run pytest
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+      - id: verify-surfaces-pre-push
+        name: repository surface verification pre-push gate
+        entry: uv run repo-rag verify-surfaces
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

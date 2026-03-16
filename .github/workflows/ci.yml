@@ -1,0 +1,167 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  python:
+    name: Python Quality, Tests, And Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.10"
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.11
+
+      - name: Sync environment
+        run: uv sync --frozen --extra azure
+
+      - name: Compile sources
+        run: uv run python -m compileall src tests
+
+      - name: Check Python formatting
+        run: uv run ruff format --check src tests
+
+      - name: Run Ruff
+        run: uv run ruff check src tests
+
+      - name: Lint notebook code cells
+        run: uv run nbqa ruff notebooks
+
+      - name: Run mypy
+        run: uv run mypy src tests
+
+      - name: Run basedpyright
+        run: uv run basedpyright
+
+      - name: Verify repository surfaces
+        run: uv run repo-rag verify-surfaces
+
+      - name: Run radon
+        run: uv run radon cc src/repo_rag_lab -s -n B
+
+      - name: Run coverage
+        run: make coverage
+
+      - name: Run smoke test
+        run: uv run repo-rag smoke-test
+
+      - name: Build wheel and source distribution
+        run: uv build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-dist
+          path: dist/*
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+  content:
+    name: Content And Metadata Gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.10"
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.11
+
+      - name: Sync environment
+        run: uv sync --frozen --extra azure
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Cache Node tool downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: >-
+            ${{ runner.os }}-npm-tools-${{ hashFiles('.github/workflows/ci.yml',
+            'tools/markdownlint-cli2.yaml', 'tools/taplo.toml', 'tools/gherkin-lintrc.json') }}
+
+      - name: Lint Markdown
+        run: npx --yes markdownlint-cli2@0.18.1 --config tools/markdownlint-cli2.yaml
+
+      - name: Check formatting for docs and metadata
+        run: >-
+          npx --yes prettier@3.6.2 --check README.md AGENTS.md AGENTS.md.d/**/*.md
+          docs/**/*.md documentation/**/*.md samples/**/*.md .github/workflows/**/*.yml
+          data/**/*.yaml samples/**/*.yaml
+
+      - name: Lint YAML
+        run: uv run yamllint .github/workflows data/questions samples
+
+      - name: Check TOML formatting
+        run: >-
+          npx --yes @taplo/cli@0.7.0 format --config tools/taplo.toml --check
+          pyproject.toml rust-cli/Cargo.toml
+
+      - name: Lint Gherkin
+        run: >-
+          npx --yes gherkin-lint@4.2.4 -c tools/gherkin-lintrc.json
+          tests/features/**/*.feature
+
+  rust-wrapper:
+    name: Rust Wrapper
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.10"
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.11
+
+      - name: Sync environment
+        run: uv sync --frozen --extra azure
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path rust-cli/Cargo.toml --check
+
+      - name: Run Clippy
+        run: cargo clippy --manifest-path rust-cli/Cargo.toml --all-targets -- -D warnings
+
+      - name: Build Rust wrapper
+        run: cargo build --manifest-path rust-cli/Cargo.toml
+
+      - name: Run Rust wrapper against packaged workflow
+        run: >-
+          cargo run --manifest-path rust-cli/Cargo.toml -- ask --question
+          "What does this repository research?"

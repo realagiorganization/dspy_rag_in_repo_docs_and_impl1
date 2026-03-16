@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .azure import write_deployment_manifest
 from .mcp import discover_mcp_servers
+from .verification import verify_repository_surfaces
 from .workflow import ask_repository
 
 
@@ -15,6 +16,7 @@ def utility_summary(root: Path) -> str:
         "- discover-mcp: inspect repo-local MCP candidates",
         "- azure-manifest: write Azure deployment metadata",
         "- smoke-test: validate the core workflow surfaces",
+        "- verify-surfaces: validate notebooks and Makefile verification surfaces",
         f"- root: {root}",
     ]
     return "\n".join(lines)
@@ -36,3 +38,6 @@ def run_smoke_test(root: Path) -> str:
     }
     return json.dumps(payload, indent=2)
 
+
+def run_surface_verification(root: Path) -> str:
+    return json.dumps(verify_repository_surfaces(root), indent=2)

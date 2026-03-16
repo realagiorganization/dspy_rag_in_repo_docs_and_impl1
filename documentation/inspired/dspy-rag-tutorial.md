@@ -29,4 +29,3 @@ The tutorial presents a compact DSPy RAG pipeline over a factual QA dataset. The
 - Replace the tutorial dataset with repository-grounded questions.
 - Upgrade the simple lexical retriever to a vector or MCP-backed retriever when repo-local services exist.
 - Add DSPy optimizer experiments once the corpus and evaluation set are credible.
-

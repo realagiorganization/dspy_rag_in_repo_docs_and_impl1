@@ -7,10 +7,9 @@ fn main() -> ExitCode {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let repo_root = manifest_dir.parent().expect("repo root");
 
-    let status = Command::new("python3")
-        .env("PYTHONPATH", repo_root.join("src"))
-        .arg("-m")
-        .arg("repo_rag_lab.cli")
+    let status = Command::new("uv")
+        .arg("run")
+        .arg("repo-rag")
         .args(args)
         .current_dir(repo_root)
         .status();
@@ -19,7 +18,7 @@ fn main() -> ExitCode {
         Ok(exit_status) if exit_status.success() => ExitCode::SUCCESS,
         Ok(exit_status) => ExitCode::from(exit_status.code().unwrap_or(1) as u8),
         Err(error) => {
-            eprintln!("failed to execute python workflow: {error}");
+            eprintln!("failed to execute uv-managed workflow: {error}");
             ExitCode::from(1)
         }
     }

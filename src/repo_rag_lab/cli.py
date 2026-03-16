@@ -6,7 +6,7 @@ from pathlib import Path
 from .azure import write_deployment_manifest
 from .dspy_workflow import RepositoryRAG
 from .mcp import discover_mcp_servers, dump_candidates
-from .utilities import run_smoke_test, utility_summary
+from .utilities import run_smoke_test, run_surface_verification, utility_summary
 from .workflow import ask_repository
 
 
@@ -33,6 +33,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     smoke_parser = subparsers.add_parser("smoke-test")
     smoke_parser.add_argument("--root", default=".")
+
+    verify_parser = subparsers.add_parser("verify-surfaces")
+    verify_parser.add_argument("--root", default=".")
     return parser
 
 
@@ -72,6 +75,11 @@ def main() -> int:
     if args.command == "smoke-test":
         print(run_smoke_test(root))
         return 0
+
+    if args.command == "verify-surfaces":
+        payload = run_surface_verification(root)
+        print(payload)
+        return 0 if '"issue_count": 0' in payload else 1
 
     parser.error(f"Unsupported command: {args.command}")
     return 2

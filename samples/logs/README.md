@@ -7,4 +7,4 @@ Expected workflow:
 1. Push commits to GitHub.
 2. Inspect runs with `gh run list`.
 3. Save selected `gh run view` output in a timestamped file here.
-
+4. Note whether the `CI` and `Publish` workflows passed for the pushed revision.

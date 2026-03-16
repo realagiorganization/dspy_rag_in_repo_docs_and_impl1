@@ -64,9 +64,7 @@ def batch_training_examples(
     [2, 1]
     """
 
-    return [
-        examples[index : index + batch_size] for index in range(0, len(examples), batch_size)
-    ]
+    return [examples[index : index + batch_size] for index in range(0, len(examples), batch_size)]
 
 
 def summarize_training_examples(examples: list[TrainingExample]) -> dict[str, Any]:

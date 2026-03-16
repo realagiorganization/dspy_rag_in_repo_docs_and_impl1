@@ -22,12 +22,15 @@ Additional standing instructions live in `AGENTS.md.d/*.md`. Agents should read 
 6. After every push, inspect GitHub Actions with `gh`, then write a log file into `samples/logs/` summarizing the latest run statuses.
 7. If a permission-gated action is interrupted or blocked, explicitly offer the user the option to make the permission permanent in Codex settings for their user or for this repository before retrying.
 8. Training and sample-population notebook logic should live in modular Python helpers under `src/` and be covered by doctests or normal pytest tests.
+9. Use the repository-managed `pre-commit` hooks; lightweight checks belong on `pre-commit`, while heavier checks belong on `pre-push`.
 
 ## Validation Expectations
 
 - For Python changes, run `python3 -m compileall src tests`.
 - For utility changes, run `PYTHONPATH=src python3 -m pytest tests/test_utilities.py tests/test_repository_rag_bdd.py`.
 - For quality-sensitive changes, run `make quality` from the project venv.
+- For coverage-specific checks, run `make coverage`.
+- After syncing the environment, run `make hooks-install` so the managed hook policy is active locally.
 - If `cargo` exists, also run `cargo build --manifest-path rust-cli/Cargo.toml`.
 - After pushing, run `gh run list --limit 10` and store the relevant run details in `samples/logs/`.
 

@@ -61,8 +61,7 @@ def group_population_candidates(
     """
 
     return [
-        candidates[index : index + batch_size]
-        for index in range(0, len(candidates), batch_size)
+        candidates[index : index + batch_size] for index in range(0, len(candidates), batch_size)
     ]
 
 

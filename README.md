@@ -1,9 +1,8 @@
 # DSPy RAG In-Repo Research Lab
 
-[![Python CI](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/python-ci.yml/badge.svg)](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/python-ci.yml)
-[![Rust Wrapper CI](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/rust-wrapper-ci.yml/badge.svg)](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/rust-wrapper-ci.yml)
-[![Quality Gates](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/quality-gates.yml/badge.svg)](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/quality-gates.yml)
-[![Coverage](https://img.shields.io/badge/coverage-93%25-brightgreen)](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/python-ci.yml)
+[![CI](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/ci.yml/badge.svg)](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/ci.yml)
+[![Publish](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/publish.yml/badge.svg)](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/publish.yml)
+[![Coverage](https://img.shields.io/badge/coverage-94.12%25-brightgreen)](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/ci.yml)
 
 This repository is a scaffold for researching how agents can perform Retrieval-Augmented Generation (RAG) over the repository itself while reusing MCP servers found in the repository, its submodules, or its Python packages.
 
@@ -47,9 +46,11 @@ make ask QUESTION="What does this repository research?"
 - Python CLI with DSPy: `uv run repo-rag ask --question "..." --use-dspy`
 - Utility summary: `uv run repo-rag utility-summary`
 - Smoke test: `uv run repo-rag smoke-test`
+- Surface verification: `uv run repo-rag verify-surfaces`
 - Make: `make ask QUESTION="..."`
 - Make utility summary: `make utility-summary`
 - Make smoke test: `make smoke-test`
+- Make surface verification: `make verify-surfaces`
 - Rust CLI: `uv run cargo run --manifest-path rust-cli/Cargo.toml -- ask --question "..."`
 - Notebook: `notebooks/01_repo_rag_research.ipynb`
 - Training notebook: `notebooks/03_dspy_training_lab.ipynb`
@@ -95,10 +96,29 @@ This writes a deployment manifest to `artifacts/azure/`.
 - `make sync`: install the locked dev environment with `uv`.
 - `make lock`: refresh `uv.lock`.
 - `make fmt`: format Python sources with Ruff.
-- `make lint`: Ruff linting.
-- `make typecheck`: mypy static analysis.
+- `make lint-python`: Ruff formatting and linting for Python modules and notebook code cells.
+- `make lint`: run the Python lint gates.
+- `make typecheck`: mypy and basedpyright static analysis.
+- `make verify-surfaces`: notebook structure and Makefile verification.
 - `make complexity`: radon complexity threshold check.
 - `make test`: pytest, doctests, and coverage reporting.
-- `make quality`: run the main Python quality stack end to end.
+- `make coverage`: run pytest coverage and print the coverage summary.
+- `make coverage-html`: generate an HTML coverage report in `htmlcov/`.
+- `make rust-quality`: Rust formatting, clippy, build, and wrapper execution.
+- `make quality`: run the main repository quality stack end to end.
 - `make build`: build wheel and sdist with `uv build`.
 - `make publish`: publish artifacts with `uv publish`.
+
+## Git Hooks
+
+The repository uses `pre-commit` as the managed Git hook system.
+
+- `make hooks-install`: install repository-managed `pre-commit` and `pre-push` hooks.
+- `make hooks-run`: execute all managed hooks manually.
+
+Hook split:
+
+- `pre-commit`: Ruff lint and formatting checks.
+- `pre-push`: mypy, pytest with coverage, and repository-surface verification.
+
+This keeps fast feedback on commit and heavier acceptance gates on push, which fits normal Git flow better than forcing the whole stack into every commit.
