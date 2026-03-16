@@ -1,39 +1,51 @@
-PYTHON ?= python3
-VENV ?= .venv
-PIP := $(VENV)/bin/pip
-PYTHON_BIN := $(VENV)/bin/python
+UV ?= uv
 QUESTION ?= What does this repository research?
 MODEL_ID ?= sample-ft-model
 DEPLOYMENT_NAME ?= repo-rag-ft
 AZURE_ENDPOINT ?= https://example.services.ai.azure.com/models
 
-.PHONY: setup ask discover-mcp utility-summary smoke-test notebook bdd rust-cli-build rust-cli-run azure-manifest fmt test
+.PHONY: setup sync lock ask discover-mcp utility-summary smoke-test notebook bdd rust-cli-build rust-cli-run azure-manifest fmt test lint typecheck complexity quality build publish
 
 setup:
-	$(PYTHON) -m venv $(VENV)
-	$(PIP) install --upgrade pip
-	$(PIP) install -e .[dev]
+	$(UV) sync --extra azure
 
-ask:
-	$(PYTHON_BIN) -m repo_rag_lab.cli ask --question "$(QUESTION)"
+sync:
+	$(UV) sync --extra azure
 
-discover-mcp:
-	$(PYTHON_BIN) -m repo_rag_lab.cli discover-mcp
+lock:
+	$(UV) lock
 
-utility-summary:
-	$(PYTHON_BIN) -m repo_rag_lab.cli utility-summary
+ask: sync
+	$(UV) run repo-rag ask --question "$(QUESTION)"
 
-smoke-test:
-	$(PYTHON_BIN) -m repo_rag_lab.cli smoke-test
+discover-mcp: sync
+	$(UV) run repo-rag discover-mcp
 
-notebook:
-	$(PYTHON_BIN) -m jupyter lab notebooks/01_repo_rag_research.ipynb
+utility-summary: sync
+	$(UV) run repo-rag utility-summary
 
-bdd:
-	$(PYTHON_BIN) -m pytest tests -k repository_rag
+smoke-test: sync
+	$(UV) run repo-rag smoke-test
 
-test:
-	$(PYTHON_BIN) -m pytest
+notebook: sync
+	$(UV) run jupyter lab notebooks/01_repo_rag_research.ipynb
+
+bdd: sync
+	$(UV) run pytest tests -k repository_rag
+
+test: sync
+	$(UV) run pytest
+
+lint: sync
+	RUFF_CACHE_DIR=.ruff_cache $(UV) run ruff check src tests
+
+typecheck: sync
+	MYPY_CACHE_DIR=.mypy_cache $(UV) run mypy src
+
+complexity: sync
+	$(UV) run radon cc src/repo_rag_lab -s -n B
+
+quality: lint typecheck complexity test
 
 rust-cli-build:
 	cargo build --manifest-path rust-cli/Cargo.toml
@@ -41,8 +53,17 @@ rust-cli-build:
 rust-cli-run:
 	cargo run --manifest-path rust-cli/Cargo.toml -- ask --question "$(QUESTION)"
 
-azure-manifest:
-	$(PYTHON_BIN) -m repo_rag_lab.cli azure-manifest --model-id "$(MODEL_ID)" --deployment-name "$(DEPLOYMENT_NAME)" --endpoint "$(AZURE_ENDPOINT)"
+azure-manifest: sync
+	$(UV) run repo-rag azure-manifest --model-id "$(MODEL_ID)" --deployment-name "$(DEPLOYMENT_NAME)" --endpoint "$(AZURE_ENDPOINT)"
 
-fmt:
-	$(PYTHON_BIN) -m compileall src tests
+fmt: sync
+	$(UV) run ruff format src tests
+
+build: sync
+	$(UV) build
+
+publish: build
+	$(UV) publish
+
+compile: sync
+	$(UV) run python -m compileall src tests

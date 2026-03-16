@@ -9,10 +9,12 @@ These utilities give agents and contributors stable entrypoints for common repos
 - `make utility-summary`: print a compact summary of the utility surfaces.
 - `make smoke-test`: run smoke coverage for utility behavior.
 - `make azure-manifest MODEL_ID=... DEPLOYMENT_NAME=...`: generate Azure deployment metadata.
+- `uv run repo-rag ...`: invoke the packaged CLI directly through Astral's locked environment.
+- `make build`: build publishable Python artifacts through `uv build`.
 
 ## Why These Utilities Exist
 
 - Keep notebook, CLI, and test workflows aligned.
 - Give agents a narrow set of preferred interfaces.
 - Make regression testing focus on behavior users actually invoke.
-
+- Keep local execution, CI, and publishing on the same Astral-managed toolchain.

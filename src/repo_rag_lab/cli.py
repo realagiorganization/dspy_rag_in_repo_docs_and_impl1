@@ -43,11 +43,11 @@ def main() -> int:
 
     if args.command == "ask":
         if args.use_dspy:
-            result = RepositoryRAG(root=root)(args.question)
-            print(result.answer)
+            dspy_result = RepositoryRAG(root=root)(args.question)
+            print(dspy_result.answer)
             return 0
-        result = ask_repository(question=args.question, root=root)
-        print(result.answer)
+        rag_result = ask_repository(question=args.question, root=root)
+        print(rag_result.answer)
         return 0
 
     if args.command == "discover-mcp":

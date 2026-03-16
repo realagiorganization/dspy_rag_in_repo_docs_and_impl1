@@ -5,7 +5,6 @@ from pathlib import Path
 
 from repo_rag_lab.utilities import run_smoke_test, utility_summary
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 

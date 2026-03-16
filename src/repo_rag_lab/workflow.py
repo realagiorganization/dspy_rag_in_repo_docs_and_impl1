@@ -25,7 +25,9 @@ def ask_repository(question: str, root: Path) -> RAGAnswer:
     return RAGAnswer(question=question, answer=answer, context=context, mcp_servers=mcp_servers)
 
 
-def synthesize_answer(question: str, context: list[Chunk], mcp_servers: list[dict[str, str]]) -> str:
+def synthesize_answer(
+    question: str, context: list[Chunk], mcp_servers: list[dict[str, str]]
+) -> str:
     if not context:
         return (
             f"No repository evidence matched the question: {question!r}. "
@@ -42,4 +44,3 @@ def synthesize_answer(question: str, context: list[Chunk], mcp_servers: list[dic
         for server in mcp_servers:
             lines.append(f"- {server['path']}: {server['hint']}")
     return "\n".join(lines)
-

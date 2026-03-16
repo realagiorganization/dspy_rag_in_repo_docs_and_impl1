@@ -12,11 +12,10 @@ class RepoSettings:
     artifacts_dir: Path
 
     @classmethod
-    def from_root(cls, root: Path) -> "RepoSettings":
+    def from_root(cls, root: Path) -> RepoSettings:
         return cls(
             root=root,
             docs_dir=root / "documentation",
             notebooks_dir=root / "notebooks",
             artifacts_dir=root / "artifacts",
         )
-

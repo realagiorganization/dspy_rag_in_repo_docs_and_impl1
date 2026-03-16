@@ -1,0 +1,13 @@
+- source: README.md
+  rationale: The root repository overview should always be part of the initial corpus.
+  priority: 1
+- source: documentation/inspired/dspy-rag-tutorial.md
+  rationale: Inspired implementation notes are high-signal retrieval context.
+  priority: 2
+- source: documentation/azure-deployment.md
+  rationale: Deployment-specific questions need Azure-oriented source material.
+  priority: 3
+- source: utilities/README.md
+  rationale: Agent workflow questions often depend on utility entrypoints.
+  priority: 4
+

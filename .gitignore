@@ -2,6 +2,7 @@
 __pycache__/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
 dist/
 build/
 *.egg-info/
@@ -11,4 +12,5 @@ target/
 .env
 artifacts/
 .coverage
-
+coverage.xml
+htmlcov/

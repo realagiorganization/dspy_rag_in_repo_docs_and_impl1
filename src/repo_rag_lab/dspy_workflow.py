@@ -13,10 +13,6 @@ except ImportError:  # pragma: no cover - optional runtime dependency during sca
     dspy = None
 
 
-class RepositoryAnswer(dspy.Signature if dspy else object):
-    """Answer a question using repository context."""
-
-
 @dataclass(frozen=True)
 class DSPyRunResult:
     question: str
@@ -40,6 +36,7 @@ class RepositoryRAG:
         self.root = root
         self.retriever = RepositoryRetriever(root=root, top_k=top_k)
         self.top_k = top_k
+        self.respond: Any | None = None
         if dspy:
             self.respond = dspy.ChainOfThought("context, question -> answer")
 
@@ -48,6 +45,7 @@ class RepositoryRAG:
         if dspy is None:
             answer = " ".join(context[:1]) if context else "No context available."
             return DSPyRunResult(question=question, context=context, answer=answer)
+        if self.respond is None:  # pragma: no cover
+            raise RuntimeError("DSPy responder was not initialized.")
         prediction: Any = self.respond(context=context, question=question)
         return DSPyRunResult(question=question, context=context, answer=prediction.answer)
-

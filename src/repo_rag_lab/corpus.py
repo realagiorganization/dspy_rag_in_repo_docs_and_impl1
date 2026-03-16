@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
-
 
 TEXT_SUFFIXES = {
     ".md",
@@ -54,4 +53,3 @@ def load_documents(root: Path) -> list[RepoDocument]:
             text = path.read_text(encoding="utf-8", errors="ignore")
         docs.append(RepoDocument(path=path, text=text))
     return docs
-

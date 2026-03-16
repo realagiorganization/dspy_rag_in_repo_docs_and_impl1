@@ -7,7 +7,6 @@ from pathlib import Path
 
 from .corpus import RepoDocument
 
-
 TOKEN_RE = re.compile(r"[A-Za-z0-9_]{2,}")
 
 
@@ -31,7 +30,11 @@ def chunk_documents(documents: list[RepoDocument], chunk_size: int = 1200) -> li
 
 def retrieve(question: str, chunks: list[Chunk], top_k: int = 4) -> list[Chunk]:
     scored = [(score(question, chunk.text), chunk) for chunk in chunks]
-    ranked = [chunk for value, chunk in sorted(scored, key=lambda item: item[0], reverse=True) if value > 0]
+    ranked = [
+        chunk
+        for value, chunk in sorted(scored, key=lambda item: item[0], reverse=True)
+        if value > 0
+    ]
     return ranked[:top_k]
 
 
@@ -45,4 +48,3 @@ def score(question: str, text: str) -> float:
     overlap = sum(1 for term in q_terms if term in t_terms)
     density = overlap / math.sqrt(len(t_terms))
     return overlap + density
-

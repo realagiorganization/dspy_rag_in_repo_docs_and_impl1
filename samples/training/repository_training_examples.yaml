@@ -1,0 +1,16 @@
+- question: What does this repository research?
+  expected_answer: It researches DSPy RAG workflows over repository content with MCP discovery and Azure deployment support.
+  tags:
+    - repo
+    - rag
+- question: Where are inspired implementation summaries stored?
+  expected_answer: They are stored under documentation/inspired.
+  tags:
+    - docs
+    - inspired
+- question: How should agents inspect utilities?
+  expected_answer: Agents should start with the repo-local make targets and Python CLI utility summary.
+  tags:
+    - agents
+    - utilities
+

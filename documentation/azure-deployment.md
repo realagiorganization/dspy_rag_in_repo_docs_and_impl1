@@ -10,7 +10,19 @@ This repository prepares for Azure deployment after a DSPy-backed model or promp
 
 ## Why The Repository Generates A Manifest
 
-The scaffold writes a small JSON manifest into `artifacts/azure/` so notebook experiments, CLI calls, and CI jobs can point at the same deployment metadata without hardcoding credentials.
+The scaffold writes a small JSON manifest into `artifacts/azure/` so notebook experiments, `uv run repo-rag ...` calls, and CI jobs can point at the same deployment metadata without hardcoding credentials.
+
+## Local Workflow
+
+Use the Astral-managed environment before generating deployment metadata:
+
+```bash
+uv sync --extra azure
+uv run repo-rag azure-manifest \
+  --model-id my-ft-model \
+  --deployment-name repo-rag-ft \
+  --endpoint https://example.services.ai.azure.com/models
+```
 
 ## Required Runtime Secrets
 

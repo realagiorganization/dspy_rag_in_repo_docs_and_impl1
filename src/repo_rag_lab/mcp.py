@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
@@ -27,7 +27,9 @@ def discover_mcp_servers(root: Path) -> list[MCPServerCandidate]:
                 continue
             hint = _hint_for(kind=kind, path=path)
             if hint:
-                candidates.append(MCPServerCandidate(kind=kind, path=str(path.relative_to(root)), hint=hint))
+                candidates.append(
+                    MCPServerCandidate(kind=kind, path=str(path.relative_to(root)), hint=hint)
+                )
     return _dedupe(candidates)
 
 
@@ -67,4 +69,3 @@ def _dedupe(candidates: list[MCPServerCandidate]) -> list[MCPServerCandidate]:
 
 def dump_candidates(candidates: list[MCPServerCandidate]) -> str:
     return json.dumps([asdict(candidate) for candidate in candidates], indent=2)
-

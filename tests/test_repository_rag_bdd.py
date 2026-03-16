@@ -6,7 +6,6 @@ from pathlib import Path
 from repo_rag_lab.mcp import discover_mcp_servers, dump_candidates
 from repo_rag_lab.workflow import ask_repository
 
-
 FEATURE_PATH = Path(__file__).resolve().parent / "features" / "repository_rag.feature"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
