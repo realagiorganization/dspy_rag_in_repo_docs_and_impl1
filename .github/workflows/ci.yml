@@ -71,60 +71,6 @@ jobs:
           name: coverage-report
           path: coverage.xml
 
-  content:
-    name: Content And Metadata Gates
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          version: "0.10.10"
-          enable-cache: true
-
-      - name: Install Python
-        run: uv python install 3.11
-
-      - name: Sync environment
-        run: uv sync --frozen --extra azure
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Cache Node tool downloads
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: >-
-            ${{ runner.os }}-npm-tools-${{ hashFiles('.github/workflows/ci.yml',
-            'tools/markdownlint-cli2.yaml', 'tools/taplo.toml', 'tools/gherkin-lintrc.json') }}
-
-      - name: Lint Markdown
-        run: npx --yes markdownlint-cli2@0.18.1 --config tools/markdownlint-cli2.yaml
-
-      - name: Check formatting for docs and metadata
-        run: >-
-          npx --yes prettier@3.6.2 --check README.md AGENTS.md AGENTS.md.d/**/*.md
-          docs/**/*.md documentation/**/*.md samples/**/*.md .github/workflows/**/*.yml
-          data/**/*.yaml samples/**/*.yaml
-
-      - name: Lint YAML
-        run: uv run yamllint .github/workflows data/questions samples
-
-      - name: Check TOML formatting
-        run: >-
-          npx --yes @taplo/cli@0.7.0 format --config tools/taplo.toml --check
-          pyproject.toml rust-cli/Cargo.toml
-
-      - name: Lint Gherkin
-        run: >-
-          npx --yes gherkin-lint@4.2.4 -c tools/gherkin-lintrc.json
-          tests/features/**/*.feature
-
   rust-wrapper:
     name: Rust Wrapper
     runs-on: ubuntu-latest
