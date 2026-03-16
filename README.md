@@ -115,6 +115,7 @@ The repository uses `pre-commit` as the managed Git hook system.
 
 - `make hooks-install`: install repository-managed `pre-commit` and `pre-push` hooks.
 - `make hooks-run`: execute all managed hooks manually.
+- `make hooks-run-push`: execute the managed `pre-push` gate manually.
 
 Hook split:
 
