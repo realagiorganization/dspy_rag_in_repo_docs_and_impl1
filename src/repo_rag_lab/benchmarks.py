@@ -28,6 +28,7 @@ BENCHMARK_EXCLUDED_PARTS = {
     "tests",
 }
 BENCHMARK_EXCLUDED_PATH_SNIPPETS = (
+    "README.DSPY.MD",
     "samples/population/",
     "samples/logs/",
     "samples/training/",
