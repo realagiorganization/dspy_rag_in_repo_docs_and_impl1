@@ -7,6 +7,7 @@ import pytest
 
 from repo_rag_lab.azure import write_deployment_manifest, write_tuning_run_metadata
 from repo_rag_lab.notebook_support import (
+    assert_contains_text,
     assert_minimum_pass_rate,
     assert_no_validation_issues,
     resolve_repo_root,
@@ -55,6 +56,15 @@ def test_write_notebook_run_log_creates_artifact(tmp_path: Path) -> None:
 
 
 def test_assert_helpers_raise_on_failure() -> None:
+    assert_contains_text(
+        "ask smoke-test utility-summary",
+        ["ask", "smoke-test"],
+        context="utility summary",
+    )
+
+    with pytest.raises(AssertionError, match="missing required content"):
+        assert_contains_text("utility-summary", ["ask", "smoke-test"], context="utility summary")
+
     with pytest.raises(AssertionError, match="training samples validation failed"):
         assert_no_validation_issues(["broken"], context="training samples")
 

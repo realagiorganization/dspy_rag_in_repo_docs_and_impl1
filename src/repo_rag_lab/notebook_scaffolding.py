@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -25,10 +26,35 @@ from .training_samples import (
     summarize_training_examples,
     validate_training_examples,
 )
+from .utilities import run_smoke_test, utility_summary
+from .workflow import ask_repository
 
 LOGGER = configure_notebook_logger("repo_rag_lab.notebook_scaffolding")
 TRAINING_SAMPLES_PATH = Path("samples/training/repository_training_examples.yaml")
 POPULATION_SAMPLES_PATH = Path("samples/population/repository_population_candidates.yaml")
+
+
+def build_research_playbook_context(root: Path) -> dict[str, Any]:
+    """Build the baseline research notebook context with smoke-test assertions."""
+
+    baseline_question = "What does this repository research?"
+    baseline_answer = ask_repository(baseline_question, root=root).answer
+    mcp_candidates = discover_mcp_servers(root)
+    smoke_test_summary: dict[str, Any] = json.loads(run_smoke_test(root))
+    payload = {
+        "root": str(root),
+        "utility_summary": utility_summary(root),
+        "mcp_candidates": [candidate.path for candidate in mcp_candidates],
+        "baseline_question": baseline_question,
+        "baseline_answer": baseline_answer,
+        "smoke_test": smoke_test_summary,
+    }
+    LOGGER.info(
+        "Built research playbook context with %s MCP candidates and smoke test manifest %s.",
+        len(mcp_candidates),
+        smoke_test_summary["manifest_path"],
+    )
+    return payload
 
 
 def build_agent_workflow_context(root: Path) -> dict[str, Any]:

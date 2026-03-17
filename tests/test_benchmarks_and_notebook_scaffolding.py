@@ -11,6 +11,7 @@ from repo_rag_lab.benchmarks import (
 from repo_rag_lab.notebook_scaffolding import (
     build_agent_workflow_context,
     build_population_lab_context,
+    build_research_playbook_context,
     build_training_lab_context,
 )
 from repo_rag_lab.training_samples import load_training_examples
@@ -76,3 +77,12 @@ def test_build_agent_workflow_context_reports_validation_and_benchmarks() -> Non
     assert payload["training_validation_issues"] == []
     assert payload["population_validation_issues"] == []
     assert payload["benchmark_summary"]["pass_rate"] == 1.0
+
+
+def test_build_research_playbook_context_reports_smoke_and_baseline_details() -> None:
+    payload = build_research_playbook_context(REPO_ROOT)
+    assert "ask" in payload["utility_summary"]
+    assert payload["baseline_question"] == "What does this repository research?"
+    assert "Question:" in payload["baseline_answer"]
+    assert payload["smoke_test"]["answer_contains_repository"] is True
+    assert payload["smoke_test"]["mcp_candidate_count"] == len(payload["mcp_candidates"])

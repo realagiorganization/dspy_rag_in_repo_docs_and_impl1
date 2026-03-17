@@ -50,6 +50,15 @@ def assert_no_validation_issues(issues: list[str], *, context: str) -> None:
         raise AssertionError(f"{context} validation failed: {joined}")
 
 
+def assert_contains_text(text: str, required_substrings: list[str], *, context: str) -> None:
+    """Fail fast when a notebook-facing string loses required content."""
+
+    missing = [substring for substring in required_substrings if substring not in text]
+    if missing:
+        joined = ", ".join(missing)
+        raise AssertionError(f"{context} is missing required content: {joined}")
+
+
 def assert_minimum_pass_rate(summary: dict[str, object], minimum_pass_rate: float = 1.0) -> None:
     """Fail fast in notebooks when retrieval assertions regress."""
 
