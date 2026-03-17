@@ -49,5 +49,5 @@ Absent or still not verified locally in this turn:
 
 ## Notes
 
-- The publication PDF and banner image are intended to be committed as Git LFS-managed assets so `README.md` can link to a stable PDF path.
+- The publication PDF and banner image are committed directly in the repository so `README.md` can link to a stable PDF path without depending on workflow artifacts.
 - The next push should trigger both the main `CI` workflow and the new `Publication PDF` workflow.
