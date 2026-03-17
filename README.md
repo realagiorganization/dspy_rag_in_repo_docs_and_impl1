@@ -55,13 +55,14 @@ make ask QUESTION="What does this repository research?"
 
 | Path | Role |
 | --- | --- |
-| `src/repo_rag_lab/` | Shared Python package for corpus loading, retrieval, MCP discovery, CLI commands, utilities, and verification helpers. |
-| `notebooks/` | Research playbooks that reuse package helpers instead of embedding workflow logic inline. |
+| `src/repo_rag_lab/` | Shared Python package for corpus loading, retrieval, MCP discovery, CLI commands, notebook scaffolds, utilities, and verification helpers. |
+| `notebooks/` | Research playbooks that reuse package helpers for validation, assertions, and logging instead of embedding workflow logic inline. |
 | `tests/` | Pytest suites, BDD-style checks, doctests, and surface verification tests. |
 | `samples/training/` | Starter question-answer pairs for DSPy-oriented experiments. |
 | `samples/population/` | Starter corpus-planning data for staged repository ingestion. |
 | `documentation/` | Supporting notes for Azure deployment and inspired external implementations. |
 | `samples/logs/` | Post-push GitHub Actions inspection logs captured with `gh`. |
+| `artifacts/` | Generated Azure manifests, tuning metadata, and notebook run logs. |
 | `rust-cli/` | Thin Rust wrapper that delegates to `uv run repo-rag`. |
 
 ## Verification And Quality
