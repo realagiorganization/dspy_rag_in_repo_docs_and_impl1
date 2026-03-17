@@ -1,125 +1,115 @@
-# DSPy RAG In-Repo Research Lab
+# Repository RAG Lab
 
 [![CI](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/ci.yml/badge.svg)](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/ci.yml)
 [![Publish](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/publish.yml/badge.svg)](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/publish.yml)
 [![Coverage](https://img.shields.io/badge/coverage-94.12%25-brightgreen)](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/ci.yml)
 
-This repository is a scaffold for researching how agents can perform Retrieval-Augmented Generation (RAG) over the repository itself while reusing MCP servers found in the repository, its submodules, or its Python packages.
+This repository is a `uv`-first research lab for repository-grounded Retrieval-Augmented
+Generation. Notebooks, the packaged Python CLI, `make` targets, tests, CI, and the Rust wrapper
+all share the same implementation so experiments and automation stay aligned.
 
-The build, packaging, and CI flow is standardized around Astral tooling:
+## What The Repository Covers
 
-- `uv` manages Python installation, dependency resolution, lockfiles, execution, builds, and publishing.
-- `uv_build` provides the package build backend.
-- `ruff` handles formatting and linting.
+The current scaffold focuses on three connected jobs:
 
-## Scope
+1. Explore in-repo RAG over repository files with a simple baseline retriever and an optional
+   DSPy-shaped flow.
+2. Discover MCP-related artifacts in the repository, submodules, or package manifests.
+3. Prepare Azure deployment manifests for tuned artifacts that are produced outside this repo.
 
-The scaffold covers three functional requirements:
+## Tooling Stance
 
-1. Notebook-first research for DSPy RAG over repository contents, with MCP server discovery hooks.
-2. The same workflows exposed through Python, `make`, a Rust CLI, and BDD tests with example RAG questions.
-3. A path to package tuning artifacts and deploy the tuned model behind an Azure inference endpoint.
+This repository is intentionally fully `uv`-managed.
 
-## Repository Layout
-
-- `notebooks/`: Jupyter notebooks for experiments and reproducible research.
-- `src/repo_rag_lab/`: Python package with corpus discovery, MCP discovery, retrieval, workflow, CLI, and Azure manifest helpers.
-- `rust-cli/`: Thin Rust entrypoint that delegates to the Python workflow.
-- `tests/`: BDD feature and step definitions for example repository questions.
-- `documentation/inspired/`: Cleaned and shortened summaries of external implementations that inform this scaffold.
-- `artifacts/`: Generated outputs such as Azure deployment manifests.
-- `samples/training/` and `samples/population/`: sample datasets that drive notebook experiments.
-- `samples/logs/`: Post-push GitHub Actions inspection logs captured with `gh`.
+- `uv` owns environment sync, locked execution, dependency resolution, builds, and publishing.
+- `uv_build` is the Python build backend.
+- `make` is a convenience layer over `uv run ...`.
+- Pixi is not part of the current toolchain because it would duplicate responsibilities already
+  covered by `uv`.
 
 ## Quick Start
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync --extra azure
+make hooks-install
 make quality
 make ask QUESTION="What does this repository research?"
 ```
 
-## Workflow Surfaces
+## Preferred Workflow Surfaces
 
-- Python CLI: `uv run repo-rag ask --question "..."`
-- Python CLI with DSPy: `uv run repo-rag ask --question "..." --use-dspy`
-- Utility summary: `uv run repo-rag utility-summary`
-- Smoke test: `uv run repo-rag smoke-test`
-- Surface verification: `uv run repo-rag verify-surfaces`
-- Make: `make ask QUESTION="..."`
-- Make utility summary: `make utility-summary`
-- Make smoke test: `make smoke-test`
-- Make surface verification: `make verify-surfaces`
-- Rust CLI: `uv run cargo run --manifest-path rust-cli/Cargo.toml -- ask --question "..."`
-- Notebook: `notebooks/01_repo_rag_research.ipynb`
-- Training notebook: `notebooks/03_dspy_training_lab.ipynb`
-- Sample population notebook: `notebooks/04_sample_population_lab.ipynb`
+| Surface | Preferred command | Purpose |
+| --- | --- | --- |
+| Utility overview | `make utility-summary` | Show the supported user-facing entrypoints. |
+| Direct CLI | `uv run repo-rag utility-summary` | Use the packaged CLI without going through `make`. |
+| Ask a repo question | `make ask QUESTION="..."` | Run the baseline repository-grounded RAG workflow. |
+| DSPy-shaped ask | `uv run repo-rag ask --question "..." --use-dspy` | Exercise the optional DSPy wrapper. |
+| MCP discovery | `make discover-mcp` | Inspect MCP-related repository artifacts. |
+| Smoke test | `make smoke-test` | Check answer generation, MCP discovery, and Azure manifest output together. |
+| Surface verification | `make verify-surfaces` | Enforce the Makefile and notebook contract. |
+| Notebook research | `make notebook` | Open the main notebook playbook in JupyterLab. |
+| Rust wrapper | `cargo run --manifest-path rust-cli/Cargo.toml -- ask --question "..."` | Run the same Python workflow through the Rust shim. |
 
-## Agent Guidance
+## Repository Map
 
-Repository-local agent instructions live in `AGENTS.md`. Agents should prefer the utility entrypoints above when they cover the task, then validate changes with the repository tests.
+| Path | Role |
+| --- | --- |
+| `src/repo_rag_lab/` | Shared Python package for corpus loading, retrieval, MCP discovery, CLI commands, utilities, and verification helpers. |
+| `notebooks/` | Research playbooks that reuse package helpers instead of embedding workflow logic inline. |
+| `tests/` | Pytest suites, BDD-style checks, doctests, and surface verification tests. |
+| `samples/training/` | Starter question-answer pairs for DSPy-oriented experiments. |
+| `samples/population/` | Starter corpus-planning data for staged repository ingestion. |
+| `documentation/` | Supporting notes for Azure deployment and inspired external implementations. |
+| `samples/logs/` | Post-push GitHub Actions inspection logs captured with `gh`. |
+| `rust-cli/` | Thin Rust wrapper that delegates to `uv run repo-rag`. |
 
-## Post-Push Verification
+## Verification And Quality
 
-After each push:
+The repository treats documentation, notebooks, utilities, and packaging as one workflow. The
+main verification entrypoints are:
 
-1. Inspect the latest GitHub Actions runs with `gh run list`.
-2. Capture the relevant `gh run view` details.
-3. Save the output under `samples/logs/`.
+- `make compile`
+- `make lint`
+- `make typecheck`
+- `make verify-surfaces`
+- `make test`
+- `make quality`
+- `make build`
 
-This repository treats that step as part of the normal push workflow rather than an optional follow-up.
+Git hooks are managed through `pre-commit`:
 
-## Packaging And Publishing
+- `make hooks-install`
+- `make hooks-run`
+- `make hooks-run-push`
 
-The repository is packaged as a standard Python project with a `src/` layout, a `repo-rag` console script, and an Astral-managed lockfile.
-
-```bash
-make build
-uv run repo-rag utility-summary
-```
-
-CI publishes wheels and source distributions from Git tags that start with `v`, using GitHub trusted publishing and `uv publish`.
+The pre-commit hook stays lightweight with Ruff checks. The pre-push hook runs the heavier
+acceptance gates: mypy, basedpyright, pytest with coverage, and repository-surface verification.
 
 ## Azure Deployment Path
 
-The code does not fine-tune a model by itself. It prepares artifacts and configuration needed to move a tuned model into Azure AI Foundry / Azure OpenAI deployment workflows:
+This repository does not fine-tune or deploy a model on its own. It writes deployment metadata
+that downstream Azure workflows can consume after a tuned artifact already exists.
 
 ```bash
 make azure-manifest MODEL_ID=my-ft-model DEPLOYMENT_NAME=repo-rag-ft
 ```
 
-This writes a deployment manifest to `artifacts/azure/`.
+The manifest lands in `artifacts/azure/` and records the deployment name, endpoint, and required
+runtime environment variables.
 
-## Quality Gates
+## Agent Guidance
 
-- `make sync`: install the locked dev environment with `uv`.
-- `make lock`: refresh `uv.lock`.
-- `make fmt`: format Python sources with Ruff.
-- `make lint-python`: Ruff formatting and linting for Python modules and notebook code cells.
-- `make lint`: run the Python lint gates.
-- `make typecheck`: mypy and basedpyright static analysis.
-- `make verify-surfaces`: notebook structure and Makefile verification.
-- `make complexity`: radon complexity threshold check.
-- `make test`: pytest, doctests, and coverage reporting.
-- `make coverage`: run pytest coverage and print the coverage summary.
-- `make coverage-html`: generate an HTML coverage report in `htmlcov/`.
-- `make rust-quality`: Rust formatting, clippy, build, and wrapper execution.
-- `make quality`: run the main repository quality stack end to end.
-- `make build`: build wheel and sdist with `uv build`.
-- `make publish`: publish artifacts with `uv publish`.
+Repository-local agent instructions live in `AGENTS.md`. Agents and contributors should start with
+named `make` targets or `uv run repo-rag ...` commands before inventing one-off workflows so
+notebooks, tests, CI, and automation stay aligned.
 
-## Git Hooks
+## Post-Push Workflow
 
-The repository uses `pre-commit` as the managed Git hook system.
+After every push:
 
-- `make hooks-install`: install repository-managed `pre-commit` and `pre-push` hooks.
-- `make hooks-run`: execute all managed hooks manually.
-- `make hooks-run-push`: execute the managed `pre-push` gate manually.
+1. Inspect recent runs with `gh run list --limit 10`.
+2. Capture the relevant `gh run view` details.
+3. Store the summary in `samples/logs/`.
 
-Hook split:
-
-- `pre-commit`: Ruff lint and formatting checks.
-- `pre-push`: mypy, pytest with coverage, and repository-surface verification.
-
-This keeps fast feedback on commit and heavier acceptance gates on push, which fits normal Git flow better than forcing the whole stack into every commit.
+That step is part of the repository contract, not optional cleanup.
