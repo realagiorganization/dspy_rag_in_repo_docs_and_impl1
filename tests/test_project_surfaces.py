@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tomllib
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from repo_rag_lab.notebook_support import (
     assert_contains_text,
     assert_minimum_pass_rate,
     assert_no_validation_issues,
+    configure_notebook_logger,
     resolve_repo_root,
     write_notebook_run_log,
 )
@@ -45,6 +47,21 @@ def test_resolve_repo_root_for_notebooks_dir() -> None:
     assert root == REPO_ROOT
 
 
+def test_resolve_repo_root_for_repo_root_is_identity() -> None:
+    assert resolve_repo_root(REPO_ROOT) == REPO_ROOT
+
+
+def test_configure_notebook_logger_reuses_existing_handler() -> None:
+    logger = configure_notebook_logger("repo_rag_lab.notebook.test_project_surfaces")
+    handler_count = len(logger.handlers)
+
+    same_logger = configure_notebook_logger("repo_rag_lab.notebook.test_project_surfaces")
+
+    assert same_logger is logger
+    assert len(same_logger.handlers) == handler_count
+    assert same_logger.propagate is False
+
+
 def test_write_notebook_run_log_creates_artifact(tmp_path: Path) -> None:
     output_path = write_notebook_run_log(
         tmp_path,
@@ -53,6 +70,10 @@ def test_write_notebook_run_log_creates_artifact(tmp_path: Path) -> None:
     )
     assert output_path.exists()
     assert output_path.parent.name == "notebook_logs"
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["notebook_name"] == "training-lab"
+    assert payload["payload"]["case_count"] == 1
+    assert payload["logged_at"]
 
 
 def test_assert_helpers_raise_on_failure() -> None:
@@ -61,6 +82,8 @@ def test_assert_helpers_raise_on_failure() -> None:
         ["ask", "smoke-test"],
         context="utility summary",
     )
+    assert_no_validation_issues([], context="training samples")
+    assert_minimum_pass_rate({"pass_rate": "1.0"}, minimum_pass_rate=1.0)
 
     with pytest.raises(AssertionError, match="missing required content"):
         assert_contains_text("utility-summary", ["ask", "smoke-test"], context="utility summary")
