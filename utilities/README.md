@@ -13,6 +13,8 @@ them over ad hoc shell commands so every workflow hits the same package code.
 - `make azure-manifest MODEL_ID=... DEPLOYMENT_NAME=...`: write Azure deployment metadata.
 - `uv run repo-rag ...`: call the packaged CLI directly inside the locked `uv` environment.
 - `make build`: build the wheel and source distribution through `uv build`.
+- Notebooks reuse `src/repo_rag_lab/notebook_scaffolding.py` and `src/repo_rag_lab/notebook_support.py`
+  for sample validation, benchmark assertions, tuning metadata, and notebook-run logging.
 
 ## Why The Repository Uses These Surfaces
 
