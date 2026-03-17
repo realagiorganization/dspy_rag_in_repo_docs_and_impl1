@@ -2,3 +2,5 @@
   answer_contains: repository
 - question: Where are inspired implementation summaries stored?
   answer_contains: documentation/inspired
+- question: How should agents inspect repository utilities?
+  answer_contains: utility-summary

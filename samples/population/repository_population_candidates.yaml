@@ -1,12 +1,15 @@
 - source: README.md
-  rationale: The root repository overview should always be part of the initial corpus.
+  rationale: The root usage guide defines the preferred uv-first workflow and entrypoints.
   priority: 1
-- source: documentation/inspired/dspy-rag-tutorial.md
-  rationale: Inspired implementation notes are high-signal retrieval context.
+- source: AGENTS.md
+  rationale: Agent execution rules are part of the intended repository contract.
   priority: 2
+- source: documentation/inspired/dspy-rag-tutorial.md
+  rationale: Inspired implementation notes provide design guidance for future retrieval work.
+  priority: 3
 - source: documentation/azure-deployment.md
   rationale: Deployment-specific questions need Azure-oriented source material.
-  priority: 3
-- source: utilities/README.md
-  rationale: Agent workflow questions often depend on utility entrypoints.
   priority: 4
+- source: utilities/README.md
+  rationale: Utility documentation explains the stable command surfaces shared by users and agents.
+  priority: 5

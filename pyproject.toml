@@ -9,7 +9,7 @@ dependencies = [
   "nbformat>=5.10.4",
   "pyyaml>=6.0.2",
 ]
-description = "Research scaffold for DSPy RAG over repository content with MCP discovery and Azure deployment artifacts."
+description = "Uv-first repository RAG lab with MCP discovery, shared utilities, and Azure deployment manifests."
 name = "repo-rag-lab"
 readme = "README.md"
 requires-python = ">=3.11"

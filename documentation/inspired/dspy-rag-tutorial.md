@@ -2,30 +2,33 @@
 
 Source: https://dspy.ai/tutorials/rag/
 
-## What It Demonstrates
+This note captures the parts of the tutorial that map cleanly onto this repository's
+repository-grounded workflow.
 
-The tutorial presents a compact DSPy RAG pipeline over a factual QA dataset. The important pattern is not the specific dataset, but the program shape:
+## Core Pattern
+
+The tutorial demonstrates a compact DSPy RAG loop:
 
 1. Configure a language model and a retriever.
-2. Wrap retrieval and generation inside a `dspy.Module`.
-3. Evaluate using a task metric instead of intuition alone.
-4. Improve the program with a DSPy optimizer rather than manually rewriting prompts.
+2. Wrap retrieval and generation in a reusable DSPy module.
+3. Evaluate against a task metric instead of relying on intuition.
+4. Improve the program with a DSPy optimizer after the baseline is stable.
 
-## Portable Ideas For This Repository
+## What Carries Over To This Repository
 
-- Keep retrieval as an explicit step in the module interface so repository context can be swapped independently from generation.
-- Model quality should be measured against a small repository-specific QA set before trying optimization.
-- DSPy compilation is useful only after a stable retrieval baseline exists.
-- Saving compiled programs and evaluation data matters as much as the model prompt itself.
+- Retrieval should remain an explicit, swappable step.
+- Evaluation should use a small repository-specific question-answer set.
+- Compiled or tuned artifacts should be saved and treated as versioned outputs.
+- Optimization only makes sense after the baseline corpus and retrieval behavior are credible.
 
-## How It Informs This Scaffold
+## How The Current Scaffold Reflects That
 
-- The repository workflow keeps retrieval and response synthesis separate.
-- Example questions belong in version control so notebook, CLI, and tests use the same data.
-- A tuned variant should be treated as an artifact that can later be deployed to Azure.
+- The package keeps retrieval, answer synthesis, utilities, and verification in separate modules.
+- Example questions and training samples live in version control so notebooks, CLI runs, and tests share the same data.
+- Azure deployment is treated as a downstream artifact step, not part of the baseline RAG execution path.
 
-## Practical Gaps To Fill Here
+## Next Steps Suggested By The Tutorial
 
-- Replace the tutorial dataset with repository-grounded questions.
-- Upgrade the simple lexical retriever to a vector or MCP-backed retriever when repo-local services exist.
-- Add DSPy optimizer experiments once the corpus and evaluation set are credible.
+- Replace the lexical overlap retriever with embeddings or an MCP-backed retrieval surface.
+- Expand the repository-specific evaluation set.
+- Add DSPy optimizer experiments only after the baseline evidence improves.

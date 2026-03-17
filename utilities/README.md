@@ -1,21 +1,22 @@
 # Repository Utilities
 
-These utilities give agents and contributors stable entrypoints for common repository tasks.
+These utilities are the stable entrypoints for contributors, agents, notebooks, and CI. Prefer
+them over ad hoc shell commands so every workflow hits the same package code.
 
-## Available Utilities
+## Core Commands
 
-- `make ask QUESTION="..."`: ask a repository RAG question.
-- `make discover-mcp`: list MCP server candidates discovered in the repository.
-- `make utility-summary`: print a compact summary of the utility surfaces.
-- `make smoke-test`: run smoke coverage for utility behavior.
-- `make verify-surfaces`: validate notebook and Makefile contract surfaces.
-- `make azure-manifest MODEL_ID=... DEPLOYMENT_NAME=...`: generate Azure deployment metadata.
-- `uv run repo-rag ...`: invoke the packaged CLI directly through Astral's locked environment.
-- `make build`: build publishable Python artifacts through `uv build`.
+- `make utility-summary`: list the supported user-facing utility surfaces.
+- `make ask QUESTION="..."`: answer a repository-grounded question with the baseline RAG flow.
+- `make discover-mcp`: inspect repository-local MCP candidates.
+- `make smoke-test`: exercise answer generation, MCP discovery, and Azure manifest output together.
+- `make verify-surfaces`: validate the Makefile and notebook contract.
+- `make azure-manifest MODEL_ID=... DEPLOYMENT_NAME=...`: write Azure deployment metadata.
+- `uv run repo-rag ...`: call the packaged CLI directly inside the locked `uv` environment.
+- `make build`: build the wheel and source distribution through `uv build`.
 
-## Why These Utilities Exist
+## Why The Repository Uses These Surfaces
 
-- Keep notebook, CLI, and test workflows aligned.
-- Give agents a narrow set of preferred interfaces.
-- Make regression testing focus on behavior users actually invoke.
-- Keep local execution, CI, and publishing on the same Astral-managed toolchain.
+- Keep notebooks, tests, automation, and manual runs aligned.
+- Give agents one preferred command vocabulary.
+- Focus verification on behavior users actually invoke.
+- Keep local execution, CI, and publishing on the same `uv`-managed toolchain.

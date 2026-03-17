@@ -1,7 +1,7 @@
 - question: What does this repository research?
   expected_answer: >-
-    It researches DSPy RAG workflows over repository content with MCP
-    discovery and Azure deployment support.
+    It researches repository-grounded RAG workflows with shared uv-managed
+    utilities, MCP discovery, and Azure deployment manifest support.
   tags:
     - repo
     - rag
@@ -10,10 +10,11 @@
   tags:
     - docs
     - inspired
-- question: How should agents inspect utilities?
+- question: How should agents start with repository utilities?
   expected_answer: >-
-    Agents should start with the repo-local make targets and Python CLI
-    utility summary.
+    Start with make utility-summary or uv run repo-rag utility-summary, then
+    use the named make targets or direct CLI commands.
   tags:
     - agents
     - utilities
+    - uv
