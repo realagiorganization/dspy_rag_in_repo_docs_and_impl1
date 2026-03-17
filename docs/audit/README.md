@@ -4,7 +4,7 @@ This directory records point-in-time verification audits for the repository.
 
 ## Latest Audit
 
-- [2026-03-15-repo-state.md](/home/standart/dspy_rag_in_repo_docs_and_impl1/docs/audit/2026-03-15-repo-state.md)
+- [2026-03-17-full-build.md](/home/standard/dspy_rag_in_repo_docs_and_impl1/docs/audit/2026-03-17-full-build.md)
 
 ## Usage
 

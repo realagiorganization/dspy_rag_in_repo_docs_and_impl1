@@ -1,0 +1,407 @@
+# Full Build Raw Log Attempt 2
+
+Started: 2026-03-17T06:48:33+00:00
+Repository: /home/standard/dspy_rag_in_repo_docs_and_impl1
+Git HEAD: d4cc6925ce47e5f19bd6faf91a6dc76cdbd1cf49
+UV_CACHE_DIR: /tmp/uv-cache-dspy-rag
+UV_PROJECT_ENVIRONMENT: /tmp/dspy-rag-in-repo-venv
+CARGO_HOME: /tmp/dspy-rag-cargo-home
+CARGO_TARGET_DIR: /tmp/dspy-rag-cargo-target
+uv: uv 0.10.11
+cargo: cargo 1.93.0 (083ac5135 2025-12-15)
+
+$ make hooks-install
+uv sync --extra azure
+Using CPython 3.11.15
+Creating virtual environment at: /tmp/dspy-rag-in-repo-venv
+Resolved 180 packages in 2ms
+   Building repo-rag-lab @ file:///home/standard/dspy_rag_in_repo_docs_and_impl1
+      Built repo-rag-lab @ file:///home/standard/dspy_rag_in_repo_docs_and_impl1
+Downloading hf-xet (4.0MiB)
+Downloading pydantic-core (2.0MiB)
+Downloading jedi (1.5MiB)
+Downloading pygments (1.2MiB)
+Downloading virtualenv (5.6MiB)
+Downloading tokenizers (3.1MiB)
+Downloading litellm (14.8MiB)
+Downloading numpy (16.1MiB)
+Downloading openai (1.1MiB)
+Downloading jupyterlab (11.9MiB)
+Downloading debugpy (3.0MiB)
+Downloading babel (9.7MiB)
+Downloading aiohttp (1.7MiB)
+Downloading ruff (10.8MiB)
+Downloading mypy (12.8MiB)
+Downloading sqlalchemy (3.2MiB)
+Downloading nodejs-wheel-binaries (57.1MiB)
+Downloading tiktoken (1.1MiB)
+Downloading basedpyright (11.7MiB)
+ Downloaded tiktoken
+ Downloaded pygments
+ Downloaded openai
+ Downloaded jedi
+ Downloaded aiohttp
+ Downloaded pydantic-core
+ Downloaded debugpy
+ Downloaded tokenizers
+ Downloaded sqlalchemy
+ Downloaded hf-xet
+ Downloaded virtualenv
+ Downloaded babel
+ Downloaded ruff
+ Downloaded basedpyright
+ Downloaded jupyterlab
+ Downloaded mypy
+ Downloaded litellm
+ Downloaded numpy
+ Downloaded nodejs-wheel-binaries
+Prepared 177 packages in 14.09s
+Installed 177 packages in 316ms
+ + aiohappyeyeballs==2.6.1
+ + aiohttp==3.13.3
+ + aiosignal==1.4.0
+ + alembic==1.18.4
+ + annotated-doc==0.0.4
+ + annotated-types==0.7.0
+ + anyio==4.12.1
+ + argon2-cffi==25.1.0
+ + argon2-cffi-bindings==25.1.0
+ + arrow==1.4.0
+ + asttokens==3.0.1
+ + async-lru==2.2.0
+ + asyncer==0.0.8
+ + attrs==25.4.0
+ + autopep8==2.3.2
+ + azure-ai-inference==1.0.0b9
+ + azure-core==1.38.3
+ + babel==2.18.0
+ + basedpyright==1.38.2
+ + beautifulsoup4==4.14.3
+ + bleach==6.3.0
+ + cachetools==7.0.5
+ + certifi==2026.2.25
+ + cffi==2.0.0
+ + cfgv==3.5.0
+ + charset-normalizer==3.4.6
+ + click==8.3.1
+ + cloudpickle==3.1.2
+ + colorama==0.4.6
+ + colorlog==6.10.1
+ + comm==0.2.3
+ + coverage==7.13.4
+ + debugpy==1.8.20
+ + decorator==5.2.1
+ + defusedxml==0.7.1
+ + diskcache==5.6.3
+ + distlib==0.4.0
+ + distro==1.9.0
+ + dspy==3.1.3
+ + dspy-ai==3.1.3
+ + executing==2.2.1
+ + fastjsonschema==2.21.2
+ + fastuuid==0.14.0
+ + filelock==3.25.2
+ + fqdn==1.5.1
+ + frozenlist==1.8.0
+ + fsspec==2026.2.0
+ + gepa==0.0.26
+ + greenlet==3.3.2
+ + h11==0.16.0
+ + hf-xet==1.4.2
+ + httpcore==1.0.9
+ + httpx==0.28.1
+ + huggingface-hub==1.7.1
+ + identify==2.6.18
+ + idna==3.11
+ + importlib-metadata==8.7.1
+ + iniconfig==2.3.0
+ + ipykernel==7.2.0
+ + ipython==9.10.0
+ + ipython-pygments-lexers==1.1.1
+ + isodate==0.7.2
+ + isoduration==20.11.0
+ + jedi==0.19.2
+ + jinja2==3.1.6
+ + jiter==0.13.0
+ + json-repair==0.58.5
+ + json5==0.13.0
+ + jsonpointer==3.0.0
+ + jsonschema==4.26.0
+ + jsonschema-specifications==2025.9.1
+ + jupyter-client==8.8.0
+ + jupyter-core==5.9.1
+ + jupyter-events==0.12.0
+ + jupyter-lsp==2.3.0
+ + jupyter-server==2.17.0
+ + jupyter-server-terminals==0.5.4
+ + jupyterlab==4.5.6
+ + jupyterlab-pygments==0.3.0
+ + jupyterlab-server==2.28.0
+ + lark==1.3.1
+ + librt==0.8.1
+ + litellm==1.82.2
+ + mako==1.3.10
+ + mando==0.7.1
+ + markdown-it-py==4.0.0
+ + markupsafe==3.0.3
+ + matplotlib-inline==0.2.1
+ + mdurl==0.1.2
+ + mistune==3.2.0
+ + multidict==6.7.1
+ + mypy==1.19.1
+ + mypy-extensions==1.1.0
+ + nbclient==0.10.4
+ + nbconvert==7.17.0
+ + nbformat==5.10.4
+ + nbqa==1.9.1
+ + nest-asyncio==1.6.0
+ + nodeenv==1.10.0
+ + nodejs-wheel-binaries==24.14.0
+ + notebook-shim==0.2.4
+ + numpy==2.4.3
+ + openai==2.28.0
+ + optuna==4.8.0
+ + orjson==3.11.7
+ + overrides==7.7.0
+ + packaging==26.0
+ + pandocfilters==1.5.1
+ + parso==0.8.6
+ + pathspec==1.0.4
+ + pexpect==4.9.0
+ + platformdirs==4.9.4
+ + pluggy==1.6.0
+ + pre-commit==4.5.1
+ + prometheus-client==0.24.1
+ + prompt-toolkit==3.0.52
+ + propcache==0.4.1
+ + psutil==7.2.2
+ + ptyprocess==0.7.0
+ + pure-eval==0.2.3
+ + pycodestyle==2.14.0
+ + pycparser==3.0
+ + pydantic==2.12.5
+ + pydantic-core==2.41.5
+ + pygments==2.19.2
+ + pytest==9.0.2
+ + pytest-cov==7.0.0
+ + python-dateutil==2.9.0.post0
+ + python-discovery==1.1.3
+ + python-dotenv==1.2.2
+ + python-json-logger==4.0.0
+ + pyyaml==6.0.3
+ + pyzmq==27.1.0
+ + radon==6.0.1
+ + referencing==0.37.0
+ + regex==2026.2.28
+ + repo-rag-lab==0.1.0 (from file:///home/standard/dspy_rag_in_repo_docs_and_impl1)
+ + requests==2.32.5
+ + rfc3339-validator==0.1.4
+ + rfc3986-validator==0.1.1
+ + rfc3987-syntax==1.1.0
+ + rich==14.3.3
+ + rpds-py==0.30.0
+ + ruff==0.15.6
+ + send2trash==2.1.0
+ + setuptools==82.0.1
+ + shellingham==1.5.4
+ + six==1.17.0
+ + sniffio==1.3.1
+ + soupsieve==2.8.3
+ + sqlalchemy==2.0.48
+ + stack-data==0.6.3
+ + tenacity==9.1.4
+ + terminado==0.18.1
+ + tiktoken==0.12.0
+ + tinycss2==1.4.0
+ + tokenize-rt==6.2.0
+ + tokenizers==0.22.2
+ + tomli==2.4.0
+ + tornado==6.5.5
+ + tqdm==4.67.3
+ + traitlets==5.14.3
+ + typer==0.24.1
+ + typing-extensions==4.15.0
+ + typing-inspection==0.4.2
+ + tzdata==2025.3
+ + uri-template==1.3.0
+ + urllib3==2.6.3
+ + virtualenv==21.2.0
+ + wcwidth==0.6.0
+ + webcolors==25.10.0
+ + webencodings==0.5.1
+ + websocket-client==1.9.0
+ + xxhash==3.6.0
+ + yamllint==1.38.0
+ + yarl==1.23.0
+ + zipp==3.23.0
+PRE_COMMIT_HOME=.pre-commit-cache uv run pre-commit install --hook-type pre-commit --hook-type pre-push
+pre-commit installed at .git/hooks/pre-commit
+pre-commit installed at .git/hooks/pre-push
+
+$ make utility-summary
+uv sync --extra azure
+Resolved 180 packages in 1ms
+Checked 177 packages in 2ms
+uv run repo-rag utility-summary
+Repository utility surfaces:
+- ask: answer repository-grounded questions
+- discover-mcp: inspect repo-local MCP candidates
+- azure-manifest: write Azure deployment metadata
+- smoke-test: validate the core workflow surfaces
+- verify-surfaces: validate notebooks and Makefile verification surfaces
+- root: /home/standard/dspy_rag_in_repo_docs_and_impl1
+
+$ make quality
+uv sync --extra azure
+Resolved 180 packages in 0.88ms
+Checked 177 packages in 2ms
+uv run python -m compileall src tests
+Listing 'src'...
+Listing 'src/repo_rag_lab'...
+Compiling 'src/repo_rag_lab/notebook_support.py'...
+Compiling 'src/repo_rag_lab/population_samples.py'...
+Compiling 'src/repo_rag_lab/settings.py'...
+Compiling 'src/repo_rag_lab/training_samples.py'...
+Listing 'tests'...
+Listing 'tests/features'...
+Compiling 'tests/test_cli_and_dspy.py'...
+Compiling 'tests/test_mcp_branches.py'...
+Compiling 'tests/test_population_samples.py'...
+Compiling 'tests/test_project_surfaces.py'...
+Compiling 'tests/test_repository_rag_bdd.py'...
+Compiling 'tests/test_training_samples.py'...
+Compiling 'tests/test_utilities.py'...
+Compiling 'tests/test_verification.py'...
+RUFF_CACHE_DIR=.ruff_cache uv run ruff format --check src tests
+22 files already formatted
+RUFF_CACHE_DIR=.ruff_cache uv run ruff check src tests
+All checks passed!
+RUFF_CACHE_DIR=.ruff_cache uv run nbqa ruff notebooks
+All checks passed!
+MYPY_CACHE_DIR=.mypy_cache uv run mypy src tests
+Success: no issues found in 22 source files
+uv run basedpyright
+0 errors, 0 warnings, 0 notes
+uv run repo-rag verify-surfaces
+{
+  "checked_makefile": "Makefile",
+  "checked_notebook_count": 4,
+  "issue_count": 0,
+  "issues": []
+}
+uv run radon cc src/repo_rag_lab -s -n B
+src/repo_rag_lab/verification.py
+    F 65:0 validate_notebook - B (9)
+src/repo_rag_lab/corpus.py
+    F 36:0 iter_text_files - B (6)
+src/repo_rag_lab/mcp.py
+    F 36:0 _hint_for - C (11)
+    F 15:0 discover_mcp_servers - B (7)
+src/repo_rag_lab/cli.py
+    F 42:0 main - B (9)
+uv run pytest
+============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.0.2, pluggy-1.6.0
+rootdir: /home/standard/dspy_rag_in_repo_docs_and_impl1
+configfile: pyproject.toml
+testpaths: tests
+plugins: cov-7.0.0, anyio-4.12.1
+collected 24 items
+
+tests/test_cli_and_dspy.py .....                                         [ 20%]
+tests/test_mcp_branches.py .                                             [ 25%]
+tests/test_population_samples.py ...                                     [ 37%]
+tests/test_project_surfaces.py ...                                       [ 50%]
+tests/test_repository_rag_bdd.py ...                                     [ 62%]
+tests/test_training_samples.py ...                                       [ 75%]
+tests/test_utilities.py ...                                              [ 87%]
+tests/test_verification.py ...                                           [100%]
+
+================================ tests coverage ================================
+_______________ coverage: platform linux, python 3.11.15-final-0 _______________
+
+Name                                     Stmts   Miss Branch BrPart  Cover   Missing
+------------------------------------------------------------------------------------
+src/repo_rag_lab/__init__.py                 2      0      0      0   100%
+src/repo_rag_lab/azure.py                   10      0      0      0   100%
+src/repo_rag_lab/cli.py                     63      6     16      3    89%   49-51, 84-85, 89
+src/repo_rag_lab/corpus.py                  28      3     10      1    89%   43, 52-53
+src/repo_rag_lab/dspy_workflow.py           36      3      2      1    89%   41, 50-51
+src/repo_rag_lab/mcp.py                     50      6     22      3    88%   27, 39-40, 55-56, 60
+src/repo_rag_lab/notebook_support.py         4      0      0      0   100%
+src/repo_rag_lab/population_samples.py      20      0      0      0   100%
+src/repo_rag_lab/retrieval.py               35      2     10      2    91%   24, 44
+src/repo_rag_lab/settings.py                12      0      0      0   100%
+src/repo_rag_lab/training_samples.py        24      0      2      0   100%
+src/repo_rag_lab/utilities.py               18      0      0      0   100%
+src/repo_rag_lab/verification.py            50      1     22      1    97%   80
+src/repo_rag_lab/workflow.py                32      1      8      1    95%   32
+------------------------------------------------------------------------------------
+TOTAL                                      384     22     92     12    93%
+Coverage XML written to file coverage.xml
+Required test coverage of 85.0% reached. Total coverage: 92.86%
+============================= 24 passed in 25.92s ==============================
+uv run coverage report --fail-under=85
+Name                                     Stmts   Miss Branch BrPart  Cover   Missing
+------------------------------------------------------------------------------------
+src/repo_rag_lab/__init__.py                 2      0      0      0   100%
+src/repo_rag_lab/azure.py                   10      0      0      0   100%
+src/repo_rag_lab/cli.py                     63      6     16      3    89%   49-51, 84-85, 89
+src/repo_rag_lab/corpus.py                  28      3     10      1    89%   43, 52-53
+src/repo_rag_lab/dspy_workflow.py           36      3      2      1    89%   41, 50-51
+src/repo_rag_lab/mcp.py                     50      6     22      3    88%   27, 39-40, 55-56, 60
+src/repo_rag_lab/notebook_support.py         4      0      0      0   100%
+src/repo_rag_lab/population_samples.py      20      0      0      0   100%
+src/repo_rag_lab/retrieval.py               35      2     10      2    91%   24, 44
+src/repo_rag_lab/settings.py                12      0      0      0   100%
+src/repo_rag_lab/training_samples.py        24      0      2      0   100%
+src/repo_rag_lab/utilities.py               18      0      0      0   100%
+src/repo_rag_lab/verification.py            50      1     22      1    97%   80
+src/repo_rag_lab/workflow.py                32      1      8      1    95%   32
+------------------------------------------------------------------------------------
+TOTAL                                      384     22     92     12    93%
+
+$ make smoke-test
+uv sync --extra azure
+Resolved 180 packages in 3ms
+Checked 177 packages in 3ms
+uv run repo-rag smoke-test
+{
+  "answer_contains_repository": true,
+  "mcp_candidate_count": 1,
+  "manifest_path": "artifacts/azure/repo-rag-smoke.json"
+}
+
+$ make build
+uv sync --extra azure
+Resolved 180 packages in 0.84ms
+Checked 177 packages in 3ms
+uv build
+Building source distribution (uv build backend)...
+Building wheel from source distribution (uv build backend)...
+Successfully built dist/repo_rag_lab-0.1.0.tar.gz
+Successfully built dist/repo_rag_lab-0.1.0-py3-none-any.whl
+
+$ make rust-quality
+cargo fmt --manifest-path rust-cli/Cargo.toml --check
+cargo clippy --manifest-path rust-cli/Cargo.toml --all-targets -- -D warnings
+    Checking repo-rag-cli v0.1.0 (/home/standard/dspy_rag_in_repo_docs_and_impl1/rust-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.29s
+cargo build --manifest-path rust-cli/Cargo.toml
+   Compiling repo-rag-cli v0.1.0 (/home/standard/dspy_rag_in_repo_docs_and_impl1/rust-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.60s
+cargo run --manifest-path rust-cli/Cargo.toml -- ask --question "What does this repository research?"
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `/tmp/dspy-rag-cargo-target/debug/repo-rag-cli ask --question 'What does this repository research?'`
+Question: What does this repository research?
+
+Evidence:
+- /home/standard/dspy_rag_in_repo_docs_and_impl1/data/questions/repository.yaml: - question: What does this repository research? answer_contains: repository - question: Where are inspired implementation summaries stored? answer_contains: documentation/inspired
+- /home/standard/dspy_rag_in_repo_docs_and_impl1/.github/workflows/ci.yml: ml --all-targets -- -D warnings - name: Build Rust wrapper run: cargo build --manifest-path rust-cli/Cargo.toml - name: Run Rust wrapper against packaged workflow run: >- cargo run --manifest-path rust-cli/Cargo.toml -- ask --question "What
+- /home/standard/dspy_rag_in_repo_docs_and_impl1/tests/features/repository_rag.feature: Feature: Repository RAG Scenario: Answer a repository scope question Given the repository root When I ask the repository question "What does this repository research?" Then the answer mentions "repository" Scenario: Discover MCP candidates 
+- /home/standard/dspy_rag_in_repo_docs_and_impl1/samples/training/repository_training_examples.yaml: - question: What does this repository research? expected_answer: >- It researches DSPy RAG workflows over repository content with MCP discovery and Azure deployment support. tags: - repo - rag - question: Where are inspired implementation s
+
+Discovered MCP candidates:
+- pyproject.toml: Inspect package scripts or console entrypoints for MCP server commands.
+
+Completed: 2026-03-17T06:50:15+00:00

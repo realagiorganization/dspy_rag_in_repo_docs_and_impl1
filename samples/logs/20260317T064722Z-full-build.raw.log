@@ -1,0 +1,61 @@
+# Full Build Raw Log
+
+Started: 2026-03-17T06:47:22+00:00
+Repository: /home/standard/dspy_rag_in_repo_docs_and_impl1
+Git HEAD: d4cc6925ce47e5f19bd6faf91a6dc76cdbd1cf49
+uv: uv 0.10.11
+cargo: cargo 1.93.0 (083ac5135 2025-12-15)
+
+$ make hooks-install
+uv sync --extra azure
+Downloading cpython-3.11.15-linux-x86_64-gnu (download) (29.8MiB)
+ Downloaded cpython-3.11.15-linux-x86_64-gnu (download)
+Using CPython 3.11.15
+Creating virtual environment at: .venv
+Resolved 180 packages in 0.87ms
+   Building repo-rag-lab @ file:///home/standard/dspy_rag_in_repo_docs_and_impl1
+      Built repo-rag-lab @ file:///home/standard/dspy_rag_in_repo_docs_and_impl1
+Downloading babel (9.7MiB)
+Downloading jupyterlab (11.9MiB)
+Downloading debugpy (3.0MiB)
+Downloading nodejs-wheel-binaries (57.1MiB)
+Downloading hf-xet (4.0MiB)
+Downloading aiohttp (1.7MiB)
+Downloading mypy (12.8MiB)
+Downloading pygments (1.2MiB)
+Downloading ruff (10.8MiB)
+Downloading tokenizers (3.1MiB)
+Downloading pydantic-core (2.0MiB)
+Downloading jedi (1.5MiB)
+Downloading numpy (16.1MiB)
+Downloading sqlalchemy (3.2MiB)
+Downloading virtualenv (5.6MiB)
+Downloading openai (1.1MiB)
+Downloading tiktoken (1.1MiB)
+Downloading basedpyright (11.7MiB)
+Downloading litellm (14.8MiB)
+ Downloaded tiktoken
+ Downloaded openai
+ Downloaded pygments
+ Downloaded jedi
+ Downloaded pydantic-core
+ Downloaded aiohttp
+ Downloaded debugpy
+ Downloaded tokenizers
+ Downloaded sqlalchemy
+ Downloaded hf-xet
+ Downloaded virtualenv
+ Downloaded babel
+ Downloaded ruff
+ Downloaded jupyterlab
+  × Failed to download `nodejs-wheel-binaries==24.14.0`
+  ├─▶ Failed to extract archive:
+  │   nodejs_wheel_binaries-24.14.0-py2.py3-none-manylinux_2_28_x86_64.whl
+  ├─▶ I/O operation failed during extraction
+  ╰─▶ failed to flush file
+      `/home/standard/.cache/uv/.tmpAJl7Bq/nodejs_wheel/bin/node`: No space
+      left on device (os error 28)
+  help: `nodejs-wheel-binaries` (v24.14.0) was included because
+        `repo-rag-lab:dev` (v0.1.0) depends on `basedpyright` (v1.38.2) which
+        depends on `nodejs-wheel-binaries`
+make: *** [Makefile:13: sync] Error 1
