@@ -44,7 +44,7 @@ make ask QUESTION="What does this repository research?"
 | Utility overview | `make utility-summary` | Show the supported user-facing entrypoints. |
 | Direct CLI | `uv run repo-rag utility-summary` | Use the packaged CLI without going through `make`. |
 | Ask a repo question | `make ask QUESTION="..."` | Run the baseline repository-grounded RAG workflow. |
-| DSPy-shaped ask | `uv run repo-rag ask --question "..." --use-dspy` | Exercise the optional DSPy wrapper. |
+| DSPy-shaped ask | `uv run repo-rag ask --question "..." --use-dspy` | Exercise the optional DSPy wrapper after configuring a DSPy LM in-process; see `README.DSPY.MD`. |
 | MCP discovery | `make discover-mcp` | Inspect MCP-related repository artifacts. |
 | Smoke test | `make smoke-test` | Check answer generation, MCP discovery, and Azure manifest output together. |
 | Surface verification | `make verify-surfaces` | Enforce the Makefile and notebook contract. |
@@ -56,6 +56,7 @@ make ask QUESTION="What does this repository research?"
 | Path | Role |
 | --- | --- |
 | `src/repo_rag_lab/` | Shared Python package for corpus loading, retrieval, MCP discovery, CLI commands, notebook scaffolds, utilities, and verification helpers. |
+| `README.DSPY.MD` | Central DSPy map covering corpus planning, training samples, benchmarks, notebook scaffolds, and current DSPy runtime limitations. |
 | `notebooks/` | Research playbooks that reuse package helpers for validation, assertions, and logging instead of embedding workflow logic inline. |
 | `tests/` | Pytest suites, BDD-style checks, doctests, and surface verification tests. |
 | `samples/training/` | Starter question-answer pairs for DSPy-oriented experiments. |

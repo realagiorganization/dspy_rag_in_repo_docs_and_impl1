@@ -59,9 +59,24 @@ Use the repo-managed surfaces first.
 uv sync --extra azure
 make utility-summary
 make ask QUESTION="What does this repository research?"
-uv run repo-rag ask --question "What does this repository research?" --use-dspy
 make smoke-test
 make verify-surfaces
+```
+
+The baseline path above is runnable as-is. The DSPy path needs an LM configured in-process first,
+because the current CLI does not expose DSPy LM configuration flags. Use a small Python entrypoint
+like this when you want the real DSPy runtime path:
+
+```python
+from pathlib import Path
+
+import dspy
+
+from repo_rag_lab.dspy_workflow import RepositoryRAG
+
+dspy.configure(lm=dspy.LM("openai/gpt-4o-mini"))
+result = RepositoryRAG(Path(".").resolve())("What does this repository research?")
+print(result.answer)
 ```
 
 Use the notebooks when you want the research-playbook view.
@@ -315,7 +330,7 @@ The benchmark loop is:
 4. Each result records `retrieved_sources`, `matched_sources`, and tags.
 5. `summarize_benchmark_results(results)` computes pass counts, pass rate, and per-source hit
    counters.
-6. `assert_minimum_pass_rate(summary, minimum_pass_rate=1.0)` can fail a notebook run when the
+6. `assert_minimum_pass_rate(summary, minimum_pass_rate=2 / 3)` can fail a notebook run when the
    retrieval surface regresses.
 7. The source-hit summary can feed
    `rerank_population_candidates(...)` in
@@ -399,6 +414,10 @@ uv run repo-rag ask --question "What does this repository research?" --use-dspy
 
 Important limitation:
 
+- I verified the direct CLI command above in this repository, and it fails unless an LM has already
+  been configured through `dspy.configure(...)` in the same process.
+- The current CLI exposes the DSPy answer path, but it does not yet expose LM selection or
+  credentials setup.
 - This is a DSPy-shaped execution surface, not a trained DSPy program lifecycle.
 - There is no saved program artifact, optimizer checkpoint, or compile command in the repo yet.
 - The inspired notes under [documentation/inspired/](documentation/inspired/) explain the intended
@@ -503,6 +522,11 @@ Primary tests:
 - [tests/test_repository_rag_bdd.py](tests/test_repository_rag_bdd.py): baseline behavior checks.
 - [tests/test_project_surfaces.py](tests/test_project_surfaces.py): packaging and manifest surfaces.
 - [tests/test_verification.py](tests/test_verification.py): Makefile and notebook contract checks.
+
+Current test gap:
+
+- [tests/test_cli_and_dspy.py](tests/test_cli_and_dspy.py) verifies retrieval and the fallback path
+  when DSPy is unavailable, but it does not currently cover a real LM-configured DSPy invocation.
 
 Primary commands:
 
