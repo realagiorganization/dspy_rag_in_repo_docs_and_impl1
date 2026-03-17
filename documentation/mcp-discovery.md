@@ -1,6 +1,6 @@
 # MCP Discovery Notes
 
-The repository treats MCP discovery as a reusable research surface rather than notebook-only glue.
+The repository treats MCP discovery as a reusable package surface rather than notebook-only glue.
 
 ## Current Heuristics
 
@@ -12,7 +12,7 @@ The repository treats MCP discovery as a reusable research surface rather than n
 - `Cargo.toml`
 - `package.json`
 
-It emits a candidate only when the file shape or contents suggest MCP-related behavior.
+It emits a candidate only when the file path or file contents suggest MCP-related behavior.
 
 ## Notebook Usage
 
@@ -23,4 +23,5 @@ The notebooks use MCP discovery in two ways:
 
 ## Why This Doc Exists
 
-Population scaffolding now extends the starter corpus candidates with MCP-specific documentation so follow-up work can cite a stable explanation of the current discovery behavior.
+Population scaffolding extends the starter corpus candidates with MCP-specific documentation so
+follow-up work can cite a stable explanation of the current discovery behavior.

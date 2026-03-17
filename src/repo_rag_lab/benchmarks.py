@@ -55,6 +55,8 @@ class RetrievalBenchmarkResult:
 
     @property
     def passed(self) -> bool:
+        """Return ``True`` when retrieval found at least one expected source."""
+
         return bool(self.matched_sources)
 
 
@@ -86,6 +88,8 @@ def build_retrieval_benchmarks(examples: list[TrainingExample]) -> list[Retrieva
 
 
 def _select_benchmark_documents(root: Path) -> list[RepoDocument]:
+    """Load a fairness-filtered benchmark corpus from repository documents."""
+
     documents: list[RepoDocument] = []
     for document in load_documents(root):
         if any(part in BENCHMARK_EXCLUDED_PARTS for part in document.path.parts):

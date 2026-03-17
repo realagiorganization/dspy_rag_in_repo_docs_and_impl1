@@ -7,6 +7,8 @@ from pathlib import Path
 
 
 def _relative_path_text(root: Path, path: Path) -> str:
+    """Return ``path`` relative to ``root`` when possible, else as-is."""
+
     try:
         return str(path.relative_to(root))
     except ValueError:

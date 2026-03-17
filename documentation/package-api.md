@@ -1,6 +1,7 @@
 # Package API Notes
 
-This repository keeps notebook logic in small Python modules under `src/repo_rag_lab/` so notebooks stay readable and testable.
+This repository keeps notebook logic in small Python modules under `src/repo_rag_lab/` so
+notebooks stay readable, testable, and aligned with CLI and automation entrypoints.
 
 ## Core Workflow Modules
 
@@ -24,3 +25,4 @@ This repository keeps notebook logic in small Python modules under `src/repo_rag
 - `repo-rag discover-mcp`: inspect MCP discovery candidates.
 - `repo-rag smoke-test`: run a compact workflow smoke test.
 - `repo-rag verify-surfaces`: validate the repository utility and notebook contract surfaces.
+- `repo-rag azure-manifest`: write Azure deployment metadata for downstream deployment workflows.
