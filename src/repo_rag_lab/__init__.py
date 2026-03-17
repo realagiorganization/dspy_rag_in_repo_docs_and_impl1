@@ -1,4 +1,4 @@
-"""Repository RAG research scaffold."""
+"""Public package surface for the repository-grounded RAG lab."""
 
 from .workflow import ask_repository
 

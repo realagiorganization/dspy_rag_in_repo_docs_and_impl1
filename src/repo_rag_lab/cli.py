@@ -1,3 +1,5 @@
+"""Command-line entrypoints for the shared repository RAG workflows."""
+
 from __future__ import annotations
 
 import argparse
@@ -11,6 +13,8 @@ from .workflow import ask_repository
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build the top-level ``repo-rag`` argument parser."""
+
     parser = argparse.ArgumentParser(prog="repo-rag")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -40,6 +44,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    """Run the requested CLI command and return a process exit code."""
+
     parser = build_parser()
     args = parser.parse_args()
     root = Path(args.root).resolve()

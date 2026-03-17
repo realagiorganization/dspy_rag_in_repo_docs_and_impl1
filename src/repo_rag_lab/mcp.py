@@ -1,3 +1,5 @@
+"""Discovery helpers for MCP-related repository artifacts."""
+
 from __future__ import annotations
 
 import json
@@ -7,12 +9,16 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class MCPServerCandidate:
+    """A repository artifact that may expose or configure MCP behavior."""
+
     kind: str
     path: str
     hint: str
 
 
 def discover_mcp_servers(root: Path) -> list[MCPServerCandidate]:
+    """Find MCP-related configuration and package manifests under ``root``."""
+
     candidates: list[MCPServerCandidate] = []
     patterns = [
         ("mcp-config", "mcp.json"),
@@ -34,6 +40,8 @@ def discover_mcp_servers(root: Path) -> list[MCPServerCandidate]:
 
 
 def _hint_for(kind: str, path: Path) -> str:
+    """Generate a short operator hint for a discovered MCP candidate."""
+
     try:
         text = path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
@@ -61,6 +69,8 @@ def _hint_for(kind: str, path: Path) -> str:
 
 
 def _dedupe(candidates: list[MCPServerCandidate]) -> list[MCPServerCandidate]:
+    """Remove duplicate candidates while preserving the latest discovered value."""
+
     unique: dict[tuple[str, str], MCPServerCandidate] = {}
     for candidate in candidates:
         unique[(candidate.kind, candidate.path)] = candidate
@@ -68,4 +78,6 @@ def _dedupe(candidates: list[MCPServerCandidate]) -> list[MCPServerCandidate]:
 
 
 def dump_candidates(candidates: list[MCPServerCandidate]) -> str:
+    """Serialize discovered MCP candidates as indented JSON."""
+
     return json.dumps([asdict(candidate) for candidate in candidates], indent=2)

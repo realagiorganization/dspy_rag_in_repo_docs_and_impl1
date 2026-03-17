@@ -1,3 +1,5 @@
+"""Baseline chunking and lexical retrieval utilities for repository text."""
+
 from __future__ import annotations
 
 import math
@@ -12,11 +14,15 @@ TOKEN_RE = re.compile(r"[A-Za-z0-9_]{2,}")
 
 @dataclass(frozen=True)
 class Chunk:
+    """A retrievable slice of repository text tied to its source path."""
+
     source: Path
     text: str
 
 
 def chunk_documents(documents: list[RepoDocument], chunk_size: int = 1200) -> list[Chunk]:
+    """Split loaded repository documents into fixed-width text chunks."""
+
     chunks: list[Chunk] = []
     for doc in documents:
         text = doc.text.strip()
@@ -29,6 +35,8 @@ def chunk_documents(documents: list[RepoDocument], chunk_size: int = 1200) -> li
 
 
 def retrieve(question: str, chunks: list[Chunk], top_k: int = 4) -> list[Chunk]:
+    """Return the highest-scoring chunks for ``question``."""
+
     scored = [(score(question, chunk.text), chunk) for chunk in chunks]
     ranked = [
         chunk
@@ -39,6 +47,8 @@ def retrieve(question: str, chunks: list[Chunk], top_k: int = 4) -> list[Chunk]:
 
 
 def score(question: str, text: str) -> float:
+    """Score a text chunk by lexical overlap and light term-density weighting."""
+
     q_terms = TOKEN_RE.findall(question.lower())
     if not q_terms:
         return 0.0

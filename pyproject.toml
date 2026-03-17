@@ -42,7 +42,7 @@ dev = [
 default-groups = ["dev"]
 
 [tool.pytest.ini_options]
-addopts    = "--doctest-modules --cov=src/repo_rag_lab --cov-report=term-missing --cov-report=xml"
+addopts    = "--doctest-modules"
 pythonpath = ["src"]
 testpaths  = ["tests"]
 

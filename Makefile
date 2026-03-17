@@ -3,6 +3,7 @@ QUESTION ?= What does this repository research?
 MODEL_ID ?= sample-ft-model
 DEPLOYMENT_NAME ?= repo-rag-ft
 AZURE_ENDPOINT ?= https://example.services.ai.azure.com/models
+PYTEST_COV_ARGS ?= --cov=src/repo_rag_lab --cov-report=term-missing --cov-report=xml
 
 .PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask discover-mcp utility-summary smoke-test verify-surfaces notebook bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run azure-manifest fmt build publish
 
@@ -46,15 +47,15 @@ bdd: sync
 	$(UV) run pytest tests -k repository_rag
 
 test: sync
-	$(UV) run pytest
+	$(UV) run pytest $(PYTEST_COV_ARGS)
 	$(UV) run coverage report --fail-under=85
 
 coverage: sync
-	$(UV) run pytest
+	$(UV) run pytest $(PYTEST_COV_ARGS)
 	$(UV) run coverage report
 
 coverage-html: sync
-	$(UV) run pytest --cov-report=html
+	$(UV) run pytest $(PYTEST_COV_ARGS) --cov-report=html
 	$(UV) run coverage html
 
 compile: sync

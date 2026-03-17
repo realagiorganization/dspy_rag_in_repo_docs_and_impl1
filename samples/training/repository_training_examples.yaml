@@ -5,11 +5,17 @@
   tags:
     - repo
     - rag
+  expected_sources:
+    - README.md
+    - src/repo_rag_lab/utilities.py
 - question: Where are inspired implementation summaries stored?
   expected_answer: They are stored under documentation/inspired.
   tags:
     - docs
     - inspired
+  expected_sources:
+    - documentation/inspired/dspy-rag-tutorial.md
+    - documentation/inspired/implementing-rag-with-dspy-technical-guide.md
 - question: How should agents start with repository utilities?
   expected_answer: >-
     Start with make utility-summary or uv run repo-rag utility-summary, then
@@ -18,3 +24,7 @@
     - agents
     - utilities
     - uv
+  expected_sources:
+    - AGENTS.md
+    - README.md
+    - utilities/README.md

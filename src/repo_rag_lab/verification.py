@@ -1,3 +1,5 @@
+"""Verification helpers for Makefile and notebook contract checks."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -30,11 +32,15 @@ MAX_NOTEBOOK_CODE_LINES = 25
 
 @dataclass(frozen=True)
 class VerificationIssue:
+    """A user-facing repository-surface verification issue."""
+
     path: str
     message: str
 
 
 def _collect_phony_targets(makefile_text: str) -> set[str]:
+    """Collect all `.PHONY` target names declared in the Makefile."""
+
     phony_targets: set[str] = set()
     for line in makefile_text.splitlines():
         if line.startswith(".PHONY:"):
@@ -44,6 +50,8 @@ def _collect_phony_targets(makefile_text: str) -> set[str]:
 
 
 def validate_makefile(path: Path) -> list[VerificationIssue]:
+    """Validate that the Makefile exposes the required repository targets."""
+
     makefile_text = path.read_text(encoding="utf-8")
     issues: list[VerificationIssue] = []
     phony_targets = _collect_phony_targets(makefile_text)
@@ -63,6 +71,8 @@ def validate_makefile(path: Path) -> list[VerificationIssue]:
 
 
 def validate_notebook(path: Path) -> list[VerificationIssue]:
+    """Validate that a notebook matches the repository's playbook conventions."""
+
     notebook = nbformat.read(path, as_version=4)
     validate_notebook_document(notebook)
     issues: list[VerificationIssue] = []
@@ -99,6 +109,8 @@ def validate_notebook(path: Path) -> list[VerificationIssue]:
 
 
 def verify_repository_surfaces(root: Path) -> dict[str, object]:
+    """Validate the Makefile and all tracked notebooks under ``root``."""
+
     issues = validate_makefile(root / "Makefile")
     notebooks = sorted((root / "notebooks").glob("*.ipynb"))
     for notebook_path in notebooks:

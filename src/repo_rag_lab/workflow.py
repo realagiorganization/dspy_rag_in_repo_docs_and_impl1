@@ -1,3 +1,5 @@
+"""Baseline repository question-answering workflow built on file retrieval."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,6 +12,8 @@ from .retrieval import Chunk, chunk_documents, retrieve
 
 @dataclass(frozen=True)
 class RAGAnswer:
+    """Answer payload returned by the baseline repository RAG workflow."""
+
     question: str
     answer: str
     context: list[Chunk]
@@ -17,6 +21,8 @@ class RAGAnswer:
 
 
 def ask_repository(question: str, root: Path) -> RAGAnswer:
+    """Answer a repository-grounded question using the baseline retrieval pipeline."""
+
     documents = load_documents(root)
     chunks = chunk_documents(documents)
     context = retrieve(question, chunks)
@@ -28,6 +34,8 @@ def ask_repository(question: str, root: Path) -> RAGAnswer:
 def synthesize_answer(
     question: str, context: list[Chunk], mcp_servers: list[dict[str, str]]
 ) -> str:
+    """Render a readable answer from retrieved context and MCP discovery hints."""
+
     if not context:
         return (
             f"No repository evidence matched the question: {question!r}. "

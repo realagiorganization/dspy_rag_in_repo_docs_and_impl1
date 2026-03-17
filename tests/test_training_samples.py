@@ -6,6 +6,7 @@ from repo_rag_lab.training_samples import (
     batch_training_examples,
     load_training_examples,
     summarize_training_examples,
+    validate_training_examples,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -17,6 +18,7 @@ def test_load_training_examples_reads_repository_samples() -> None:
     )
     assert len(examples) >= 3
     assert examples[0].question
+    assert examples[0].expected_sources
 
 
 def test_batch_training_examples_preserves_all_items() -> None:
@@ -33,4 +35,12 @@ def test_summarize_training_examples_lists_tags() -> None:
     )
     summary = summarize_training_examples(examples)
     assert summary["example_count"] == len(examples)
+    assert summary["benchmark_count"] == len(examples)
     assert "repo" in summary["unique_tags"]
+
+
+def test_validate_training_examples_accepts_repository_samples() -> None:
+    examples = load_training_examples(
+        REPO_ROOT / "samples" / "training" / "repository_training_examples.yaml"
+    )
+    assert validate_training_examples(examples, root=REPO_ROOT) == []
