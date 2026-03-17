@@ -4,6 +4,8 @@
 [![Publish](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/publish.yml/badge.svg)](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/publish.yml)
 [![Coverage](https://img.shields.io/badge/coverage-94.12%25-brightgreen)](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/ci.yml)
 
+[![Publication article banner](publication/article-banner.png)](publication/repository-rag-lab-article.pdf)
+
 This repository is a `uv`-first research lab for repository-grounded Retrieval-Augmented
 Generation. Notebooks, the packaged Python CLI, `make` targets, tests, CI, and the Rust wrapper
 all share the same implementation so experiments and automation stay aligned.
@@ -37,6 +39,15 @@ make quality
 make ask QUESTION="What does this repository research?"
 ```
 
+## Publication Draft
+
+The repository now includes a publication-style article that explains the project piece by piece,
+from corpus loading and retrieval through MCP discovery, notebook scaffolding, verification, and
+the Rust wrapper.
+
+- Read the PDF: [publication/repository-rag-lab-article.pdf](publication/repository-rag-lab-article.pdf)
+- Rebuild it locally: `make paper-build`
+
 ## Preferred Workflow Surfaces
 
 | Surface | Preferred command | Purpose |
@@ -51,6 +62,7 @@ make ask QUESTION="What does this repository research?"
 | GitHub run list | `make gh-runs` | List recent GitHub Actions runs through `gh`. |
 | GitHub run watch | `make gh-watch` | Watch the latest or selected GitHub Actions run until completion. |
 | GitHub failed logs | `make gh-failed-logs` | Print failed job logs for the latest or selected run when CI breaks. |
+| Publication PDF | `make paper-build` | Build the LaTeX article PDF and clipped banner image. |
 | Notebook research | `make notebook` | Open the main notebook playbook in JupyterLab. |
 | Rust wrapper | `cargo run --manifest-path rust-cli/Cargo.toml -- ask --question "..."` | Run the same Python workflow through the Rust shim. |
 
@@ -65,6 +77,7 @@ make ask QUESTION="What does this repository research?"
 | `samples/training/` | Starter question-answer pairs for DSPy-oriented experiments. |
 | `samples/population/` | Starter corpus-planning data for staged repository ingestion. |
 | `documentation/` | Supporting notes for Azure deployment and inspired external implementations. |
+| `publication/` | LaTeX article source, bibliography, committed PDF, clipped banner image, and local build helpers. |
 | `samples/logs/` | Post-push GitHub Actions inspection logs captured with `gh`. |
 | `artifacts/` | Generated Azure manifests, tuning metadata, and notebook run logs. |
 | `rust-cli/` | Thin Rust wrapper that delegates to `uv run repo-rag`. |

@@ -21,6 +21,8 @@ REQUIRED_MAKE_TARGETS = {
     "gh-runs",
     "gh-watch",
     "gh-failed-logs",
+    "paper-build",
+    "paper-clean",
     "compile",
     "coverage",
     "lint",

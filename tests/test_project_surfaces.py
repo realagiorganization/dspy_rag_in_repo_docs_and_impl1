@@ -5,6 +5,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
+import yaml
 
 from repo_rag_lab.azure import write_deployment_manifest, write_tuning_run_metadata
 from repo_rag_lab.notebook_support import (
@@ -99,3 +100,35 @@ def test_pyproject_exposes_uv_build_and_console_script() -> None:
     pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert pyproject["build-system"]["build-backend"] == "uv_build"
     assert pyproject["project"]["scripts"]["repo-rag"] == "repo_rag_lab.cli:main"
+
+
+def test_publication_surface_files_exist_and_are_linked() -> None:
+    publication_dir = REPO_ROOT / "publication"
+    assert (publication_dir / "README.md").exists()
+    assert (publication_dir / "Makefile").exists()
+    assert (publication_dir / "references.bib").exists()
+    assert (publication_dir / "repository-rag-lab-article.tex").exists()
+    assert (publication_dir / "repository-rag-lab-article.pdf").exists()
+    assert (publication_dir / "article-banner.png").exists()
+
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    assert "publication/repository-rag-lab-article.pdf" in readme
+    assert "publication/article-banner.png" in readme
+    assert "make paper-build" in readme
+
+
+def test_publication_workflow_builds_and_uploads_pdf() -> None:
+    workflow_path = REPO_ROOT / ".github" / "workflows" / "publication-pdf.yml"
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+
+    assert workflow["name"] == "Publication PDF"
+    job = workflow["jobs"]["publication-pdf"]
+    steps = job["steps"]
+
+    assert any(step.get("uses") == "actions/checkout@v6" for step in steps)
+    assert any(step.get("uses") == "xu-cheng/latex-action@v4" for step in steps)
+    assert any(
+        step.get("uses") == "actions/upload-artifact@v6"
+        and step.get("with", {}).get("path") == "publication/repository-rag-lab-article.pdf"
+        for step in steps
+    )

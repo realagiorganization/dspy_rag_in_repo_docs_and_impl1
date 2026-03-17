@@ -1,0 +1,208 @@
+\documentclass[11pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{longtable}
+\usepackage[table]{xcolor}
+
+\definecolor{PaperNavy}{HTML}{0F2336}
+\definecolor{PaperSlate}{HTML}{35536B}
+\definecolor{PaperGold}{HTML}{C98A1B}
+\definecolor{PaperMist}{HTML}{F5F2EA}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=PaperNavy,
+  citecolor=PaperGold,
+  urlcolor=PaperSlate,
+  pdftitle={Repository RAG Lab Article},
+  pdfauthor={OpenAI Codex}
+}
+
+\setlist[itemize]{leftmargin=1.4em}
+\renewcommand{\arraystretch}{1.2}
+
+\newcommand{\projectbanner}{
+  \noindent
+  \colorbox{PaperNavy}{%
+    \parbox{\dimexpr\linewidth-2\fboxsep\relax}{%
+      \vspace{14pt}
+      {\color{white}\fontsize{20}{22}\selectfont\bfseries Repository RAG Lab}\par
+      \vspace{4pt}
+      {\color{PaperMist}\large A uv-first publication sketch for repository-grounded retrieval, MCP discovery, and deployment handoff}\par
+      \vspace{8pt}
+      {\color{PaperGold}\normalsize Piece-by-piece implementation map, verification story, and research positioning}\par
+      \vspace{14pt}
+    }%
+  }
+}
+
+\title{\vspace{-1.6em}A Publication-Style Walkthrough of Repository RAG Lab}
+\author{OpenAI Codex}
+\date{March 17, 2026}
+
+\begin{document}
+
+\projectbanner
+
+\vspace{1.25em}
+\maketitle
+\thispagestyle{empty}
+
+\begin{abstract}
+Repository RAG Lab is a compact research scaffold for repository-grounded Retrieval-Augmented
+Generation (RAG) built around a single implementation shared by notebooks, a Python command-line
+interface, \texttt{make} targets, quality gates, and a thin Rust wrapper. This article describes
+the project piece by piece, from corpus loading and lexical retrieval to MCP candidate discovery,
+Azure deployment handoff, notebook playbooks, and verification workflows. The result is not a
+full production RAG platform; it is a deliberately inspectable lab environment that keeps
+research, automation, and packaging aligned while leaving clear seams for stronger retrieval and
+true DSPy compilation later \cite{lewis2020rag,khattab2024dspy,mcp2024}.
+\end{abstract}
+
+\section{Project Scope}
+
+The repository solves a narrow but useful problem: answering questions about a codebase by using
+the repository itself as the retrieval corpus. The current scope has three parts.
+
+\begin{itemize}
+  \item Repository-grounded question answering over files such as Markdown, Python, Rust, YAML,
+  JSON, and now C headers and sources.
+  \item MCP candidate discovery from repository metadata and package-adjacent hints.
+  \item Azure deployment-manifest generation for downstream workflows that operate outside the
+  repository itself \cite{azureinference2025}.
+\end{itemize}
+
+This means the project is best understood as a cohesive lab scaffold rather than a finished
+service. It is opinionated about reproducibility and visibility: the same behavior should be
+reachable through notebooks, tests, the Python CLI, and \texttt{make}.
+
+\section{Piece-By-Piece Architecture}
+
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.19\linewidth} >{\raggedright\arraybackslash}p{0.33\linewidth} >{\raggedright\arraybackslash}p{0.38\linewidth}}
+\toprule
+Layer & Primary files & Responsibility \\
+\midrule
+Corpus loading & \texttt{src/repo\_rag\_lab/corpus.py} & Walk the repository, keep text-like files, skip noisy paths, and load documents into a shared representation. \\
+Retrieval & \texttt{src/repo\_rag\_lab/retrieval.py} & Chunk documents and rank them with a simple lexical overlap baseline. \\
+Answer synthesis & \texttt{src/repo\_rag\_lab/workflow.py} & Assemble top-ranked context into a readable repository-grounded answer. \\
+MCP discovery & \texttt{src/repo\_rag\_lab/mcp.py} & Infer likely MCP-related surfaces from repository and package metadata. \\
+CLI surface & \texttt{src/repo\_rag\_lab/cli.py} & Expose ask, smoke test, MCP discovery, surface verification, and manifest generation through a packaged command. \\
+Notebook scaffolding & \texttt{src/repo\_rag\_lab/notebook\_scaffolding.py} and \texttt{notebooks/} & Keep research notebooks tied to reusable package helpers instead of ad hoc notebook-only logic. \\
+Verification & \texttt{src/repo\_rag\_lab/verification.py}, \texttt{Makefile}, and \texttt{.github/workflows/} & Enforce repository surface expectations and route checks through stable automation layers. \\
+Rust wrapper & \texttt{rust-cli/src/main.rs} & Delegate to the Python CLI so the repo can be exercised from a Rust entrypoint without duplicating logic. \\
+\bottomrule
+\end{longtable}
+
+\section{From Files To Answers}
+
+The baseline answer path mirrors the standard RAG structure introduced by Lewis et al.
+\cite{lewis2020rag}, but it keeps the mechanics intentionally small and inspectable.
+
+\subsection{Corpus Construction}
+
+The repository loader walks the local tree, ignores generated directories such as
+\texttt{artifacts/}, \texttt{dist/}, and cache folders, then reads supported text-like files into
+\texttt{RepoDocument} records. The recent hushwheel fixture work widened this surface to include
+C source and header files, which matters for source-heavy corpora.
+
+\subsection{Chunking And Ranking}
+
+Documents are chunked into fixed-size text slices and ranked with lexical overlap plus light
+density weighting. This is explicitly a baseline, not an embeddings-backed system. That choice is
+important for the project: the current behavior is transparent enough to inspect, benchmark, and
+replace later.
+
+\subsection{Answer Synthesis}
+
+The baseline workflow packages the top chunks, the user question, and any MCP hints into a final
+answer object. The same implementation is reused by smoke tests, the notebooks, and the Rust
+shim. That consistency is one of the repository's strongest design decisions.
+
+\section{DSPy And Research Workflow}
+
+The project already depends on DSPy and exposes a DSPy-shaped runtime path, but it does not yet
+compile optimized DSPy programs or persist tuned artifacts. The current state is closer to a
+research preparation environment than a full declarative DSPy pipeline \cite{khattab2024dspy}.
+
+The supporting pieces are already present:
+
+\begin{itemize}
+  \item training examples in \texttt{samples/training/}
+  \item population-planning seeds in \texttt{samples/population/}
+  \item notebook helpers for benchmark summaries and logging
+  \item a dedicated DSPy guide in \texttt{README.DSPY.MD}
+\end{itemize}
+
+That is enough to explain the future direction clearly. What is missing is the automated
+teleprompter or optimizer stage and the artifact-loading path that a publication-ready DSPy
+workflow would normally include.
+
+\section{Operational Surfaces}
+
+Repository RAG Lab behaves like one project with several front doors:
+
+\begin{itemize}
+  \item \texttt{make ask QUESTION="..."} for baseline repository questions
+  \item \texttt{make discover-mcp} for repository-local MCP inspection
+  \item \texttt{make smoke-test} for an end-to-end sanity pass
+  \item \texttt{make verify-surfaces} for notebook and Makefile contract checks
+  \item \texttt{make quality} for compile, lint, type, complexity, test, and coverage gates
+  \item \texttt{cargo run --manifest-path rust-cli/Cargo.toml -- ask --question "..."} for the Rust entrypoint
+\end{itemize}
+
+This publication folder adds one more operational surface: a publication-style article that can be
+built locally and in GitHub Actions. That matters because the repository already treats docs,
+checks, and runnable code as one system.
+
+\section{Verification Story}
+
+The repository's verification loop is unusually explicit for a small research scaffold. Audit notes
+under \texttt{docs/audit/} record what was actually run, \texttt{samples/logs/} preserves post-push
+CI evidence, and the Makefile routes core checks through stable commands.
+
+The current completeness threshold is therefore concrete rather than rhetorical:
+
+\begin{itemize}
+  \item local compile, smoke, and targeted utility tests must pass
+  \item the Python quality gate must clear its coverage threshold
+  \item the Rust wrapper must still build
+  \item GitHub Actions evidence must be captured after pushes
+\end{itemize}
+
+That verification discipline is a meaningful part of the project contribution. It lets a reader
+trust the scaffold as an executable research artifact rather than a loose notebook dump.
+
+\section{Limitations And Next Steps}
+
+The project still has visible limits, and the repository now documents them plainly.
+
+\begin{itemize}
+  \item Retrieval is lexical and intentionally simple.
+  \item Automated DSPy compilation and artifact persistence are still backlog items.
+  \item Live Azure deployment validation is outside the repository scope today.
+  \item UI and browser-level tests do not exist.
+\end{itemize}
+
+Those gaps do not weaken the core idea. Instead, they define the next layer of work: replace the
+retriever, formalize DSPy optimization, and keep the same shared workflow contract as the system
+becomes stronger.
+
+\section{Conclusion}
+
+Repository RAG Lab is most useful as a transparent, end-to-end scaffold for repository-grounded
+RAG research. Its value is not a single novel algorithm; it is the coherence between corpus
+loading, retrieval, workflow entrypoints, notebook playbooks, verification, and packaging. That
+coherence makes the repository easy to inspect, easy to extend, and easy to explain.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}

@@ -7,7 +7,7 @@ PYTEST_COV_ARGS ?= --cov=src/repo_rag_lab --cov-report=term-missing --cov-report
 GH_RUN_LIMIT ?= 10
 RUN_ID ?=
 
-.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask discover-mcp utility-summary smoke-test verify-surfaces gh-runs gh-watch gh-failed-logs notebook bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run azure-manifest fmt build publish
+.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask discover-mcp utility-summary smoke-test verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run azure-manifest fmt build publish
 
 setup:
 	$(UV) sync --extra azure
@@ -60,6 +60,12 @@ gh-failed-logs:
 	fi; \
 	test -n "$$run_id"; \
 	gh run view "$$run_id" --log-failed
+
+paper-build:
+	$(MAKE) -C publication build
+
+paper-clean:
+	$(MAKE) -C publication clean
 
 notebook: sync
 	$(UV) run jupyter lab notebooks/01_repo_rag_research.ipynb

@@ -1,0 +1,40 @@
+name: Publication PDF
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/publication-pdf.yml"
+      - "publication/**"
+      - "README.md"
+  pull_request:
+    paths:
+      - ".github/workflows/publication-pdf.yml"
+      - "publication/**"
+      - "README.md"
+  workflow_dispatch:
+
+jobs:
+  publication-pdf:
+    name: Build Publication PDF
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          lfs: true
+
+      - name: Compile article PDF
+        uses: xu-cheng/latex-action@v4
+        with:
+          root_file: repository-rag-lab-article.tex
+          working_directory: publication
+          args: -pdf -file-line-error -halt-on-error -interaction=nonstopmode
+
+      - name: Upload publication PDF
+        uses: actions/upload-artifact@v6
+        with:
+          name: publication-pdf
+          path: publication/repository-rag-lab-article.pdf
+          if-no-files-found: error
