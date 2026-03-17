@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 TEXT_SUFFIXES = {
+    ".c",
+    ".h",
     ".md",
     ".txt",
     ".py",

@@ -1,0 +1,11 @@
+{
+  "entry_count": 4108,
+  "source_size_bytes": 1725649,
+  "doc_files": [
+    "README.md",
+    "docs/concepts.md",
+    "docs/operations.md",
+    "docs/districts.md",
+    "docs/catalog.md"
+  ]
+}
