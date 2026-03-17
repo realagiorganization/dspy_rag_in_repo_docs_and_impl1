@@ -19,6 +19,8 @@ This audit covers the hushwheel follow-up work added in this turn:
 
 Executed successfully in this turn:
 
+- `uv sync --extra azure`
+- `make hooks-install`
 - `make utility-summary`
 - `uv run python -m compileall src tests`
 - `uv run pytest tests/test_training_samples.py tests/test_population_samples.py tests/test_benchmarks_and_notebook_scaffolding.py tests/test_hushwheel_fixture.py`
@@ -26,17 +28,17 @@ Executed successfully in this turn:
 - `uv run repo-rag smoke-test`
 - `cargo build --manifest-path rust-cli/Cargo.toml`
 - `make quality`
-- `make hooks-install`
 
 Notable results:
 
+- `make utility-summary`: pass
 - `uv run python -m compileall src tests`: pass
-- `uv run pytest tests/test_training_samples.py tests/test_population_samples.py tests/test_benchmarks_and_notebook_scaffolding.py tests/test_hushwheel_fixture.py`: pass, `24 passed in 22.20s`
+- `uv run pytest tests/test_training_samples.py tests/test_population_samples.py tests/test_benchmarks_and_notebook_scaffolding.py tests/test_hushwheel_fixture.py`: pass, `24 passed in 12.70s`
 - `make verify-surfaces`: pass, `checked_notebook_count: 5`, `issue_count: 0`
 - `uv run repo-rag smoke-test`: pass, reported `answer_contains_repository: true`, `mcp_candidate_count: 1`, and `manifest_path: artifacts/azure/repo-rag-smoke.json`
 - `cargo build --manifest-path rust-cli/Cargo.toml`: pass
-- `make quality`: pass, `47 passed in 63.39s` with total coverage `88.62%` against the `85%` floor
 - `make hooks-install`: pass
+- `make quality`: pass, `47 passed in 53.60s` with total coverage `88.62%` against the `85%` floor
 
 ## Verification Notes
 
