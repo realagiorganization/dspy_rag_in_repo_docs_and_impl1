@@ -14,6 +14,9 @@ verification results, and anchor status statements to the newest file in `docs/a
 - `make discover-mcp`
 - `make smoke-test`
 - `make verify-surfaces`
+- `make gh-runs`
+- `make gh-watch`
+- `make gh-failed-logs`
 - `uv run repo-rag utility-summary`
 - `uv run repo-rag ask --question "..." --use-dspy`
 
@@ -24,7 +27,7 @@ verification results, and anchor status statements to the newest file in `docs/a
 3. When changing retrieval, MCP discovery, deployment metadata, or verification behavior, update tests and notebook guidance in the same turn.
 4. If adding a new user-facing utility, expose it through both the Python CLI and the `Makefile` when practical.
 5. Prefer tests that validate user-visible behavior instead of only internal helpers.
-6. After every push, inspect GitHub Actions with `gh` and write a summary log into `samples/logs/`.
+6. After every push, run `make gh-runs`, then `make gh-watch`, and write a summary log into `samples/logs/`. If the watched run fails, inspect it with `make gh-failed-logs`, fix the repository, rerun local validation, and push again.
 7. If a permission-gated action is blocked, explicitly offer the user the option to make that permission permanent in Codex settings before retrying.
 8. Keep reusable notebook logic in `src/` with doctests or normal pytest coverage instead of embedding it in notebook cells.
 9. Keep the repository fully `uv`-managed unless `uv` no longer covers a required workflow.
@@ -37,7 +40,7 @@ verification results, and anchor status statements to the newest file in `docs/a
 - For coverage-specific checks, run `make coverage`.
 - After syncing the environment, run `make hooks-install`.
 - If `cargo` exists, also run `cargo build --manifest-path rust-cli/Cargo.toml`.
-- After pushing, run `gh run list --limit 10` and store the relevant run details in `samples/logs/`.
+- After pushing, run `make gh-runs GH_RUN_LIMIT=10`, then `make gh-watch`, and store the relevant run details in `samples/logs/`.
 
 ## Audit Files
 

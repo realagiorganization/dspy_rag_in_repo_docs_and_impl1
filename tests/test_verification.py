@@ -14,6 +14,9 @@ def test_validate_makefile_flags_missing_targets(tmp_path: Path) -> None:
     issues = validate_makefile(makefile)
 
     assert any(issue.message == "Missing target `coverage`." for issue in issues)
+    assert any(issue.message == "Missing target `gh-runs`." for issue in issues)
+    assert any(issue.message == "Missing target `gh-watch`." for issue in issues)
+    assert any(issue.message == "Missing target `gh-failed-logs`." for issue in issues)
     assert any(issue.message == "Missing target `hooks-install`." for issue in issues)
     assert any(issue.message == "Missing target `quality`." for issue in issues)
     assert any(issue.message == "Target `quality` must be listed in .PHONY." for issue in issues)

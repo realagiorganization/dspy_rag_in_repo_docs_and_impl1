@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-03-17-notebook-scaffolding.md`
+- `2026-03-17-gh-actions-watch-loop.md`
 
 ## Usage
 

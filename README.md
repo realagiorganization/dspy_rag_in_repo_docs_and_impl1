@@ -48,6 +48,9 @@ make ask QUESTION="What does this repository research?"
 | MCP discovery | `make discover-mcp` | Inspect MCP-related repository artifacts. |
 | Smoke test | `make smoke-test` | Check answer generation, MCP discovery, and Azure manifest output together. |
 | Surface verification | `make verify-surfaces` | Enforce the Makefile and notebook contract. |
+| GitHub run list | `make gh-runs` | List recent GitHub Actions runs through `gh`. |
+| GitHub run watch | `make gh-watch` | Watch the latest or selected GitHub Actions run until completion. |
+| GitHub failed logs | `make gh-failed-logs` | Print failed job logs for the latest or selected run when CI breaks. |
 | Notebook research | `make notebook` | Open the main notebook playbook in JupyterLab. |
 | Rust wrapper | `cargo run --manifest-path rust-cli/Cargo.toml -- ask --question "..."` | Run the same Python workflow through the Rust shim. |
 

@@ -10,6 +10,9 @@ them over ad hoc shell commands so every workflow hits the same package code.
 - `make discover-mcp`: inspect repository-local MCP candidates.
 - `make smoke-test`: exercise answer generation, MCP discovery, and Azure manifest output together.
 - `make verify-surfaces`: validate the Makefile and notebook contract.
+- `make gh-runs`: list the latest GitHub Actions runs with `gh`.
+- `make gh-watch`: watch the latest or selected GitHub Actions run and exit with its status.
+- `make gh-failed-logs`: show failed job logs for the latest or selected run.
 - `make azure-manifest MODEL_ID=... DEPLOYMENT_NAME=...`: write Azure deployment metadata.
 - `uv run repo-rag ...`: call the packaged CLI directly inside the locked `uv` environment.
 - `make build`: build the wheel and source distribution through `uv build`.
