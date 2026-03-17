@@ -10,6 +10,7 @@ from repo_rag_lab.training_samples import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+HUSHWHEEL_FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures" / "hushwheel_lexiconarium"
 
 
 def test_load_training_examples_reads_repository_samples() -> None:
@@ -44,3 +45,11 @@ def test_validate_training_examples_accepts_repository_samples() -> None:
         REPO_ROOT / "samples" / "training" / "repository_training_examples.yaml"
     )
     assert validate_training_examples(examples, root=REPO_ROOT) == []
+
+
+def test_validate_training_examples_accepts_hushwheel_fixture_samples() -> None:
+    examples = load_training_examples(
+        REPO_ROOT / "samples" / "training" / "hushwheel_fixture_training_examples.yaml"
+    )
+    assert len(examples) == 6
+    assert validate_training_examples(examples, root=HUSHWHEEL_FIXTURE_ROOT) == []

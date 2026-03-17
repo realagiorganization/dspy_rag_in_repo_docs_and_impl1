@@ -1,0 +1,21 @@
+- source: README.md
+  rationale: The fixture overview names the commands, concepts, and retrieval prompts.
+  priority: 1
+- source: docs/concepts.md
+  rationale: The concept guide explains ember index, lantern vowel, and moss ledger semantics.
+  priority: 2
+- source: docs/operations.md
+  rationale: The operations guide maps user questions to concrete functions and commands.
+  priority: 3
+- source: src/hushwheel.c
+  rationale: The giant source file contains the full glossary table and command implementation.
+  priority: 4
+- source: include/hushwheel.h
+  rationale: The header defines the central GlossaryEntry shape and public entrypoint.
+  priority: 5
+- source: docs/catalog.md
+  rationale: The catalog provides repeated term-level evidence for lore-heavy retrieval questions.
+  priority: 6
+- source: docs/districts.md
+  rationale: The district notes broaden the lore corpus when concept queries get repetitive.
+  priority: 7

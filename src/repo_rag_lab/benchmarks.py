@@ -28,7 +28,9 @@ BENCHMARK_EXCLUDED_PARTS = {
     "tests",
 }
 BENCHMARK_EXCLUDED_PATH_SNIPPETS = (
+    "REPO_COMPLETENESS_CHECKLIST.md",
     "README.DSPY.MD",
+    "documentation/hushwheel-fixture-rag-guide.md",
     "samples/population/",
     "samples/logs/",
     "samples/training/",
@@ -93,9 +95,10 @@ def _select_benchmark_documents(root: Path) -> list[RepoDocument]:
 
     documents: list[RepoDocument] = []
     for document in load_documents(root):
-        if any(part in BENCHMARK_EXCLUDED_PARTS for part in document.path.parts):
+        relative_path = document.path.relative_to(root)
+        if any(part in BENCHMARK_EXCLUDED_PARTS for part in relative_path.parts):
             continue
-        path_text = str(document.path)
+        path_text = str(relative_path)
         if any(snippet in path_text for snippet in BENCHMARK_EXCLUDED_PATH_SNIPPETS):
             continue
         documents.append(document)

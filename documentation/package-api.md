@@ -14,7 +14,7 @@ notebooks stay readable, testable, and aligned with CLI and automation entrypoin
 ## Notebook-Facing Modules
 
 - `notebook_support.py`: repository-root resolution, notebook assertions, and notebook run logging.
-- `notebook_scaffolding.py`: high-level training, workflow, and population scaffolds used directly by notebooks.
+- `notebook_scaffolding.py`: high-level training, workflow, population, and fixture-specific scaffolds used directly by notebooks.
 - `training_samples.py`: training sample loading, summarization, and validation.
 - `population_samples.py`: population candidate loading, extension, validation, and empirical re-ranking.
 - `benchmarks.py`: retrieval benchmark assertions derived from training samples.

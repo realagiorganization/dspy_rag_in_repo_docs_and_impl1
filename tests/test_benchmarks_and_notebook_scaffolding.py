@@ -10,6 +10,7 @@ from repo_rag_lab.benchmarks import (
 )
 from repo_rag_lab.notebook_scaffolding import (
     build_agent_workflow_context,
+    build_hushwheel_fixture_lab_context,
     build_population_lab_context,
     build_research_playbook_context,
     build_training_lab_context,
@@ -17,6 +18,7 @@ from repo_rag_lab.notebook_scaffolding import (
 from repo_rag_lab.training_samples import load_training_examples
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+HUSHWHEEL_FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures" / "hushwheel_lexiconarium"
 
 
 def _copy_scaffold_inputs(tmp_path: Path) -> Path:
@@ -62,6 +64,16 @@ def test_build_training_lab_context_writes_metadata_and_reports_clean_validation
     assert (root / payload["tuning_metadata_path"]).exists()
 
 
+def test_build_training_lab_context_uses_paths_relative_to_selected_root(
+    tmp_path: Path,
+) -> None:
+    root = _copy_scaffold_inputs(tmp_path / "tests" / "fixture_repo")
+    payload = build_training_lab_context(root)
+
+    assert payload["validation_issues"] == []
+    assert payload["benchmark_summary"]["pass_rate"] == 1.0
+
+
 def test_build_population_lab_context_extends_and_reranks_candidates(tmp_path: Path) -> None:
     root = _copy_scaffold_inputs(tmp_path)
     payload = build_population_lab_context(root)
@@ -86,3 +98,31 @@ def test_build_research_playbook_context_reports_smoke_and_baseline_details() ->
     assert "Question:" in payload["baseline_answer"]
     assert payload["smoke_test"]["answer_contains_repository"] is True
     assert payload["smoke_test"]["mcp_candidate_count"] == len(payload["mcp_candidates"])
+
+
+def test_hushwheel_fixture_benchmarks_pass_with_nested_fixture_root() -> None:
+    examples = load_training_examples(
+        REPO_ROOT / "samples" / "training" / "hushwheel_fixture_training_examples.yaml"
+    )
+    summary = summarize_benchmark_results(
+        evaluate_retrieval_benchmarks(HUSHWHEEL_FIXTURE_ROOT, build_retrieval_benchmarks(examples))
+    )
+    assert summary["case_count"] == len(examples)
+    assert summary["pass_rate"] == 1.0
+    assert summary["retrieved_source_hits"]["src/hushwheel.c"] >= 1
+
+
+def test_build_hushwheel_fixture_lab_context_reports_fixture_scale_and_answers() -> None:
+    payload = build_hushwheel_fixture_lab_context(REPO_ROOT)
+
+    assert payload["fixture_manifest"]["entry_count"] == 4108
+    assert payload["corpus_summary"]["document_count"] == 8
+    assert payload["corpus_summary"]["chunk_count"] >= 1500
+    assert payload["training_summary"]["example_count"] == 6
+    assert payload["population_summary"]["candidate_count"] == 7
+    assert payload["training_validation_issues"] == []
+    assert payload["population_validation_issues"] == []
+    assert payload["benchmark_summary"]["pass_rate"] == 1.0
+    assert payload["reranked_sources"][0] == "README.md"
+    assert len(payload["highlight_runs"]) == 2
+    assert any("src/hushwheel.c" in run["context_sources"] for run in payload["highlight_runs"])

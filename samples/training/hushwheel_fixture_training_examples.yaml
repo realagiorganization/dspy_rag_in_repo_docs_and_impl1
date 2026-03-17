@@ -1,0 +1,67 @@
+- question: What is the ember index?
+  expected_answer: >-
+    The ember index is a three-digit heat-memory score used to break ties when
+    terms share the same lantern vowel.
+  tags:
+    - hushwheel
+    - concept
+    - ranking
+  expected_sources:
+    - README.md
+    - docs/concepts.md
+    - src/hushwheel.c
+- question: What does the lantern vowel measure?
+  expected_answer: >-
+    The lantern vowel measures the open-vowel count of a term as a lightweight
+    first-pass sorting heuristic.
+  tags:
+    - hushwheel
+    - concept
+    - sorting
+  expected_sources:
+    - README.md
+    - docs/concepts.md
+    - src/hushwheel.c
+- question: How does print_prefix_matches handle prefix search?
+  expected_answer: >-
+    It walks the giant entry table, uses the starts_with helper, and prints one
+    compact result row for each matching term.
+  tags:
+    - hushwheel
+    - code
+    - prefix
+  expected_sources:
+    - docs/operations.md
+    - src/hushwheel.c
+- question: Why does the archive keep a moss ledger?
+  expected_answer: >-
+    The moss ledger is the soggy backup notebook used to settle disputes about
+    synonyms, spellings, and other archive arguments.
+  tags:
+    - hushwheel
+    - concept
+    - lore
+  expected_sources:
+    - README.md
+    - docs/concepts.md
+    - src/hushwheel.c
+- question: What does the stats command report?
+  expected_answer: >-
+    The stats command reports the entry count, category count, district count,
+    and average ember index.
+  tags:
+    - hushwheel
+    - command
+    - stats
+  expected_sources:
+    - README.md
+    - docs/operations.md
+    - src/hushwheel.c
+- question: Which file defines the GlossaryEntry struct?
+  expected_answer: The GlossaryEntry struct is defined in include/hushwheel.h.
+  tags:
+    - hushwheel
+    - code
+    - header
+  expected_sources:
+    - include/hushwheel.h

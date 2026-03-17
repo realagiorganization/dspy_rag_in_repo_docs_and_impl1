@@ -12,6 +12,7 @@ from repo_rag_lab.population_samples import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+HUSHWHEEL_FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures" / "hushwheel_lexiconarium"
 
 
 def test_load_population_candidates_reads_repository_samples() -> None:
@@ -64,3 +65,11 @@ def test_rerank_population_candidates_promotes_empirical_hits() -> None:
     reranked = rerank_population_candidates(candidates, {"utilities/README.md": 4})
     assert reranked[0].source == "utilities/README.md"
     assert reranked[0].priority == 1
+
+
+def test_validate_population_candidates_accepts_hushwheel_fixture_samples() -> None:
+    candidates = load_population_candidates(
+        REPO_ROOT / "samples" / "population" / "hushwheel_fixture_population_candidates.yaml"
+    )
+    assert summarize_population_candidates(candidates)["highest_priority_source"] == "README.md"
+    assert validate_population_candidates(candidates, root=HUSHWHEEL_FIXTURE_ROOT) == []

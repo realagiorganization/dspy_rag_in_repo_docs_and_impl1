@@ -12,6 +12,7 @@ from .benchmarks import (
     evaluate_retrieval_benchmarks,
     summarize_benchmark_results,
 )
+from .corpus import load_documents
 from .mcp import discover_mcp_servers
 from .notebook_support import configure_notebook_logger
 from .population_samples import (
@@ -21,6 +22,7 @@ from .population_samples import (
     summarize_population_candidates,
     validate_population_candidates,
 )
+from .retrieval import chunk_documents
 from .training_samples import (
     load_training_examples,
     summarize_training_examples,
@@ -32,6 +34,15 @@ from .workflow import ask_repository
 LOGGER = configure_notebook_logger("repo_rag_lab.notebook_scaffolding")
 TRAINING_SAMPLES_PATH = Path("samples/training/repository_training_examples.yaml")
 POPULATION_SAMPLES_PATH = Path("samples/population/repository_population_candidates.yaml")
+HUSHWHEEL_FIXTURE_ROOT = Path("tests/fixtures/hushwheel_lexiconarium")
+HUSHWHEEL_TRAINING_SAMPLES_PATH = Path("samples/training/hushwheel_fixture_training_examples.yaml")
+HUSHWHEEL_POPULATION_SAMPLES_PATH = Path(
+    "samples/population/hushwheel_fixture_population_candidates.yaml"
+)
+HUSHWHEEL_HIGHLIGHT_QUESTIONS = (
+    "What is the ember index?",
+    "How does print_prefix_matches handle prefix search?",
+)
 
 
 def build_research_playbook_context(root: Path) -> dict[str, Any]:
@@ -150,5 +161,73 @@ def build_population_lab_context(root: Path) -> dict[str, Any]:
     LOGGER.info(
         "Built population lab context with %s extended candidates.",
         extended_summary["candidate_count"],
+    )
+    return payload
+
+
+def build_hushwheel_fixture_lab_context(root: Path) -> dict[str, Any]:
+    """Build notebook-safe context for the hushwheel retrieval fixture."""
+
+    fixture_root = root / HUSHWHEEL_FIXTURE_ROOT
+    training_path = root / HUSHWHEEL_TRAINING_SAMPLES_PATH
+    population_path = root / HUSHWHEEL_POPULATION_SAMPLES_PATH
+    manifest: dict[str, Any] = json.loads(
+        (fixture_root / "fixture-manifest.json").read_text(encoding="utf-8")
+    )
+    examples = load_training_examples(training_path)
+    candidates = load_population_candidates(population_path)
+    benchmark_summary: dict[str, Any] = summarize_benchmark_results(
+        evaluate_retrieval_benchmarks(fixture_root, build_retrieval_benchmarks(examples))
+    )
+    training_summary: dict[str, Any] = summarize_training_examples(examples)
+    population_summary: dict[str, Any] = summarize_population_candidates(candidates)
+    reranked_candidates = rerank_population_candidates(
+        candidates,
+        {
+            source: int(hit_count)
+            for source, hit_count in benchmark_summary["retrieved_source_hits"].items()
+        },
+    )
+    documents = load_documents(fixture_root)
+    chunks = chunk_documents(documents)
+    corpus_summary: dict[str, Any] = {
+        "document_count": len(documents),
+        "chunk_count": len(chunks),
+        "largest_source": max(documents, key=lambda document: len(document.text)).path.name,
+    }
+    highlight_runs = []
+    for question in HUSHWHEEL_HIGHLIGHT_QUESTIONS:
+        answer = ask_repository(question, fixture_root)
+        highlight_runs.append(
+            {
+                "question": question,
+                "answer": answer.answer,
+                "context_sources": [
+                    str(chunk.source.relative_to(fixture_root)) for chunk in answer.context
+                ],
+            }
+        )
+
+    payload = {
+        "root": str(root),
+        "fixture_root": str(HUSHWHEEL_FIXTURE_ROOT),
+        "training_path": str(HUSHWHEEL_TRAINING_SAMPLES_PATH),
+        "population_path": str(HUSHWHEEL_POPULATION_SAMPLES_PATH),
+        "fixture_manifest": manifest,
+        "corpus_summary": corpus_summary,
+        "training_summary": training_summary,
+        "population_summary": population_summary,
+        "training_validation_issues": validate_training_examples(examples, root=fixture_root),
+        "population_validation_issues": validate_population_candidates(
+            candidates, root=fixture_root
+        ),
+        "benchmark_summary": benchmark_summary,
+        "reranked_sources": [candidate.source for candidate in reranked_candidates],
+        "highlight_runs": highlight_runs,
+    }
+    LOGGER.info(
+        "Built hushwheel fixture context for %s examples across %s documents.",
+        training_summary["example_count"],
+        corpus_summary["document_count"],
     )
     return payload
