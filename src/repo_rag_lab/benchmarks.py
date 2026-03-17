@@ -101,6 +101,17 @@ def _select_benchmark_documents(root: Path) -> list[RepoDocument]:
     return documents
 
 
+def _unique_in_order(items: list[str]) -> tuple[str, ...]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        ordered.append(item)
+    return tuple(ordered)
+
+
 def evaluate_retrieval_benchmarks(
     root: Path, benchmarks: list[RetrievalBenchmark], top_k: int = 4
 ) -> list[RetrievalBenchmarkResult]:
@@ -110,9 +121,12 @@ def evaluate_retrieval_benchmarks(
     results: list[RetrievalBenchmarkResult] = []
     for benchmark in benchmarks:
         retrieved = retrieve(benchmark.question, chunks, top_k=top_k)
-        retrieved_sources = tuple(str(chunk.source.relative_to(root)) for chunk in retrieved)
+        retrieved_sources = _unique_in_order(
+            [str(chunk.source.relative_to(root)) for chunk in retrieved]
+        )
+        expected_source_set = set(benchmark.expected_sources)
         matched_sources = tuple(
-            source for source in retrieved_sources if source in set(benchmark.expected_sources)
+            source for source in retrieved_sources if source in expected_source_set
         )
         results.append(
             RetrievalBenchmarkResult(

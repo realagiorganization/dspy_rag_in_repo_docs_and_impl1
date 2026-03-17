@@ -38,13 +38,17 @@ def build_agent_workflow_context(root: Path) -> dict[str, Any]:
     population_path = root / POPULATION_SAMPLES_PATH
     examples = load_training_examples(training_path)
     benchmarks = build_retrieval_benchmarks(examples)
-    benchmark_summary = summarize_benchmark_results(evaluate_retrieval_benchmarks(root, benchmarks))
+    benchmark_summary: dict[str, Any] = summarize_benchmark_results(
+        evaluate_retrieval_benchmarks(root, benchmarks)
+    )
     candidates = extend_population_candidates(root, load_population_candidates(population_path))
+    mcp_candidates = discover_mcp_servers(root)
     payload = {
         "root": str(root),
         "training_path": str(TRAINING_SAMPLES_PATH),
         "population_path": str(POPULATION_SAMPLES_PATH),
-        "mcp_candidate_count": len(discover_mcp_servers(root)),
+        "mcp_candidate_count": len(mcp_candidates),
+        "mcp_candidates": [candidate.path for candidate in mcp_candidates],
         "training_validation_issues": validate_training_examples(examples, root=root),
         "population_validation_issues": validate_population_candidates(candidates, root=root),
         "benchmark_summary": benchmark_summary,
@@ -63,8 +67,8 @@ def build_training_lab_context(root: Path) -> dict[str, Any]:
     training_path = root / TRAINING_SAMPLES_PATH
     examples = load_training_examples(training_path)
     validation_issues = validate_training_examples(examples, root=root)
-    training_summary = summarize_training_examples(examples)
-    benchmark_summary = summarize_benchmark_results(
+    training_summary: dict[str, Any] = summarize_training_examples(examples)
+    benchmark_summary: dict[str, Any] = summarize_benchmark_results(
         evaluate_retrieval_benchmarks(root, build_retrieval_benchmarks(examples))
     )
     tuning_metadata_path = write_tuning_run_metadata(
@@ -97,9 +101,11 @@ def build_population_lab_context(root: Path) -> dict[str, Any]:
     base_candidates = load_population_candidates(population_path)
     extended_candidates = extend_population_candidates(root, base_candidates)
     examples = load_training_examples(training_path)
-    benchmark_summary = summarize_benchmark_results(
+    benchmark_summary: dict[str, Any] = summarize_benchmark_results(
         evaluate_retrieval_benchmarks(root, build_retrieval_benchmarks(examples))
     )
+    base_summary: dict[str, Any] = summarize_population_candidates(base_candidates)
+    extended_summary: dict[str, Any] = summarize_population_candidates(extended_candidates)
     reranked_candidates = rerank_population_candidates(
         extended_candidates,
         {
@@ -109,14 +115,14 @@ def build_population_lab_context(root: Path) -> dict[str, Any]:
     )
     payload = {
         "population_path": str(POPULATION_SAMPLES_PATH),
-        "base_summary": summarize_population_candidates(base_candidates),
-        "extended_summary": summarize_population_candidates(extended_candidates),
+        "base_summary": base_summary,
+        "extended_summary": extended_summary,
         "validation_issues": validate_population_candidates(extended_candidates, root=root),
         "benchmark_summary": benchmark_summary,
         "reranked_sources": [candidate.source for candidate in reranked_candidates],
     }
     LOGGER.info(
         "Built population lab context with %s extended candidates.",
-        payload["extended_summary"]["candidate_count"],
+        extended_summary["candidate_count"],
     )
     return payload
