@@ -11,12 +11,9 @@ import pytest
 
 from repo_rag_lab import file_summaries as file_summary_module
 
-
-@pytest.fixture(autouse=True)
-def _clear_git_hook_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    for key in tuple(os.environ):
-        if key.startswith("GIT_"):
-            monkeypatch.delenv(key, raising=False)
+for _git_env_key in tuple(os.environ):
+    if _git_env_key.startswith("GIT_"):
+        os.environ.pop(_git_env_key, None)
 
 
 def _write_text(root: Path, relative_path: str, text: str) -> None:

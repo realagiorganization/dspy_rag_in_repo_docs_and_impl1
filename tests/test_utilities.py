@@ -21,12 +21,9 @@ from repo_rag_lab.utilities import (
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-
-@pytest.fixture(autouse=True)
-def _clear_git_hook_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    for key in tuple(os.environ):
-        if key.startswith("GIT_"):
-            monkeypatch.delenv(key, raising=False)
+for _git_env_key in tuple(os.environ):
+    if _git_env_key.startswith("GIT_"):
+        os.environ.pop(_git_env_key, None)
 
 
 def test_utility_summary_mentions_core_surfaces() -> None:
