@@ -74,7 +74,7 @@ the Rust wrapper.
 | Live Azure ask | `make ask-live QUESTION="..."` | Retrieve repository evidence locally, then synthesize a live answer through Azure OpenAI or Azure AI Inference. |
 | DSPy compile | `make dspy-train DSPY_RUN_NAME=...` | Compile and save a repository-grounded DSPy program under `artifacts/dspy/`. |
 | DSPy artifact inspect | `make dspy-artifacts` | List saved DSPy runs, the latest compiled program, and recorded benchmark metadata. |
-| Retrieval evaluation | `make retrieval-eval` | Measure retrieval quality with pass rate, recall, precision, reciprocal rank, per-tag breakdowns, and a top-k sweep. |
+| Retrieval evaluation | `make retrieval-eval` | Measure retrieval quality with pass rate, recall, precision, reciprocal rank, per-tag breakdowns, a top-k sweep, and enforced minimum pass/recall thresholds. |
 | MCP discovery | `make discover-mcp` | Inspect MCP-related repository artifacts. |
 | Smoke test | `make smoke-test` | Check answer generation, MCP discovery, and Azure manifest output together. |
 | Azure OpenAI probe | `make azure-openai-probe` | Validate the Azure OpenAI env contract and run a minimal live chat-completions round trip. |
@@ -128,7 +128,8 @@ Git hooks are managed through `pre-commit`:
 - `make hooks-run-push`
 
 The pre-commit hook stays lightweight with Ruff checks. The pre-push hook runs the heavier
-acceptance gates: mypy, basedpyright, pytest with coverage, and repository-surface verification.
+acceptance gates: mypy, basedpyright, retrieval evaluation, pytest with coverage, and
+repository-surface verification. The same retrieval gate also runs inside `make quality` and CI.
 
 ## Azure Deployment Path
 

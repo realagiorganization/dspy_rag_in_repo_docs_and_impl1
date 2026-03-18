@@ -53,6 +53,9 @@ jobs:
       - name: Verify repository surfaces
         run: uv run repo-rag verify-surfaces
 
+      - name: Run retrieval evaluation gate
+        run: make retrieval-eval
+
       - name: Run radon
         run: uv run radon cc src/repo_rag_lab -s -n B
 

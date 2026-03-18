@@ -7,6 +7,8 @@ import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .benchmarks import assert_retrieval_quality_thresholds
+
 
 def resolve_repo_root(current: Path) -> Path:
     """
@@ -62,16 +64,7 @@ def assert_contains_text(text: str, required_substrings: list[str], *, context: 
 def assert_minimum_pass_rate(summary: dict[str, object], minimum_pass_rate: float = 1.0) -> None:
     """Fail fast in notebooks when retrieval assertions regress."""
 
-    pass_rate_value = summary.get("pass_rate", 0.0)
-    if isinstance(pass_rate_value, (int, float, str)):
-        pass_rate = float(pass_rate_value)
-    else:  # pragma: no cover - defensive guard for malformed notebook payloads
-        raise AssertionError("Benchmark summary pass_rate must be numeric.")
-    if pass_rate < minimum_pass_rate:
-        raise AssertionError(
-            f"Benchmark pass rate {pass_rate:.2f} is below required "
-            f"threshold {minimum_pass_rate:.2f}."
-        )
+    assert_retrieval_quality_thresholds(summary, minimum_pass_rate=minimum_pass_rate)
 
 
 def write_notebook_run_log(root: Path, notebook_name: str, payload: dict[str, object]) -> Path:

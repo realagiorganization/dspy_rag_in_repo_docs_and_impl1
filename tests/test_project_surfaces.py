@@ -203,6 +203,34 @@ def test_publication_workflow_builds_and_uploads_pdf() -> None:
     )
 
 
+def test_retrieval_regression_gate_is_wired_into_quality_pre_push_and_ci() -> None:
+    makefile_text = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    assert "quality: compile lint typecheck verify-surfaces retrieval-eval complexity test" in (
+        makefile_text
+    )
+    assert "RETRIEVAL_MIN_PASS_RATE ?= 1.0" in makefile_text
+    assert "RETRIEVAL_MIN_SOURCE_RECALL ?= 1.0" in makefile_text
+
+    pre_commit = yaml.safe_load((REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
+    hooks = pre_commit["repos"][0]["hooks"]
+    assert any(
+        hook.get("id") == "retrieval-eval-pre-push"
+        and hook.get("entry") == "make retrieval-eval"
+        and hook.get("stages") == ["pre-push"]
+        for hook in hooks
+    )
+
+    ci_workflow = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    )
+    steps = ci_workflow["jobs"]["python"]["steps"]
+    assert any(
+        step.get("name") == "Run retrieval evaluation gate"
+        and step.get("run") == "make retrieval-eval"
+        for step in steps
+    )
+
+
 def test_repo_local_todo_skill_is_recorded() -> None:
     agents_text = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
     skill_path = REPO_ROOT / ".codex" / "skills" / "todo-backlog-sync" / "SKILL.md"

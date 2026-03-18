@@ -32,6 +32,12 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-push]
+      - id: retrieval-eval-pre-push
+        name: retrieval benchmark pre-push gate
+        entry: make retrieval-eval
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
       - id: pytest-pre-push
         name: pytest coverage pre-push gate
         entry: make coverage

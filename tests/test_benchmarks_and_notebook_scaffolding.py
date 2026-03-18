@@ -7,7 +7,9 @@ import pytest
 
 from repo_rag_lab.benchmarks import (
     RetrievalBenchmarkResult,
+    assert_retrieval_quality_thresholds,
     build_retrieval_benchmarks,
+    check_retrieval_quality_thresholds,
     evaluate_retrieval_benchmarks,
     evaluate_retrieval_quality_suite,
     is_benchmark_document_path,
@@ -112,6 +114,29 @@ def test_evaluate_retrieval_quality_suite_reports_top_k_summaries() -> None:
     assert suite["default_summary"]["top_k"] == 4
     assert suite["default_summary"]["tag_summaries"]
     assert [summary["top_k"] for summary in suite["top_k_summaries"]] == [1, 4]
+
+
+def test_retrieval_quality_threshold_helpers_report_regressions() -> None:
+    summary = {
+        "pass_rate": 0.75,
+        "average_source_recall": 0.5,
+    }
+
+    failures = check_retrieval_quality_thresholds(
+        summary,
+        minimum_pass_rate=1.0,
+        minimum_source_recall=0.75,
+    )
+
+    assert "Benchmark pass rate 0.75 is below required threshold 1.00." in failures
+    assert "Benchmark average source recall 0.50 is below required threshold 0.75." in failures
+
+    with pytest.raises(AssertionError, match=r"Benchmark pass rate 0\.75"):
+        assert_retrieval_quality_thresholds(
+            summary,
+            minimum_pass_rate=1.0,
+            minimum_source_recall=0.75,
+        )
 
 
 def test_is_benchmark_document_path_excludes_operational_repo_surfaces() -> None:

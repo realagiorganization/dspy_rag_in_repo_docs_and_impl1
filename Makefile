@@ -26,6 +26,8 @@ RUNTIME_LOAD_ENV_FILE ?= 1
 RETRIEVAL_TRAINING_PATH ?= samples/training/repository_training_examples.yaml
 RETRIEVAL_TOP_K ?= 4
 RETRIEVAL_TOP_K_SWEEP ?= 1,2,4,8
+RETRIEVAL_MIN_PASS_RATE ?= 1.0
+RETRIEVAL_MIN_SOURCE_RECALL ?= 1.0
 PYTEST_COV_ARGS ?= --cov=src/repo_rag_lab --cov-report=term-missing --cov-report=xml
 GH_RUN_LIMIT ?= 10
 RUN_ID ?=
@@ -92,7 +94,9 @@ dspy-artifacts: sync
 
 retrieval-eval: sync
 	$(UV) run repo-rag retrieval-eval --root . --training-path "$(RETRIEVAL_TRAINING_PATH)" \
-		--top-k $(RETRIEVAL_TOP_K) --top-k-sweep "$(RETRIEVAL_TOP_K_SWEEP)"
+		--top-k $(RETRIEVAL_TOP_K) --top-k-sweep "$(RETRIEVAL_TOP_K_SWEEP)" \
+		$(if $(strip $(RETRIEVAL_MIN_PASS_RATE)),--minimum-pass-rate $(RETRIEVAL_MIN_PASS_RATE),) \
+		$(if $(strip $(RETRIEVAL_MIN_SOURCE_RECALL)),--minimum-source-recall $(RETRIEVAL_MIN_SOURCE_RECALL),)
 
 discover-mcp: sync
 	$(UV) run repo-rag discover-mcp
@@ -193,7 +197,7 @@ typecheck: sync
 complexity: sync
 	$(UV) run radon cc src/repo_rag_lab -s -n B
 
-quality: compile lint typecheck verify-surfaces complexity test
+quality: compile lint typecheck verify-surfaces retrieval-eval complexity test
 
 rust-fmt:
 	cargo fmt --manifest-path rust-cli/Cargo.toml --check

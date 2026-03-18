@@ -237,7 +237,8 @@ def test_cli_main_other_commands(
     def fake_retrieval_evaluation(root: Path, **_: object) -> str:
         return (
             '{"training_path": "samples/training/repository_training_examples.yaml", '
-            f'"default_top_k": 4, "benchmark_count": 8, "root": "{root}"}}'
+            '"default_top_k": 4, "benchmark_count": 8, '
+            f'"threshold_failures": [], "root": "{root}"}}'
         )
 
     def fake_dspy_artifacts(root: Path) -> str:
@@ -281,6 +282,8 @@ def test_cli_main_other_commands(
                 "training_path": "samples/training/repository_training_examples.yaml",
                 "top_k": 4,
                 "top_k_sweep": "1,2,4,8",
+                "minimum_pass_rate": 1.0,
+                "minimum_source_recall": 1.0,
             },
         )(),
         type("Args", (), {"command": "sync-todo-backlog", "root": str(tmp_path)})(),
@@ -336,6 +339,39 @@ def test_cli_main_other_commands(
     assert '"default_top_k": 4' in output
     assert "todo-backlog.yaml" in output
     assert "exploratorium_translation.pdf" in output
+
+
+def test_cli_main_retrieval_eval_returns_nonzero_on_threshold_failure(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    def fake_retrieval_evaluation(root: Path, **_: object) -> str:
+        return (
+            '{"training_path": "samples/training/repository_training_examples.yaml", '
+            f'"default_top_k": 4, "benchmark_count": 8, "threshold_failures": ["regressed"], '
+            f'"root": "{root}"}}'
+        )
+
+    def fake_parse_args(self: object) -> object:
+        del self
+        return type(
+            "Args",
+            (),
+            {
+                "command": "retrieval-eval",
+                "root": str(tmp_path),
+                "training_path": "samples/training/repository_training_examples.yaml",
+                "top_k": 4,
+                "top_k_sweep": "1,2,4,8",
+                "minimum_pass_rate": 1.0,
+                "minimum_source_recall": 1.0,
+            },
+        )()
+
+    monkeypatch.setattr(cli, "run_retrieval_evaluation", fake_retrieval_evaluation)
+    monkeypatch.setattr(cli.argparse.ArgumentParser, "parse_args", fake_parse_args)
+
+    assert cli.main() == 1
+    assert "regressed" in capsys.readouterr().out
 
 
 def test_cli_main_ask_live_command(

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -212,6 +212,57 @@ def normalize_retrieval_top_k_values(
         seen.add(candidate)
         normalized.append(candidate)
     return tuple(normalized)
+
+
+def _coerce_summary_metric(summary: Mapping[str, object], metric_name: str) -> float:
+    """Coerce a numeric retrieval-summary metric to ``float``."""
+
+    if metric_name not in summary:
+        raise AssertionError(f"Benchmark summary is missing required metric `{metric_name}`.")
+    value = summary[metric_name]
+    if not isinstance(value, (int, float, str)):
+        raise AssertionError(f"Benchmark summary metric `{metric_name}` must be numeric.")
+    return float(value)
+
+
+def check_retrieval_quality_thresholds(
+    summary: Mapping[str, object],
+    *,
+    minimum_pass_rate: float | None = None,
+    minimum_source_recall: float | None = None,
+) -> list[str]:
+    """Return threshold failures for a retrieval-quality summary."""
+
+    failures: list[str] = []
+    for metric_name, label, threshold in (
+        ("pass_rate", "pass rate", minimum_pass_rate),
+        ("average_source_recall", "average source recall", minimum_source_recall),
+    ):
+        if threshold is None:
+            continue
+        metric_value = _coerce_summary_metric(summary, metric_name)
+        if metric_value < threshold:
+            failures.append(
+                f"Benchmark {label} {metric_value:.2f} is below required threshold {threshold:.2f}."
+            )
+    return failures
+
+
+def assert_retrieval_quality_thresholds(
+    summary: Mapping[str, object],
+    *,
+    minimum_pass_rate: float | None = None,
+    minimum_source_recall: float | None = None,
+) -> None:
+    """Raise ``AssertionError`` when retrieval-quality thresholds regress."""
+
+    failures = check_retrieval_quality_thresholds(
+        summary,
+        minimum_pass_rate=minimum_pass_rate,
+        minimum_source_recall=minimum_source_recall,
+    )
+    if failures:
+        raise AssertionError(" ".join(failures))
 
 
 def _build_retrieval_benchmark_result(

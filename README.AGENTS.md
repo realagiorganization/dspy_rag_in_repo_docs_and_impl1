@@ -100,8 +100,9 @@ The next stage formalizes what “good answers” should look like:
 Training examples and expected sources convert repository self-description into a measurable
 benchmark surface. This is the point where the project stops being a demo and becomes a research
 instrument. The benchmark layer is now also a user-facing evaluation surface through
-`make retrieval-eval`, which reports top-k sweeps and richer retrieval-quality metrics instead of
-leaving benchmark inspection buried in notebook helpers.
+`make retrieval-eval`, which reports top-k sweeps, richer retrieval-quality metrics, and now fails
+when minimum pass-rate or source-recall thresholds regress instead of leaving benchmark inspection
+buried in notebook helpers.
 
 ### 5. DSPy Moves The Repo From Prompted Runtime To Compiled Program
 
@@ -182,6 +183,8 @@ At the time of this document:
   `make azure-openai-probe` and `make azure-inference-probe`
 - tracked-file inventory sync is implemented and exposed through `make files-sync`
 - retrieval-quality evaluation is implemented and exposed through `make retrieval-eval`
+- retrieval regressions now fail `make quality`, the pre-push hook, and CI through the same
+  threshold-aware `make retrieval-eval` gate
 - local SQLite lookup over tracked files is implemented and exposed through `make rust-lookup-index`
   plus `make rust-lookup`
 - DSPy runtime answering is implemented and exposed through `make ask-dspy`
@@ -205,7 +208,7 @@ Use these files when you need to defend the current repository story quickly:
 | Question | Best starting point | Supporting surfaces |
 | --- | --- | --- |
 | What is the repo for? | [README.md](README.md) | [publication/repository-rag-lab-article.pdf](publication/repository-rag-lab-article.pdf) |
-| How is retrieval quality measured? | [README.DSPY.MD](README.DSPY.MD) | [src/repo_rag_lab/benchmarks.py](src/repo_rag_lab/benchmarks.py), [docs/audit/2026-03-18-retrieval-evaluation-suite.md](docs/audit/2026-03-18-retrieval-evaluation-suite.md) |
+| How is retrieval quality measured? | [README.DSPY.MD](README.DSPY.MD) | [src/repo_rag_lab/benchmarks.py](src/repo_rag_lab/benchmarks.py), [docs/audit/2026-03-18-zzzzzzzzzzzz-retrieval-regression-gate.md](docs/audit/2026-03-18-zzzzzzzzzzzz-retrieval-regression-gate.md) |
 | How are live Azure runtime calls validated? | [documentation/azure-deployment.md](documentation/azure-deployment.md) | [src/repo_rag_lab/azure_runtime.py](src/repo_rag_lab/azure_runtime.py), [docs/audit/2026-03-18-azure-runtime-surfaces.md](docs/audit/2026-03-18-azure-runtime-surfaces.md) |
 | How does DSPy work here? | [README.DSPY.MD](README.DSPY.MD) | [src/repo_rag_lab/dspy_training.py](src/repo_rag_lab/dspy_training.py), [src/repo_rag_lab/dspy_workflow.py](src/repo_rag_lab/dspy_workflow.py) |
 | How do agents do cheap file lookup before DSPy? | [AGENTS.md](AGENTS.md) | [AGENTS.md.d/RUST_LOOKUP.md](AGENTS.md.d/RUST_LOOKUP.md), [rust-cli/src/main.rs](rust-cli/src/main.rs), [Makefile](Makefile) |

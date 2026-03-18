@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -121,6 +122,8 @@ def build_parser() -> argparse.ArgumentParser:
     retrieval_eval_parser.add_argument("--training-path", default=str(DEFAULT_TRAINING_PATH))
     retrieval_eval_parser.add_argument("--top-k", type=int, default=DEFAULT_RETRIEVAL_EVAL_TOP_K)
     retrieval_eval_parser.add_argument("--top-k-sweep", default="1,2,4,8")
+    retrieval_eval_parser.add_argument("--minimum-pass-rate", type=float)
+    retrieval_eval_parser.add_argument("--minimum-source-recall", type=float)
 
     verify_parser = subparsers.add_parser("verify-surfaces")
     verify_parser.add_argument("--root", default=".")
@@ -233,15 +236,16 @@ def main() -> int:
         return 0
 
     if args.command == "retrieval-eval":
-        print(
-            run_retrieval_evaluation(
-                root,
-                training_path=Path(args.training_path),
-                top_k=args.top_k,
-                top_k_sweep=args.top_k_sweep,
-            )
+        payload = run_retrieval_evaluation(
+            root,
+            training_path=Path(args.training_path),
+            top_k=args.top_k,
+            top_k_sweep=args.top_k_sweep,
+            minimum_pass_rate=args.minimum_pass_rate,
+            minimum_source_recall=args.minimum_source_recall,
         )
-        return 0
+        print(payload)
+        return 0 if not json.loads(payload).get("threshold_failures") else 1
 
     if args.command == "verify-surfaces":
         payload = run_surface_verification(root)

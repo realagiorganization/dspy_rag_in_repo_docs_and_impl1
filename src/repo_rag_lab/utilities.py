@@ -11,6 +11,7 @@ from .azure_runtime import probe_azure_inference, probe_azure_openai
 from .benchmarks import (
     DEFAULT_RETRIEVAL_EVAL_TOP_K,
     build_retrieval_benchmarks,
+    check_retrieval_quality_thresholds,
     evaluate_retrieval_quality_suite,
     normalize_retrieval_top_k_values,
 )
@@ -72,7 +73,7 @@ def utility_summary(root: Path) -> str:
         (
             "- make retrieval-eval / uv run repo-rag retrieval-eval: "
             "measure retrieval quality across a top-k sweep, richer source metrics, "
-            "and per-tag summaries"
+            "per-tag summaries, and threshold enforcement"
         ),
         "- make smoke-test / uv run repo-rag smoke-test: validate the core workflow surfaces",
         (
@@ -125,6 +126,8 @@ def run_retrieval_evaluation(
     training_path: Path = DEFAULT_TRAINING_PATH,
     top_k: int = DEFAULT_RETRIEVAL_EVAL_TOP_K,
     top_k_sweep: str | None = None,
+    minimum_pass_rate: float | None = None,
+    minimum_source_recall: float | None = None,
 ) -> str:
     """Serialize a retrieval-quality evaluation suite as JSON."""
 
@@ -145,7 +148,20 @@ def run_retrieval_evaluation(
         "training_path": training_path_text,
         "benchmark_count": len(benchmarks),
         **suite,
+        "thresholds_enabled": any(
+            threshold is not None for threshold in (minimum_pass_rate, minimum_source_recall)
+        ),
+        "thresholds": {
+            "minimum_pass_rate": minimum_pass_rate,
+            "minimum_source_recall": minimum_source_recall,
+        },
+        "threshold_failures": check_retrieval_quality_thresholds(
+            suite["default_summary"],
+            minimum_pass_rate=minimum_pass_rate,
+            minimum_source_recall=minimum_source_recall,
+        ),
     }
+    payload["status"] = "pass" if not payload["threshold_failures"] else "fail"
     return json.dumps(payload, indent=2)
 
 

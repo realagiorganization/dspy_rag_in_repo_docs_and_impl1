@@ -353,12 +353,15 @@ The benchmark loop is:
    mean recall, mean precision, mean reciprocal rank, per-source hit counters, and per-tag
    rollups so notebook and CLI users can see which retrieval slices regress.
 6. `assert_minimum_pass_rate(summary, minimum_pass_rate=2 / 3)` can fail a notebook run when the
-   retrieval surface regresses.
+   retrieval surface regresses, while the shared threshold helpers in
+   [src/repo_rag_lab/benchmarks.py](src/repo_rag_lab/benchmarks.py) now power the CLI and CI gate
+   too.
 7. The source-hit summary can feed
    `rerank_population_candidates(...)` in
    [src/repo_rag_lab/population_samples.py](src/repo_rag_lab/population_samples.py).
 8. `make retrieval-eval` and `uv run repo-rag retrieval-eval` expose the same evaluation suite as a
-   user-facing utility surface.
+   user-facing utility surface, and the repo defaults now enforce `minimum_pass_rate=1.0` plus
+   `minimum_source_recall=1.0` so regressions fail in `make quality`, pre-push, and CI.
 
 Use this when you want a compact benchmark report:
 
@@ -597,7 +600,7 @@ Useful cross-references:
 - [Makefile](Makefile) exposes the canonical verification targets.
 - [src/repo_rag_lab/verification.py](src/repo_rag_lab/verification.py) validates notebook and
   Makefile contracts.
-- [docs/audit/2026-03-18-retrieval-evaluation-suite.md](docs/audit/2026-03-18-retrieval-evaluation-suite.md)
+- [docs/audit/2026-03-18-zzzzzzzzzzzz-retrieval-regression-gate.md](docs/audit/2026-03-18-zzzzzzzzzzzz-retrieval-regression-gate.md)
   records the current retrieval-quality evaluation evidence.
 
 ## Current Gap And Direct Extension Path

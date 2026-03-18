@@ -55,7 +55,15 @@ def test_run_smoke_test_reports_expected_fields() -> None:
 
 
 def test_run_retrieval_evaluation_reports_expected_fields() -> None:
-    payload = json.loads(run_retrieval_evaluation(REPO_ROOT, top_k=4, top_k_sweep="1,4"))
+    payload = json.loads(
+        run_retrieval_evaluation(
+            REPO_ROOT,
+            top_k=4,
+            top_k_sweep="1,4",
+            minimum_pass_rate=1.0,
+            minimum_source_recall=1.0,
+        )
+    )
     assert payload["training_path"] == "samples/training/repository_training_examples.yaml"
     assert payload["benchmark_count"] >= 1
     assert payload["default_top_k"] == 4
@@ -63,6 +71,26 @@ def test_run_retrieval_evaluation_reports_expected_fields() -> None:
     assert payload["default_summary"]["tag_summaries"]
     assert [summary["top_k"] for summary in payload["top_k_summaries"]] == [1, 4]
     assert "average_reciprocal_rank" in payload["default_summary"]
+    assert payload["thresholds_enabled"] is True
+    assert payload["thresholds"]["minimum_pass_rate"] == 1.0
+    assert payload["thresholds"]["minimum_source_recall"] == 1.0
+    assert payload["threshold_failures"] == []
+    assert payload["status"] == "pass"
+
+
+def test_run_retrieval_evaluation_reports_threshold_failures() -> None:
+    payload = json.loads(
+        run_retrieval_evaluation(
+            REPO_ROOT,
+            top_k=4,
+            top_k_sweep="1,4",
+            minimum_pass_rate=1.1,
+            minimum_source_recall=1.1,
+        )
+    )
+
+    assert payload["status"] == "fail"
+    assert len(payload["threshold_failures"]) == 2
 
 
 def test_run_surface_verification_reports_expected_fields() -> None:
