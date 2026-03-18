@@ -87,3 +87,31 @@ Absent or not exercised in this turn:
   spawning `git ls-files`, which broke temporary Git repositories inside `tests/test_file_summaries.py`.
   The follow-up fix sanitizes `GIT_*` in `_tracked_paths()` and also gives the test helper a clean
   Git subprocess environment.
+
+## Follow-Up Stabilization
+
+Executed successfully after the hook-time publication churn surfaced:
+
+- `uv run pytest tests/test_exploratorium_translation.py tests/test_utilities.py`
+- `make coverage`
+- `make files-sync`
+- `make exploratorium-sync`
+
+## Follow-Up Results
+
+- `uv run pytest tests/test_exploratorium_translation.py tests/test_utilities.py`: passed, `12 passed`
+- `make coverage`: passed, `122 passed`, total coverage `87.54%`
+- `make files-sync`: passed and refreshed `FILES.md` plus `FILES.csv` for the updated source and test
+  surfaces
+- `make exploratorium-sync`: passed and refreshed the generated exploratorium manifest and LaTeX
+  include without requiring a timestamp-only rewrite on unchanged inventory
+
+## Follow-Up Notes
+
+- `src/repo_rag_lab/exploratorium_translation.py` now reuses the previous `generated_at` value when
+  the manifest payload is unchanged apart from the timestamp. That makes repeated sync runs
+  idempotent for tracked outputs and stops `tests/test_utilities.py` from dirtying the repository
+  during the pre-push coverage hook.
+- `tests/test_exploratorium_translation.py` now verifies both the no-change rerun case and the
+  tracked-inventory-change case inside a temporary Git repository so the regression matches the
+  production `git ls-files` code path.
