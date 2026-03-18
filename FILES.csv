@@ -52,7 +52,7 @@ docs/audit/2026-03-18-retrieval-evaluation-suite.md,docs,markdown,80,4031,Reposi
 docs/audit/2026-03-18-rust-and-benchmark-hygiene.md,docs,markdown,53,2049,Repository audit note for 2026 03 18 rust and benchmark hygiene
 docs/audit/2026-03-18-todo-backlog-sync.md,docs,markdown,83,4104,Repository audit note for 2026 03 18 todo backlog sync
 docs/audit/2026-03-18-z-notebook-runner-harness.md,docs,markdown,104,4153,Repository audit note for 2026 03 18 z notebook runner harness
-docs/audit/2026-03-18-zz-file-summary-inventory.md,docs,markdown,88,3880,Repository audit note for 2026 03 18 zz file summary inventory
+docs/audit/2026-03-18-zz-file-summary-inventory.md,docs,markdown,91,4126,Repository audit note for 2026 03 18 zz file summary inventory
 docs/audit/2026-03-18-zz-research-narrative.md,docs,markdown,79,3220,Repository audit note for 2026 03 18 zz research narrative
 docs/audit/2026-03-18-zzz-session-consolidation-on-origin-master.md,docs,markdown,109,5061,Repository audit note for 2026 03 18 zzz session consolidation on origin master
 docs/audit/2026-03-18-zzzz-session-consolidation-master-ci-repair.md,docs,markdown,73,3270,Repository audit note for 2026 03 18 zzzz session consolidation master ci repair
@@ -187,7 +187,7 @@ tests/test_benchmarks_and_notebook_scaffolding.py,tests,python,208,8758,Python m
 tests/test_cli_and_dspy.py,tests,python,391,13621,Python module for test cli and dspy
 tests/test_dspy_training.py,tests,python,405,13695,Python module for test dspy training
 tests/test_exploratorium_translation.py,tests,python,62,2502,Python module for test exploratorium translation
-tests/test_file_summaries.py,tests,python,246,10046,Python module for test file summaries
+tests/test_file_summaries.py,tests,python,254,10274,Python module for test file summaries
 tests/test_hushwheel_fixture.py,tests,python,50,2030,Python module for test hushwheel fixture
 tests/test_hushwheel_program_surface.py,tests,python,81,2888,Python module for test hushwheel program surface
 tests/test_mcp_branches.py,tests,python,31,1077,Python module for test mcp branches
@@ -197,7 +197,7 @@ tests/test_project_surfaces.py,tests,python,267,11535,Python module for test pro
 tests/test_repository_rag_bdd.py,tests,python,30,879,Python module for test repository rag bdd
 tests/test_todo_backlog.py,tests,python,98,3225,Python module for test todo backlog
 tests/test_training_samples.py,tests,python,56,1973,Python module for test training samples
-tests/test_utilities.py,tests,python,153,5505,Python module for test utilities
+tests/test_utilities.py,tests,python,161,5733,Python module for test utilities
 tests/test_verification.py,tests,python,63,2899,Python module for test verification
 tests/test_workflow_live.py,tests,python,99,3331,Python module for test workflow live
 todo-backlog.yaml,todo-backlog.yaml,yaml,150,6989,repository_web_base: https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/blob/master

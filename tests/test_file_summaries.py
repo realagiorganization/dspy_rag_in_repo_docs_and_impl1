@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -9,6 +10,13 @@ import nbformat
 import pytest
 
 from repo_rag_lab import file_summaries as file_summary_module
+
+
+@pytest.fixture(autouse=True)
+def _clear_git_hook_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key in tuple(os.environ):
+        if key.startswith("GIT_"):
+            monkeypatch.delenv(key, raising=False)
 
 
 def _write_text(root: Path, relative_path: str, text: str) -> None:

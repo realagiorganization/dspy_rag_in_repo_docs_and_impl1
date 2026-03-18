@@ -83,5 +83,8 @@ Repository-state gaps:
   `make files-sync` or `uv run repo-rag sync-file-summaries --root .`, keep hooks installed with
   `make hooks-install`, and only source `.env` when they intentionally layer LM-backed synthesis
   on top of the generated file inventory.
+- `tests/test_file_summaries.py` and `tests/test_utilities.py` now clear inherited `GIT_*`
+  variables during test runs so nested temporary repositories do not leak or mutate the outer
+  hook repository state when coverage runs inside Git hooks.
 - Validation ran from a clean detached worktree on `origin/master` so the results were isolated
   from unrelated local branch changes in the shared checkout.
