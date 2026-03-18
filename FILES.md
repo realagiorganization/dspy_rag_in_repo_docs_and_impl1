@@ -79,7 +79,7 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzzzz-publication-cache-node24-followup.md` | docs | markdown | 89 | 2900 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzz publication cache node24 followup |
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzz-dspy-backlog-reconciliation.md` | docs | markdown | 62 | 2457 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzz dspy backlog reconciliation |
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzz-lookup-first-ask-path.md` | docs | markdown | 94 | 4604 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzz lookup first ask path |
-| `docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzzz-answer-synthesis-refresh.md` | docs | markdown | 43 | 2207 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzzz answer synthesis refresh |
+| `docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzzz-answer-synthesis-refresh.md` | docs | markdown | 48 | 2565 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzzz answer synthesis refresh |
 | `docs/audit/README.md` | docs | markdown | 14 | 429 | Audit index for dated repository verification notes |
 | `documentation/azure-deployment.md` | documentation | markdown | 63 | 2603 | Azure Deployment Notes |
 | `documentation/hushwheel-fixture-rag-guide.md` | documentation | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
@@ -171,7 +171,7 @@ This inventory is generated from the current Git index.
 | `src/repo_rag_lab/notebook_scaffolding.py` | src | python | 260 | 11029 | High-level notebook scaffolds built from tested repository helpers. |
 | `src/repo_rag_lab/notebook_support.py` | src | python | 89 | 2843 | Helpers shared by notebooks so their setup logic stays in tested Python code. |
 | `src/repo_rag_lab/population_samples.py` | src | python | 241 | 8364 | Helpers for reviewing and batching starter corpus-population inputs. |
-| `src/repo_rag_lab/retrieval.py` | src | python | 273 | 8514 | Baseline chunking and lexical retrieval utilities for repository text. |
+| `src/repo_rag_lab/retrieval.py` | src | python | 289 | 8973 | Baseline chunking and lexical retrieval utilities for repository text. |
 | `src/repo_rag_lab/rust_lookup.py` | src | python | 271 | 6926 | Helpers for the native Rust-backed SQLite lookup index. |
 | `src/repo_rag_lab/settings.py` | src | python | 28 | 708 | Shared repository path settings derived from a repository root. |
 | `src/repo_rag_lab/todo_backlog.py` | src | python | 276 | 8434 | Shared backlog rendering helpers for Markdown and LaTeX surfaces. |

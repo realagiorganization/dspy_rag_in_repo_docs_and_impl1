@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 
 from .corpus import RepoDocument
@@ -171,7 +172,22 @@ def _chunk_text(text: str, chunk_size: int) -> list[str]:
 def _is_root_readme(source: Path) -> bool:
     """Return ``True`` when ``source`` is the repository root ``README.md``."""
 
-    return source.parts == ("README.md",)
+    if source.name != "README.md":
+        return False
+    if source.parts == ("README.md",):
+        return True
+    return _looks_like_repository_root(source.parent)
+
+
+@cache
+def _looks_like_repository_root(path: Path) -> bool:
+    """Return ``True`` when ``path`` looks like the repository root directory."""
+
+    return (
+        path.joinpath("pyproject.toml").is_file()
+        and path.joinpath("Makefile").is_file()
+        and path.joinpath("src").is_dir()
+    )
 
 
 def _definition_bonus(question: str, text: str) -> float:
