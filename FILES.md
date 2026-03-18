@@ -68,7 +68,7 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-03-18-zzzz-rust-sqlite-lookup.md` | docs | markdown | 105 | 5404 | Repository audit note for 2026 03 18 zzzz rust sqlite lookup |
 | `docs/audit/2026-03-18-zzzz-session-consolidation-master-ci-repair.md` | docs | markdown | 73 | 3270 | Repository audit note for 2026 03 18 zzzz session consolidation master ci repair |
 | `docs/audit/2026-03-18-zzzzzz-dspy-pipeline-and-live-azure-proof.md` | docs | markdown | 116 | 5992 | Repository audit note for 2026 03 18 zzzzzz dspy pipeline and live azure proof |
-| `docs/audit/2026-03-18-zzzzzzz-hushwheel-pdf-side-effect-fix.md` | docs | markdown | 76 | 3525 | Repository audit note for 2026 03 18 zzzzzzz hushwheel pdf side effect fix |
+| `docs/audit/2026-03-18-zzzzzzz-hushwheel-pdf-side-effect-fix.md` | docs | markdown | 83 | 4044 | Repository audit note for 2026 03 18 zzzzzzz hushwheel pdf side effect fix |
 | `docs/audit/2026-03-18-zzzzzzzzzzzz-retrieval-regression-gate.md` | docs | markdown | 66 | 2898 | Repository audit note for 2026 03 18 zzzzzzzzzzzz retrieval regression gate |
 | `docs/audit/README.md` | docs | markdown | 14 | 423 | Audit index for dated repository verification notes |
 | `documentation/azure-deployment.md` | documentation | markdown | 63 | 2603 | Azure Deployment Notes |

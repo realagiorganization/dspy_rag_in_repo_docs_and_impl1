@@ -24,22 +24,26 @@ Run after implementation in this turn:
 - `uv run pytest tests/test_hushwheel_program_surface.py`
 - `make coverage`
 - `make verify-surfaces`
+- `cargo fmt --manifest-path rust-cli/Cargo.toml`
 
 ## Results
 
 - `make hooks-install`: passed and refreshed the managed `pre-commit` plus `pre-push` hooks
-- `make files-sync`: passed and refreshed `FILES.md` plus `FILES.csv` for `214` tracked files
+- `make files-sync`: passed and refreshed `FILES.md` plus `FILES.csv` for `215` tracked files
 - `uv run python -m compileall src tests`: passed
 - `uv run pytest tests/test_utilities.py tests/test_project_surfaces.py tests/test_cli_and_dspy.py tests/test_repository_rag_bdd.py`:
   passed, `39 passed in 14.93s`
 - `uv run repo-rag smoke-test`: passed with `answer_contains_repository: true`,
   `mcp_candidate_count: 1`, and `manifest_path: artifacts/azure/repo-rag-smoke.json`
 - `make rust-quality`: passed with `cargo fmt`, `cargo clippy`, `cargo build`, the native `index`
-  and `lookup` smoke runs, and the delegated `ask` smoke run
+  and `lookup` smoke runs, and the delegated `ask` smoke run after the final `rust-cli/src/main.rs`
+  follow-up
 - `uv run pytest tests/test_hushwheel_program_surface.py`: passed, `4 passed in 3.04s`
 - `make coverage`: passed with `120 passed in 112.73s` and total coverage `87.98%`
+- `cargo fmt --manifest-path rust-cli/Cargo.toml`: passed after reproducing the remote CI
+  formatting failure from run `23238085108`
 - `cargo run --manifest-path rust-cli/Cargo.toml -- index`: passed with
-  `indexed=204 skipped_binary=3 skipped_large=2`
+  `indexed=210 skipped_binary=3 skipped_large=2`
 - `cargo run --manifest-path rust-cli/Cargo.toml -- lookup "dspy training"`: passed and returned
   ranked hits led by:
   - `src/repo_rag_lab/notebook_scaffolding.py`
@@ -54,6 +58,9 @@ Run after implementation in this turn:
 - `tests/test_hushwheel_program_surface.py` now restores the committed
   `tests/fixtures/hushwheel_lexiconarium/docs/hushwheel-reference.pdf` after docs/dist runs, so
   the pre-push coverage hook no longer dirties the working tree.
+- GitHub Actions run `23238085108` failed in `Rust Wrapper -> Check Rust formatting`; the local
+  follow-up applied `cargo fmt` and replaced the lingering `bytes.iter().any(...)` check with
+  `bytes.contains(&0)` so `make rust-quality` now passes on top of the newer remote baseline.
 - `Makefile`, `README.md`, `README.AGENTS.md`, `AGENTS.md`, `AGENTS.md.d/RUST_LOOKUP.md`, and the
   repo-local `rust-sqlite-lookup` skill now agree on the “lookup first, DSPy second” workflow.
 
