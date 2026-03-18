@@ -6,6 +6,7 @@ from pathlib import Path
 from repo_rag_lab.benchmarks import (
     build_retrieval_benchmarks,
     evaluate_retrieval_benchmarks,
+    is_benchmark_document_path,
     summarize_benchmark_results,
 )
 from repo_rag_lab.notebook_scaffolding import (
@@ -51,6 +52,27 @@ def test_repository_benchmarks_pass_with_current_training_samples() -> None:
     assert len(benchmarks) == len(examples)
     assert summary["case_count"] == len(examples)
     assert summary["pass_rate"] == 1.0
+
+
+def test_is_benchmark_document_path_excludes_operational_repo_surfaces() -> None:
+    assert is_benchmark_document_path(Path("README.md")) is True
+    assert is_benchmark_document_path(Path("publication/README.md")) is True
+    assert (
+        is_benchmark_document_path(Path("docs/audit/2026-03-18-retest-with-env-refresh.md"))
+        is False
+    )
+    assert is_benchmark_document_path(Path("samples/logs/20260318T010254Z-gh-runs.md")) is False
+    assert (
+        is_benchmark_document_path(Path("samples/training/repository_training_examples.yaml"))
+        is False
+    )
+    assert (
+        is_benchmark_document_path(Path("samples/population/repository_population_candidates.yaml"))
+        is False
+    )
+    assert is_benchmark_document_path(Path("artifacts/notebook_logs/run.json")) is False
+    assert is_benchmark_document_path(Path("tests/test_utilities.py")) is False
+    assert is_benchmark_document_path(Path("README.DSPY.MD")) is False
 
 
 def test_build_training_lab_context_writes_metadata_and_reports_clean_validation(

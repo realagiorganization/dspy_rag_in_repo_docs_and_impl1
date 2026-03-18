@@ -117,6 +117,14 @@ def test_publication_surface_files_exist_and_are_linked() -> None:
     assert "make paper-build" in readme
 
 
+def test_rust_wrapper_surface_keeps_committed_lockfile_policy() -> None:
+    checklist = (REPO_ROOT / "REPO_COMPLETENESS_CHECKLIST.md").read_text(encoding="utf-8")
+
+    assert (REPO_ROOT / "rust-cli" / "Cargo.lock").exists()
+    assert "rust-cli/Cargo.lock" in checklist
+    assert "committed intentionally" in checklist
+
+
 def test_publication_workflow_builds_and_uploads_pdf() -> None:
     workflow_path = REPO_ROOT / ".github" / "workflows" / "publication-pdf.yml"
     workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))

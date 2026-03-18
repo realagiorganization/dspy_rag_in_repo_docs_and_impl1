@@ -27,13 +27,16 @@ BENCHMARK_EXCLUDED_PARTS = {
     "target",
     "tests",
 }
-BENCHMARK_EXCLUDED_PATH_SNIPPETS = (
-    "REPO_COMPLETENESS_CHECKLIST.md",
-    "README.DSPY.MD",
-    "documentation/hushwheel-fixture-rag-guide.md",
-    "samples/population/",
-    "samples/logs/",
-    "samples/training/",
+BENCHMARK_EXCLUDED_PATHS = {
+    Path("README.DSPY.MD"),
+    Path("REPO_COMPLETENESS_CHECKLIST.md"),
+    Path("documentation/hushwheel-fixture-rag-guide.md"),
+}
+BENCHMARK_EXCLUDED_PATH_PREFIXES = (
+    Path("docs/audit"),
+    Path("samples/logs"),
+    Path("samples/population"),
+    Path("samples/training"),
 )
 
 
@@ -90,16 +93,37 @@ def build_retrieval_benchmarks(examples: list[TrainingExample]) -> list[Retrieva
     ]
 
 
+def is_benchmark_document_path(relative_path: Path) -> bool:
+    """
+    Return ``True`` when a repository-relative path belongs in the benchmark corpus.
+
+    >>> is_benchmark_document_path(Path("README.md"))
+    True
+    >>> is_benchmark_document_path(Path("docs/audit/2026-03-18-retest-with-env-refresh.md"))
+    False
+    >>> is_benchmark_document_path(Path("samples/logs/20260318T010254Z-gh-runs.md"))
+    False
+    """
+
+    if any(part in BENCHMARK_EXCLUDED_PARTS for part in relative_path.parts):
+        return False
+    if relative_path in BENCHMARK_EXCLUDED_PATHS:
+        return False
+    path_text = relative_path.as_posix()
+    for prefix in BENCHMARK_EXCLUDED_PATH_PREFIXES:
+        prefix_text = prefix.as_posix()
+        if path_text == prefix_text or path_text.startswith(f"{prefix_text}/"):
+            return False
+    return True
+
+
 def _select_benchmark_documents(root: Path) -> list[RepoDocument]:
     """Load a fairness-filtered benchmark corpus from repository documents."""
 
     documents: list[RepoDocument] = []
     for document in load_documents(root):
         relative_path = document.path.relative_to(root)
-        if any(part in BENCHMARK_EXCLUDED_PARTS for part in relative_path.parts):
-            continue
-        path_text = str(relative_path)
-        if any(snippet in path_text for snippet in BENCHMARK_EXCLUDED_PATH_SNIPPETS):
+        if not is_benchmark_document_path(relative_path):
             continue
         documents.append(document)
     return documents

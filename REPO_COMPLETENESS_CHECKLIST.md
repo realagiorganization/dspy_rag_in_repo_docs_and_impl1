@@ -29,7 +29,7 @@ What is complete now:
 | Azure manifest generation | Complete for offline handoff | `make azure-manifest` writes metadata into `artifacts/azure/`. |
 | Notebook and Makefile contract checks | Complete | `make verify-surfaces` reports zero issues. |
 | Python quality gates | Complete | `make quality` passes locally. |
-| Rust wrapper build path | Complete | `cargo build --manifest-path rust-cli/Cargo.toml` passes locally. |
+| Rust wrapper build path | Complete | `cargo build --manifest-path rust-cli/Cargo.toml` passes locally, and `rust-cli/Cargo.lock` is committed intentionally for stable wrapper builds. |
 | GitHub Actions inspection helpers | Complete | `make gh-runs`, `make gh-watch`, and `make gh-failed-logs` are part of the Makefile contract. |
 
 What is still incomplete by design or backlog:
@@ -182,6 +182,7 @@ Run the checklist in order. If a step fails, stop there and treat the repo as in
 
     - Cargo builds the wrapper
     - format, clippy, build, and Rust CLI invocation all pass
+    - `rust-cli/Cargo.lock` remains committed intentionally so Rust dependency resolution is stable across CI and local runs
 
 11. Check the notebooks as playbooks, not just as files.
 

@@ -26,6 +26,9 @@
   - Expand repository-specific benchmark questions and expected answers.
   - Add tests for regression metrics and artifact persistence once the training surface exists.
 - Keep the benchmark corpus definition stable as the repository grows.
+  - Operational evidence surfaces such as `docs/audit/`, `samples/logs/`,
+    `samples/training/`, and `samples/population/` are intentionally excluded from the benchmark
+    corpus so retrieval assertions measure repository content, not verification byproducts.
   - Review `src/repo_rag_lab/benchmarks.py` exclusions whenever new generated docs or artifacts are added.
   - Make sure benchmark assertions continue to measure the intended repository corpus instead of generated side outputs.
 - Continue improving corpus planning.
@@ -56,9 +59,9 @@
 
 ## Repo Hygiene And Workflow Policy
 
-- Decide what to do with the recurring `rust-cli/Cargo.lock` artifact.
-  - Commit it intentionally if the Rust wrapper should be treated like an application.
-  - Ignore it or otherwise suppress regeneration if it is not meant to be versioned.
+- Keep the committed `rust-cli/Cargo.lock` policy intentional.
+  - Refresh it only when Rust dependencies change.
+  - Treat lockfile drift as repository-surface work, not incidental noise.
 - Keep audit notes and backlog documents synchronized.
   - Update `docs/audit/` when verification status materially changes.
   - Refresh this file when roadmap items are completed or replaced.
