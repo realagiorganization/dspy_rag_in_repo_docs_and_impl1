@@ -137,6 +137,8 @@ def test_publication_surface_files_exist_and_are_linked() -> None:
     todo_text = (REPO_ROOT / "TODO.MD").read_text(encoding="utf-8")
     assert "| 🎯 | 🧭 Area | 📌 TODO | 🔗 Primary Surfaces | ✅ Done When |" in todo_text
     assert "todo-backlog.yaml" in todo_text
+    assert "Strengthen retrieval quality beyond the lexical baseline." in todo_text
+    assert "Build the missing automated DSPy training path." not in todo_text
 
 
 def test_rust_wrapper_surface_keeps_committed_lockfile_policy() -> None:

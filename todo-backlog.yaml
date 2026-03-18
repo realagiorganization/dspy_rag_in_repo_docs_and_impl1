@@ -1,38 +1,5 @@
 repository_web_base: https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/blob/master
 items:
-  - emoji: "🧠"
-    area: "DSPy Training And Runtime"
-    task: "Build the missing automated DSPy training path."
-    surfaces:
-      - path: "README.DSPY.MD"
-      - path: "src/repo_rag_lab/cli.py"
-      - path: "Makefile"
-    done_when:
-      - "A dedicated training module exists under src/repo_rag_lab/."
-      - "A real dspy.Module plus optimizer flow replaces the current runtime wrapper."
-      - "Compiled programs are versioned under artifacts/dspy/."
-      - "Training is exposed through both the CLI and Makefile."
-  - emoji: "🛠"
-    area: "DSPy Training And Runtime"
-    task: "Make the existing DSPy CLI path operational without custom bootstrap code."
-    surfaces:
-      - path: "src/repo_rag_lab/cli.py"
-      - path: "README.DSPY.MD"
-      - path: "tests/test_cli_and_dspy.py"
-    done_when:
-      - "LM selection and configuration are handled through flags or documented env setup."
-      - "The --use-dspy path works without ad hoc in-process bootstrap code."
-      - "Tests cover both configured and unconfigured DSPy runs."
-  - emoji: "📓"
-    area: "DSPy Training And Runtime"
-    task: "Extend the notebooks beyond summary-only DSPy preparation."
-    surfaces:
-      - path: "notebooks/03_dspy_training_lab.ipynb"
-      - path: "src/repo_rag_lab/notebook_scaffolding.py"
-      - path: "README.DSPY.MD"
-    done_when:
-      - "The DSPy training notebook loads and exercises a compiled program."
-      - "Notebook helpers stay aligned with any future compiled-artifact workflow."
   - emoji: "🔎"
     area: "Retrieval, Corpus, And Evaluation"
     task: "Strengthen retrieval quality beyond the lexical baseline."
