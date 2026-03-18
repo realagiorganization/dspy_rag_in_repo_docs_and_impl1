@@ -105,7 +105,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Coal Arcade`
 - Ember index: `100`
 - Summary: A storm-index gloss from Coal Arcade where the Doom Slayer of Doom trades commentary with Arjuna from the Bible while John Carmack annotates a release-note sermon; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## argent-glyph-chamber-0073
 
@@ -113,7 +113,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `North Annex`
 - Ember index: `101`
 - Summary: A lantern-note gloss from North Annex where Daisy of Doom II trades commentary with Ruth from the Bhagavad Gita while Dennis Ritchie narrates a rhetorical test harness; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## argent-ash-diff-0146
 
@@ -121,7 +121,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Velvet Basin`
 - Ember index: `102`
 - Summary: A tea-invoice gloss from Velvet Basin where the Ranger of Quake trades commentary with Vyasa from the Shrimad Bhagavatam while Michael Abrash refactors a code-side homily; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## argent-ink-folio-0219
 
@@ -129,7 +129,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Glass Causeway`
 - Ember index: `103`
 - Summary: A archive-gossip gloss from Glass Causeway where the Spider Mastermind of Wolfenstein 3D trades commentary with Prahlada from the Bible while Guido van Rossum indexes a cross-canon changelog; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## ranger-altar-annotation-0512
 
@@ -137,7 +137,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Glass Causeway`
 - Ember index: `217`
 - Summary: A lantern-note gloss from Glass Causeway where Corvus of Quake trades commentary with Shuka from the Bhagavad Gita while Tom Hall cross-references a editorial diff; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## ranger-glyph-chamber-0585
 
@@ -145,7 +145,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Saffron Steps`
 - Ember index: `218`
 - Summary: A tea-invoice gloss from Saffron Steps where the Strogg marine of Wolfenstein 3D trades commentary with Dhruva from the Shrimad Bhagavatam while Brendan Eich diagrams a mechanical exegesis ledger; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## ranger-ash-diff-0658
 
@@ -153,7 +153,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Tin Wharf`
 - Ember index: `219`
 - Summary: A archive-gossip gloss from Tin Wharf where D'Sparil of Commander Keen trades commentary with David from the Bible while Donald Knuth debugs a source marginalia folio; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## ranger-ink-folio-0731
 
@@ -161,7 +161,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Moss Arcade`
 - Ember index: `220`
 - Summary: A roof-taxonomy gloss from Moss Arcade where the Hell priest of Heretic trades commentary with Mary from the Bhagavad Gita while Adele Goldberg red-lines a shader catechism; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## gita-altar-annotation-1024
 
@@ -169,7 +169,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Moss Arcade`
 - Ember index: `334`
 - Summary: A tea-invoice gloss from Moss Arcade where the Ranger of Doom II trades commentary with John from the Shrimad Bhagavatam while Alan Kay stages a code-side homily; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## gita-glyph-chamber-1097
 
@@ -177,7 +177,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Brass Quarter`
 - Ember index: `335`
 - Summary: A archive-gossip gloss from Brass Quarter where the Spider Mastermind of Quake trades commentary with Paul from the Bible while Tim Berners-Lee patches a cross-canon changelog; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## gita-ash-diff-1170
 
@@ -185,7 +185,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Coal Arcade`
 - Ember index: `336`
 - Summary: A roof-taxonomy gloss from Coal Arcade where Corvus of Wolfenstein 3D trades commentary with Krishna from the Bhagavad Gita while Ken Thompson rewrites a commentary patch wheel; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## gita-ink-folio-1243
 
@@ -193,7 +193,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `North Annex`
 - Ember index: `337`
 - Summary: A clock-oath gloss from North Annex where the Strogg marine of Commander Keen trades commentary with Jonah from the Shrimad Bhagavatam while John Romero release-notes a playbook appendix; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## bhagavatam-altar-annotation-1536
 
@@ -201,7 +201,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `North Annex`
 - Ember index: `451`
 - Summary: A archive-gossip gloss from North Annex where the Icon of Sin of Commander Keen trades commentary with Paul from the Shrimad Bhagavatam while Dennis Ritchie refactors a source marginalia folio; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## bhagavatam-glyph-chamber-1609
 
@@ -209,7 +209,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Velvet Basin`
 - Ember index: `452`
 - Summary: A roof-taxonomy gloss from Velvet Basin where BJ Blazkowicz of Heretic trades commentary with Krishna from the Bible while Michael Abrash indexes a shader catechism; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## bhagavatam-ash-diff-1682
 
@@ -217,7 +217,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Glass Causeway`
 - Ember index: `453`
 - Summary: A clock-oath gloss from Glass Causeway where the Cyberdemon of Hexen trades commentary with Jonah from the Bhagavad Gita while Guido van Rossum scripts a narrative build sheet; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## bhagavatam-ink-folio-1755
 
@@ -225,7 +225,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Saffron Steps`
 - Ember index: `454`
 - Summary: A harbor-saying gloss from Saffron Steps where Commander Keen of Rage trades commentary with Shuka from the Shrimad Bhagavatam while Grace Hopper redacts a editorial patchnote; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## psalter-altar-annotation-2048
 
@@ -233,7 +233,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Saffron Steps`
 - Ember index: `568`
 - Summary: A roof-taxonomy gloss from Saffron Steps where D'Sparil of Wolfenstein 3D trades commentary with Mary from the Bhagavad Gita while Brendan Eich debugs a commentary patch wheel; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## psalter-glyph-chamber-2121
 
@@ -241,7 +241,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Tin Wharf`
 - Ember index: `569`
 - Summary: A clock-oath gloss from Tin Wharf where the Hell priest of Commander Keen trades commentary with Ezekiel from the Shrimad Bhagavatam while Donald Knuth red-lines a playbook appendix; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## psalter-ash-diff-2194
 
@@ -249,7 +249,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Moss Arcade`
 - Ember index: `570`
 - Summary: A harbor-saying gloss from Moss Arcade where the Icon of Sin of Heretic trades commentary with Arjuna from the Bible while Adele Goldberg typesets a level-editor concordance; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## psalter-ink-folio-2267
 
@@ -257,7 +257,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Brass Quarter`
 - Ember index: `571`
 - Summary: A shelf-charm gloss from Brass Quarter where BJ Blazkowicz of Hexen trades commentary with Ruth from the Bhagavad Gita while Linus Torvalds footnotes a annotated compile hymn; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## kernel-altar-annotation-2560
 
@@ -265,7 +265,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Brass Quarter`
 - Ember index: `685`
 - Summary: A clock-oath gloss from Brass Quarter where the Cyberdemon of Heretic trades commentary with Bhishma from the Bible while John Romero refactors a narrative build sheet; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## kernel-glyph-chamber-2633
 
@@ -273,7 +273,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Coal Arcade`
 - Ember index: `686`
 - Summary: A harbor-saying gloss from Coal Arcade where Commander Keen of Hexen trades commentary with Uddhava from the Bhagavad Gita while Margaret Hamilton indexes a editorial patchnote; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## kernel-ash-diff-2706
 
@@ -281,7 +281,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `North Annex`
 - Ember index: `687`
 - Summary: A shelf-charm gloss from North Annex where Shub-Niggurath of Rage trades commentary with Isaiah from the Shrimad Bhagavatam while Tom Hall scripts a program-text psalter; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## kernel-ink-folio-2779
 
@@ -289,7 +289,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Velvet Basin`
 - Ember index: `688`
 - Summary: A canal-jargon gloss from Velvet Basin where Parias of Doom trades commentary with John from the Bible while Brendan Eich redacts a release-note sermon; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## editorial-altar-annotation-3072
 
@@ -297,7 +297,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Velvet Basin`
 - Ember index: `802`
 - Summary: A harbor-saying gloss from Velvet Basin where Shub-Niggurath of Hexen trades commentary with Isaiah from the Shrimad Bhagavatam while Donald Knuth typesets a level-editor concordance; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## editorial-glyph-chamber-3145
 
@@ -305,7 +305,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Glass Causeway`
 - Ember index: `803`
 - Summary: A shelf-charm gloss from Glass Causeway where Parias of Rage trades commentary with John from the Bible while Adele Goldberg footnotes a annotated compile hymn; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## editorial-ash-diff-3218
 
@@ -313,7 +313,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Saffron Steps`
 - Ember index: `804`
 - Summary: A canal-jargon gloss from Saffron Steps where the Phobos marine of Doom trades commentary with Paul from the Bhagavad Gita while Linus Torvalds stages a syntax-lit sermon; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## editorial-ink-folio-3291
 
@@ -321,7 +321,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Tin Wharf`
 - Ember index: `805`
 - Summary: A map-rhyme gloss from Tin Wharf where Crash of Doom II trades commentary with Krishna from the Shrimad Bhagavatam while John Carmack patches a editorial diff; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## crosscanon-altar-annotation-3584
 
@@ -329,7 +329,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Tin Wharf`
 - Ember index: `919`
 - Summary: A shelf-charm gloss from Tin Wharf where the Phobos marine of Rage trades commentary with Jonah from the Shrimad Bhagavatam while Linus Torvalds rewrites a program-text psalter; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## crosscanon-glyph-chamber-3657
 
@@ -337,7 +337,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Moss Arcade`
 - Ember index: `920`
 - Summary: A canal-jargon gloss from Moss Arcade where Crash of Doom trades commentary with Shuka from the Bible while John Carmack release-notes a release-note sermon; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## crosscanon-ash-diff-3730
 
@@ -345,7 +345,7 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Brass Quarter`
 - Ember index: `921`
 - Summary: A map-rhyme gloss from Brass Quarter where the Doom Slayer of Doom II trades commentary with Dhruva from the Bhagavad Gita while Dennis Ritchie annotates a rhetorical test harness; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
 
 ## crosscanon-ink-folio-3803
 
@@ -353,4 +353,4 @@ spokes about id Software characters, scripture, and legendary software developer
 - District: `Coal Arcade`
 - Ember index: `922`
 - Summary: A bellframe gloss from Coal Arcade where Daisy of Quake trades commentary with David from the Shrimad Bhagavatam while Michael Abrash narrates a code-side homily; the ember index and lantern vowel keep the whole argument searchable instead of merely ecstatic.
-- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail.
+- Usage: Used when archivists must align id heroics, scripture, and legendary software-developer actions inside one textual-programmatic-narrative-editorial thread, usually after the moss ledger, whisper funnel, and clock oath have documented the disagreement as a searchable retrieval record.
