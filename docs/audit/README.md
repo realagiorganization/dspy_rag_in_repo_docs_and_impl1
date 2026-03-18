@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-03-18-hushwheel-program-harness.md`
+- `2026-03-18-retest-with-env-refresh.md`
 
 ## Usage
 
