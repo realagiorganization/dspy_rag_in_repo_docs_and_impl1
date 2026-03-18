@@ -119,23 +119,37 @@ def test_run_file_summary_sync_reports_expected_fields() -> None:
 
 
 def test_run_exploratorium_translation_sync_reports_expected_fields() -> None:
-    payload = json.loads(run_exploratorium_translation_sync(REPO_ROOT))
-    assert (
-        payload["tex_path"]
-        == "publication/exploratorium_translation/generated/exploratorium-content.tex"
+    content_path = (
+        REPO_ROOT / "publication/exploratorium_translation/generated/exploratorium-content.tex"
     )
-    assert (
-        payload["manifest_path"]
-        == "publication/exploratorium_translation/generated/exploratorium-manifest.json"
+    manifest_path = (
+        REPO_ROOT / "publication/exploratorium_translation/generated/exploratorium-manifest.json"
     )
-    assert (
-        payload["main_tex_path"]
-        == "publication/exploratorium_translation/exploratorium_translation.tex"
-    )
-    assert (
-        payload["pdf_path"] == "publication/exploratorium_translation/exploratorium_translation.pdf"
-    )
-    assert payload["summarized_file_count"] >= 10
+    original_content = content_path.read_bytes()
+    original_manifest = manifest_path.read_bytes()
+
+    try:
+        payload = json.loads(run_exploratorium_translation_sync(REPO_ROOT))
+        assert (
+            payload["tex_path"]
+            == "publication/exploratorium_translation/generated/exploratorium-content.tex"
+        )
+        assert (
+            payload["manifest_path"]
+            == "publication/exploratorium_translation/generated/exploratorium-manifest.json"
+        )
+        assert (
+            payload["main_tex_path"]
+            == "publication/exploratorium_translation/exploratorium_translation.tex"
+        )
+        assert (
+            payload["pdf_path"]
+            == "publication/exploratorium_translation/exploratorium_translation.pdf"
+        )
+        assert payload["summarized_file_count"] >= 10
+    finally:
+        content_path.write_bytes(original_content)
+        manifest_path.write_bytes(original_manifest)
 
 
 def test_run_notebook_report_returns_machine_readable_summary(

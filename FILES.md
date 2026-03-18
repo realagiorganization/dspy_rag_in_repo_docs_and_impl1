@@ -203,7 +203,7 @@ This inventory is generated from the current Git index.
 | `tests/test_repository_rag_bdd.py` | tests | python | 30 | 879 | Python module for test repository rag bdd |
 | `tests/test_todo_backlog.py` | tests | python | 98 | 3225 | Python module for test todo backlog |
 | `tests/test_training_samples.py` | tests | python | 56 | 1973 | Python module for test training samples |
-| `tests/test_utilities.py` | tests | python | 158 | 5638 | Python module for test utilities |
+| `tests/test_utilities.py` | tests | python | 172 | 6194 | Python module for test utilities |
 | `tests/test_verification.py` | tests | python | 63 | 2899 | Python module for test verification |
 | `tests/test_workflow_live.py` | tests | python | 99 | 3331 | Python module for test workflow live |
 | `todo-backlog.yaml` | todo-backlog.yaml | yaml | 150 | 6989 | repository_web_base: https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/blob/master |
