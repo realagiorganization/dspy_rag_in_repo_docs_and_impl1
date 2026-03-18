@@ -10,6 +10,7 @@
 \usepackage{enumitem}
 \usepackage{hyperref}
 \usepackage{longtable}
+\usepackage{pifont}
 \usepackage[table]{xcolor}
 
 \definecolor{PaperNavy}{HTML}{0F2336}
@@ -46,7 +47,7 @@
 
 \title{\vspace{-1.6em}A Publication-Style Walkthrough of Repository RAG Lab}
 \author{OpenAI Codex}
-\date{March 17, 2026}
+\date{March 18, 2026}
 
 \begin{document}
 
@@ -182,14 +183,12 @@ trust the scaffold as an executable research artifact rather than a loose notebo
 
 \section{Limitations And Next Steps}
 
-The project still has visible limits, and the repository now documents them plainly.
+The project still has visible limits, and the repository now documents them through one shared
+backlog source. The Markdown backlog and the publication table below are generated from the same
+\texttt{todo-backlog.yaml} file so the working roadmap is visible in both the repository and the
+article.
 
-\begin{itemize}
-  \item Retrieval is lexical and intentionally simple.
-  \item Automated DSPy compilation and artifact persistence are still backlog items.
-  \item Live Azure deployment validation is outside the repository scope today.
-  \item UI and browser-level tests do not exist.
-\end{itemize}
+\input{todo-backlog-table.tex}
 
 Those gaps do not weaken the core idea. Instead, they define the next layer of work: replace the
 retriever, formalize DSPy optimization, and keep the same shared workflow contract as the system

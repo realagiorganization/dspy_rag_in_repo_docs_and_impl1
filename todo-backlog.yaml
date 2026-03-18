@@ -1,0 +1,149 @@
+repository_web_base: https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/blob/master
+items:
+  - emoji: "🧠"
+    area: "DSPy Training And Runtime"
+    task: "Build the missing automated DSPy training path."
+    surfaces:
+      - path: "README.DSPY.MD"
+      - path: "src/repo_rag_lab/cli.py"
+      - path: "Makefile"
+    done_when:
+      - "A dedicated training module exists under src/repo_rag_lab/."
+      - "A real dspy.Module plus optimizer flow replaces the current runtime wrapper."
+      - "Compiled programs are versioned under artifacts/dspy/."
+      - "Training is exposed through both the CLI and Makefile."
+  - emoji: "🛠"
+    area: "DSPy Training And Runtime"
+    task: "Make the existing DSPy CLI path operational without custom bootstrap code."
+    surfaces:
+      - path: "src/repo_rag_lab/cli.py"
+      - path: "README.DSPY.MD"
+      - path: "tests/test_cli_and_dspy.py"
+    done_when:
+      - "LM selection and configuration are handled through flags or documented env setup."
+      - "The --use-dspy path works without ad hoc in-process bootstrap code."
+      - "Tests cover both configured and unconfigured DSPy runs."
+  - emoji: "📓"
+    area: "DSPy Training And Runtime"
+    task: "Extend the notebooks beyond summary-only DSPy preparation."
+    surfaces:
+      - path: "notebooks/03_dspy_training_lab.ipynb"
+      - path: "src/repo_rag_lab/notebook_scaffolding.py"
+      - path: "README.DSPY.MD"
+    done_when:
+      - "The DSPy training notebook loads and exercises a compiled program."
+      - "Notebook helpers stay aligned with any future compiled-artifact workflow."
+  - emoji: "🔎"
+    area: "Retrieval, Corpus, And Evaluation"
+    task: "Strengthen retrieval quality beyond the lexical baseline."
+    surfaces:
+      - path: "src/repo_rag_lab/retrieval.py"
+      - path: "src/repo_rag_lab/workflow.py"
+      - path: "src/repo_rag_lab/dspy_workflow.py"
+    done_when:
+      - "A stronger retrieval layer replaces simple lexical overlap."
+      - "Direct file retrieval and MCP-powered retrieval are compared explicitly."
+      - "Retrieval upgrades are shared by both the baseline and DSPy paths."
+  - emoji: "🧪"
+    area: "Retrieval, Corpus, And Evaluation"
+    task: "Expand benchmark and training evidence."
+    surfaces:
+      - path: "samples/training/repository_training_examples.yaml"
+      - path: "src/repo_rag_lab/benchmarks.py"
+      - path: "tests/test_benchmarks_and_notebook_scaffolding.py"
+    done_when:
+      - "More training examples carry expected_sources evidence."
+      - "Repository-specific benchmark questions and expected answers are expanded."
+      - "Regression and artifact-persistence tests land once training exists."
+  - emoji: "🗺"
+    area: "Retrieval, Corpus, And Evaluation"
+    task: "Keep the benchmark corpus definition stable as the repository grows."
+    surfaces:
+      - path: "src/repo_rag_lab/benchmarks.py"
+      - path: "docs/audit/README.md"
+      - path: "samples/logs/"
+    done_when:
+      - "Operational evidence surfaces stay excluded from the benchmark corpus."
+      - "Benchmark exclusions are reviewed whenever new generated docs or artifacts appear."
+      - "Assertions keep measuring repository content instead of verification byproducts."
+  - emoji: "📚"
+    area: "Retrieval, Corpus, And Evaluation"
+    task: "Continue improving corpus planning."
+    surfaces:
+      - path: "src/repo_rag_lab/population_samples.py"
+      - path: "samples/population/repository_population_candidates.yaml"
+      - path: "notebooks/04_sample_population_lab.ipynb"
+    done_when:
+      - "Benchmark hit data drives reranking more systematically."
+      - "Population-candidate discovery expands when new repository surfaces matter."
+  - emoji: "🧾"
+    area: "Notebook And Documentation Surfaces"
+    task: "Keep notebooks executable as research playbooks."
+    surfaces:
+      - path: "notebooks/01_repo_rag_research.ipynb"
+      - path: "notebooks/03_dspy_training_lab.ipynb"
+      - path: "src/repo_rag_lab/notebook_scaffolding.py"
+    done_when:
+      - "Notebook execution checks land in CI if notebook execution becomes an acceptance surface."
+      - "Notebook cell IDs and repository-surface validation stay intact as scaffolding evolves."
+      - "Notebook logging and tuning metadata outputs stay documented under artifacts/."
+  - emoji: "📝"
+    area: "Notebook And Documentation Surfaces"
+    task: "Keep the DSPy and utility documentation current."
+    surfaces:
+      - path: "README.DSPY.MD"
+      - path: "utilities/README.md"
+      - path: "README.md"
+    done_when:
+      - "README.DSPY.MD is refreshed whenever training or benchmark workflows change."
+      - "README.md, utilities/README.md, and notebook guidance match the actual CLI and Make targets."
+  - emoji: "🚦"
+    area: "Verification, CI, And Deployment"
+    task: "Expand verification beyond the current smoke and BDD emphasis."
+    surfaces:
+      - path: "tests/test_repository_rag_bdd.py"
+      - path: "documentation/azure-deployment.md"
+      - path: "tests/fixtures/hushwheel_lexiconarium/"
+    done_when:
+      - "A live or mocked Azure inference integration test exists."
+      - "Integration-oriented tests are split out or labeled clearly as the repository grows."
+      - "Future DSPy training and artifact-loading paths have dedicated tests."
+  - emoji: "🧭"
+    area: "Verification, CI, And Deployment"
+    task: "Keep CI current with platform changes."
+    surfaces:
+      - path: ".github/workflows/ci.yml"
+      - path: "samples/logs/"
+      - path: "docs/audit/README.md"
+    done_when:
+      - "GitHub Actions dependencies stop emitting Node.js 20 deprecation warnings."
+      - "Post-push CI evidence stays current under samples/logs/."
+  - emoji: "📦"
+    area: "Verification, CI, And Deployment"
+    task: "Keep packaging and publish surfaces healthy."
+    surfaces:
+      - path: ".github/workflows/publish.yml"
+      - path: "pyproject.toml"
+      - path: "publication/README.md"
+    done_when:
+      - "The Publish workflow is re-checked once versioned DSPy artifacts or release tags exist."
+  - emoji: "🦀"
+    area: "Repo Hygiene And Workflow Policy"
+    task: "Keep the committed rust-cli/Cargo.lock policy intentional."
+    surfaces:
+      - path: "rust-cli/Cargo.lock"
+      - path: "REPO_COMPLETENESS_CHECKLIST.md"
+      - path: "rust-cli/Cargo.toml"
+    done_when:
+      - "The lockfile is refreshed only when Rust dependencies change."
+      - "Lockfile drift is treated as repository-surface work rather than incidental noise."
+  - emoji: "🧹"
+    area: "Repo Hygiene And Workflow Policy"
+    task: "Keep audit notes and backlog documents synchronized."
+    surfaces:
+      - path: "docs/audit/README.md"
+      - path: "TODO.MD"
+      - path: "samples/logs/"
+    done_when:
+      - "Audit notes are updated whenever verification status changes materially."
+      - "The backlog is refreshed when roadmap items are completed, replaced, or reprioritized."

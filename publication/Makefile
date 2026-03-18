@@ -1,10 +1,13 @@
+UV ?= uv
+REPO_ROOT := ..
 ARTICLE := repository-rag-lab-article
 BUILD_DIR := .build
 PDF := $(ARTICLE).pdf
 BANNER := article-banner.png
 RASTER := $(BUILD_DIR)/$(ARTICLE)-page1.png
+TODO_TABLE := todo-backlog-table.tex
 
-.PHONY: build pdf banner clean
+.PHONY: build pdf banner sync-backlog clean
 
 build: $(PDF) $(BANNER)
 
@@ -12,10 +15,16 @@ pdf: $(PDF)
 
 banner: $(BANNER)
 
+sync-backlog:
+	cd $(REPO_ROOT) && $(UV) run repo-rag sync-todo-backlog --root .
+
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-$(PDF): $(ARTICLE).tex references.bib | $(BUILD_DIR)
+$(TODO_TABLE): $(REPO_ROOT)/todo-backlog.yaml $(REPO_ROOT)/src/repo_rag_lab/todo_backlog.py $(REPO_ROOT)/src/repo_rag_lab/cli.py $(REPO_ROOT)/src/repo_rag_lab/utilities.py
+	cd $(REPO_ROOT) && $(UV) run repo-rag sync-todo-backlog --root .
+
+$(PDF): $(ARTICLE).tex references.bib $(TODO_TABLE) | $(BUILD_DIR)
 	pdflatex -interaction=nonstopmode -halt-on-error -output-directory=$(BUILD_DIR) $(ARTICLE).tex
 	cp references.bib $(BUILD_DIR)/references.bib
 	cd $(BUILD_DIR) && bibtex $(ARTICLE)

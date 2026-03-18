@@ -13,10 +13,12 @@ verification results, and anchor status statements to the newest file in `docs/a
 - Use `repo-verification-audit-loop` when verification work, audit-note updates, or repository health reporting are part of the task.
 - Use `post-push-gh-run-logging` immediately after each push and whenever GitHub Actions failures or `samples/logs/` updates are in scope.
 - Use `notebook-playbook-sync` when editing notebooks, notebook scaffolding, notebook-facing docs, or training and population sample surfaces.
+- Use `todo-backlog-sync` when editing `todo-backlog.yaml`, `TODO.MD`, the publication backlog table, or backlog-facing workflow documentation.
 
 ## Primary Utilities
 
 - `make utility-summary`
+- `make todo-sync`
 - `make ask QUESTION="..."`
 - `make discover-mcp`
 - `make smoke-test`

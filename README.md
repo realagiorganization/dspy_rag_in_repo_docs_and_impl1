@@ -46,6 +46,8 @@ from corpus loading and retrieval through MCP discovery, notebook scaffolding, v
 the Rust wrapper.
 
 - Read the PDF: [publication/repository-rag-lab-article.pdf](publication/repository-rag-lab-article.pdf)
+- Review the synced TODO table: [TODO.MD](TODO.MD)
+- Refresh the backlog tables: `make todo-sync`
 - Rebuild it locally: `make paper-build`
 
 ## Preferred Workflow Surfaces
@@ -54,6 +56,7 @@ the Rust wrapper.
 | --- | --- | --- |
 | Utility overview | `make utility-summary` | Show the supported user-facing entrypoints. |
 | Direct CLI | `uv run repo-rag utility-summary` | Use the packaged CLI without going through `make`. |
+| Backlog sync | `make todo-sync` | Regenerate the linkified TODO table in both Markdown and the publication article. |
 | Ask a repo question | `make ask QUESTION="..."` | Run the baseline repository-grounded RAG workflow. |
 | DSPy-shaped ask | `uv run repo-rag ask --question "..." --use-dspy` | Exercise the optional DSPy wrapper after configuring a DSPy LM in-process; see `README.DSPY.MD`. |
 | MCP discovery | `make discover-mcp` | Inspect MCP-related repository artifacts. |
@@ -79,6 +82,7 @@ the Rust wrapper.
 | `samples/population/` | Starter corpus-planning data for staged repository ingestion. |
 | `documentation/` | Supporting notes for Azure deployment and inspired external implementations. |
 | `publication/` | LaTeX article source, bibliography, committed PDF, clipped banner image, and local build helpers. |
+| `todo-backlog.yaml` | Single source of truth for the linkified backlog table rendered into `TODO.MD` and the publication article. |
 | `samples/logs/` | Post-push GitHub Actions inspection logs captured with `gh`. |
 | `artifacts/` | Generated Azure manifests, tuning metadata, notebook run logs, and notebook batch-run reports. |
 | `rust-cli/` | Thin Rust wrapper that delegates to `uv run repo-rag`. |

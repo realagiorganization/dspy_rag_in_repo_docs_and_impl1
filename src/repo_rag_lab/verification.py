@@ -14,6 +14,8 @@ REQUIRED_MAKE_TARGETS = {
     "lock",
     "hooks-install",
     "ask",
+    "ask-dspy",
+    "dspy-train",
     "discover-mcp",
     "utility-summary",
     "smoke-test",

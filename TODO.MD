@@ -1,67 +1,23 @@
 # TODO
 
-## DSPy Training And Runtime
+This backlog is generated from [todo-backlog.yaml](todo-backlog.yaml) via `make todo-sync`.
 
-- Build the missing automated DSPy training path.
-  - Add a dedicated module such as `src/repo_rag_lab/dspy_training.py`.
-  - Configure the DSPy LM explicitly instead of requiring in-process setup outside the CLI.
-  - Define a real `dspy.Module` and optimizer flow rather than stopping at the current DSPy-shaped runtime wrapper.
-  - Persist compiled DSPy programs to a versioned path such as `artifacts/dspy/`.
-  - Expose the training surface through both `src/repo_rag_lab/cli.py` and `Makefile`.
-- Make the existing DSPy CLI path operational without custom bootstrap code.
-  - Add LM-selection and credential/configuration flags or documented env handling for `--use-dspy`.
-  - Add tests that verify CLI behavior for both the configured and unconfigured DSPy path.
-- Extend the notebooks beyond summary-only DSPy preparation.
-  - Let `notebooks/03_dspy_training_lab.ipynb` load and exercise a compiled DSPy program.
-  - Keep `src/repo_rag_lab/notebook_scaffolding.py` aligned with any future compiled-artifact workflow.
+| 🎯 | 🧭 Area | 📌 TODO | 🔗 Primary Surfaces | ✅ Done When |
+| --- | --- | --- | --- | --- |
+| 🧠 | DSPy Training And Runtime | Build the missing automated DSPy training path. | [README.DSPY.MD](README.DSPY.MD)<br>[src/repo_rag_lab/cli.py](src/repo_rag_lab/cli.py)<br>[Makefile](Makefile) | A dedicated training module exists under src/repo_rag_lab/.<br>A real dspy.Module plus optimizer flow replaces the current runtime wrapper.<br>Compiled programs are versioned under artifacts/dspy/.<br>Training is exposed through both the CLI and Makefile. |
+| 🛠 | DSPy Training And Runtime | Make the existing DSPy CLI path operational without custom bootstrap code. | [src/repo_rag_lab/cli.py](src/repo_rag_lab/cli.py)<br>[README.DSPY.MD](README.DSPY.MD)<br>[tests/test_cli_and_dspy.py](tests/test_cli_and_dspy.py) | LM selection and configuration are handled through flags or documented env setup.<br>The --use-dspy path works without ad hoc in-process bootstrap code.<br>Tests cover both configured and unconfigured DSPy runs. |
+| 📓 | DSPy Training And Runtime | Extend the notebooks beyond summary-only DSPy preparation. | [notebooks/03_dspy_training_lab.ipynb](notebooks/03_dspy_training_lab.ipynb)<br>[src/repo_rag_lab/notebook_scaffolding.py](src/repo_rag_lab/notebook_scaffolding.py)<br>[README.DSPY.MD](README.DSPY.MD) | The DSPy training notebook loads and exercises a compiled program.<br>Notebook helpers stay aligned with any future compiled-artifact workflow. |
+| 🔎 | Retrieval, Corpus, And Evaluation | Strengthen retrieval quality beyond the lexical baseline. | [src/repo_rag_lab/retrieval.py](src/repo_rag_lab/retrieval.py)<br>[src/repo_rag_lab/workflow.py](src/repo_rag_lab/workflow.py)<br>[src/repo_rag_lab/dspy_workflow.py](src/repo_rag_lab/dspy_workflow.py) | A stronger retrieval layer replaces simple lexical overlap.<br>Direct file retrieval and MCP-powered retrieval are compared explicitly.<br>Retrieval upgrades are shared by both the baseline and DSPy paths. |
+| 🧪 | Retrieval, Corpus, And Evaluation | Expand benchmark and training evidence. | [samples/training/repository_training_examples.yaml](samples/training/repository_training_examples.yaml)<br>[src/repo_rag_lab/benchmarks.py](src/repo_rag_lab/benchmarks.py)<br>[tests/test_benchmarks_and_notebook_scaffolding.py](tests/test_benchmarks_and_notebook_scaffolding.py) | More training examples carry expected_sources evidence.<br>Repository-specific benchmark questions and expected answers are expanded.<br>Regression and artifact-persistence tests land once training exists. |
+| 🗺 | Retrieval, Corpus, And Evaluation | Keep the benchmark corpus definition stable as the repository grows. | [src/repo_rag_lab/benchmarks.py](src/repo_rag_lab/benchmarks.py)<br>[docs/audit/README.md](docs/audit/README.md)<br>[samples/logs/](samples/logs/) | Operational evidence surfaces stay excluded from the benchmark corpus.<br>Benchmark exclusions are reviewed whenever new generated docs or artifacts appear.<br>Assertions keep measuring repository content instead of verification byproducts. |
+| 📚 | Retrieval, Corpus, And Evaluation | Continue improving corpus planning. | [src/repo_rag_lab/population_samples.py](src/repo_rag_lab/population_samples.py)<br>[samples/population/repository_population_candidates.yaml](samples/population/repository_population_candidates.yaml)<br>[notebooks/04_sample_population_lab.ipynb](notebooks/04_sample_population_lab.ipynb) | Benchmark hit data drives reranking more systematically.<br>Population-candidate discovery expands when new repository surfaces matter. |
+| 🧾 | Notebook And Documentation Surfaces | Keep notebooks executable as research playbooks. | [notebooks/01_repo_rag_research.ipynb](notebooks/01_repo_rag_research.ipynb)<br>[notebooks/03_dspy_training_lab.ipynb](notebooks/03_dspy_training_lab.ipynb)<br>[src/repo_rag_lab/notebook_scaffolding.py](src/repo_rag_lab/notebook_scaffolding.py) | Notebook execution checks land in CI if notebook execution becomes an acceptance surface.<br>Notebook cell IDs and repository-surface validation stay intact as scaffolding evolves.<br>Notebook logging and tuning metadata outputs stay documented under artifacts/. |
+| 📝 | Notebook And Documentation Surfaces | Keep the DSPy and utility documentation current. | [README.DSPY.MD](README.DSPY.MD)<br>[utilities/README.md](utilities/README.md)<br>[README.md](README.md) | README.DSPY.MD is refreshed whenever training or benchmark workflows change.<br>README.md, utilities/README.md, and notebook guidance match the actual CLI and Make targets. |
+| 🚦 | Verification, CI, And Deployment | Expand verification beyond the current smoke and BDD emphasis. | [tests/test_repository_rag_bdd.py](tests/test_repository_rag_bdd.py)<br>[documentation/azure-deployment.md](documentation/azure-deployment.md)<br>[tests/fixtures/hushwheel_lexiconarium/](tests/fixtures/hushwheel_lexiconarium/) | A live or mocked Azure inference integration test exists.<br>Integration-oriented tests are split out or labeled clearly as the repository grows.<br>Future DSPy training and artifact-loading paths have dedicated tests. |
+| 🧭 | Verification, CI, And Deployment | Keep CI current with platform changes. | [.github/workflows/ci.yml](.github/workflows/ci.yml)<br>[samples/logs/](samples/logs/)<br>[docs/audit/README.md](docs/audit/README.md) | GitHub Actions dependencies stop emitting Node.js 20 deprecation warnings.<br>Post-push CI evidence stays current under samples/logs/. |
+| 📦 | Verification, CI, And Deployment | Keep packaging and publish surfaces healthy. | [.github/workflows/publish.yml](.github/workflows/publish.yml)<br>[pyproject.toml](pyproject.toml)<br>[publication/README.md](publication/README.md) | The Publish workflow is re-checked once versioned DSPy artifacts or release tags exist. |
+| 🦀 | Repo Hygiene And Workflow Policy | Keep the committed rust-cli/Cargo.lock policy intentional. | [rust-cli/Cargo.lock](rust-cli/Cargo.lock)<br>[REPO_COMPLETENESS_CHECKLIST.md](REPO_COMPLETENESS_CHECKLIST.md)<br>[rust-cli/Cargo.toml](rust-cli/Cargo.toml) | The lockfile is refreshed only when Rust dependencies change.<br>Lockfile drift is treated as repository-surface work rather than incidental noise. |
+| 🧹 | Repo Hygiene And Workflow Policy | Keep audit notes and backlog documents synchronized. | [docs/audit/README.md](docs/audit/README.md)<br>[TODO.MD](TODO.MD)<br>[samples/logs/](samples/logs/) | Audit notes are updated whenever verification status changes materially.<br>The backlog is refreshed when roadmap items are completed, replaced, or reprioritized. |
 
-## Retrieval, Corpus, And Evaluation
-
-- Strengthen retrieval quality beyond the lexical baseline.
-  - Replace lexical overlap scoring with embeddings or another stronger retrieval layer.
-  - Compare direct file retrieval against MCP-powered retrieval services.
-  - Keep retrieval improvements shared by both the baseline workflow and the DSPy workflow.
-- Expand benchmark and training evidence.
-  - Enrich more entries in `samples/training/repository_training_examples.yaml` with `expected_sources`.
-  - Expand repository-specific benchmark questions and expected answers.
-  - Add tests for regression metrics and artifact persistence once the training surface exists.
-- Keep the benchmark corpus definition stable as the repository grows.
-  - Operational evidence surfaces such as `docs/audit/`, `samples/logs/`,
-    `samples/training/`, and `samples/population/` are intentionally excluded from the benchmark
-    corpus so retrieval assertions measure repository content, not verification byproducts.
-  - Review `src/repo_rag_lab/benchmarks.py` exclusions whenever new generated docs or artifacts are added.
-  - Make sure benchmark assertions continue to measure the intended repository corpus instead of generated side outputs.
-- Continue improving corpus planning.
-  - Use benchmark hit data to drive `rerank_population_candidates(...)` more systematically.
-  - Expand population-candidate discovery if submodules or additional documentation surfaces become important.
-
-## Notebook And Documentation Surfaces
-
-- Keep notebooks executable as research playbooks.
-  - Add notebook execution checks in CI if notebook execution becomes part of the acceptance surface.
-  - Preserve notebook cell IDs and repository-surface validation when scaffolding changes.
-  - Keep notebook logging and tuning-metadata outputs documented under `artifacts/`.
-- Keep the DSPy and utility documentation current.
-  - Refresh `README.DSPY.MD` when the training or benchmark workflow changes.
-  - Keep `utilities/README.md`, `README.md`, and notebook guidance aligned with the actual CLI and Make targets.
-
-## Verification, CI, And Deployment
-
-- Expand verification beyond the current smoke/BDD emphasis.
-  - Add a live or mocked Azure inference integration test once deployment moves beyond manifest generation.
-  - Split or explicitly label integration-oriented tests if the repository grows past the current smoke-test and BDD surface.
-  - Add tests that cover the future DSPy training and artifact-loading paths.
-- Keep CI current with platform changes.
-  - Update GitHub Actions dependencies that still emit Node.js 20 deprecation warnings.
-  - Keep the post-push `samples/logs/` evidence updated after every push.
-- Keep packaging and publish surfaces healthy.
-  - Re-check the `Publish` workflow when the repo starts producing versioned DSPy artifacts or release tags.
-
-## Repo Hygiene And Workflow Policy
-
-- Keep the committed `rust-cli/Cargo.lock` policy intentional.
-  - Refresh it only when Rust dependencies change.
-  - Treat lockfile drift as repository-surface work, not incidental noise.
-- Keep audit notes and backlog documents synchronized.
-  - Update `docs/audit/` when verification status materially changes.
-  - Refresh this file when roadmap items are completed or replaced.
+Edit `todo-backlog.yaml`, then run `make todo-sync` to refresh this table and the
+publication-ready LaTeX include.

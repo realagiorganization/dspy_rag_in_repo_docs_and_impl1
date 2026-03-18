@@ -7,11 +7,25 @@ on:
     paths:
       - ".github/workflows/publication-pdf.yml"
       - "publication/**"
+      - "todo-backlog.yaml"
+      - "src/repo_rag_lab/todo_backlog.py"
+      - "src/repo_rag_lab/cli.py"
+      - "src/repo_rag_lab/utilities.py"
+      - "Makefile"
+      - "pyproject.toml"
+      - "uv.lock"
       - "README.md"
   pull_request:
     paths:
       - ".github/workflows/publication-pdf.yml"
       - "publication/**"
+      - "todo-backlog.yaml"
+      - "src/repo_rag_lab/todo_backlog.py"
+      - "src/repo_rag_lab/cli.py"
+      - "src/repo_rag_lab/utilities.py"
+      - "Makefile"
+      - "pyproject.toml"
+      - "uv.lock"
       - "README.md"
   workflow_dispatch:
 
@@ -22,6 +36,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: .python-version
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            .python-version
+            pyproject.toml
+            uv.lock
+
+      - name: Sync backlog tables
+        run: |
+          uv sync --extra azure
+          uv run repo-rag sync-todo-backlog --root .
 
       - name: Restore LaTeX auxiliary cache
         uses: actions/cache@v4
@@ -37,7 +70,7 @@ jobs:
             publication/*.out
             publication/*.run.xml
             publication/*.toc
-          key: latex-aux-${{ runner.os }}-${{ hashFiles('publication/repository-rag-lab-article.tex', 'publication/references.bib', 'publication/Makefile', '.github/workflows/publication-pdf.yml') }}
+          key: latex-aux-${{ runner.os }}-${{ hashFiles('publication/repository-rag-lab-article.tex', 'publication/references.bib', 'publication/Makefile', 'publication/todo-backlog-table.tex', 'todo-backlog.yaml', '.github/workflows/publication-pdf.yml') }}
           restore-keys: |
             latex-aux-${{ runner.os }}-
 

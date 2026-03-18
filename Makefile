@@ -3,12 +3,29 @@ QUESTION ?= What does this repository research?
 MODEL_ID ?= sample-ft-model
 DEPLOYMENT_NAME ?= repo-rag-ft
 AZURE_ENDPOINT ?= https://example.services.ai.azure.com/models
+DSPY_RUN_NAME ?= repository-rag-default
+DSPY_TRAINING_PATH ?= samples/training/repository_training_examples.yaml
+DSPY_MODEL ?=
+DSPY_API_KEY ?=
+DSPY_API_BASE ?=
+DSPY_API_VERSION ?=
+DSPY_MODEL_TYPE ?= chat
+DSPY_TEMPERATURE ?=
+DSPY_MAX_TOKENS ?=
+DSPY_PROGRAM_PATH ?=
+DSPY_OPTIMIZER ?= bootstrapfewshot
+DSPY_TOP_K ?= 4
+DSPY_MAX_BOOTSTRAPPED_DEMOS ?= 2
+DSPY_MAX_LABELED_DEMOS ?= 2
+DSPY_MIPRO_AUTO ?= light
+DSPY_NUM_THREADS ?= 4
+DSPY_MIPRO_NUM_TRIALS ?=
 PYTEST_COV_ARGS ?= --cov=src/repo_rag_lab --cov-report=term-missing --cov-report=xml
 GH_RUN_LIMIT ?= 10
 RUN_ID ?=
 NOTEBOOK_TIMEOUT ?= 600
 
-.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask discover-mcp utility-summary smoke-test verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook notebook-report bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run azure-manifest fmt build publish
+.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask ask-dspy dspy-train discover-mcp utility-summary todo-sync smoke-test verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook notebook-report bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run azure-manifest fmt build publish
 
 setup:
 	$(UV) sync --extra azure
@@ -31,11 +48,42 @@ hooks-run-push: sync
 ask: sync
 	$(UV) run repo-rag ask --question "$(QUESTION)"
 
+ask-dspy: sync
+	$(UV) run repo-rag ask --question "$(QUESTION)" --use-dspy \
+		$(if $(strip $(DSPY_PROGRAM_PATH)),--dspy-program-path "$(DSPY_PROGRAM_PATH)",) \
+		$(if $(strip $(DSPY_MODEL)),--dspy-model "$(DSPY_MODEL)",) \
+		$(if $(strip $(DSPY_API_KEY)),--dspy-api-key "$(DSPY_API_KEY)",) \
+		$(if $(strip $(DSPY_API_BASE)),--dspy-api-base "$(DSPY_API_BASE)",) \
+		$(if $(strip $(DSPY_API_VERSION)),--dspy-api-version "$(DSPY_API_VERSION)",) \
+		--dspy-model-type "$(DSPY_MODEL_TYPE)" \
+		$(if $(strip $(DSPY_TEMPERATURE)),--dspy-temperature $(DSPY_TEMPERATURE),) \
+		$(if $(strip $(DSPY_MAX_TOKENS)),--dspy-max-tokens $(DSPY_MAX_TOKENS),) \
+		--dspy-top-k $(DSPY_TOP_K)
+
+dspy-train: sync
+	$(UV) run repo-rag dspy-train --root . --training-path "$(DSPY_TRAINING_PATH)" \
+		--run-name "$(DSPY_RUN_NAME)" --optimizer "$(DSPY_OPTIMIZER)" \
+		--dspy-top-k $(DSPY_TOP_K) \
+		--max-bootstrapped-demos $(DSPY_MAX_BOOTSTRAPPED_DEMOS) \
+		--max-labeled-demos $(DSPY_MAX_LABELED_DEMOS) \
+		--mipro-auto "$(DSPY_MIPRO_AUTO)" --num-threads $(DSPY_NUM_THREADS) \
+		$(if $(strip $(DSPY_MIPRO_NUM_TRIALS)),--mipro-num-trials $(DSPY_MIPRO_NUM_TRIALS),) \
+		$(if $(strip $(DSPY_MODEL)),--dspy-model "$(DSPY_MODEL)",) \
+		$(if $(strip $(DSPY_API_KEY)),--dspy-api-key "$(DSPY_API_KEY)",) \
+		$(if $(strip $(DSPY_API_BASE)),--dspy-api-base "$(DSPY_API_BASE)",) \
+		$(if $(strip $(DSPY_API_VERSION)),--dspy-api-version "$(DSPY_API_VERSION)",) \
+		--dspy-model-type "$(DSPY_MODEL_TYPE)" \
+		$(if $(strip $(DSPY_TEMPERATURE)),--dspy-temperature $(DSPY_TEMPERATURE),) \
+		$(if $(strip $(DSPY_MAX_TOKENS)),--dspy-max-tokens $(DSPY_MAX_TOKENS),)
+
 discover-mcp: sync
 	$(UV) run repo-rag discover-mcp
 
 utility-summary: sync
 	$(UV) run repo-rag utility-summary
+
+todo-sync: sync
+	$(UV) run repo-rag sync-todo-backlog
 
 smoke-test: sync
 	$(UV) run repo-rag smoke-test
@@ -62,7 +110,7 @@ gh-failed-logs:
 	test -n "$$run_id"; \
 	gh run view "$$run_id" --log-failed
 
-paper-build:
+paper-build: todo-sync
 	$(MAKE) -C publication build
 
 paper-clean:

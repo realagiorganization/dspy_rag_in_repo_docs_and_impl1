@@ -9,6 +9,7 @@ them over ad hoc shell commands so every workflow hits the same package code.
 - `make ask QUESTION="..."`: answer a repository-grounded question with the baseline RAG flow.
 - `make discover-mcp`: inspect repository-local MCP candidates.
 - `make smoke-test`: exercise answer generation, MCP discovery, and Azure manifest output together.
+- `make todo-sync`: regenerate the shared TODO backlog table for both `TODO.MD` and the publication PDF source.
 - `make verify-surfaces`: validate the Makefile and notebook contract.
 - `make notebook-report`: execute all tracked notebooks with monitored progress and report artifacts.
 - `make gh-runs`: list the latest GitHub Actions runs with `gh`.

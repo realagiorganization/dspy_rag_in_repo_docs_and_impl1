@@ -108,6 +108,7 @@ def test_publication_surface_files_exist_and_are_linked() -> None:
     assert (publication_dir / "Makefile").exists()
     assert (publication_dir / "references.bib").exists()
     assert (publication_dir / "repository-rag-lab-article.tex").exists()
+    assert (publication_dir / "todo-backlog-table.tex").exists()
     assert (publication_dir / "repository-rag-lab-article.pdf").exists()
     assert (publication_dir / "article-banner.png").exists()
 
@@ -115,6 +116,11 @@ def test_publication_surface_files_exist_and_are_linked() -> None:
     assert "publication/repository-rag-lab-article.pdf" in readme
     assert "publication/article-banner.png" in readme
     assert "make paper-build" in readme
+    assert "make todo-sync" in readme
+
+    todo_text = (REPO_ROOT / "TODO.MD").read_text(encoding="utf-8")
+    assert "| 🎯 | 🧭 Area | 📌 TODO | 🔗 Primary Surfaces | ✅ Done When |" in todo_text
+    assert "todo-backlog.yaml" in todo_text
 
 
 def test_rust_wrapper_surface_keeps_committed_lockfile_policy() -> None:
@@ -128,16 +134,28 @@ def test_rust_wrapper_surface_keeps_committed_lockfile_policy() -> None:
 def test_publication_workflow_builds_and_uploads_pdf() -> None:
     workflow_path = REPO_ROOT / ".github" / "workflows" / "publication-pdf.yml"
     workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    workflow_on = workflow.get("on", workflow.get(True))
+    assert workflow_on is not None
+    assert "todo-backlog.yaml" in workflow_on["push"]["paths"]
+    assert "src/repo_rag_lab/todo_backlog.py" in workflow_on["push"]["paths"]
 
     assert workflow["name"] == "Publication PDF"
     job = workflow["jobs"]["publication-pdf"]
     steps = job["steps"]
 
     assert any(step.get("uses") == "actions/checkout@v6" for step in steps)
+    assert any(step.get("uses") == "actions/setup-python@v6" for step in steps)
+    assert any(step.get("uses") == "astral-sh/setup-uv@v6" for step in steps)
+    assert any(
+        step.get("name") == "Sync backlog tables"
+        and "repo-rag sync-todo-backlog" in step.get("run", "")
+        for step in steps
+    )
     assert any(
         step.get("uses") == "actions/cache@v4"
         and "publication/*.aux" in step.get("with", {}).get("path", "")
         and "publication/repository-rag-lab-article.tex" in step.get("with", {}).get("key", "")
+        and "publication/todo-backlog-table.tex" in step.get("with", {}).get("key", "")
         for step in steps
     )
     assert any(step.get("uses") == "xu-cheng/latex-action@v4" for step in steps)
@@ -157,6 +175,18 @@ def test_publication_workflow_builds_and_uploads_pdf() -> None:
         and "publication/repository-rag-lab-article.pdf" in step.get("with", {}).get("url", "")
         for step in steps
     )
+
+
+def test_repo_local_todo_skill_is_recorded() -> None:
+    agents_text = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    skill_path = REPO_ROOT / ".codex" / "skills" / "todo-backlog-sync" / "SKILL.md"
+
+    assert "todo-backlog-sync" in agents_text
+    assert "make todo-sync" in agents_text
+    assert skill_path.exists()
+    skill_text = skill_path.read_text(encoding="utf-8")
+    assert "todo-backlog.yaml" in skill_text
+    assert "make paper-build" in skill_text
 
 
 def test_ci_and_publish_workflows_cache_python_and_dependencies() -> None:

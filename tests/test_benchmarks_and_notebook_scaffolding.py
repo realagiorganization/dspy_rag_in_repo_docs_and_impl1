@@ -84,6 +84,8 @@ def test_build_training_lab_context_writes_metadata_and_reports_clean_validation
     assert payload["validation_issues"] == []
     assert payload["benchmark_summary"]["pass_rate"] == 1.0
     assert (root / payload["tuning_metadata_path"]).exists()
+    assert payload["compiled_program_metadata_path"] is None
+    assert payload["compiled_program_path"] is None
 
 
 def test_build_training_lab_context_uses_paths_relative_to_selected_root(

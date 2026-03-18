@@ -7,15 +7,50 @@ import sys
 from pathlib import Path
 
 from .azure import write_deployment_manifest
+from .dspy_training import (
+    DEFAULT_DSPY_RUN_NAME,
+    DEFAULT_TRAINING_PATH,
+    DSPyLMConfig,
+    DSPyTrainingConfig,
+    resolve_dspy_lm_config,
+    train_repository_program,
+)
 from .dspy_workflow import RepositoryRAG
 from .mcp import discover_mcp_servers, dump_candidates
 from .utilities import (
     run_notebook_report,
     run_smoke_test,
     run_surface_verification,
+    run_todo_backlog_sync,
     utility_summary,
 )
 from .workflow import ask_repository
+
+
+def add_dspy_lm_arguments(parser: argparse.ArgumentParser) -> None:
+    """Attach shared DSPy LM configuration flags to ``parser``."""
+
+    parser.add_argument("--dspy-model")
+    parser.add_argument("--dspy-api-key")
+    parser.add_argument("--dspy-api-base")
+    parser.add_argument("--dspy-api-version")
+    parser.add_argument("--dspy-model-type", default="chat")
+    parser.add_argument("--dspy-temperature", type=float)
+    parser.add_argument("--dspy-max-tokens", type=int)
+
+
+def resolve_dspy_lm_config_from_args(args: argparse.Namespace) -> DSPyLMConfig | None:
+    """Resolve optional DSPy LM configuration from parsed CLI args."""
+
+    return resolve_dspy_lm_config(
+        model=getattr(args, "dspy_model", None),
+        api_key=getattr(args, "dspy_api_key", None),
+        api_base=getattr(args, "dspy_api_base", None),
+        api_version=getattr(args, "dspy_api_version", None),
+        model_type=getattr(args, "dspy_model_type", "chat"),
+        temperature=getattr(args, "dspy_temperature", None),
+        max_tokens=getattr(args, "dspy_max_tokens", None),
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -28,6 +63,9 @@ def build_parser() -> argparse.ArgumentParser:
     ask_parser.add_argument("--question", required=True)
     ask_parser.add_argument("--root", default=".")
     ask_parser.add_argument("--use-dspy", action="store_true")
+    ask_parser.add_argument("--dspy-program-path")
+    ask_parser.add_argument("--dspy-top-k", type=int, default=4)
+    add_dspy_lm_arguments(ask_parser)
 
     mcp_parser = subparsers.add_parser("discover-mcp")
     mcp_parser.add_argument("--root", default=".")
@@ -41,6 +79,9 @@ def build_parser() -> argparse.ArgumentParser:
     utility_parser = subparsers.add_parser("utility-summary")
     utility_parser.add_argument("--root", default=".")
 
+    todo_parser = subparsers.add_parser("sync-todo-backlog")
+    todo_parser.add_argument("--root", default=".")
+
     smoke_parser = subparsers.add_parser("smoke-test")
     smoke_parser.add_argument("--root", default=".")
 
@@ -52,6 +93,27 @@ def build_parser() -> argparse.ArgumentParser:
     notebook_parser.add_argument("--timeout-seconds", type=int, default=600)
     notebook_parser.add_argument("--load-env-file", action="store_true")
     notebook_parser.add_argument("--fail-fast", action="store_true")
+
+    dspy_train_parser = subparsers.add_parser("dspy-train")
+    dspy_train_parser.add_argument("--root", default=".")
+    dspy_train_parser.add_argument("--training-path", default=str(DEFAULT_TRAINING_PATH))
+    dspy_train_parser.add_argument("--run-name", default=DEFAULT_DSPY_RUN_NAME)
+    dspy_train_parser.add_argument(
+        "--optimizer",
+        choices=["bootstrapfewshot", "miprov2"],
+        default="bootstrapfewshot",
+    )
+    dspy_train_parser.add_argument("--dspy-top-k", type=int, default=4)
+    dspy_train_parser.add_argument("--max-bootstrapped-demos", type=int, default=2)
+    dspy_train_parser.add_argument("--max-labeled-demos", type=int, default=2)
+    dspy_train_parser.add_argument(
+        "--mipro-auto",
+        choices=["light", "medium", "heavy"],
+        default="light",
+    )
+    dspy_train_parser.add_argument("--num-threads", type=int, default=4)
+    dspy_train_parser.add_argument("--mipro-num-trials", type=int)
+    add_dspy_lm_arguments(dspy_train_parser)
     return parser
 
 
@@ -64,7 +126,13 @@ def main() -> int:
 
     if args.command == "ask":
         if args.use_dspy:
-            dspy_result = RepositoryRAG(root=root)(args.question)
+            dspy_result = RepositoryRAG(
+                root=root,
+                top_k=args.dspy_top_k,
+                program_path=Path(args.dspy_program_path) if args.dspy_program_path else None,
+                lm_config=resolve_dspy_lm_config_from_args(args),
+                require_configured_lm=True,
+            )(args.question)
             print(dspy_result.answer)
             return 0
         rag_result = ask_repository(question=args.question, root=root)
@@ -90,6 +158,10 @@ def main() -> int:
         print(utility_summary(root))
         return 0
 
+    if args.command == "sync-todo-backlog":
+        print(run_todo_backlog_sync(root))
+        return 0
+
     if args.command == "smoke-test":
         print(run_smoke_test(root))
         return 0
@@ -109,6 +181,31 @@ def main() -> int:
         )
         print(payload)
         return 0 if '"failure_count": 0' in payload else 1
+
+    if args.command == "dspy-train":
+        lm_config = resolve_dspy_lm_config_from_args(args)
+        if lm_config is None:
+            parser.error(
+                "DSPy training requires LM configuration. Pass --dspy-model / --dspy-api-* "
+                "flags, export DSPY_* env vars, or source the repository env first."
+            )
+        result = train_repository_program(
+            root,
+            training_config=DSPyTrainingConfig(
+                training_path=Path(args.training_path),
+                run_name=args.run_name,
+                optimizer=args.optimizer,
+                top_k=args.dspy_top_k,
+                max_bootstrapped_demos=args.max_bootstrapped_demos,
+                max_labeled_demos=args.max_labeled_demos,
+                mipro_auto=args.mipro_auto,
+                num_threads=args.num_threads,
+                mipro_num_trials=args.mipro_num_trials,
+            ),
+            lm_config=lm_config,
+        )
+        print(result.to_json())
+        return 0
 
     parser.error(f"Unsupported command: {args.command}")
     return 2

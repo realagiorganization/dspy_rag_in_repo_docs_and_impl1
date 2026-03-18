@@ -13,6 +13,7 @@ from .benchmarks import (
     summarize_benchmark_results,
 )
 from .corpus import load_documents
+from .dspy_training import latest_dspy_artifact_metadata
 from .mcp import discover_mcp_servers
 from .notebook_support import configure_notebook_logger
 from .population_samples import (
@@ -115,12 +116,29 @@ def build_training_lab_context(root: Path) -> dict[str, Any]:
         benchmark_summary=benchmark_summary,
         deployment_name="repo-rag-ft",
     )
+    compiled_program_metadata_path = latest_dspy_artifact_metadata(root)
+    compiled_program_summary: dict[str, Any] | None = None
+    compiled_program_path: str | None = None
+    if compiled_program_metadata_path is not None:
+        compiled_metadata = json.loads(compiled_program_metadata_path.read_text(encoding="utf-8"))
+        compiled_program_summary = compiled_metadata.get("compiled_program_summary")
+        program_path_value = compiled_metadata.get("program_path")
+        if isinstance(program_path_value, str):
+            compiled_program_path = program_path_value
+
     payload = {
         "training_path": str(TRAINING_SAMPLES_PATH),
         "training_summary": training_summary,
         "validation_issues": validation_issues,
         "benchmark_summary": benchmark_summary,
         "tuning_metadata_path": str(tuning_metadata_path.relative_to(root)),
+        "compiled_program_metadata_path": (
+            str(compiled_program_metadata_path.relative_to(root))
+            if compiled_program_metadata_path is not None
+            else None
+        ),
+        "compiled_program_path": compiled_program_path,
+        "compiled_program_summary": compiled_program_summary,
     }
     LOGGER.info(
         "Built training lab context for %s examples with %s validation issues.",

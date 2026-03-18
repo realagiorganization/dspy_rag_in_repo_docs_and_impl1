@@ -9,6 +9,7 @@ from repo_rag_lab.utilities import (
     run_notebook_report,
     run_smoke_test,
     run_surface_verification,
+    run_todo_backlog_sync,
     utility_summary,
 )
 
@@ -19,6 +20,8 @@ def test_utility_summary_mentions_core_surfaces() -> None:
     summary = utility_summary(REPO_ROOT)
     assert "ask" in summary
     assert "discover-mcp" in summary
+    assert "dspy-train" in summary
+    assert "todo-sync" in summary
     assert "smoke-test" in summary
     assert "verify-surfaces" in summary
     assert "run-notebooks" in summary
@@ -35,6 +38,14 @@ def test_run_surface_verification_reports_expected_fields() -> None:
     payload = json.loads(run_surface_verification(REPO_ROOT))
     assert payload["issue_count"] == 0
     assert payload["checked_notebook_count"] >= 2
+
+
+def test_run_todo_backlog_sync_reports_expected_fields() -> None:
+    payload = json.loads(run_todo_backlog_sync(REPO_ROOT))
+    assert payload["source_path"] == "todo-backlog.yaml"
+    assert payload["markdown_path"] == "TODO.MD"
+    assert payload["latex_path"] == "publication/todo-backlog-table.tex"
+    assert payload["item_count"] >= 10
 
 
 def test_run_notebook_report_returns_machine_readable_summary(
