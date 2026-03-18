@@ -9,6 +9,7 @@ from repo_rag_lab.utilities import (
     run_azure_inference_probe,
     run_azure_openai_probe,
     run_notebook_report,
+    run_retrieval_evaluation,
     run_smoke_test,
     run_surface_verification,
     run_todo_backlog_sync,
@@ -26,6 +27,7 @@ def test_utility_summary_mentions_core_surfaces() -> None:
     assert "dspy-train" in summary
     assert "azure-openai-probe" in summary
     assert "azure-inference-probe" in summary
+    assert "retrieval-eval" in summary
     assert "todo-sync" in summary
     assert "smoke-test" in summary
     assert "verify-surfaces" in summary
@@ -37,6 +39,16 @@ def test_run_smoke_test_reports_expected_fields() -> None:
     assert payload["answer_contains_repository"] is True
     assert payload["manifest_path"].startswith("artifacts/azure/")
     assert isinstance(payload["mcp_candidate_count"], int)
+
+
+def test_run_retrieval_evaluation_reports_expected_fields() -> None:
+    payload = json.loads(run_retrieval_evaluation(REPO_ROOT, top_k=4, top_k_sweep="1,4"))
+    assert payload["training_path"] == "samples/training/repository_training_examples.yaml"
+    assert payload["benchmark_count"] >= 1
+    assert payload["default_top_k"] == 4
+    assert payload["default_summary"]["top_k"] == 4
+    assert [summary["top_k"] for summary in payload["top_k_summaries"]] == [1, 4]
+    assert "average_reciprocal_rank" in payload["default_summary"]
 
 
 def test_run_surface_verification_reports_expected_fields() -> None:

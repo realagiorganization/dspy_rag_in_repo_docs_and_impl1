@@ -98,7 +98,9 @@ The next stage formalizes what “good answers” should look like:
 
 Training examples and expected sources convert repository self-description into a measurable
 benchmark surface. This is the point where the project stops being a demo and becomes a research
-instrument.
+instrument. The benchmark layer is now also a user-facing evaluation surface through
+`make retrieval-eval`, which reports top-k sweeps and richer retrieval-quality metrics instead of
+leaving benchmark inspection buried in notebook helpers.
 
 ### 5. DSPy Moves The Repo From Prompted Runtime To Compiled Program
 
@@ -162,6 +164,7 @@ pretending that deployment itself happens inside this repo.
 At the time of this document:
 
 - baseline repository-grounded RAG is implemented and exposed through `make ask`
+- retrieval-quality evaluation is implemented and exposed through `make retrieval-eval`
 - DSPy runtime answering is implemented and exposed through `make ask-dspy`
 - DSPy compile-save-reload is implemented and exposed through `make dspy-train`
 - notebook batch execution and reporting are implemented and exposed through
@@ -180,6 +183,7 @@ Use these files when you need to defend the current repository story quickly:
 | Question | Best starting point | Supporting surfaces |
 | --- | --- | --- |
 | What is the repo for? | [README.md](README.md) | [publication/repository-rag-lab-article.pdf](publication/repository-rag-lab-article.pdf) |
+| How is retrieval quality measured? | [README.DSPY.MD](README.DSPY.MD) | [src/repo_rag_lab/benchmarks.py](src/repo_rag_lab/benchmarks.py), [docs/audit/2026-03-18-retrieval-evaluation-suite.md](docs/audit/2026-03-18-retrieval-evaluation-suite.md) |
 | How does DSPy work here? | [README.DSPY.MD](README.DSPY.MD) | [src/repo_rag_lab/dspy_training.py](src/repo_rag_lab/dspy_training.py), [src/repo_rag_lab/dspy_workflow.py](src/repo_rag_lab/dspy_workflow.py) |
 | How do notebooks fit in? | [notebooks/](notebooks/) | [src/repo_rag_lab/notebook_scaffolding.py](src/repo_rag_lab/notebook_scaffolding.py), [src/repo_rag_lab/notebook_runner.py](src/repo_rag_lab/notebook_runner.py) |
 | What currently passes? | [docs/audit/README.md](docs/audit/README.md) | newest dated note in [docs/audit/](docs/audit/), plus [samples/logs/](samples/logs/) |

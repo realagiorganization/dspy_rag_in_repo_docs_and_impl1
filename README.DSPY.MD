@@ -338,17 +338,21 @@ The benchmark loop is:
 1. `build_retrieval_benchmarks(examples)` keeps only training examples that declare
    `expected_sources`.
 2. `evaluate_retrieval_benchmarks(root, benchmarks)` runs retrieval against a fairness-filtered
-   corpus.
+   corpus, while `evaluate_retrieval_quality_suite(...)` sweeps multiple `top_k` values over the
+   same benchmark set.
 3. The benchmark corpus explicitly excludes noisy or leaking paths such as `.github`, `tests`,
    `data`, `samples/training`, and `samples/logs`.
-4. Each result records `retrieved_sources`, `matched_sources`, and tags.
-5. `summarize_benchmark_results(results)` computes pass counts, pass rate, and per-source hit
-   counters.
+4. Each result records `retrieved_sources`, `matched_sources`, missed sources, first relevant rank,
+   reciprocal rank, source recall, source precision, and tags.
+5. `summarize_benchmark_results(results)` computes pass counts, pass rate, full-coverage rate,
+   mean recall, mean precision, mean reciprocal rank, and per-source hit counters.
 6. `assert_minimum_pass_rate(summary, minimum_pass_rate=2 / 3)` can fail a notebook run when the
    retrieval surface regresses.
 7. The source-hit summary can feed
    `rerank_population_candidates(...)` in
    [src/repo_rag_lab/population_samples.py](src/repo_rag_lab/population_samples.py).
+8. `make retrieval-eval` and `uv run repo-rag retrieval-eval` expose the same evaluation suite as a
+   user-facing utility surface.
 
 Use this when you want a compact benchmark report:
 
@@ -357,8 +361,7 @@ from pathlib import Path
 
 from repo_rag_lab.benchmarks import (
     build_retrieval_benchmarks,
-    evaluate_retrieval_benchmarks,
-    summarize_benchmark_results,
+    evaluate_retrieval_quality_suite,
 )
 from repo_rag_lab.training_samples import load_training_examples
 
@@ -367,9 +370,10 @@ examples = load_training_examples(
     root / "samples" / "training" / "repository_training_examples.yaml"
 )
 benchmarks = build_retrieval_benchmarks(examples)
-summary = summarize_benchmark_results(evaluate_retrieval_benchmarks(root, benchmarks))
-print(summary["pass_rate"])
-print(summary["retrieved_source_hits"])
+suite = evaluate_retrieval_quality_suite(root, benchmarks, top_k=4, top_k_values=(1, 2, 4, 8))
+print(suite["default_summary"]["pass_rate"])
+print(suite["default_summary"]["average_reciprocal_rank"])
+print(suite["top_k_summaries"])
 ```
 
 Why this is the key development stage:
@@ -585,8 +589,8 @@ Useful cross-references:
 - [Makefile](Makefile) exposes the canonical verification targets.
 - [src/repo_rag_lab/verification.py](src/repo_rag_lab/verification.py) validates notebook and
   Makefile contracts.
-- [docs/audit/2026-03-18-dspy-training-path.md](docs/audit/2026-03-18-dspy-training-path.md)
-  records the current DSPy compile-path verification evidence.
+- [docs/audit/2026-03-18-retrieval-evaluation-suite.md](docs/audit/2026-03-18-retrieval-evaluation-suite.md)
+  records the current retrieval-quality evaluation evidence.
 
 ## Current Gap And Direct Extension Path
 

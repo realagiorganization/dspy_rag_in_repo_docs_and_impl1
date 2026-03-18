@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,8 @@ BENCHMARK_EXCLUDED_PATH_PREFIXES = (
     Path("samples/population"),
     Path("samples/training"),
 )
+DEFAULT_RETRIEVAL_EVAL_TOP_K = 4
+DEFAULT_RETRIEVAL_EVAL_TOP_K_SWEEP = (1, 2, 4, 8)
 
 
 @dataclass(frozen=True)
@@ -64,6 +67,56 @@ class RetrievalBenchmarkResult:
         """Return ``True`` when retrieval found at least one expected source."""
 
         return bool(self.matched_sources)
+
+    @property
+    def missed_sources(self) -> tuple[str, ...]:
+        """Return expected sources that were not retrieved."""
+
+        matched_source_set = set(self.matched_sources)
+        return tuple(source for source in self.expected_sources if source not in matched_source_set)
+
+    @property
+    def first_relevant_rank(self) -> int | None:
+        """Return the 1-based rank of the first retrieved expected source, if any."""
+
+        matched_source_set = set(self.matched_sources)
+        for index, source in enumerate(self.retrieved_sources, start=1):
+            if source in matched_source_set:
+                return index
+        return None
+
+    @property
+    def reciprocal_rank(self) -> float:
+        """Return reciprocal rank for the first relevant retrieved source."""
+
+        first_rank = self.first_relevant_rank
+        if first_rank is None:
+            return 0.0
+        return 1.0 / first_rank
+
+    @property
+    def source_recall(self) -> float:
+        """Return source recall across the expected source set."""
+
+        if not self.expected_sources:
+            return 0.0
+        return len(self.matched_sources) / len(self.expected_sources)
+
+    @property
+    def source_precision(self) -> float:
+        """Return source precision across retrieved sources."""
+
+        if not self.retrieved_sources:
+            return 0.0
+        return len(self.matched_sources) / len(self.retrieved_sources)
+
+    @property
+    def fully_covered(self) -> bool:
+        """Return ``True`` when retrieval found every expected source."""
+
+        return bool(self.expected_sources) and len(self.matched_sources) == len(
+            self.expected_sources
+        )
 
 
 def build_retrieval_benchmarks(examples: list[TrainingExample]) -> list[RetrievalBenchmark]:
@@ -140,6 +193,42 @@ def _unique_in_order(items: list[str]) -> tuple[str, ...]:
     return tuple(ordered)
 
 
+def normalize_retrieval_top_k_values(
+    top_k_values: Sequence[int] | None = None,
+    *,
+    default_top_k: int = DEFAULT_RETRIEVAL_EVAL_TOP_K,
+) -> tuple[int, ...]:
+    """Normalize the retrieval evaluation top-k sweep into positive, unique values."""
+
+    candidates = [*(top_k_values or DEFAULT_RETRIEVAL_EVAL_TOP_K_SWEEP), default_top_k]
+    normalized: list[int] = []
+    seen: set[int] = set()
+    for candidate in sorted(candidates):
+        if candidate <= 0:
+            raise ValueError(f"Retrieval evaluation top-k values must be positive: {candidate}")
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        normalized.append(candidate)
+    return tuple(normalized)
+
+
+def _build_retrieval_benchmark_result(
+    benchmark: RetrievalBenchmark,
+    *,
+    retrieved_sources: tuple[str, ...],
+) -> RetrievalBenchmarkResult:
+    expected_source_set = set(benchmark.expected_sources)
+    matched_sources = tuple(source for source in retrieved_sources if source in expected_source_set)
+    return RetrievalBenchmarkResult(
+        question=benchmark.question,
+        expected_sources=benchmark.expected_sources,
+        retrieved_sources=retrieved_sources,
+        matched_sources=matched_sources,
+        tags=benchmark.tags,
+    )
+
+
 def evaluate_retrieval_benchmarks(
     root: Path, benchmarks: list[RetrievalBenchmark], top_k: int = 4
 ) -> list[RetrievalBenchmarkResult]:
@@ -152,23 +241,71 @@ def evaluate_retrieval_benchmarks(
         retrieved_sources = _unique_in_order(
             [str(chunk.source.relative_to(root)) for chunk in retrieved]
         )
-        expected_source_set = set(benchmark.expected_sources)
-        matched_sources = tuple(
-            source for source in retrieved_sources if source in expected_source_set
-        )
         results.append(
-            RetrievalBenchmarkResult(
-                question=benchmark.question,
-                expected_sources=benchmark.expected_sources,
-                retrieved_sources=retrieved_sources,
-                matched_sources=matched_sources,
-                tags=benchmark.tags,
-            )
+            _build_retrieval_benchmark_result(benchmark, retrieved_sources=retrieved_sources)
         )
     return results
 
 
-def summarize_benchmark_results(results: list[RetrievalBenchmarkResult]) -> dict[str, Any]:
+def evaluate_retrieval_quality_suite(
+    root: Path,
+    benchmarks: list[RetrievalBenchmark],
+    *,
+    top_k: int = DEFAULT_RETRIEVAL_EVAL_TOP_K,
+    top_k_values: Sequence[int] | None = None,
+) -> dict[str, Any]:
+    """Evaluate retrieval quality across the default top-k and a small top-k sweep."""
+
+    normalized_top_k_values = normalize_retrieval_top_k_values(top_k_values, default_top_k=top_k)
+    chunks = chunk_documents(_select_benchmark_documents(root))
+    max_top_k = max(normalized_top_k_values, default=top_k)
+    results_by_top_k: dict[int, list[RetrievalBenchmarkResult]] = {
+        value: [] for value in normalized_top_k_values
+    }
+
+    for benchmark in benchmarks:
+        retrieved = retrieve(benchmark.question, chunks, top_k=max_top_k)
+        retrieved_sources = _unique_in_order(
+            [str(chunk.source.relative_to(root)) for chunk in retrieved]
+        )
+        for sweep_top_k in normalized_top_k_values:
+            results_by_top_k[sweep_top_k].append(
+                _build_retrieval_benchmark_result(
+                    benchmark,
+                    retrieved_sources=retrieved_sources[:sweep_top_k],
+                )
+            )
+
+    top_k_summaries = [
+        summarize_benchmark_results(results_by_top_k[sweep_top_k], top_k=sweep_top_k)
+        for sweep_top_k in normalized_top_k_values
+    ]
+    default_summary = next(summary for summary in top_k_summaries if summary.get("top_k") == top_k)
+    best_summary = max(
+        top_k_summaries,
+        key=lambda summary: (
+            float(summary["pass_rate"]),
+            float(summary["average_reciprocal_rank"]),
+            float(summary["average_source_recall"]),
+            -int(summary["top_k"]),
+        ),
+    )
+    return {
+        "case_count": len(benchmarks),
+        "default_top_k": top_k,
+        "top_k_values": list(normalized_top_k_values),
+        "default_summary": default_summary,
+        "top_k_summaries": top_k_summaries,
+        "best_pass_rate_top_k": best_summary["top_k"],
+        "best_pass_rate": best_summary["pass_rate"],
+    }
+
+
+def summarize_benchmark_results(
+    results: list[RetrievalBenchmarkResult],
+    *,
+    top_k: int | None = None,
+) -> dict[str, Any]:
     """
     Summarize benchmark outcomes for notebook display and artifact logs.
 
@@ -187,29 +324,54 @@ def summarize_benchmark_results(results: list[RetrievalBenchmarkResult]) -> dict
     1
     """
 
+    case_count = len(results)
+    pass_count = sum(1 for result in results if result.passed)
+    fully_covered_case_count = sum(1 for result in results if result.fully_covered)
     retrieved_hits = Counter(
         source for result in results for source in result.retrieved_sources if source
     )
     matched_hits = Counter(
         source for result in results for source in result.matched_sources if source
     )
-    return {
-        "case_count": len(results),
-        "pass_count": sum(1 for result in results if result.passed),
-        "pass_rate": (sum(1 for result in results if result.passed) / len(results))
-        if results
-        else 0.0,
+    missed_hits = Counter(
+        source for result in results for source in result.missed_sources if source
+    )
+    summary = {
+        "case_count": case_count,
+        "pass_count": pass_count,
+        "pass_rate": (pass_count / case_count) if case_count else 0.0,
+        "fully_covered_case_count": fully_covered_case_count,
+        "fully_covered_rate": (fully_covered_case_count / case_count) if case_count else 0.0,
+        "average_source_recall": (
+            sum(result.source_recall for result in results) / case_count if case_count else 0.0
+        ),
+        "average_source_precision": (
+            sum(result.source_precision for result in results) / case_count if case_count else 0.0
+        ),
+        "average_reciprocal_rank": (
+            sum(result.reciprocal_rank for result in results) / case_count if case_count else 0.0
+        ),
         "retrieved_source_hits": dict(sorted(retrieved_hits.items())),
         "matched_source_hits": dict(sorted(matched_hits.items())),
+        "missed_source_hits": dict(sorted(missed_hits.items())),
         "results": [
             {
                 "question": result.question,
                 "expected_sources": list(result.expected_sources),
                 "retrieved_sources": list(result.retrieved_sources),
                 "matched_sources": list(result.matched_sources),
+                "missed_sources": list(result.missed_sources),
                 "passed": result.passed,
+                "fully_covered": result.fully_covered,
+                "first_relevant_rank": result.first_relevant_rank,
+                "reciprocal_rank": result.reciprocal_rank,
+                "source_recall": result.source_recall,
+                "source_precision": result.source_precision,
                 "tags": list(result.tags),
             }
             for result in results
         ],
     }
+    if top_k is not None:
+        summary["top_k"] = top_k
+    return summary

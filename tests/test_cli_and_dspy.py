@@ -148,8 +148,15 @@ def test_cli_main_other_commands(
             f'"root": "{root}", "load_env_file": {str(load_env_file).lower()}}}'
         )
 
+    def fake_retrieval_evaluation(root: Path, **_: object) -> str:
+        return (
+            '{"training_path": "samples/training/repository_training_examples.yaml", '
+            f'"default_top_k": 4, "benchmark_count": 3, "root": "{root}"}}'
+        )
+
     monkeypatch.setattr(cli, "run_surface_verification", fake_surface_verification)
     monkeypatch.setattr(cli, "run_notebook_report", fake_notebook_report)
+    monkeypatch.setattr(cli, "run_retrieval_evaluation", fake_retrieval_evaluation)
     monkeypatch.setattr(cli, "run_todo_backlog_sync", fake_todo_sync)
     monkeypatch.setattr(cli, "run_azure_openai_probe", fake_azure_openai_probe)
     monkeypatch.setattr(cli, "run_azure_inference_probe", fake_azure_inference_probe)
@@ -167,6 +174,17 @@ def test_cli_main_other_commands(
             },
         )(),
         type("Args", (), {"command": "utility-summary", "root": str(tmp_path)})(),
+        type(
+            "Args",
+            (),
+            {
+                "command": "retrieval-eval",
+                "root": str(tmp_path),
+                "training_path": "samples/training/repository_training_examples.yaml",
+                "top_k": 4,
+                "top_k_sweep": "1,2,4,8",
+            },
+        )(),
         type("Args", (), {"command": "sync-todo-backlog", "root": str(tmp_path)})(),
         type("Args", (), {"command": "smoke-test", "root": str(tmp_path)})(),
         type(
@@ -214,6 +232,7 @@ def test_cli_main_other_commands(
     assert "Repository utility surfaces:" in output
     assert "OPENAI_OK" in output
     assert "INFERENCE_OK" in output
+    assert '"default_top_k": 4' in output
     assert "todo-backlog.yaml" in output
 
 

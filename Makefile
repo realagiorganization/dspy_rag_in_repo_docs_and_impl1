@@ -22,12 +22,15 @@ DSPY_NUM_THREADS ?= 4
 DSPY_MIPRO_NUM_TRIALS ?=
 LIVE_PROVIDER ?= azure-openai
 RUNTIME_LOAD_ENV_FILE ?= 1
+RETRIEVAL_TRAINING_PATH ?= samples/training/repository_training_examples.yaml
+RETRIEVAL_TOP_K ?= 4
+RETRIEVAL_TOP_K_SWEEP ?= 1,2,4,8
 PYTEST_COV_ARGS ?= --cov=src/repo_rag_lab --cov-report=term-missing --cov-report=xml
 GH_RUN_LIMIT ?= 10
 RUN_ID ?=
 NOTEBOOK_TIMEOUT ?= 600
 
-.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask ask-dspy ask-live dspy-train discover-mcp utility-summary todo-sync smoke-test azure-openai-probe azure-inference-probe verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook notebook-report bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run azure-manifest fmt build publish
+.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask ask-dspy ask-live dspy-train retrieval-eval discover-mcp utility-summary todo-sync smoke-test azure-openai-probe azure-inference-probe verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook notebook-report bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run azure-manifest fmt build publish
 
 setup:
 	$(UV) sync --extra azure
@@ -81,6 +84,10 @@ dspy-train: sync
 		--dspy-model-type "$(DSPY_MODEL_TYPE)" \
 		$(if $(strip $(DSPY_TEMPERATURE)),--dspy-temperature $(DSPY_TEMPERATURE),) \
 		$(if $(strip $(DSPY_MAX_TOKENS)),--dspy-max-tokens $(DSPY_MAX_TOKENS),)
+
+retrieval-eval: sync
+	$(UV) run repo-rag retrieval-eval --root . --training-path "$(RETRIEVAL_TRAINING_PATH)" \
+		--top-k $(RETRIEVAL_TOP_K) --top-k-sweep "$(RETRIEVAL_TOP_K_SWEEP)"
 
 discover-mcp: sync
 	$(UV) run repo-rag discover-mcp
