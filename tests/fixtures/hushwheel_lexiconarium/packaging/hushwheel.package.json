@@ -1,0 +1,26 @@
+{
+  "name": "hushwheel",
+  "version": "0.1.0",
+  "summary": "Oversized whimsical C dictionary fixture with lint, test, and packaging targets.",
+  "binary": "hushwheel",
+  "docs": [
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE.md",
+    "docs/architecture.md",
+    "docs/testing.md",
+    "docs/packaging.md"
+  ],
+  "quality_targets": [
+    "lint",
+    "unit",
+    "integration",
+    "bdd",
+    "check"
+  ],
+  "install_layout": {
+    "bin": "bin/hushwheel",
+    "docs": "share/doc/hushwheel",
+    "man1": "share/man/man1/hushwheel.1"
+  }
+}

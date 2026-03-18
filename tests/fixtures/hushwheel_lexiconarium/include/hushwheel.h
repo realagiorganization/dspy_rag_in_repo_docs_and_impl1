@@ -12,6 +12,7 @@ typedef struct GlossaryEntry {
     const char *usage;
 } GlossaryEntry;
 
+/* Define HUSHWHEEL_NO_MAIN to embed the production source into tests without a duplicate main. */
 int hushwheel_main(int argc, char **argv);
 
 #endif

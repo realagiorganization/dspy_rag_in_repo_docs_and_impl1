@@ -4293,6 +4293,8 @@ int hushwheel_main(int argc, char **argv) {
     return 1;
 }
 
+#ifndef HUSHWHEEL_NO_MAIN
 int main(int argc, char **argv) {
     return hushwheel_main(argc, argv);
 }
+#endif

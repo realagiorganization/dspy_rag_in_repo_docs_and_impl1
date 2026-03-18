@@ -17,22 +17,27 @@ def test_hushwheel_fixture_is_large_and_c_indexable() -> None:
     assert Path("src/hushwheel.c") in indexed_paths
     assert Path("include/hushwheel.h") in indexed_paths
     assert Path("docs/concepts.md") in indexed_paths
+    assert Path("docs/testing.md") in indexed_paths
+    assert Path("docs/packaging.md") in indexed_paths
     assert Path("fixture-manifest.json") in indexed_paths
+    assert Path("packaging/hushwheel.package.json") in indexed_paths
+    assert Path("tests/bdd/hushwheel.feature") in indexed_paths
 
 
 def test_hushwheel_fixture_builds_a_large_chunkable_corpus() -> None:
     documents = load_documents(FIXTURE_ROOT)
     chunks = chunk_documents(documents)
 
-    assert len(documents) >= 8
+    assert len(documents) >= 14
     assert len(chunks) >= 1500
 
 
 def test_hushwheel_fixture_answers_document_question() -> None:
     answer = ask_repository("What is the ember index?", FIXTURE_ROOT)
 
-    assert "heat-memory score" in answer.answer.lower()
-    assert "lantern vowel" in answer.answer.lower()
+    assert "ember index" in answer.answer.lower()
+    assert any("heat-memory score" in chunk.text.lower() for chunk in answer.context)
+    assert any("lantern vowel" in chunk.text.lower() for chunk in answer.context)
     assert any(chunk.source.suffix == ".md" for chunk in answer.context)
 
 

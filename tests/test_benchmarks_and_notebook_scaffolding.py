@@ -116,7 +116,7 @@ def test_build_hushwheel_fixture_lab_context_reports_fixture_scale_and_answers()
     payload = build_hushwheel_fixture_lab_context(REPO_ROOT)
 
     assert payload["fixture_manifest"]["entry_count"] == 4108
-    assert payload["corpus_summary"]["document_count"] == 8
+    assert payload["corpus_summary"]["document_count"] >= 19
     assert payload["corpus_summary"]["chunk_count"] >= 1500
     assert payload["training_summary"]["example_count"] == 6
     assert payload["population_summary"]["candidate_count"] == 7
