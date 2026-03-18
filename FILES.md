@@ -151,6 +151,7 @@ This inventory is generated from the current Git index.
 | `samples/logs/20260318T124437Z-gh-runs-reconcile-stale-dspy-backlog-for-1.md` | samples | markdown | 21 | 1060 | GitHub Actions Log |
 | `samples/logs/20260318T125547Z-gh-runs-wire-lookup-first-ask-for-1.md` | samples | markdown | 22 | 1058 | GitHub Actions Log |
 | `samples/logs/20260318T130525Z-gh-runs-finish-node24-publication-cache-followup-for-1.md` | samples | markdown | 27 | 1119 | GitHub Actions Status For `Finish Node 24 publication cache follow-up for "1"` |
+| `samples/logs/20260318T131709Z-gh-runs-restore-root-readme-weighting-for-1.md` | samples | markdown | 45 | 1680 | GitHub Actions Run Log |
 | `samples/logs/README.md` | samples | markdown | 11 | 331 | GitHub Run Logs |
 | `samples/population/hushwheel_fixture_population_candidates.yaml` | samples | yaml | 22 | 955 | - source: README.md |
 | `samples/population/repository_population_candidates.yaml` | samples | yaml | 16 | 684 | - source: README.md |
