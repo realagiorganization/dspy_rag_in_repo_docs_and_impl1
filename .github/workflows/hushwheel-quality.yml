@@ -42,8 +42,16 @@ jobs:
             pyproject.toml
             uv.lock
 
-      - name: Install native analyzers
-        run: sudo apt-get update && sudo apt-get install -y cppcheck
+      - name: Install native analyzers and docs toolchain
+        run: >-
+          sudo apt-get update &&
+          sudo apt-get install -y
+          cppcheck
+          doxygen
+          texlive-latex-extra
+          texlive-luatex
+          texlive-fonts-recommended
+          texlive-plain-generic
 
       - name: Sync environment
         run: uv sync --frozen --extra azure
