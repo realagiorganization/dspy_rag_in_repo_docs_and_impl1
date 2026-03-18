@@ -35,6 +35,8 @@ def test_utility_summary_mentions_core_surfaces() -> None:
     assert "azure-openai-probe" in summary
     assert "azure-inference-probe" in summary
     assert "files-sync" in summary
+    assert "rust-lookup-index" in summary
+    assert "rust-lookup" in summary
     assert "exploratorium-sync" in summary
     assert "retrieval-eval" in summary
     assert "todo-sync" in summary
@@ -56,6 +58,7 @@ def test_run_retrieval_evaluation_reports_expected_fields() -> None:
     assert payload["benchmark_count"] >= 1
     assert payload["default_top_k"] == 4
     assert payload["default_summary"]["top_k"] == 4
+    assert payload["default_summary"]["tag_summaries"]
     assert [summary["top_k"] for summary in payload["top_k_summaries"]] == [1, 4]
     assert "average_reciprocal_rank" in payload["default_summary"]
 

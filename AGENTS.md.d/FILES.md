@@ -17,8 +17,11 @@ Use these maintained surfaces for repository-wide file summaries:
 ## Narrative Summaries
 
 - Start repo-wide file summarization from `FILES.md` and `FILES.csv`, then use the repo-bound
-  utilities such as `make utility-summary`, `make ask QUESTION="..."`, `make ask-dspy QUESTION="..."`,
-  and `make ask-live QUESTION="..."` for higher-level synthesis.
+  utilities such as `make utility-summary`, `make ask QUESTION="..."`, `make rust-lookup QUERY="..."`,
+  `make ask-dspy QUESTION="..."`, and `make ask-live QUESTION="..."` for higher-level synthesis.
+- When the question is about exact files, path discovery, or likely local evidence, refresh the
+  Rust SQLite index with `make rust-lookup-index` and run `make rust-lookup QUERY="..."` before
+  escalating to `make ask-dspy`.
 - The inventory generator itself is deterministic and does not require secrets.
 - If LM-backed synthesis is needed, source `.env` first without echoing values:
   `set -a; source .env; set +a`.

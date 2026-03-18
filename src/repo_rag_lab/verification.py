@@ -21,6 +21,8 @@ REQUIRED_MAKE_TARGETS = {
     "retrieval-eval",
     "discover-mcp",
     "utility-summary",
+    "rust-lookup-index",
+    "rust-lookup",
     "todo-sync",
     "exploratorium-sync",
     "exploratorium-build",

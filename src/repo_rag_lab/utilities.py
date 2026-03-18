@@ -34,6 +34,14 @@ def utility_summary(root: Path) -> str:
         "- make ask / uv run repo-rag ask: answer repository-grounded questions",
         "- make ask-dspy / uv run repo-rag ask --use-dspy: answer with the DSPy runtime path",
         (
+            "- make rust-lookup-index / cargo run --manifest-path rust-cli/Cargo.toml -- index: "
+            "build the local SQLite FTS index of tracked UTF-8 repository files"
+        ),
+        (
+            "- make rust-lookup / cargo run --manifest-path rust-cli/Cargo.toml -- lookup: "
+            "search the local SQLite index before escalating to DSPy synthesis"
+        ),
+        (
             "- make ask-live / uv run repo-rag ask-live: answer with retrieved repo evidence "
             "plus a live Azure-backed synthesis step"
         ),
@@ -62,7 +70,8 @@ def utility_summary(root: Path) -> str:
         ),
         (
             "- make retrieval-eval / uv run repo-rag retrieval-eval: "
-            "measure retrieval quality across a top-k sweep and richer source metrics"
+            "measure retrieval quality across a top-k sweep, richer source metrics, "
+            "and per-tag summaries"
         ),
         "- make smoke-test / uv run repo-rag smoke-test: validate the core workflow surfaces",
         (

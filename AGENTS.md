@@ -12,6 +12,7 @@ verification results, and anchor status statements to the newest file in `docs/a
 - Repo-local skill implementations live under `.codex/skills/`.
 - Use `file-summary-sync` when tracked files are added, removed, renamed, or when `FILES.md` and `FILES.csv` need to stay aligned with the repository tree.
 - Use `exploratorium-translation-sync` when bilingual file/link/fetch-state summaries, bibliography fetch reporting, or the `publication/exploratorium_translation/` subdocument are in scope.
+- Use `rust-sqlite-lookup` when a repo question needs exact file hits, path discovery, or a cheap local search pass before `make ask-dspy`.
 - Use `repo-verification-audit-loop` when verification work, audit-note updates, or repository health reporting are part of the task.
 - Use `post-push-gh-run-logging` immediately after each push and whenever GitHub Actions failures or `samples/logs/` updates are in scope.
 - Use `notebook-playbook-sync` when editing notebooks, notebook scaffolding, notebook-facing docs, or training and population sample surfaces.
@@ -21,6 +22,8 @@ verification results, and anchor status statements to the newest file in `docs/a
 
 - `make utility-summary`
 - `make files-sync`
+- `make rust-lookup-index`
+- `make rust-lookup QUERY="..."`
 - `make todo-sync`
 - `make exploratorium-sync`
 - `make ask QUESTION="..."`
@@ -37,6 +40,8 @@ verification results, and anchor status statements to the newest file in `docs/a
 - `uv run repo-rag utility-summary`
 - `uv run repo-rag sync-file-summaries --root .`
 - `uv run repo-rag sync-exploratorium-translation --root .`
+- `cargo run --manifest-path rust-cli/Cargo.toml -- index`
+- `cargo run --manifest-path rust-cli/Cargo.toml -- lookup "dspy training"`
 - `uv run repo-rag ask-live --question "..." --provider azure-openai`
 - `uv run repo-rag retrieval-eval --top-k-sweep "1,2,4,8"`
 - `uv run repo-rag ask --question "..." --use-dspy`
@@ -47,13 +52,14 @@ verification results, and anchor status statements to the newest file in `docs/a
 2. Keep notebooks, tests, CLI behavior, and docs aligned around the same package helpers.
 3. When changing retrieval, MCP discovery, deployment metadata, or verification behavior, update tests and notebook guidance in the same turn.
 4. If adding a new user-facing utility, expose it through both the Python CLI and the `Makefile` when practical.
-5. Prefer tests that validate user-visible behavior instead of only internal helpers.
-6. After every push, use `post-push-gh-run-logging`: run `make gh-runs`, then `make gh-watch`, and write a summary log into `samples/logs/`. If the watched run fails, inspect it with `make gh-failed-logs`, fix the repository, rerun local validation, and push again. If the only follow-up would be a recursive log-only commit for a prior log-only push, summarize the result instead of creating endless log churn.
-7. If a permission-gated action is blocked, explicitly offer the user the option to make that permission permanent in Codex settings before retrying.
-8. Keep reusable notebook logic in `src/` with doctests or normal pytest coverage instead of embedding it in notebook cells.
-9. Keep the repository fully `uv`-managed unless `uv` no longer covers a required workflow.
-10. Treat `README.AGENTS.md` as the overreaching research narrative for the repository; when a turn materially changes workflow stages, DSPy capabilities, notebooks, verification posture, publication scope, or deployment handoff, update `README.AGENTS.md` in the same turn.
-11. When tracked files, publication inventories, or bibliography-linked fetch summaries change, refresh `FILES.md`, `FILES.csv`, and the exploratorium outputs in the same turn.
+5. Before `make ask-dspy` or `uv run repo-rag ask --use-dspy`, run the Rust SQLite lookup path first when a direct file hit can narrow the question.
+6. Prefer tests that validate user-visible behavior instead of only internal helpers.
+7. After every push, use `post-push-gh-run-logging`: run `make gh-runs`, then `make gh-watch`, and write a summary log into `samples/logs/`. If the watched run fails, inspect it with `make gh-failed-logs`, fix the repository, rerun local validation, and push again. If the only follow-up would be a recursive log-only commit for a prior log-only push, summarize the result instead of creating endless log churn.
+8. If a permission-gated action is blocked, explicitly offer the user the option to make that permission permanent in Codex settings before retrying.
+9. Keep reusable notebook logic in `src/` with doctests or normal pytest coverage instead of embedding it in notebook cells.
+10. Keep the repository fully `uv`-managed unless `uv` no longer covers a required workflow.
+11. Treat `README.AGENTS.md` as the overreaching research narrative for the repository; when a turn materially changes workflow stages, DSPy capabilities, notebooks, verification posture, publication scope, or deployment handoff, update `README.AGENTS.md` in the same turn.
+12. When tracked files, publication inventories, or bibliography-linked fetch summaries change, refresh `FILES.md`, `FILES.csv`, and the exploratorium outputs in the same turn.
 
 ## Research Narrative
 

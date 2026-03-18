@@ -39,6 +39,8 @@ def _copy_scaffold_inputs(tmp_path: Path) -> Path:
         Path("publication/README.md"),
         Path("samples/training/repository_training_examples.yaml"),
         Path("samples/population/repository_population_candidates.yaml"),
+        Path("src/repo_rag_lab/mcp.py"),
+        Path("src/repo_rag_lab/notebook_scaffolding.py"),
         Path("src/repo_rag_lab/utilities.py"),
     ]:
         destination = tmp_path / relative_path
@@ -58,6 +60,7 @@ def test_repository_benchmarks_pass_with_current_training_samples() -> None:
     assert len(benchmarks) == len(examples)
     assert summary["case_count"] == len(examples)
     assert summary["pass_rate"] == 1.0
+    assert set(summary["tag_summaries"]) == {tag for example in examples for tag in example.tags}
 
 
 def test_summarize_benchmark_results_reports_quality_metrics() -> None:
@@ -90,6 +93,10 @@ def test_summarize_benchmark_results_reports_quality_metrics() -> None:
     assert summary["average_reciprocal_rank"] == pytest.approx(0.25)
     assert summary["missed_source_hits"]["documentation/package-api.md"] == 1
     assert summary["results"][0]["first_relevant_rank"] == 2
+    assert summary["tag_summaries"]["repo"]["case_count"] == 1
+    assert summary["tag_summaries"]["repo"]["pass_rate"] == pytest.approx(1.0)
+    assert summary["tag_summaries"]["docs"]["case_count"] == 1
+    assert summary["tag_summaries"]["docs"]["pass_rate"] == pytest.approx(0.0)
 
 
 def test_evaluate_retrieval_quality_suite_reports_top_k_summaries() -> None:
@@ -103,12 +110,16 @@ def test_evaluate_retrieval_quality_suite_reports_top_k_summaries() -> None:
     assert suite["default_top_k"] == 4
     assert suite["top_k_values"] == [1, 4]
     assert suite["default_summary"]["top_k"] == 4
+    assert suite["default_summary"]["tag_summaries"]
     assert [summary["top_k"] for summary in suite["top_k_summaries"]] == [1, 4]
 
 
 def test_is_benchmark_document_path_excludes_operational_repo_surfaces() -> None:
     assert is_benchmark_document_path(Path("README.md")) is True
     assert is_benchmark_document_path(Path("publication/README.md")) is True
+    assert (
+        is_benchmark_document_path(Path(".codex/skills/post-push-gh-run-logging/SKILL.md")) is False
+    )
     assert (
         is_benchmark_document_path(Path("docs/audit/2026-03-18-retest-with-env-refresh.md"))
         is False
@@ -131,13 +142,17 @@ def test_build_training_lab_context_writes_metadata_and_reports_clean_validation
     tmp_path: Path,
 ) -> None:
     root = _copy_scaffold_inputs(tmp_path)
+    examples = load_training_examples(
+        root / "samples" / "training" / "repository_training_examples.yaml"
+    )
     payload = build_training_lab_context(root)
-    assert payload["training_summary"]["example_count"] >= 8
+    assert payload["training_summary"]["example_count"] == len(examples)
     assert payload["validation_issues"] == []
     assert (
         payload["benchmark_summary"]["case_count"] == payload["training_summary"]["example_count"]
     )
     assert payload["benchmark_summary"]["pass_rate"] == 1.0
+    assert payload["benchmark_summary"]["tag_summaries"]
     assert len(payload["benchmark_top_k_summaries"]) >= 1
     assert (root / payload["tuning_metadata_path"]).exists()
     assert payload["compiled_program_metadata_path"] is None
@@ -152,6 +167,7 @@ def test_build_training_lab_context_uses_paths_relative_to_selected_root(
 
     assert payload["validation_issues"] == []
     assert payload["benchmark_summary"]["pass_rate"] == 1.0
+    assert payload["benchmark_summary"]["tag_summaries"]
     assert payload["benchmark_top_k_summaries"][-1]["top_k"] >= 4
 
 
@@ -162,6 +178,7 @@ def test_build_population_lab_context_extends_and_reranks_candidates(tmp_path: P
         payload["extended_summary"]["candidate_count"] > payload["base_summary"]["candidate_count"]
     )
     assert payload["validation_issues"] == []
+    assert payload["benchmark_summary"]["tag_summaries"]
     assert len(payload["benchmark_top_k_summaries"]) >= 1
     assert "documentation/package-api.md" in payload["reranked_sources"]
 
@@ -171,6 +188,7 @@ def test_build_agent_workflow_context_reports_validation_and_benchmarks() -> Non
     assert payload["training_validation_issues"] == []
     assert payload["population_validation_issues"] == []
     assert payload["benchmark_summary"]["pass_rate"] == 1.0
+    assert payload["benchmark_summary"]["tag_summaries"]
     assert len(payload["benchmark_top_k_summaries"]) >= 1
 
 

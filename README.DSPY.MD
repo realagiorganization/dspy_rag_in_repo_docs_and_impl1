@@ -342,12 +342,13 @@ The benchmark loop is:
 2. `evaluate_retrieval_benchmarks(root, benchmarks)` runs retrieval against a fairness-filtered
    corpus, while `evaluate_retrieval_quality_suite(...)` sweeps multiple `top_k` values over the
    same benchmark set.
-3. The benchmark corpus explicitly excludes noisy or leaking paths such as `.github`, `tests`,
-   `data`, `samples/training`, and `samples/logs`.
+3. The benchmark corpus explicitly excludes noisy or leaking paths such as `.codex`, `.github`,
+   `tests`, `data`, `samples/training`, and `samples/logs`.
 4. Each result records `retrieved_sources`, `matched_sources`, missed sources, first relevant rank,
    reciprocal rank, source recall, source precision, and tags.
 5. `summarize_benchmark_results(results)` computes pass counts, pass rate, full-coverage rate,
-   mean recall, mean precision, mean reciprocal rank, and per-source hit counters.
+   mean recall, mean precision, mean reciprocal rank, per-source hit counters, and per-tag
+   rollups so notebook and CLI users can see which retrieval slices regress.
 6. `assert_minimum_pass_rate(summary, minimum_pass_rate=2 / 3)` can fail a notebook run when the
    retrieval surface regresses.
 7. The source-hit summary can feed

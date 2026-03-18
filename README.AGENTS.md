@@ -113,12 +113,18 @@ The repo now has two DSPy layers:
 These are exposed through:
 
 - [src/repo_rag_lab/cli.py](src/repo_rag_lab/cli.py)
+- [rust-cli/](rust-cli/)
 - [Makefile](Makefile)
 - [README.DSPY.MD](README.DSPY.MD)
 
 This is the current center of gravity of the repository. The project no longer stops at “use DSPy
 at runtime if available.” It can now compile a repository-grounded program, persist it under
 `artifacts/dspy/`, and reuse that program for later questions.
+
+Before that DSPy layer runs, the Rust wrapper now exposes a repo-local SQLite FTS index and lookup
+path over tracked UTF-8 files. Agents are expected to use that cheap lexical lookup first when the
+question is really “which file or passage should I read next?” and only escalate to DSPy when they
+need synthesis across hits instead of direct file evidence.
 
 ### 6. Notebooks Become Playbooks, Not Logic Dumps
 
@@ -175,6 +181,8 @@ At the time of this document:
   `make azure-openai-probe` and `make azure-inference-probe`
 - tracked-file inventory sync is implemented and exposed through `make files-sync`
 - retrieval-quality evaluation is implemented and exposed through `make retrieval-eval`
+- local SQLite lookup over tracked files is implemented and exposed through `make rust-lookup-index`
+  plus `make rust-lookup`
 - DSPy runtime answering is implemented and exposed through `make ask-dspy`
 - DSPy compile-save-reload is implemented and exposed through `make dspy-train`
 - notebook batch execution and reporting are implemented and exposed through
@@ -198,6 +206,7 @@ Use these files when you need to defend the current repository story quickly:
 | How is retrieval quality measured? | [README.DSPY.MD](README.DSPY.MD) | [src/repo_rag_lab/benchmarks.py](src/repo_rag_lab/benchmarks.py), [docs/audit/2026-03-18-retrieval-evaluation-suite.md](docs/audit/2026-03-18-retrieval-evaluation-suite.md) |
 | How are live Azure runtime calls validated? | [documentation/azure-deployment.md](documentation/azure-deployment.md) | [src/repo_rag_lab/azure_runtime.py](src/repo_rag_lab/azure_runtime.py), [docs/audit/2026-03-18-azure-runtime-surfaces.md](docs/audit/2026-03-18-azure-runtime-surfaces.md) |
 | How does DSPy work here? | [README.DSPY.MD](README.DSPY.MD) | [src/repo_rag_lab/dspy_training.py](src/repo_rag_lab/dspy_training.py), [src/repo_rag_lab/dspy_workflow.py](src/repo_rag_lab/dspy_workflow.py) |
+| How do agents do cheap file lookup before DSPy? | [AGENTS.md](AGENTS.md) | [AGENTS.md.d/RUST_LOOKUP.md](AGENTS.md.d/RUST_LOOKUP.md), [rust-cli/src/main.rs](rust-cli/src/main.rs), [Makefile](Makefile) |
 | How do notebooks fit in? | [notebooks/](notebooks/) | [src/repo_rag_lab/notebook_scaffolding.py](src/repo_rag_lab/notebook_scaffolding.py), [src/repo_rag_lab/notebook_runner.py](src/repo_rag_lab/notebook_runner.py) |
 | How is the repository inventory summarized? | [FILES.md](FILES.md) | [FILES.csv](FILES.csv), [src/repo_rag_lab/file_summaries.py](src/repo_rag_lab/file_summaries.py), [AGENTS.md.d/FILES.md](AGENTS.md.d/FILES.md) |
 | What currently passes? | [docs/audit/README.md](docs/audit/README.md) | newest dated note in [docs/audit/](docs/audit/), plus [samples/logs/](samples/logs/) |

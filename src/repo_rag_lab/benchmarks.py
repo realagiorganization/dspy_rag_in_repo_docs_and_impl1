@@ -13,6 +13,7 @@ from .retrieval import chunk_documents, retrieve
 from .training_samples import TrainingExample
 
 BENCHMARK_EXCLUDED_PARTS = {
+    ".codex",
     ".git",
     ".github",
     ".mypy_cache",
@@ -229,6 +230,55 @@ def _build_retrieval_benchmark_result(
     )
 
 
+def _summarize_benchmark_metrics(results: list[RetrievalBenchmarkResult]) -> dict[str, Any]:
+    """Compute aggregate benchmark metrics without embedding per-case detail."""
+
+    case_count = len(results)
+    pass_count = sum(1 for result in results if result.passed)
+    fully_covered_case_count = sum(1 for result in results if result.fully_covered)
+    retrieved_hits = Counter(
+        source for result in results for source in result.retrieved_sources if source
+    )
+    matched_hits = Counter(
+        source for result in results for source in result.matched_sources if source
+    )
+    missed_hits = Counter(
+        source for result in results for source in result.missed_sources if source
+    )
+    return {
+        "case_count": case_count,
+        "pass_count": pass_count,
+        "pass_rate": (pass_count / case_count) if case_count else 0.0,
+        "fully_covered_case_count": fully_covered_case_count,
+        "fully_covered_rate": (fully_covered_case_count / case_count) if case_count else 0.0,
+        "average_source_recall": (
+            sum(result.source_recall for result in results) / case_count if case_count else 0.0
+        ),
+        "average_source_precision": (
+            sum(result.source_precision for result in results) / case_count if case_count else 0.0
+        ),
+        "average_reciprocal_rank": (
+            sum(result.reciprocal_rank for result in results) / case_count if case_count else 0.0
+        ),
+        "retrieved_source_hits": dict(sorted(retrieved_hits.items())),
+        "matched_source_hits": dict(sorted(matched_hits.items())),
+        "missed_source_hits": dict(sorted(missed_hits.items())),
+    }
+
+
+def _summarize_benchmark_tags(results: list[RetrievalBenchmarkResult]) -> dict[str, dict[str, Any]]:
+    """Group benchmark metrics by tag for narrower retrieval-quality analysis."""
+
+    results_by_tag: dict[str, list[RetrievalBenchmarkResult]] = {}
+    for result in results:
+        for tag in result.tags:
+            results_by_tag.setdefault(tag, []).append(result)
+    return {
+        tag: _summarize_benchmark_metrics(tag_results)
+        for tag, tag_results in sorted(results_by_tag.items())
+    }
+
+
 def evaluate_retrieval_benchmarks(
     root: Path, benchmarks: list[RetrievalBenchmark], top_k: int = 4
 ) -> list[RetrievalBenchmarkResult]:
@@ -324,36 +374,9 @@ def summarize_benchmark_results(
     1
     """
 
-    case_count = len(results)
-    pass_count = sum(1 for result in results if result.passed)
-    fully_covered_case_count = sum(1 for result in results if result.fully_covered)
-    retrieved_hits = Counter(
-        source for result in results for source in result.retrieved_sources if source
-    )
-    matched_hits = Counter(
-        source for result in results for source in result.matched_sources if source
-    )
-    missed_hits = Counter(
-        source for result in results for source in result.missed_sources if source
-    )
     summary = {
-        "case_count": case_count,
-        "pass_count": pass_count,
-        "pass_rate": (pass_count / case_count) if case_count else 0.0,
-        "fully_covered_case_count": fully_covered_case_count,
-        "fully_covered_rate": (fully_covered_case_count / case_count) if case_count else 0.0,
-        "average_source_recall": (
-            sum(result.source_recall for result in results) / case_count if case_count else 0.0
-        ),
-        "average_source_precision": (
-            sum(result.source_precision for result in results) / case_count if case_count else 0.0
-        ),
-        "average_reciprocal_rank": (
-            sum(result.reciprocal_rank for result in results) / case_count if case_count else 0.0
-        ),
-        "retrieved_source_hits": dict(sorted(retrieved_hits.items())),
-        "matched_source_hits": dict(sorted(matched_hits.items())),
-        "missed_source_hits": dict(sorted(missed_hits.items())),
+        **_summarize_benchmark_metrics(results),
+        "tag_summaries": _summarize_benchmark_tags(results),
         "results": [
             {
                 "question": result.question,

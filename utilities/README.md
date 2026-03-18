@@ -17,7 +17,7 @@ them over ad hoc shell commands so every workflow hits the same package code.
 - `make exploratorium-sync`: regenerate the bilingual publication inventory of files, links, and
   fetch state.
 - `make retrieval-eval`: evaluate retrieval quality across a top-k sweep with source recall,
-  precision, and reciprocal-rank metrics.
+  precision, reciprocal-rank metrics, and per-tag benchmark summaries.
 - `make discover-mcp`: inspect repository-local MCP candidates.
 - `make smoke-test`: exercise answer generation, MCP discovery, and Azure manifest output together.
 - `make azure-openai-probe`: validate the Azure OpenAI runtime contract and run a minimal live

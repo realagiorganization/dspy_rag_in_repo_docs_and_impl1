@@ -10,6 +10,9 @@ This repository is a `uv`-first research lab for repository-grounded Retrieval-A
 Generation. Notebooks, the packaged Python CLI, `make` targets, tests, CI, and the Rust wrapper
 all share the same implementation so experiments and automation stay aligned.
 
+The Rust wrapper also exposes a compact SQLite lookup path for tracked files, so agents and
+operators can inspect cheap local hits before escalating to DSPy-backed synthesis.
+
 ## What The Repository Covers
 
 The current scaffold focuses on three connected jobs:
@@ -62,13 +65,15 @@ the Rust wrapper.
 | Utility overview | `make utility-summary` | Show the supported user-facing entrypoints. |
 | Direct CLI | `uv run repo-rag utility-summary` | Use the packaged CLI without going through `make`. |
 | File inventory sync | `make files-sync` | Regenerate `FILES.md` and `FILES.csv` from the tracked repository tree. |
+| Rust lookup index | `make rust-lookup-index` | Build or refresh the ignored SQLite FTS index under `artifacts/sqlite/`. |
+| Rust lookup | `make rust-lookup QUERY="dspy training"` | Search tracked file paths and contents locally before `make ask-dspy`. |
 | Backlog sync | `make todo-sync` | Regenerate the linkified TODO table in both Markdown and the publication article. |
 | Exploratorium sync | `make exploratorium-sync` | Regenerate the bilingual file/link/fetch-state publication inventory. |
 | Ask a repo question | `make ask QUESTION="..."` | Run the baseline repository-grounded RAG workflow. |
-| DSPy ask | `make ask-dspy QUESTION="..."` | Run the DSPy runtime path with LM config from `DSPY_*`, Azure, or OpenAI environment variables. |
+| DSPy ask | `make ask-dspy QUESTION="..."` | Run the DSPy runtime path after local Rust lookup has narrowed the likely file evidence. |
 | Live Azure ask | `make ask-live QUESTION="..."` | Retrieve repository evidence locally, then synthesize a live answer through Azure OpenAI or Azure AI Inference. |
 | DSPy compile | `make dspy-train DSPY_RUN_NAME=...` | Compile and save a repository-grounded DSPy program under `artifacts/dspy/`. |
-| Retrieval evaluation | `make retrieval-eval` | Measure retrieval quality with pass rate, recall, precision, reciprocal rank, and a top-k sweep. |
+| Retrieval evaluation | `make retrieval-eval` | Measure retrieval quality with pass rate, recall, precision, reciprocal rank, per-tag breakdowns, and a top-k sweep. |
 | MCP discovery | `make discover-mcp` | Inspect MCP-related repository artifacts. |
 | Smoke test | `make smoke-test` | Check answer generation, MCP discovery, and Azure manifest output together. |
 | Azure OpenAI probe | `make azure-openai-probe` | Validate the Azure OpenAI env contract and run a minimal live chat-completions round trip. |
@@ -81,7 +86,7 @@ the Rust wrapper.
 | Publication PDF | `make paper-build` | Build the LaTeX article PDF and clipped banner image. |
 | Exploratorium PDF | `make exploratorium-build` | Build the bilingual exploratorium translation PDF. |
 | Notebook research | `make notebook` | Open the main notebook playbook in JupyterLab. |
-| Rust wrapper | `cargo run --manifest-path rust-cli/Cargo.toml -- ask --question "..."` | Run the same Python workflow through the Rust shim. |
+| Rust wrapper | `cargo run --manifest-path rust-cli/Cargo.toml -- ask --question "..."` | Delegate to the Python workflow, while also exposing native `index` and `lookup` subcommands. |
 
 ## Repository Map
 
@@ -100,7 +105,7 @@ the Rust wrapper.
 | `todo-backlog.yaml` | Single source of truth for the linkified backlog table rendered into `TODO.MD` and the publication article. |
 | `samples/logs/` | Post-push GitHub Actions inspection logs captured with `gh`. |
 | `artifacts/` | Generated DSPy program artifacts, Azure manifests, tuning metadata, notebook run logs, and notebook batch-run reports. |
-| `rust-cli/` | Thin Rust wrapper that delegates to `uv run repo-rag`. |
+| `rust-cli/` | Rust wrapper that delegates to `uv run repo-rag` and maintains the local SQLite lookup index under `artifacts/sqlite/`. |
 
 ## Verification And Quality
 
@@ -146,7 +151,9 @@ runtime environment variables.
 Repository-local agent instructions live in `AGENTS.md`. Agents and contributors should start with
 named `make` targets or `uv run repo-rag ...` commands before inventing one-off workflows so
 notebooks, tests, CI, and automation stay aligned. The overreaching repository narrative that
-agents are expected to keep current lives in [README.AGENTS.md](README.AGENTS.md).
+agents are expected to keep current lives in [README.AGENTS.md](README.AGENTS.md). For repo
+question answering, refresh the Rust lookup index and run `make rust-lookup QUERY="..."` before
+moving to `make ask-dspy`.
 
 ## Post-Push Workflow
 

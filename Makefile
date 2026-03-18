@@ -1,5 +1,6 @@
 UV ?= uv
 QUESTION ?= What does this repository research?
+QUERY ?= dspy training
 MODEL_ID ?= sample-ft-model
 DEPLOYMENT_NAME ?= repo-rag-ft
 AZURE_ENDPOINT ?= https://example.services.ai.azure.com/models
@@ -31,7 +32,7 @@ RUN_ID ?=
 NOTEBOOK_TIMEOUT ?= 600
 REPO_TMPDIR ?= $(HOME)/.cache/repo-rag-lab-tmp
 
-.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask ask-dspy ask-live dspy-train retrieval-eval discover-mcp utility-summary files-sync todo-sync exploratorium-sync exploratorium-build smoke-test azure-openai-probe azure-inference-probe verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook notebook-report bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run azure-manifest fmt build publish
+.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask ask-dspy ask-live dspy-train retrieval-eval discover-mcp utility-summary files-sync todo-sync exploratorium-sync exploratorium-build smoke-test azure-openai-probe azure-inference-probe verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook notebook-report bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run rust-lookup-index rust-lookup azure-manifest fmt build publish
 
 setup:
 	$(UV) sync --extra azure
@@ -197,13 +198,19 @@ rust-fmt:
 rust-lint:
 	cargo clippy --manifest-path rust-cli/Cargo.toml --all-targets -- -D warnings
 
-rust-quality: rust-fmt rust-lint rust-cli-build rust-cli-run
+rust-quality: rust-fmt rust-lint rust-cli-build rust-lookup-index rust-lookup rust-cli-run
 
 rust-cli-build:
 	cargo build --manifest-path rust-cli/Cargo.toml
 
 rust-cli-run:
 	cargo run --manifest-path rust-cli/Cargo.toml -- ask --question "$(QUESTION)"
+
+rust-lookup-index:
+	cargo run --manifest-path rust-cli/Cargo.toml -- index
+
+rust-lookup:
+	cargo run --manifest-path rust-cli/Cargo.toml -- lookup "$(QUERY)"
 
 azure-manifest: sync
 	$(UV) run repo-rag azure-manifest --model-id "$(MODEL_ID)" --deployment-name "$(DEPLOYMENT_NAME)" --endpoint "$(AZURE_ENDPOINT)"

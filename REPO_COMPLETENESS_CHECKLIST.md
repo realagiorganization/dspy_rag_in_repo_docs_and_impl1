@@ -17,6 +17,7 @@ The repository is currently a `uv`-first research scaffold for repository-ground
 - MCP candidate discovery
 - offline Azure deployment-manifest generation
 - a thin Rust wrapper in `rust-cli/`
+- a Rust SQLite lookup surface for tracked-file path/content search before DSPy escalation
 - repo-surface verification for the Makefile and notebooks
 
 What is complete now:
@@ -30,6 +31,7 @@ What is complete now:
 | Notebook and Makefile contract checks | Complete | `make verify-surfaces` reports zero issues. |
 | Python quality gates | Complete | `make quality` passes locally. |
 | Rust wrapper build path | Complete | `cargo build --manifest-path rust-cli/Cargo.toml` passes locally, and `rust-cli/Cargo.lock` is committed intentionally for stable wrapper builds. |
+| Local SQLite lookup | Complete | `make rust-lookup-index` builds the tracked-file index and `make rust-lookup QUERY="..."` returns ranked file hits before DSPy. |
 | GitHub Actions inspection helpers | Complete | `make gh-runs`, `make gh-watch`, and `make gh-failed-logs` are part of the Makefile contract. |
 
 What is still incomplete by design or backlog:

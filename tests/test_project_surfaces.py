@@ -128,6 +128,8 @@ def test_publication_surface_files_exist_and_are_linked() -> None:
     assert "FILES.md" in readme
     assert "make paper-build" in readme
     assert "make files-sync" in readme
+    assert "make rust-lookup-index" in readme
+    assert 'make rust-lookup QUERY="' in readme
     assert "make todo-sync" in readme
     assert "make exploratorium-sync" in readme
 
@@ -234,6 +236,21 @@ def test_repo_local_file_summary_skill_is_recorded() -> None:
     skill_text = skill_path.read_text(encoding="utf-8")
     assert "FILES.md" in skill_text
     assert "AGENTS.md.d/FILES.md" in skill_text
+
+
+def test_repo_local_rust_lookup_skill_is_recorded() -> None:
+    agents_text = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    skill_path = REPO_ROOT / ".codex" / "skills" / "rust-sqlite-lookup" / "SKILL.md"
+    guidance_path = REPO_ROOT / "AGENTS.md.d" / "RUST_LOOKUP.md"
+
+    assert "rust-sqlite-lookup" in agents_text
+    assert "make rust-lookup-index" in agents_text
+    assert "make rust-lookup QUERY=" in agents_text
+    assert skill_path.exists()
+    assert guidance_path.exists()
+    skill_text = skill_path.read_text(encoding="utf-8")
+    assert "lookup" in skill_text
+    assert "ask-dspy" in skill_text
 
 
 def test_ci_and_publish_workflows_cache_python_and_dependencies() -> None:
