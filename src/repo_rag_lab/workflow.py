@@ -7,9 +7,10 @@ from pathlib import Path
 from typing import Literal
 
 from .azure_runtime import call_azure_inference_chat, call_azure_openai_chat
-from .corpus import load_documents
+from .corpus import RepoDocument, load_documents, load_documents_for_paths
 from .mcp import discover_mcp_servers
 from .retrieval import Chunk, chunk_documents, retrieve
+from .rust_lookup import lookup_candidate_paths
 
 LiveProvider = Literal["azure-openai", "azure-inference"]
 
@@ -29,11 +30,22 @@ def collect_repository_evidence(
 ) -> tuple[list[Chunk], list[dict[str, str]]]:
     """Collect retrieved context chunks and MCP hints for ``question``."""
 
-    documents = load_documents(root)
-    chunks = chunk_documents(documents)
-    context = retrieve(question, chunks)
+    context = collect_repository_context(question, root)
     mcp_servers = [candidate.__dict__ for candidate in discover_mcp_servers(root)]
     return context, mcp_servers
+
+
+def collect_repository_context(question: str, root: Path, *, top_k: int = 4) -> list[Chunk]:
+    """Collect lookup-first repository context for ``question``."""
+
+    lookup_paths = lookup_candidate_paths(question, root)
+    if lookup_paths:
+        narrowed_documents = load_documents_for_paths(root, lookup_paths)
+        narrowed_context = _retrieve_from_documents(question, narrowed_documents, top_k=top_k)
+        if narrowed_context:
+            return narrowed_context
+
+    return _retrieve_from_documents(question, load_documents(root), top_k=top_k)
 
 
 def ask_repository(question: str, root: Path) -> RAGAnswer:
@@ -114,6 +126,18 @@ def _chunk_preview(chunk: Chunk) -> str:
     """Return the short preview used in baseline and live-answer prompts."""
 
     return " ".join(chunk.text.split())[:240]
+
+
+def _retrieve_from_documents(
+    question: str,
+    documents: list[RepoDocument],
+    *,
+    top_k: int,
+) -> list[Chunk]:
+    """Chunk ``documents`` and retrieve the most relevant context."""
+
+    chunks = chunk_documents(documents)
+    return retrieve(question, chunks, top_k=top_k)
 
 
 def build_live_answer_messages(

@@ -30,6 +30,7 @@ for _git_env_key in tuple(os.environ):
 def test_utility_summary_mentions_core_surfaces() -> None:
     summary = utility_summary(REPO_ROOT)
     assert "ask" in summary
+    assert "lookup-first" in summary
     assert "ask-live" in summary
     assert "discover-mcp" in summary
     assert "dspy-train" in summary

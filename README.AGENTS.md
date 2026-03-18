@@ -124,9 +124,10 @@ at runtime if available.” It can now compile a repository-grounded program, pe
 program automatically for later questions.
 
 Before that DSPy layer runs, the Rust wrapper now exposes a repo-local SQLite FTS index and lookup
-path over tracked UTF-8 files. Agents are expected to use that cheap lexical lookup first when the
-question is really “which file or passage should I read next?” and only escalate to DSPy when they
-need synthesis across hits instead of direct file evidence.
+path over tracked UTF-8 files. The default `ask` flow now narrows retrieval through those native
+lookup hits first and only falls back to the full corpus when the local hit set is weak. Agents are
+still expected to escalate to DSPy only when they need synthesis across hits instead of direct file
+evidence.
 
 ### 6. Notebooks Become Playbooks, Not Logic Dumps
 
@@ -177,7 +178,8 @@ publication surface rather than leaving it as hidden maintenance glue.
 
 At the time of this document:
 
-- baseline repository-grounded RAG is implemented and exposed through `make ask`
+- baseline repository-grounded RAG is implemented and exposed through `make ask`, which now
+  performs Rust SQLite lookup-first narrowing before falling back to broader retrieval
 - live Azure-backed repository answering is implemented and exposed through `make ask-live`
 - Azure runtime contract probes are implemented and exposed through
   `make azure-openai-probe` and `make azure-inference-probe`
@@ -187,7 +189,8 @@ At the time of this document:
   threshold-aware `make retrieval-eval` gate
 - local SQLite lookup over tracked files is implemented and exposed through `make rust-lookup-index`
   plus `make rust-lookup`
-- DSPy runtime answering is implemented and exposed through `make ask-dspy`
+- DSPy runtime answering is implemented and exposed through `make ask-dspy` after the same
+  lookup-first narrowing pass
 - DSPy compile-save-reload is implemented and exposed through `make dspy-train`
 - DSPy artifact inspection is implemented and exposed through `make dspy-artifacts`
 - notebook batch execution and reporting are implemented and exposed through

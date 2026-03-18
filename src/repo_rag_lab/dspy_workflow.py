@@ -6,9 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .corpus import load_documents
 from .dspy_training import DSPyLMConfig, build_repository_rag_program, resolve_dspy_program_path
-from .retrieval import chunk_documents, retrieve
+from .workflow import collect_repository_context
 
 try:
     import dspy
@@ -35,9 +34,8 @@ class RepositoryRetriever:
     def __call__(self, query: str) -> list[str]:
         """Return the top repository chunks for ``query`` as plain text."""
 
-        documents = load_documents(self.root)
-        chunks = chunk_documents(documents)
-        return [chunk.text for chunk in retrieve(query, chunks, top_k=self.top_k)]
+        context = collect_repository_context(query, self.root, top_k=self.top_k)
+        return [chunk.text for chunk in context]
 
 
 class RepositoryRAG:

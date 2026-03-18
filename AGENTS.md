@@ -52,7 +52,7 @@ verification results, and anchor status statements to the newest file in `docs/a
 2. Keep notebooks, tests, CLI behavior, and docs aligned around the same package helpers.
 3. When changing retrieval, MCP discovery, deployment metadata, or verification behavior, update tests and notebook guidance in the same turn.
 4. If adding a new user-facing utility, expose it through both the Python CLI and the `Makefile` when practical.
-5. Before `make ask-dspy` or `uv run repo-rag ask --use-dspy`, run the Rust SQLite lookup path first when a direct file hit can narrow the question.
+5. `make ask` and `uv run repo-rag ask` now perform Rust SQLite lookup-first narrowing automatically. Use `make rust-lookup` when you want to inspect those direct hits yourself before escalating to `make ask-dspy`.
 6. Prefer tests that validate user-visible behavior instead of only internal helpers.
 7. After every push, use `post-push-gh-run-logging`: run `make gh-runs`, then `make gh-watch`, and write a summary log into `samples/logs/`. If the watched run fails, inspect it with `make gh-failed-logs`, fix the repository, rerun local validation, and push again. If the only follow-up would be a recursive log-only commit for a prior log-only push, summarize the result instead of creating endless log churn.
 8. If a permission-gated action is blocked, explicitly offer the user the option to make that permission permanent in Codex settings before retrying.

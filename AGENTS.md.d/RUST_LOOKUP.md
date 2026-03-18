@@ -5,6 +5,8 @@ passages inside the tracked repository tree.
 
 ## Required Workflow
 
+- `make ask QUESTION="..."` and `uv run repo-rag ask --question "..."` now perform this Rust
+  lookup-first narrowing automatically before the broader repository retriever runs.
 - Refresh the local SQLite index with `make rust-lookup-index` after tracked-file changes, or let
   `make rust-lookup QUERY="..."` refresh it automatically when stale.
 - Start with short noun-phrase queries such as `dspy training`, `azure runtime`, or
@@ -12,8 +14,8 @@ passages inside the tracked repository tree.
 - Use `make rust-lookup QUERY="..."` or
   `cargo run --manifest-path rust-cli/Cargo.toml -- lookup "..."` to inspect direct path/content
   hits before `make ask-dspy`.
-- Escalate to `make ask-dspy` only when the question needs synthesis across multiple hits instead
-  of direct file evidence.
+- Escalate to `make ask-dspy` only when the question needs DSPy synthesis across multiple hits
+  instead of the default lookup-first answer path.
 
 ## Output Contract
 

@@ -67,10 +67,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="repo-rag")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    ask_parser = subparsers.add_parser("ask")
+    ask_parser = subparsers.add_parser(
+        "ask",
+        help="Answer a repository question with lookup-first retrieval.",
+    )
     ask_parser.add_argument("--question", required=True)
     ask_parser.add_argument("--root", default=".")
-    ask_parser.add_argument("--use-dspy", action="store_true")
+    ask_parser.add_argument(
+        "--use-dspy",
+        action="store_true",
+        help=(
+            "After lookup-first narrowing, use the DSPy answer path "
+            "instead of the baseline retriever."
+        ),
+    )
     ask_parser.add_argument("--dspy-program-path")
     ask_parser.add_argument("--dspy-top-k", type=int, default=4)
     add_dspy_lm_arguments(ask_parser)

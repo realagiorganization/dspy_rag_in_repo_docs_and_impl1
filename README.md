@@ -10,8 +10,9 @@ This repository is a `uv`-first research lab for repository-grounded Retrieval-A
 Generation. Notebooks, the packaged Python CLI, `make` targets, tests, CI, and the Rust wrapper
 all share the same implementation so experiments and automation stay aligned.
 
-The Rust wrapper also exposes a compact SQLite lookup path for tracked files, so agents and
-operators can inspect cheap local hits before escalating to DSPy-backed synthesis.
+The Rust wrapper also exposes a compact SQLite lookup path for tracked files, and the default
+`make ask` / `uv run repo-rag ask` path now uses that native index first before falling back to
+the broader baseline retriever.
 
 ## What The Repository Covers
 
@@ -69,8 +70,8 @@ the Rust wrapper.
 | Rust lookup | `make rust-lookup QUERY="dspy training"` | Search tracked file paths and contents locally before `make ask-dspy`. |
 | Backlog sync | `make todo-sync` | Regenerate the linkified TODO table in both Markdown and the publication article. |
 | Exploratorium sync | `make exploratorium-sync` | Regenerate the bilingual file/link/fetch-state publication inventory. |
-| Ask a repo question | `make ask QUESTION="..."` | Run the baseline repository-grounded RAG workflow. |
-| DSPy ask | `make ask-dspy QUESTION="..."` | Run the DSPy runtime path with LM config from `DSPY_*`, Azure, or OpenAI environment variables, automatically reusing the latest compiled program when one exists; pair it with `make rust-lookup` when you want a fast local file-content pass before the LM call. |
+| Ask a repo question | `make ask QUESTION="..."` | Run the lookup-first repository-grounded workflow, narrowing to native SQLite file hits before falling back to the broader baseline retriever. |
+| DSPy ask | `make ask-dspy QUESTION="..."` | Run the explicit DSPy runtime path with LM config from `DSPY_*`, Azure, or OpenAI environment variables, automatically reusing the latest compiled program when one exists after the same lookup-first narrowing pass. |
 | Live Azure ask | `make ask-live QUESTION="..."` | Retrieve repository evidence locally, then synthesize a live answer through Azure OpenAI or Azure AI Inference. |
 | DSPy compile | `make dspy-train DSPY_RUN_NAME=...` | Compile and save a repository-grounded DSPy program under `artifacts/dspy/`. |
 | DSPy artifact inspect | `make dspy-artifacts` | List saved DSPy runs, the latest compiled program, and recorded benchmark metadata. |
@@ -154,8 +155,9 @@ Repository-local agent instructions live in `AGENTS.md`. Agents and contributors
 named `make` targets or `uv run repo-rag ...` commands before inventing one-off workflows so
 notebooks, tests, CI, and automation stay aligned. The overreaching repository narrative that
 agents are expected to keep current lives in [README.AGENTS.md](README.AGENTS.md). For repo
-question answering, refresh the Rust lookup index and run `make rust-lookup QUERY="..."` before
-moving to `make ask-dspy`.
+question answering, `make ask` already uses the Rust lookup path first. Run `make rust-lookup
+QUERY="..."` when you want to inspect those candidate files directly before moving to
+`make ask-dspy`.
 
 ## Post-Push Workflow
 

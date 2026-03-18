@@ -32,8 +32,14 @@ def utility_summary(root: Path) -> str:
     lines = [
         "Repository utility surfaces:",
         "- make utility-summary / uv run repo-rag utility-summary: list the supported entrypoints",
-        "- make ask / uv run repo-rag ask: answer repository-grounded questions",
-        "- make ask-dspy / uv run repo-rag ask --use-dspy: answer with the DSPy runtime path",
+        (
+            "- make ask / uv run repo-rag ask: answer repository-grounded questions with a "
+            "Rust lookup-first pass before the baseline retrieval fallback"
+        ),
+        (
+            "- make ask-dspy / uv run repo-rag ask --use-dspy: answer with the explicit DSPy "
+            "runtime path after the same lookup-first narrowing"
+        ),
         (
             "- make rust-lookup-index / cargo run --manifest-path rust-cli/Cargo.toml -- index: "
             "build the local SQLite FTS index of tracked UTF-8 repository files"

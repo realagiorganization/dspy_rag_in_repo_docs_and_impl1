@@ -228,6 +228,18 @@ def source_score_adjustment(source: Path, question_terms: list[str]) -> float:
         adjustment += 0.7
     if _contains_path_parts(source, ("documentation", "inspired")) and "inspired" in question_terms:
         adjustment += 2.0
+    if (
+        source.name == "utilities.py"
+        and _contains_path_parts(source, ("src", "repo_rag_lab"))
+        and {"repository", "research"}.issubset(question_terms)
+    ):
+        adjustment += 0.5
+    if (
+        source.name == "rust_lookup.py"
+        and _contains_path_parts(source, ("src", "repo_rag_lab"))
+        and {"repository", "research"}.issubset(question_terms)
+    ):
+        adjustment -= 0.3
 
     return adjustment
 
