@@ -126,9 +126,55 @@ def test_publication_workflow_builds_and_uploads_pdf() -> None:
     steps = job["steps"]
 
     assert any(step.get("uses") == "actions/checkout@v6" for step in steps)
+    assert any(
+        step.get("uses") == "actions/cache@v4"
+        and "publication/*.aux" in step.get("with", {}).get("path", "")
+        and "publication/repository-rag-lab-article.tex" in step.get("with", {}).get("key", "")
+        for step in steps
+    )
     assert any(step.get("uses") == "xu-cheng/latex-action@v4" for step in steps)
     assert any(
         step.get("uses") == "actions/upload-artifact@v6"
+        and step.get("id") == "upload_publication_pdf"
         and step.get("with", {}).get("path") == "publication/repository-rag-lab-article.pdf"
         for step in steps
     )
+    assert any(
+        step.get("uses") == "sarisia/actions-status-discord@v1"
+        and step.get("with", {}).get("webhook") == "${{ secrets.DISCORD_WEBHOOK }}"
+        and "nofail" not in step.get("with", {})
+        and "steps.upload_publication_pdf.outputs.artifact-url"
+        in step.get("with", {}).get("description", "")
+        and "publication/repository-rag-lab-article.pdf" in step.get("with", {}).get("url", "")
+        for step in steps
+    )
+
+
+def test_ci_and_publish_workflows_cache_python_and_dependencies() -> None:
+    ci_workflow = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    )
+    publish_workflow = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "publish.yml").read_text(encoding="utf-8")
+    )
+
+    ci_python_steps = ci_workflow["jobs"]["python"]["steps"]
+    ci_rust_steps = ci_workflow["jobs"]["rust-wrapper"]["steps"]
+    publish_steps = publish_workflow["jobs"]["publish"]["steps"]
+
+    for steps in (ci_python_steps, ci_rust_steps, publish_steps):
+        assert any(
+            step.get("uses") == "actions/setup-python@v6"
+            and step.get("with", {}).get("python-version-file") == ".python-version"
+            for step in steps
+        )
+        assert any(
+            step.get("uses") == "astral-sh/setup-uv@v6"
+            and step.get("with", {}).get("enable-cache") is True
+            and ".python-version" in step.get("with", {}).get("cache-dependency-glob", "")
+            and "pyproject.toml" in step.get("with", {}).get("cache-dependency-glob", "")
+            and "uv.lock" in step.get("with", {}).get("cache-dependency-glob", "")
+            for step in steps
+        )
+
+    assert any(step.get("uses") == "Swatinem/rust-cache@v2" for step in ci_rust_steps)

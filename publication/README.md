@@ -18,3 +18,11 @@ make paper-build
 
 That command calls the publication-local Makefile, runs `pdflatex` and `bibtex`, writes the PDF,
 and crops the banner image from the rendered first page.
+
+## Automation
+
+The `Publication PDF` GitHub Actions workflow rebuilds the article on pushes that touch the
+publication surface, restores cached LaTeX auxiliary files to speed repeated builds, uploads the
+rendered PDF as a workflow artifact, and, when the `DISCORD_WEBHOOK` secret is configured,
+attempts to post the artifact link, the commit-pinned PDF link, and the workflow run link to
+Discord.

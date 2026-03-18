@@ -14,14 +14,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: ".python-version"
+
       - name: Set up uv
         uses: astral-sh/setup-uv@v6
         with:
           version: "0.10.10"
           enable-cache: true
-
-      - name: Install Python
-        run: uv python install 3.11
+          cache-dependency-glob: |
+            .python-version
+            pyproject.toml
+            uv.lock
 
       - name: Sync environment
         run: uv sync --frozen --extra azure
@@ -78,14 +84,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: ".python-version"
+
       - name: Set up uv
         uses: astral-sh/setup-uv@v6
         with:
           version: "0.10.10"
           enable-cache: true
-
-      - name: Install Python
-        run: uv python install 3.11
+          cache-dependency-glob: |
+            .python-version
+            pyproject.toml
+            uv.lock
 
       - name: Sync environment
         run: uv sync --frozen --extra azure

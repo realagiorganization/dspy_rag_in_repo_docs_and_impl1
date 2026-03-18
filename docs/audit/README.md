@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-03-18-notebook-execution.md`
+- `2026-03-18-actions-caching.md`
 
 ## Usage
 
