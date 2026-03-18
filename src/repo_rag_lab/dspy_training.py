@@ -250,6 +250,19 @@ def _normalize_sources(values: Sequence[str]) -> tuple[str, ...]:
     return tuple(ordered)
 
 
+def _answer_overlap_score(expected_answer: str, predicted_answer: str) -> float:
+    """Return a simple token-overlap score for repository answer paraphrases."""
+
+    expected_tokens = set(re.findall(r"[a-z0-9]+", _normalize_text(expected_answer)))
+    predicted_tokens = set(re.findall(r"[a-z0-9]+", _normalize_text(predicted_answer)))
+    if not expected_tokens or not predicted_tokens:
+        return 0.0
+    return len(expected_tokens.intersection(predicted_tokens)) / min(
+        len(expected_tokens),
+        len(predicted_tokens),
+    )
+
+
 def resolve_dspy_lm_config(
     *,
     model: str | None = None,
@@ -385,7 +398,9 @@ def repository_answer_metric(
     expected_answer = _normalize_text(example.answer)
     predicted_answer = _normalize_text(pred.answer)
     answer_match = bool(predicted_answer) and (
-        expected_answer in predicted_answer or predicted_answer in expected_answer
+        expected_answer in predicted_answer
+        or predicted_answer in expected_answer
+        or _answer_overlap_score(expected_answer, predicted_answer) >= 0.6
     )
     expected_sources = set(_normalize_sources(example.expected_sources))
     if not expected_sources:

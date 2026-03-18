@@ -9,7 +9,6 @@ from repo_rag_lab.dspy_training import (
     DEFAULT_DSPY_MODEL,
     DSPyLMConfig,
     DSPyTrainingConfig,
-    TrainingExample,
     build_dspy_trainset,
     build_repository_rag_program,
     evaluate_repository_program,
@@ -20,6 +19,7 @@ from repo_rag_lab.dspy_training import (
     resolve_dspy_lm_config,
     train_repository_program,
 )
+from repo_rag_lab.training_samples import TrainingExample
 
 
 def test_resolve_dspy_lm_config_prefers_explicit_values(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -58,10 +58,30 @@ def test_resolve_dspy_lm_config_uses_repo_azure_env(monkeypatch: pytest.MonkeyPa
     assert config.api_version == "2024-10-21"
 
 
+def test_resolve_dspy_lm_config_uses_chat_completions_uri(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT_NAME", "repo-rag-ft")
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "secret")
+    monkeypatch.delenv("AZURE_OPENAI_ENDPOINT", raising=False)
+    monkeypatch.setenv(
+        "AZURE_OPENAI_CHAT_COMPLETIONS_URI",
+        "https://example.openai.azure.com/openai/deployments/repo-rag-ft/chat/completions",
+    )
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+
+    config = resolve_dspy_lm_config()
+
+    assert config is not None
+    assert config.model == "azure/repo-rag-ft"
+    assert config.api_base == "https://example.openai.azure.com"
+    assert config.api_version == "2024-10-21"
+
+
 def test_resolve_dspy_lm_config_falls_back_to_openai_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("AZURE_OPENAI_DEPLOYMENT_NAME", raising=False)
+    monkeypatch.delenv("AZURE_OPENAI_ENDPOINT", raising=False)
+    monkeypatch.delenv("AZURE_OPENAI_CHAT_COMPLETIONS_URI", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "openai-secret")
 
     config = resolve_dspy_lm_config()
@@ -71,6 +91,26 @@ def test_resolve_dspy_lm_config_falls_back_to_openai_env(
     assert config.api_key == "openai-secret"
 
 
+def test_resolve_dspy_lm_config_returns_none_without_configuration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in [
+        "DSPY_MODEL",
+        "DSPY_API_KEY",
+        "DSPY_API_BASE",
+        "DSPY_API_VERSION",
+        "AZURE_OPENAI_DEPLOYMENT_NAME",
+        "AZURE_OPENAI_API_KEY",
+        "AZURE_OPENAI_ENDPOINT",
+        "AZURE_OPENAI_CHAT_COMPLETIONS_URI",
+        "AZURE_OPENAI_API_VERSION",
+        "OPENAI_API_KEY",
+    ]:
+        monkeypatch.delenv(name, raising=False)
+
+    assert resolve_dspy_lm_config() is None
+
+
 def test_resolve_dspy_artifact_paths_and_latest_metadata(tmp_path: Path) -> None:
     paths = resolve_dspy_artifact_paths(tmp_path, "sample-run")
     paths.artifact_dir.mkdir(parents=True)
@@ -78,6 +118,12 @@ def test_resolve_dspy_artifact_paths_and_latest_metadata(tmp_path: Path) -> None
 
     assert paths.program_path.name == "program.json"
     assert latest_dspy_artifact_metadata(tmp_path) == paths.metadata_path
+
+
+def test_resolve_dspy_artifact_paths_sanitizes_run_name(tmp_path: Path) -> None:
+    paths = resolve_dspy_artifact_paths(tmp_path, " Sample run / with spaces ")
+
+    assert paths.artifact_dir == tmp_path / "artifacts" / "dspy" / "Sample-run-with-spaces"
 
 
 def test_latest_dspy_artifact_metadata_returns_none_without_artifacts(tmp_path: Path) -> None:
@@ -114,6 +160,24 @@ def test_repository_answer_metric_requires_answer_and_source_match() -> None:
     pred = Prediction()
 
     assert repository_answer_metric(example, pred) is True
+
+
+def test_repository_answer_metric_accepts_strong_paraphrase() -> None:
+    class Example:
+        answer = (
+            "The repository researches repository-grounded RAG workflows with shared uv-managed "
+            "utilities and Azure deployment manifests."
+        )
+        expected_sources = ("README.md",)
+
+    class Prediction:
+        answer = (
+            "This repo studies repository-grounded RAG workflows with shared uv utilities and "
+            "Azure deployment manifests."
+        )
+        context_sources = ("README.md",)
+
+    assert repository_answer_metric(Example(), Prediction()) is True
 
 
 def test_evaluate_repository_program_reports_pass_rate() -> None:
@@ -281,3 +345,60 @@ def test_train_repository_program_writes_artifacts(
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     assert metadata["run_name"] == "sample-run"
     assert metadata["training_example_count"] == 1
+    assert metadata["program_path"] == "artifacts/dspy/sample-run/program.json"
+
+
+def test_train_repository_program_raises_for_invalid_training_examples(tmp_path: Path) -> None:
+    samples_dir = tmp_path / "samples" / "training"
+    samples_dir.mkdir(parents=True)
+    training_path = samples_dir / "invalid-training.yaml"
+    training_path.write_text(
+        '- question: ""\n  expected_answer: "Repository answer"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Training samples are invalid"):
+        train_repository_program(
+            tmp_path,
+            training_config=DSPyTrainingConfig(
+                training_path=Path("samples/training/invalid-training.yaml"),
+            ),
+            lm_config=DSPyLMConfig(model="openai/test-model"),
+        )
+
+
+def test_train_repository_program_raises_for_unsupported_optimizer(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    (tmp_path / "README.md").write_text("# sample\n", encoding="utf-8")
+    samples_dir = tmp_path / "samples" / "training"
+    samples_dir.mkdir(parents=True)
+    training_path = samples_dir / "sample-training.yaml"
+    training_path.write_text(
+        "\n".join(
+            [
+                '- question: "What does this repository research?"',
+                '  expected_answer: "Repository answer"',
+                "  expected_sources:",
+                '    - "README.md"',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    def fake_configure_dspy_lm(lm_config: object) -> object:
+        del lm_config
+        return object()
+
+    monkeypatch.setattr("repo_rag_lab.dspy_training.configure_dspy_lm", fake_configure_dspy_lm)
+
+    with pytest.raises(ValueError, match="Unsupported DSPy optimizer"):
+        train_repository_program(
+            tmp_path,
+            training_config=DSPyTrainingConfig(
+                training_path=Path("samples/training/sample-training.yaml"),
+                optimizer="unknown",
+            ),
+            lm_config=DSPyLMConfig(model="openai/test-model"),
+        )

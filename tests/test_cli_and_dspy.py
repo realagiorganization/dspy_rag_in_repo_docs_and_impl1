@@ -24,6 +24,67 @@ def test_repository_rag_fallback_answer_contains_context(monkeypatch: pytest.Mon
     assert result.answer
 
 
+def test_repository_rag_skips_program_without_configuration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_if_called(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        return pytest.fail("program builder should not run without configuration")
+
+    def fake_retrieve(self: RepositoryRetriever, question: str) -> list[str]:
+        del self
+        return [f"context for {question}"]
+
+    monkeypatch.setattr("repo_rag_lab.dspy_workflow.dspy", object())
+    monkeypatch.setattr(
+        "repo_rag_lab.dspy_workflow.build_repository_rag_program",
+        fail_if_called,
+    )
+    monkeypatch.setattr(RepositoryRetriever, "__call__", fake_retrieve)
+
+    result = RepositoryRAG(REPO_ROOT)("What does this repository research?")
+
+    assert result.context == ["context for What does this repository research?"]
+    assert result.answer == "context for What does this repository research?"
+
+
+def test_repository_rag_uses_program_prediction_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeProgram:
+        def __call__(self, *, question: str) -> object:
+            return type(
+                "Prediction",
+                (),
+                {
+                    "answer": f"answer for {question}",
+                    "context": ["program context"],
+                },
+            )()
+
+    def fake_build_program(*args: object, **kwargs: object) -> FakeProgram:
+        del args, kwargs
+        return FakeProgram()
+
+    def fake_retrieve(self: RepositoryRetriever, question: str) -> list[str]:
+        del self, question
+        return ["retrieved context"]
+
+    monkeypatch.setattr("repo_rag_lab.dspy_workflow.dspy", object())
+    monkeypatch.setattr(
+        "repo_rag_lab.dspy_workflow.build_repository_rag_program",
+        fake_build_program,
+    )
+    monkeypatch.setattr(RepositoryRetriever, "__call__", fake_retrieve)
+
+    result = RepositoryRAG(
+        REPO_ROOT,
+        lm_config=DSPyLMConfig(model="openai/test-model"),
+        require_configured_lm=True,
+    )("What does this repository research?")
+
+    assert result.context == ["program context"]
+    assert result.answer == "answer for What does this repository research?"
+
+
 def test_repo_settings_from_root_builds_expected_paths() -> None:
     settings = RepoSettings.from_root(REPO_ROOT)
     assert settings.docs_dir == REPO_ROOT / "documentation"

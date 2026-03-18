@@ -23,33 +23,41 @@ and where true DSPy optimizer-driven development still needs to be added.
 
 ## Current Reality
 
-The repository already has a DSPy-shaped workflow, but it is important to be precise about what
-exists today.
+The repository now has both an optional DSPy runtime path and a real compile-save-reload DSPy
+program path.
 
 Present now:
 
 - [pyproject.toml](pyproject.toml) installs `dspy-ai` as part of the main Python package.
-- [src/repo_rag_lab/dspy_workflow.py](src/repo_rag_lab/dspy_workflow.py) provides an optional
-  `RepositoryRAG` wrapper that calls `dspy.ChainOfThought("context, question -> answer")` when
-  DSPy imports successfully.
+- [src/repo_rag_lab/dspy_training.py](src/repo_rag_lab/dspy_training.py) resolves LM
+  configuration from CLI flags or environment variables, defines the repository-grounded
+  `RepositoryRAGProgram`, runs `BootstrapFewShot` or `MIPROv2`, and persists artifacts under
+  `artifacts/dspy/`.
+- [src/repo_rag_lab/dspy_workflow.py](src/repo_rag_lab/dspy_workflow.py),
+  [src/repo_rag_lab/cli.py](src/repo_rag_lab/cli.py), and [Makefile](Makefile) expose both
+  runtime answering and compiled-program reuse through `ask --use-dspy`, `dspy-train`,
+  `make ask-dspy`, and `make dspy-train`.
 - [src/repo_rag_lab/training_samples.py](src/repo_rag_lab/training_samples.py),
   [src/repo_rag_lab/benchmarks.py](src/repo_rag_lab/benchmarks.py), and
   [src/repo_rag_lab/notebook_scaffolding.py](src/repo_rag_lab/notebook_scaffolding.py) provide
-  the data-preparation and evaluation scaffolding that a real DSPy training loop would need.
+  the data-preparation, evaluation, and artifact-discovery scaffolding used by the training lab.
 - [notebooks/03_dspy_training_lab.ipynb](notebooks/03_dspy_training_lab.ipynb) and
   [notebooks/04_sample_population_lab.ipynb](notebooks/04_sample_population_lab.ipynb) document
-  the human-in-the-loop preparation flow.
+  the sample-preparation and corpus-planning flow around that runtime.
 
 Not implemented yet:
 
-- There is no custom `dspy.Module` subclass in the repository today.
-- There is no teleprompter or optimizer flow such as `BootstrapFewShot` or `MIPROv2`.
-- There is no command that compiles and saves a tuned DSPy program artifact.
-- There is no in-repo model fine-tuning or live deployment step.
+- Retrieval below DSPy is still the repository's lexical baseline from
+  [src/repo_rag_lab/retrieval.py](src/repo_rag_lab/retrieval.py), so compiled-program quality is
+  still bottlenecked by retrieved context quality.
+- The repository persists final program artifacts and metadata, not richer optimizer histories,
+  checkpoints, or run comparisons.
+- There is still no in-repo model fine-tuning or live deployment step.
 
 The practical consequence is: this repo already supports corpus planning, training-sample curation,
-retrieval benchmarking, optional DSPy runtime answering, and deployment metadata handoff, but it
-does not yet run a full automated DSPy optimizer pipeline.
+retrieval benchmarking, optional DSPy runtime answering, compiled-program persistence, saved-program
+reloads, and deployment metadata handoff. The next bottleneck is retrieval quality, not the
+absence of a DSPy compile path.
 
 ## Fast Start
 
@@ -59,24 +67,30 @@ Use the repo-managed surfaces first.
 uv sync --extra azure
 make utility-summary
 make ask QUESTION="What does this repository research?"
+make ask-dspy QUESTION="What does this repository research?" \
+  DSPY_MODEL=openai/gpt-4o-mini \
+  DSPY_API_KEY="$OPENAI_API_KEY"
+make dspy-train DSPY_RUN_NAME=smoke \
+  DSPY_MODEL=openai/gpt-4o-mini \
+  DSPY_API_KEY="$OPENAI_API_KEY"
 make smoke-test
 make verify-surfaces
 ```
 
-The baseline path above is runnable as-is. The DSPy path needs an LM configured in-process first,
-because the current CLI does not expose DSPy LM configuration flags. Use a small Python entrypoint
-like this when you want the real DSPy runtime path:
+The baseline path above is runnable as-is. The DSPy path can now resolve LM configuration from:
 
-```python
-from pathlib import Path
+- explicit `--dspy-*` CLI flags
+- `DSPY_*` environment variables
+- repository Azure variables such as `AZURE_OPENAI_DEPLOYMENT_NAME` and `AZURE_OPENAI_ENDPOINT`
+- `OPENAI_API_KEY` for the default OpenAI fallback model
 
-import dspy
+Once a program is compiled, you can point the runtime at the saved artifact directly:
 
-from repo_rag_lab.dspy_workflow import RepositoryRAG
-
-dspy.configure(lm=dspy.LM("openai/gpt-4o-mini"))
-result = RepositoryRAG(Path(".").resolve())("What does this repository research?")
-print(result.answer)
+```bash
+make ask-dspy QUESTION="What does this repository research?" \
+  DSPY_PROGRAM_PATH=artifacts/dspy/smoke/program.json \
+  DSPY_MODEL=openai/gpt-4o-mini \
+  DSPY_API_KEY="$OPENAI_API_KEY"
 ```
 
 Use the notebooks when you want the research-playbook view.
@@ -86,7 +100,7 @@ Use the notebooks when you want the research-playbook view.
 - [notebooks/02_agent_workflow_checklist.ipynb](notebooks/02_agent_workflow_checklist.ipynb):
   operational checklist for agents.
 - [notebooks/03_dspy_training_lab.ipynb](notebooks/03_dspy_training_lab.ipynb): training-sample
-  inspection.
+  inspection plus latest compiled-program inspection and reuse.
 - [notebooks/04_sample_population_lab.ipynb](notebooks/04_sample_population_lab.ipynb): corpus
   population planning.
 
@@ -115,7 +129,7 @@ Read this flow from left to right:
 2. Load repository files as text.
 3. Chunk and rank them.
 4. Prepare training and benchmark examples.
-5. Run the baseline or DSPy-shaped answer path.
+5. Run the baseline answer path or compile and reuse a DSPy program.
 6. Capture notebook-oriented metadata for later tuning and deployment work.
 
 ## Stage 1. Corpus Planning And Data Collection
@@ -367,66 +381,78 @@ Why this is the key development stage:
 
 ## Stage 5. Optional DSPy Execution Path
 
-This stage is where DSPy enters the runtime path directly.
+This stage now covers both the direct DSPy runtime path and the compile-save-reload lifecycle.
 
 Primary files:
 
+- [src/repo_rag_lab/dspy_training.py](src/repo_rag_lab/dspy_training.py)
 - [src/repo_rag_lab/dspy_workflow.py](src/repo_rag_lab/dspy_workflow.py)
 - [src/repo_rag_lab/cli.py](src/repo_rag_lab/cli.py)
 - [Makefile](Makefile)
+- [tests/test_dspy_training.py](tests/test_dspy_training.py)
 - [tests/test_cli_and_dspy.py](tests/test_cli_and_dspy.py)
 - [documentation/inspired/dspy-rag-tutorial.md](documentation/inspired/dspy-rag-tutorial.md)
 - [documentation/inspired/implementing-rag-with-dspy-technical-guide.md](documentation/inspired/implementing-rag-with-dspy-technical-guide.md)
 
-The current implementation is intentionally thin:
+The runtime flow is now:
 
 ```python
-class RepositoryRAG:
-    def __init__(self, root: Path, top_k: int = 4) -> None:
-        self.retriever = RepositoryRetriever(root=root, top_k=top_k)
-        self.respond = dspy.ChainOfThought("context, question -> answer") if dspy else None
-
-    def __call__(self, question: str) -> DSPyRunResult:
-        context = self.retriever(question)
-        if dspy is None:
-            answer = " ".join(context[:1]) if context else "No context available."
-            return DSPyRunResult(question=question, context=context, answer=answer)
-        prediction = self.respond(context=context, question=question)
-        return DSPyRunResult(question=question, context=context, answer=prediction.answer)
+lm_config = resolve_dspy_lm_config(...)
+runtime = RepositoryRAG(
+    root=Path(".").resolve(),
+    top_k=4,
+    program_path=Path("artifacts/dspy/smoke/program.json"),
+    lm_config=lm_config,
+    require_configured_lm=True,
+)
+result = runtime("What does this repository research?")
+print(result.answer)
 ```
 
-The runtime flow is:
-
-1. [src/repo_rag_lab/cli.py](src/repo_rag_lab/cli.py) parses `repo-rag ask`.
-2. If `--use-dspy` is absent, control goes to
-   [src/repo_rag_lab/workflow.py](src/repo_rag_lab/workflow.py).
-3. If `--use-dspy` is present, control goes to `RepositoryRAG(root)(question)`.
-4. `RepositoryRetriever` still uses
+1. [src/repo_rag_lab/cli.py](src/repo_rag_lab/cli.py) parses either `repo-rag ask --use-dspy`
+   or `repo-rag dspy-train`.
+2. `resolve_dspy_lm_config(...)` maps explicit flags or environment variables into a typed DSPy LM
+   config.
+3. `RepositoryRAG(...)` either builds a fresh runtime program or loads
+   `--dspy-program-path` from disk.
+4. [src/repo_rag_lab/dspy_training.py](src/repo_rag_lab/dspy_training.py) validates the training
+   examples, builds a DSPy trainset, compiles a `RepositoryRAGProgram`, writes
+   `artifacts/dspy/<run-name>/program.json`, and records `metadata.json`.
+5. `RepositoryRAGProgram` still retrieves context through
    [src/repo_rag_lab/corpus.py](src/repo_rag_lab/corpus.py) and
-   [src/repo_rag_lab/retrieval.py](src/repo_rag_lab/retrieval.py).
-5. DSPy only changes the answer-generation step, not the corpus or ranking step.
+   [src/repo_rag_lab/retrieval.py](src/repo_rag_lab/retrieval.py), so DSPy changes the
+   answer-generation and compile layers without replacing the current retriever.
 
-The user-facing command is:
+The user-facing commands are:
 
 ```bash
-uv run repo-rag ask --question "What does this repository research?" --use-dspy
+make ask-dspy QUESTION="What does this repository research?" \
+  DSPY_MODEL=openai/gpt-4o-mini \
+  DSPY_API_KEY="$OPENAI_API_KEY"
+
+make dspy-train DSPY_RUN_NAME=smoke \
+  DSPY_MODEL=openai/gpt-4o-mini \
+  DSPY_API_KEY="$OPENAI_API_KEY"
+
+make ask-dspy QUESTION="What does this repository research?" \
+  DSPY_PROGRAM_PATH=artifacts/dspy/smoke/program.json \
+  DSPY_MODEL=openai/gpt-4o-mini \
+  DSPY_API_KEY="$OPENAI_API_KEY"
 ```
 
 Important limitation:
 
-- I verified the direct CLI command above in this repository, and it fails unless an LM has already
-  been configured through `dspy.configure(...)` in the same process.
-- The current CLI exposes the DSPy answer path, but it does not yet expose LM selection or
-  credentials setup.
-- This is a DSPy-shaped execution surface, not a trained DSPy program lifecycle.
-- There is no saved program artifact, optimizer checkpoint, or compile command in the repo yet.
-- The inspired notes under [documentation/inspired/](documentation/inspired/) explain the intended
-  direction, but the optimizer implementation has not been wired in.
+- The compile path now exists, but it still sits on the repository's lexical retriever.
+- A saved program still needs an LM configured at runtime before it can answer.
+- The repository persists the final program and metadata, not richer optimizer traces or
+  experiment-comparison dashboards.
+- The inspired notes under [documentation/inspired/](documentation/inspired/) still matter because
+  retrieval and evaluation depth remain the next meaningful extension surface.
 
 ## Stage 6. Notebook Automation And Artifacts
 
-The notebooks are not supposed to carry core logic inline. They orchestrate tested helpers from
-`src/`.
+The notebooks still do not carry core logic inline. They orchestrate tested helpers from `src/`
+and now also surface the latest compiled DSPy artifact when one exists.
 
 Primary files:
 
@@ -449,8 +475,8 @@ Notebook scaffolding responsibilities:
 
 - `build_agent_workflow_context(root)` combines training validation, benchmark summary, MCP counts,
   and population validation into one payload.
-- `build_training_lab_context(root)` loads training data, evaluates benchmarks, and writes tuning
-  metadata.
+- `build_training_lab_context(root)` loads training data, evaluates benchmarks, writes tuning
+  metadata, and surfaces the latest compiled DSPy artifact metadata when one exists.
 - `build_population_lab_context(root)` extends and reranks the corpus plan from benchmark evidence.
 
 This is the most compact automatic training-lab entrypoint in the repo today:
@@ -465,13 +491,27 @@ payload = build_training_lab_context(root)
 print(payload["training_summary"])
 print(payload["benchmark_summary"])
 print(payload["tuning_metadata_path"])
+print(payload["compiled_program_path"])
 ```
 
 That single call crosses these modules in sequence:
 
 1. [src/repo_rag_lab/training_samples.py](src/repo_rag_lab/training_samples.py)
 2. [src/repo_rag_lab/benchmarks.py](src/repo_rag_lab/benchmarks.py)
-3. [src/repo_rag_lab/azure.py](src/repo_rag_lab/azure.py)
+3. [src/repo_rag_lab/dspy_training.py](src/repo_rag_lab/dspy_training.py)
+4. [src/repo_rag_lab/azure.py](src/repo_rag_lab/azure.py)
+
+[notebooks/03_dspy_training_lab.ipynb](notebooks/03_dspy_training_lab.ipynb) keeps the research
+playbook shape:
+
+1. load training helpers
+2. summarize the training set
+3. build notebook-friendly batches
+4. inspect or reuse the latest compiled program
+5. assert benchmark health and log the run
+
+The notebook deliberately does not kick off a live optimizer run by default, because that would
+hide network cost and credential requirements inside notebook execution.
 
 ## Stage 7. Deployment Handoff, Not In-Repo Fine-Tuning
 
@@ -513,6 +553,8 @@ so the verification story is also multi-surface.
 
 Primary tests:
 
+- [tests/test_dspy_training.py](tests/test_dspy_training.py): LM resolution, artifact persistence,
+  optimizer errors, and repository-answer metric behavior.
 - [tests/test_cli_and_dspy.py](tests/test_cli_and_dspy.py): optional DSPy wrapper and CLI behavior.
 - [tests/test_training_samples.py](tests/test_training_samples.py): training sample loading,
   batching, summary.
@@ -543,27 +585,25 @@ Useful cross-references:
 - [Makefile](Makefile) exposes the canonical verification targets.
 - [src/repo_rag_lab/verification.py](src/repo_rag_lab/verification.py) validates notebook and
   Makefile contracts.
-- [docs/audit/2026-03-17-full-build.md](docs/audit/2026-03-17-full-build.md) is the latest dated
-  repository audit note at the time this file was added.
+- [docs/audit/2026-03-18-dspy-training-path.md](docs/audit/2026-03-18-dspy-training-path.md)
+  records the current DSPy compile-path verification evidence.
 
 ## Current Gap And Direct Extension Path
 
-If the goal is full automatic DSPy module development inside this repository, the shortest honest
-path is:
+Now that the compile path exists, the shortest honest extension path is:
 
 1. Enrich more entries in
    [samples/training/repository_training_examples.yaml](samples/training/repository_training_examples.yaml)
-   with `expected_sources` so benchmark coverage becomes meaningful.
-2. Add a new module such as `src/repo_rag_lab/dspy_training.py` that configures the DSPy LM,
-   defines a real `dspy.Module`, runs an optimizer, and persists the compiled program.
-3. Store compiled DSPy artifacts under a versioned path such as `artifacts/dspy/`.
-4. Expose the training surface through both
-   [src/repo_rag_lab/cli.py](src/repo_rag_lab/cli.py) and [Makefile](Makefile), following the
-   repository contract for user-facing utilities.
-5. Extend the notebooks so
-   [notebooks/03_dspy_training_lab.ipynb](notebooks/03_dspy_training_lab.ipynb) can load the
-   compiled program instead of stopping at summary and batching.
-6. Add tests that verify artifact persistence, CLI behavior, and regression metrics.
+   with `expected_sources` so benchmark coverage stays meaningful as the benchmark set grows.
+2. Improve retrieval under DSPy, most likely through embeddings or an MCP-backed retrieval surface,
+   because the current lexical retriever is now the clearest quality bottleneck.
+3. Extend the artifact model beyond `program.json` and `metadata.json` so runs can be compared and
+   promoted intentionally.
+4. Keep extending
+   [notebooks/03_dspy_training_lab.ipynb](notebooks/03_dspy_training_lab.ipynb) and CI coverage so
+   saved-program reuse is exercised with realistic credentials or a stable mock.
+5. Add tests that verify richer regression metrics, saved-program promotion rules, and downstream
+   Azure inference behavior beyond manifest generation.
 
 The existing scaffolding already gives the right inputs for that work:
 

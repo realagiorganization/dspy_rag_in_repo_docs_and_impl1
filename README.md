@@ -14,8 +14,8 @@ all share the same implementation so experiments and automation stay aligned.
 
 The current scaffold focuses on three connected jobs:
 
-1. Explore in-repo RAG over repository files with a simple baseline retriever and an optional
-   DSPy-shaped flow.
+1. Explore in-repo RAG over repository files with a simple baseline retriever plus optional DSPy
+   runtime and compiled-program flows.
 2. Discover MCP-related artifacts in the repository, submodules, or package manifests.
 3. Prepare Azure deployment manifests for tuned artifacts that are produced outside this repo.
 
@@ -58,7 +58,8 @@ the Rust wrapper.
 | Direct CLI | `uv run repo-rag utility-summary` | Use the packaged CLI without going through `make`. |
 | Backlog sync | `make todo-sync` | Regenerate the linkified TODO table in both Markdown and the publication article. |
 | Ask a repo question | `make ask QUESTION="..."` | Run the baseline repository-grounded RAG workflow. |
-| DSPy-shaped ask | `uv run repo-rag ask --question "..." --use-dspy` | Exercise the optional DSPy wrapper after configuring a DSPy LM in-process; see `README.DSPY.MD`. |
+| DSPy ask | `make ask-dspy QUESTION="..."` | Run the DSPy runtime path with LM config from `DSPY_*`, Azure, or OpenAI environment variables. |
+| DSPy compile | `make dspy-train DSPY_RUN_NAME=...` | Compile and save a repository-grounded DSPy program under `artifacts/dspy/`. |
 | MCP discovery | `make discover-mcp` | Inspect MCP-related repository artifacts. |
 | Smoke test | `make smoke-test` | Check answer generation, MCP discovery, and Azure manifest output together. |
 | Surface verification | `make verify-surfaces` | Enforce the Makefile and notebook contract. |
@@ -75,7 +76,7 @@ the Rust wrapper.
 | Path | Role |
 | --- | --- |
 | `src/repo_rag_lab/` | Shared Python package for corpus loading, retrieval, MCP discovery, CLI commands, notebook scaffolds, utilities, and verification helpers. |
-| `README.DSPY.MD` | Central DSPy map covering corpus planning, training samples, benchmarks, notebook scaffolds, and current DSPy runtime limitations. |
+| `README.DSPY.MD` | Central DSPy map covering corpus planning, training samples, benchmarks, compile-reload flows, notebook scaffolds, and remaining DSPy limitations. |
 | `notebooks/` | Research playbooks that reuse package helpers for validation, assertions, and logging instead of embedding workflow logic inline. |
 | `tests/` | Pytest suites, BDD-style checks, doctests, and surface verification tests. |
 | `samples/training/` | Starter question-answer pairs for DSPy-oriented experiments. |
@@ -84,7 +85,7 @@ the Rust wrapper.
 | `publication/` | LaTeX article source, bibliography, committed PDF, clipped banner image, and local build helpers. |
 | `todo-backlog.yaml` | Single source of truth for the linkified backlog table rendered into `TODO.MD` and the publication article. |
 | `samples/logs/` | Post-push GitHub Actions inspection logs captured with `gh`. |
-| `artifacts/` | Generated Azure manifests, tuning metadata, notebook run logs, and notebook batch-run reports. |
+| `artifacts/` | Generated DSPy program artifacts, Azure manifests, tuning metadata, notebook run logs, and notebook batch-run reports. |
 | `rust-cli/` | Thin Rust wrapper that delegates to `uv run repo-rag`. |
 
 ## Verification And Quality

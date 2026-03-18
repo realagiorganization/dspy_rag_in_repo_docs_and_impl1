@@ -7,6 +7,10 @@ them over ad hoc shell commands so every workflow hits the same package code.
 
 - `make utility-summary`: list the supported user-facing utility surfaces.
 - `make ask QUESTION="..."`: answer a repository-grounded question with the baseline RAG flow.
+- `make ask-dspy QUESTION="..."`: answer through the DSPy runtime path, optionally loading a saved
+  compiled program.
+- `make dspy-train DSPY_RUN_NAME=...`: compile and persist a repository-grounded DSPy program under
+  `artifacts/dspy/`.
 - `make discover-mcp`: inspect repository-local MCP candidates.
 - `make smoke-test`: exercise answer generation, MCP discovery, and Azure manifest output together.
 - `make todo-sync`: regenerate the shared TODO backlog table for both `TODO.MD` and the publication PDF source.
@@ -19,7 +23,8 @@ them over ad hoc shell commands so every workflow hits the same package code.
 - `uv run repo-rag ...`: call the packaged CLI directly inside the locked `uv` environment.
 - `make build`: build the wheel and source distribution through `uv build`.
 - Notebooks reuse `src/repo_rag_lab/notebook_scaffolding.py` and `src/repo_rag_lab/notebook_support.py`
-  for sample validation, benchmark assertions, tuning metadata, and notebook-run logging.
+  for sample validation, benchmark assertions, tuning metadata, latest compiled-program inspection,
+  and notebook-run logging.
 - Batch notebook runs also use `src/repo_rag_lab/notebook_runner.py` to stream progress, capture
   raw logs, and write JSON plus Markdown reports under `artifacts/notebook_runs/`.
 
