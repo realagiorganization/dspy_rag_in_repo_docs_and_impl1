@@ -2,8 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define HUSHWHEEL_NO_MAIN 1
-#include "../../src/hushwheel.c"
+#include "../../src/hushwheel_internal.h"
 
 static void test_starts_with_matches_prefixes(void) {
     assert(starts_with("amber-abacus-0000", "amber") == 1);

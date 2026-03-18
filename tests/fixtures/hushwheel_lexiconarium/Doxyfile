@@ -1,0 +1,33 @@
+PROJECT_NAME           = Hushwheel Lexiconarium
+PROJECT_BRIEF          = Seven-spoke id/scripture/editorial codex fixture
+OUTPUT_DIRECTORY       = build/doxygen
+CREATE_SUBDIRS         = NO
+ALLOW_UNICODE_NAMES    = YES
+OPTIMIZE_OUTPUT_FOR_C  = YES
+MARKDOWN_SUPPORT       = YES
+TOC_INCLUDE_HEADINGS   = 2
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = YES
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO
+INPUT                  = README.md \
+                         include \
+                         src \
+                         docs/concepts.md \
+                         docs/operations.md \
+                         docs/districts.md \
+                         docs/architecture.md \
+                         docs/testing.md \
+                         docs/packaging.md \
+                         docs/catalog.md
+FILE_PATTERNS          = *.c \
+                         *.h \
+                         *.md
+RECURSIVE              = NO
+GENERATE_HTML          = YES
+GENERATE_LATEX         = YES
+LATEX_CMD_NAME         = lualatex
+EXTRA_PACKAGES         = fontspec
+LATEX_EXTRA_STYLESHEET = docs/doxygen-fonts.sty
+USE_PDFLATEX           = YES
+LATEX_BATCHMODE        = NO

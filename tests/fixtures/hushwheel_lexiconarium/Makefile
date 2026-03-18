@@ -3,6 +3,7 @@ PYTHON ?= python3
 CPPFLAGS ?=
 CFLAGS ?= -std=c99 -O2 -Wall -Wextra -pedantic
 LINT_CFLAGS ?= -Werror -Wstrict-prototypes -Wold-style-definition
+DOXYGEN ?= doxygen
 PREFIX ?= /usr/local
 DESTDIR ?=
 PACKAGE_NAME ?= hushwheel
@@ -12,8 +13,13 @@ DOCDIR ?= $(PREFIX)/share/doc/$(PACKAGE_NAME)
 MANDIR ?= $(PREFIX)/share/man
 BUILD_DIR := build
 DIST_DIR := dist
+DOC_BUILD_DIR := $(BUILD_DIR)/doxygen
+DOXYFILE := Doxyfile
+DOC_PDF := docs/hushwheel-reference.pdf
+SRC_FILES := $(sort $(wildcard src/*.c))
+SRC_HEADERS := $(sort $(wildcard src/*.h))
 UNIT_BIN := $(BUILD_DIR)/tests/hushwheel_unit
-LINT_OBJ := $(BUILD_DIR)/lint/hushwheel.o
+LINT_OBJS := $(patsubst src/%.c,$(BUILD_DIR)/lint/%.o,$(SRC_FILES))
 STAGE_DIR := $(BUILD_DIR)/dist/$(PACKAGE_NAME)-$(VERSION)
 DIST_ARCHIVE := $(DIST_DIR)/$(PACKAGE_NAME)-$(VERSION).tar.gz
 DOC_FILES := \
@@ -26,13 +32,16 @@ DOC_FILES := \
 	docs/catalog.md \
 	docs/architecture.md \
 	docs/testing.md \
-	docs/packaging.md
+	docs/packaging.md \
+	docs/doxygen-fonts.sty
 PACKAGE_FILES := \
 	Makefile \
+	Doxyfile \
 	VERSION \
 	fixture-manifest.json \
 	include/hushwheel.h \
-	src/hushwheel.c \
+	$(SRC_HEADERS) \
+	$(SRC_FILES) \
 	packaging/hushwheel.package.json \
 	packaging/hushwheel.1 \
 	tests/unit/test_hushwheel_unit.c \
@@ -40,25 +49,38 @@ PACKAGE_FILES := \
 	tests/bdd/hushwheel.feature \
 	tests/bdd/run_bdd.py \
 	tools/lint_hushwheel.py \
-	$(DOC_FILES)
+	tools/regenerate_hushwheel_fixture.py \
+	$(DOC_FILES) \
+	$(DOC_PDF)
 
-.PHONY: all bdd check clean dist install integration lint package test unit uninstall
+.PHONY: all bdd check clean dist docs install integration lint package regenerate test unit uninstall
 
 all: hushwheel
 
-hushwheel: src/hushwheel.c include/hushwheel.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -Iinclude src/hushwheel.c -o $@
+hushwheel: $(SRC_FILES) $(SRC_HEADERS) include/hushwheel.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -Iinclude -Isrc $(SRC_FILES) -o $@
 
-$(UNIT_BIN): tests/unit/test_hushwheel_unit.c src/hushwheel.c include/hushwheel.h
+$(UNIT_BIN): tests/unit/test_hushwheel_unit.c $(SRC_FILES) $(SRC_HEADERS) include/hushwheel.h
 	mkdir -p $(dir $@)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -Iinclude tests/unit/test_hushwheel_unit.c -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DHUSHWHEEL_NO_MAIN -Iinclude -Isrc tests/unit/test_hushwheel_unit.c $(SRC_FILES) -o $@
 
-$(LINT_OBJ): src/hushwheel.c include/hushwheel.h
+$(BUILD_DIR)/lint/%.o: src/%.c $(SRC_HEADERS) include/hushwheel.h
 	mkdir -p $(dir $@)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LINT_CFLAGS) -DHUSHWHEEL_NO_MAIN -Iinclude -c src/hushwheel.c -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LINT_CFLAGS) -DHUSHWHEEL_NO_MAIN -Iinclude -Isrc -c $< -o $@
 
-lint: $(LINT_OBJ)
+lint: $(LINT_OBJS)
 	$(PYTHON) tools/lint_hushwheel.py
+
+$(DOC_PDF): $(DOXYFILE) README.md include/hushwheel.h $(SRC_FILES) $(SRC_HEADERS) $(DOC_FILES)
+	rm -rf $(DOC_BUILD_DIR)
+	$(DOXYGEN) $(DOXYFILE)
+	cd $(DOC_BUILD_DIR)/latex && lualatex -interaction=nonstopmode -halt-on-error refman >/dev/null
+	cd $(DOC_BUILD_DIR)/latex && makeindex refman.idx >/dev/null
+	cd $(DOC_BUILD_DIR)/latex && lualatex -interaction=nonstopmode -halt-on-error refman >/dev/null
+	cd $(DOC_BUILD_DIR)/latex && lualatex -interaction=nonstopmode -halt-on-error refman >/dev/null
+	install -m 0644 $(DOC_BUILD_DIR)/latex/refman.pdf $@
+
+docs: $(DOC_PDF)
 
 unit: $(UNIT_BIN)
 	./$(UNIT_BIN)
@@ -73,6 +95,9 @@ check: lint unit integration bdd
 
 test: check
 
+regenerate:
+	$(PYTHON) tools/regenerate_hushwheel_fixture.py
+
 $(DIST_ARCHIVE): $(PACKAGE_FILES)
 	mkdir -p $(DIST_DIR) $(dir $(STAGE_DIR))
 	rm -rf $(STAGE_DIR)
@@ -84,7 +109,7 @@ dist: $(DIST_ARCHIVE)
 
 package: dist
 
-install: hushwheel
+install: hushwheel $(DOC_PDF)
 	install -d $(DESTDIR)$(BINDIR)
 	install -d $(DESTDIR)$(DOCDIR)
 	install -d $(DESTDIR)$(DOCDIR)/docs
@@ -93,7 +118,7 @@ install: hushwheel
 	install -m 0755 hushwheel $(DESTDIR)$(BINDIR)/hushwheel
 	install -m 0644 README.md CHANGELOG.md LICENSE.md VERSION fixture-manifest.json $(DESTDIR)$(DOCDIR)/
 	install -m 0644 docs/concepts.md docs/operations.md docs/districts.md docs/catalog.md $(DESTDIR)$(DOCDIR)/docs/
-	install -m 0644 docs/architecture.md docs/testing.md docs/packaging.md $(DESTDIR)$(DOCDIR)/docs/
+	install -m 0644 docs/architecture.md docs/testing.md docs/packaging.md docs/hushwheel-reference.pdf $(DESTDIR)$(DOCDIR)/docs/
 	install -m 0644 packaging/hushwheel.package.json $(DESTDIR)$(DOCDIR)/packaging/
 	install -m 0644 packaging/hushwheel.1 $(DESTDIR)$(MANDIR)/man1/hushwheel.1
 

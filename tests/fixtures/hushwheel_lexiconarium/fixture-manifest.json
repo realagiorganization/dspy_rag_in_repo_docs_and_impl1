@@ -1,6 +1,6 @@
 {
   "entry_count": 4108,
-  "source_size_bytes": 1725649,
+  "source_size_bytes": 1694575,
   "doc_files": [
     "README.md",
     "docs/concepts.md",
@@ -21,5 +21,19 @@
     "install",
     "uninstall"
   ],
-  "package_metadata": "packaging/hushwheel.package.json"
+  "package_metadata": "packaging/hushwheel.package.json",
+  "generated_pdf": "docs/hushwheel-reference.pdf",
+  "source_files": [
+    "src/hushwheel.c",
+    "src/hushwheel_internal.h",
+    "src/hushwheel_spokes.c",
+    "src/hushwheel_spoke_argent.c",
+    "src/hushwheel_spoke_ranger.c",
+    "src/hushwheel_spoke_gita.c",
+    "src/hushwheel_spoke_bhagavatam.c",
+    "src/hushwheel_spoke_psalter.c",
+    "src/hushwheel_spoke_kernel.c",
+    "src/hushwheel_spoke_editorial.c",
+    "src/hushwheel_spoke_crosscanon.c"
+  ]
 }

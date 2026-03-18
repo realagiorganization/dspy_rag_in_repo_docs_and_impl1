@@ -43,6 +43,12 @@ def test_hushwheel_fixture_check_target_passes() -> None:
         run_fixture_make("clean")
 
 
+def test_hushwheel_fixture_docs_target_builds_pdf() -> None:
+    run_fixture_make("docs")
+    assert (FIXTURE_ROOT / "docs" / "hushwheel-reference.pdf").exists()
+    run_fixture_make("clean")
+
+
 def test_hushwheel_fixture_packaging_targets_stage_install_and_dist(tmp_path: Path) -> None:
     try:
         run_fixture_make("dist")
@@ -62,6 +68,7 @@ def test_hushwheel_fixture_packaging_targets_stage_install_and_dist(tmp_path: Pa
 
         assert (install_root / "usr/bin/hushwheel").exists()
         assert (install_root / "usr/share/doc/hushwheel/docs/testing.md").exists()
+        assert (install_root / "usr/share/doc/hushwheel/docs/hushwheel-reference.pdf").exists()
         assert (install_root / "usr/share/doc/hushwheel/packaging/hushwheel.package.json").exists()
         assert (install_root / "usr/share/man/man1/hushwheel.1").exists()
 

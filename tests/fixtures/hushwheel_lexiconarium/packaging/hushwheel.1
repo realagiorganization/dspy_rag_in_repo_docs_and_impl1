@@ -1,15 +1,18 @@
 .TH HUSHWHEEL 1 "March 2026" "hushwheel 0.1.0" "User Commands"
 .SH NAME
-hushwheel \- theatrical dictionary fixture with a giant static glossary table
+hushwheel \- theatrical dictionary fixture with a giant static glossary table and Doxygen codex
 .SH SYNOPSIS
 .B hushwheel
-.I lookup TERM
+.I lookup
+.I TERM
 .br
 .B hushwheel
-.I prefix PREFIX
+.I prefix
+.I PREFIX
 .br
 .B hushwheel
-.I category NAME
+.I category
+.I NAME
 .br
 .B hushwheel
 .I stats
@@ -17,35 +20,32 @@ hushwheel \- theatrical dictionary fixture with a giant static glossary table
 .B hushwheel
 .I about
 .SH DESCRIPTION
-The Hushwheel Lexiconarium is a deliberately oversized but mechanically simple C program. It
-stores a giant static table of whimsical civic terms and exposes direct lookup, prefix scans,
-category scans, statistics, and archive notes.
+Hushwheel is a deliberately oversized C fixture whose archive now spans a giant coordinator file,
+eight spoke sources, and generated Doxygen documentation. Its lore cross-indexes id Software games
+and characters, scripture, and legendary software developers inside editorial narrative frames.
 .SH COMMANDS
 .TP
-.B lookup TERM
-Print the full glossary entry for TERM.
+.B lookup
+Print a full glossary entry.
 .TP
-.B prefix PREFIX
-Print every entry whose term starts with PREFIX.
+.B prefix
+Print compact rows for every term whose name starts with the given prefix.
 .TP
-.B category NAME
-Print every entry filed under NAME.
+.B category
+Print every entry filed under the named category.
 .TP
 .B stats
 Print entry, category, district, and average ember-index counts.
 .TP
 .B about
-Describe the archive in one short paragraph.
+Describe the archive.
 .SH FILES
 .TP
 .I src/hushwheel.c
-Production source with the full glossary table.
+Large coordinator source with the Doxygen mainpage, canonical entries, and CLI dispatch.
 .TP
-.I include/hushwheel.h
-Program data model and entry-point declaration.
+.I src/hushwheel_spoke_*.c
+Generated spoke tables that hold the bulk of the glossary entries.
 .TP
-.I docs/
-Supporting documentation for concepts, testing, and packaging.
-.SH EXIT STATUS
-The program exits with status 0 on success, 1 on usage errors, 2 on missing command arguments,
-and 3 when an exact lookup term cannot be found.
+.I docs/hushwheel-reference.pdf
+Generated Doxygen PDF linked from the README and packaged with the fixture.

@@ -1,7 +1,7 @@
 {
   "name": "hushwheel",
   "version": "0.1.0",
-  "summary": "Oversized whimsical C dictionary fixture with lint, test, and packaging targets.",
+  "summary": "Oversized multi-file C dictionary fixture with Doxygen docs and cross-canon lore.",
   "binary": "hushwheel",
   "docs": [
     "README.md",
@@ -9,14 +9,16 @@
     "LICENSE.md",
     "docs/architecture.md",
     "docs/testing.md",
-    "docs/packaging.md"
+    "docs/packaging.md",
+    "docs/hushwheel-reference.pdf"
   ],
   "quality_targets": [
     "lint",
     "unit",
     "integration",
     "bdd",
-    "check"
+    "check",
+    "docs"
   ],
   "install_layout": {
     "bin": "bin/hushwheel",

@@ -1,266 +1,41 @@
-# District Lore
+# Hushwheel Districts
 
-## Brass Quarter
-
-- Brass Quarter note 1: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Brass Quarter note 2: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Brass Quarter note 3: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Brass Quarter note 4: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Brass Quarter note 5: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Brass Quarter note 6: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Brass Quarter note 7: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Brass Quarter note 8: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Brass Quarter note 9: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Brass Quarter note 10: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Brass Quarter note 11: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Brass Quarter note 12: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Brass Quarter note 13: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Brass Quarter note 14: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Brass Quarter note 15: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Brass Quarter note 16: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Brass Quarter note 17: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Brass Quarter note 18: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Brass Quarter note 19: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Brass Quarter note 20: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Brass Quarter note 21: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Brass Quarter note 22: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Brass Quarter note 23: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Brass Quarter note 24: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Brass Quarter note 25: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Brass Quarter note 26: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Brass Quarter note 27: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Brass Quarter note 28: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Brass Quarter note 29: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Brass Quarter note 30: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-
-## Moss Arcade
-
-- Moss Arcade note 1: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Moss Arcade note 2: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Moss Arcade note 3: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Moss Arcade note 4: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Moss Arcade note 5: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Moss Arcade note 6: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Moss Arcade note 7: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Moss Arcade note 8: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Moss Arcade note 9: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Moss Arcade note 10: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Moss Arcade note 11: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Moss Arcade note 12: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Moss Arcade note 13: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Moss Arcade note 14: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Moss Arcade note 15: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Moss Arcade note 16: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Moss Arcade note 17: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Moss Arcade note 18: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Moss Arcade note 19: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Moss Arcade note 20: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Moss Arcade note 21: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Moss Arcade note 22: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Moss Arcade note 23: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Moss Arcade note 24: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Moss Arcade note 25: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Moss Arcade note 26: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Moss Arcade note 27: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Moss Arcade note 28: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Moss Arcade note 29: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Moss Arcade note 30: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-
-## Tin Wharf
-
-- Tin Wharf note 1: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Tin Wharf note 2: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Tin Wharf note 3: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Tin Wharf note 4: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Tin Wharf note 5: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Tin Wharf note 6: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Tin Wharf note 7: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Tin Wharf note 8: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Tin Wharf note 9: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Tin Wharf note 10: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Tin Wharf note 11: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Tin Wharf note 12: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Tin Wharf note 13: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Tin Wharf note 14: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Tin Wharf note 15: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Tin Wharf note 16: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Tin Wharf note 17: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Tin Wharf note 18: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Tin Wharf note 19: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Tin Wharf note 20: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Tin Wharf note 21: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Tin Wharf note 22: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Tin Wharf note 23: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Tin Wharf note 24: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Tin Wharf note 25: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Tin Wharf note 26: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Tin Wharf note 27: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Tin Wharf note 28: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Tin Wharf note 29: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Tin Wharf note 30: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-
-## Saffron Steps
-
-- Saffron Steps note 1: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Saffron Steps note 2: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Saffron Steps note 3: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Saffron Steps note 4: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Saffron Steps note 5: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Saffron Steps note 6: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Saffron Steps note 7: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Saffron Steps note 8: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Saffron Steps note 9: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Saffron Steps note 10: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Saffron Steps note 11: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Saffron Steps note 12: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Saffron Steps note 13: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Saffron Steps note 14: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Saffron Steps note 15: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Saffron Steps note 16: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Saffron Steps note 17: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Saffron Steps note 18: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Saffron Steps note 19: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Saffron Steps note 20: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Saffron Steps note 21: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Saffron Steps note 22: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Saffron Steps note 23: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Saffron Steps note 24: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Saffron Steps note 25: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Saffron Steps note 26: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Saffron Steps note 27: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Saffron Steps note 28: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Saffron Steps note 29: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Saffron Steps note 30: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-
-## Velvet Basin
-
-- Velvet Basin note 1: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Velvet Basin note 2: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Velvet Basin note 3: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Velvet Basin note 4: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Velvet Basin note 5: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Velvet Basin note 6: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Velvet Basin note 7: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Velvet Basin note 8: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Velvet Basin note 9: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Velvet Basin note 10: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Velvet Basin note 11: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Velvet Basin note 12: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Velvet Basin note 13: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Velvet Basin note 14: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Velvet Basin note 15: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Velvet Basin note 16: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Velvet Basin note 17: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Velvet Basin note 18: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Velvet Basin note 19: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Velvet Basin note 20: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Velvet Basin note 21: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Velvet Basin note 22: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Velvet Basin note 23: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Velvet Basin note 24: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Velvet Basin note 25: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Velvet Basin note 26: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Velvet Basin note 27: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Velvet Basin note 28: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Velvet Basin note 29: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Velvet Basin note 30: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
+The eight districts still anchor the fixture's place names, but each now represents a different
+angle on the shared canon.
 
 ## Coal Arcade
 
-- Coal Arcade note 1: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Coal Arcade note 2: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Coal Arcade note 3: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Coal Arcade note 4: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Coal Arcade note 5: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Coal Arcade note 6: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Coal Arcade note 7: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Coal Arcade note 8: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Coal Arcade note 9: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Coal Arcade note 10: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Coal Arcade note 11: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Coal Arcade note 12: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Coal Arcade note 13: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Coal Arcade note 14: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Coal Arcade note 15: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Coal Arcade note 16: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Coal Arcade note 17: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Coal Arcade note 18: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Coal Arcade note 19: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Coal Arcade note 20: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Coal Arcade note 21: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Coal Arcade note 22: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Coal Arcade note 23: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Coal Arcade note 24: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Coal Arcade note 25: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Coal Arcade note 26: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Coal Arcade note 27: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Coal Arcade note 28: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Coal Arcade note 29: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Coal Arcade note 30: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-
-## North Annex
-
-- North Annex note 1: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- North Annex note 2: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- North Annex note 3: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- North Annex note 4: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- North Annex note 5: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- North Annex note 6: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- North Annex note 7: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- North Annex note 8: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- North Annex note 9: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- North Annex note 10: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- North Annex note 11: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- North Annex note 12: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- North Annex note 13: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- North Annex note 14: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- North Annex note 15: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- North Annex note 16: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- North Annex note 17: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- North Annex note 18: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- North Annex note 19: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- North Annex note 20: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- North Annex note 21: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- North Annex note 22: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- North Annex note 23: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- North Annex note 24: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- North Annex note 25: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- North Annex note 26: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- North Annex note 27: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- North Annex note 28: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- North Annex note 29: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- North Annex note 30: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
+Coal Arcade favors Doom heat, battlefield rhetoric, and first-draft manifestos.
 
 ## Glass Causeway
 
-- Glass Causeway note 1: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Glass Causeway note 2: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Glass Causeway note 3: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Glass Causeway note 4: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Glass Causeway note 5: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Glass Causeway note 6: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Glass Causeway note 7: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Glass Causeway note 8: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Glass Causeway note 9: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Glass Causeway note 10: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Glass Causeway note 11: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Glass Causeway note 12: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Glass Causeway note 13: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Glass Causeway note 14: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Glass Causeway note 15: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Glass Causeway note 16: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Glass Causeway note 17: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Glass Causeway note 18: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Glass Causeway note 19: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Glass Causeway note 20: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Glass Causeway note 21: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Glass Causeway note 22: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
-- Glass Causeway note 23: locals treat `canal-jargon` terms as especially reliable during salt-rain mornings, especially when the storm compass has been polished and nobody is improvising etymology.
-- Glass Causeway note 24: locals treat `bellframe` terms as especially reliable during fog-tax season, especially when the moss ledger has been polished and nobody is improvising etymology.
-- Glass Causeway note 25: locals treat `roof-taxonomy` terms as especially reliable during wind audits, especially when the hinge flute has been polished and nobody is improvising etymology.
-- Glass Causeway note 26: locals treat `storm-index` terms as especially reliable during archive thaw, especially when the tax bell has been polished and nobody is improvising etymology.
-- Glass Causeway note 27: locals treat `canal-jargon` terms as especially reliable during lantern curfews, especially when the map sieve has been polished and nobody is improvising etymology.
-- Glass Causeway note 28: locals treat `bellframe` terms as especially reliable during tram halts, especially when the tea abacus has been polished and nobody is improvising etymology.
-- Glass Causeway note 29: locals treat `roof-taxonomy` terms as especially reliable during copper tides, especially when the whisper funnel has been polished and nobody is improvising etymology.
-- Glass Causeway note 30: locals treat `storm-index` terms as especially reliable during market eclipses, especially when the shelf kite has been polished and nobody is improvising etymology.
+Glass Causeway is reflective and analytical. It houses mirrored exegesis, diagram-heavy source
+notes, and the archive's most self-aware editors.
 
+## Moss Arcade
+
+Moss Arcade keeps the damp backup truth: disputed glosses, reconciled anecdotes, and patient
+long-form commentary.
+
+## North Annex
+
+North Annex is where overfull shelves, shelf kites, and cross-reference cleanups accumulate.
+
+## Saffron Steps
+
+Saffron Steps specializes in elevated taxonomies, visionary maps, and high-angle architectural
+arguments.
+
+## Brass Quarter
+
+Brass Quarter loves ceremony: clock oaths, bellframes, and official renamings with maximum drama.
+
+## Velvet Basin
+
+Velvet Basin hosts hearings, tea-abacus counts, and the archive's softest but most exacting
+editorial negotiations.
+
+## Tin Wharf
+
+Tin Wharf is loud, windy, and fertile ground for prefix parades, harbor sayings, and storm-index
+predictions.

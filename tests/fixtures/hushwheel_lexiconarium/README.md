@@ -1,14 +1,20 @@
 # The Hushwheel Lexiconarium
 
 The Hushwheel Lexiconarium is a deliberately oversized fictional dictionary engine written in
-simple C. Its job is humble: store a giant table of invented civic jargon, answer direct lookup
-requests, and print enough lore-heavy context that retrieval systems have something entertaining
-to chew on.
+simple C. Its logic stays humble, but its archive is now a cohesive multi-file codex that
+cross-indexes id Software games and characters, scripture, and legendary software developers in
+textual-programmatic-narrative-editorial form.
 
-The program is intentionally not algorithmically fancy. The spectacle comes from the corpus: one
-enormous source file, a dense glossary of made-up terms, and explanatory notes about how archive
-clerks sort phrases with lantern vowels and the ember index, a three-digit heat-memory score used
-to settle tie breaks across the archive.
+Read the generated Doxygen PDF: [Hushwheel Reference PDF §::<[]>](docs/hushwheel-reference.pdf)
+
+The fixture still centers the same benchmark-friendly concepts:
+
+- the `ember index`, a three-digit heat-memory score used for tie breaking
+- the `lantern vowel`, a light first-pass vowel heuristic
+- the `moss ledger`, the archive's soggy backup notebook
+
+What changed is the internal nonsense. The giant coordinator file, eight spoke sources, and the
+generated catalog now tell one connected story instead of a pile of unrelated civic jokes.
 
 ## Signature Questions
 
@@ -25,9 +31,10 @@ ember index.
 ## Why This Fixture Exists
 
 - It gives tests a very large but still understandable C codebase.
-- It keeps the logic simple enough that humans can skim it quickly.
-- It provides rich documentation full of recurring concepts and proper nouns.
-- It is a good target for lexical retrieval because the docs and code repeat the same lore.
+- It keeps the command logic simple enough that humans can skim it quickly.
+- It repeats the same concepts across docs, code, and generated Doxygen output.
+- It gives retrieval systems recurring evidence across README prose, source comments, and catalog
+  entries.
 
 ## Quick Start
 
@@ -38,6 +45,7 @@ make
 ./hushwheel category storm-index
 ./hushwheel stats
 ./hushwheel about
+make docs
 ```
 
 ## Commands
@@ -54,22 +62,24 @@ make
 
 | Target | Purpose |
 | --- | --- |
-| `make lint` | Strict warning build plus fixture-shape checks from `tools/lint_hushwheel.py`. |
+| `make lint` | Strict warning builds plus fixture-shape checks from `tools/lint_hushwheel.py`. |
 | `make unit` | C-level assertions against helper functions and return codes. |
 | `make integration` | End-to-end CLI checks using Python subprocess calls. |
 | `make bdd` | Feature-backed acceptance scenarios for the public CLI. |
 | `make check` | Run lint, unit, integration, and BDD in one pass. |
+| `make docs` | Regenerate Doxygen HTML and the PDF reference manual. |
 
 ## Packaging
 
 | Target | Result |
 | --- | --- |
 | `make dist` | Build `dist/hushwheel-0.1.0.tar.gz`. |
-| `make install PREFIX=/tmp/hushwheel-root` | Install the binary, docs, and man page into a staging prefix. |
+| `make install PREFIX=/tmp/hushwheel-root` | Install the binary, docs, man page, and PDF into a staging prefix. |
 | `make uninstall PREFIX=/tmp/hushwheel-root` | Remove the installed hushwheel files from that prefix. |
 
 The packaging surface is described in `docs/packaging.md`, declared in
-`packaging/hushwheel.package.json`, and documented for operators in `packaging/hushwheel.1`.
+`packaging/hushwheel.package.json`, documented for operators in `packaging/hushwheel.1`, and
+mirrored in the generated `docs/hushwheel-reference.pdf`.
 
 ## Core Concepts
 
@@ -83,22 +93,28 @@ The packaging surface is described in `docs/packaging.md`, declared in
 
 | Path | Purpose |
 | --- | --- |
-| `include/hushwheel.h` | Data model and testable entry-point declaration. |
-| `src/hushwheel.c` | Giant application source and the full entry table. |
+| `include/hushwheel.h` | Public data model and testable entry-point declaration. |
+| `src/hushwheel.c` | Giant coordinator source with the Doxygen mainpage and CLI dispatch. |
+| `src/hushwheel_internal.h` | Internal spoke and helper declarations for linked builds. |
+| `src/hushwheel_spokes.c` | Aggregates the spoke tables into one searchable mesh. |
+| `src/hushwheel_spoke_*.c` | Eight large spoke tables full of cohesive cross-canon glossary entries. |
+| `Doxyfile` | Doxygen configuration for HTML and PDF generation. |
+| `docs/hushwheel-reference.pdf` | Generated reference manual linked from this README. |
 | `docs/concepts.md` | Field definitions and archive theory. |
 | `docs/operations.md` | Command behavior and operator notes. |
 | `docs/districts.md` | District-by-district lore. |
-| `docs/catalog.md` | Long catalog of representative terms. |
-| `docs/architecture.md` | Design notes for the data table, CLI dispatch, and test seam. |
+| `docs/catalog.md` | Representative cross-canon catalog entries. |
+| `docs/architecture.md` | Design notes for the spoke mesh, CLI dispatch, and doc generation. |
 | `docs/testing.md` | Test strategy and make-target walkthrough. |
 | `docs/packaging.md` | Install layout, distribution target, and packaging metadata. |
 | `packaging/hushwheel.package.json` | Machine-readable package description. |
 | `packaging/hushwheel.1` | Manual page installed with the program. |
-| `tests/unit/test_hushwheel_unit.c` | C unit tests for internal helpers. |
+| `tests/unit/test_hushwheel_unit.c` | C unit tests for helper functions and return codes. |
 | `tests/integration/cli_suite.py` | CLI integration suite. |
 | `tests/bdd/hushwheel.feature` | BDD scenarios for user-facing behavior. |
 | `tests/bdd/run_bdd.py` | Feature runner for the BDD scenarios. |
 | `tools/lint_hushwheel.py` | Fixture-specific lint and surface checks. |
+| `tools/regenerate_hushwheel_fixture.py` | Generator for the source spokes and representative catalog. |
 
 ## Suggested Retrieval Questions
 
@@ -106,12 +122,12 @@ The packaging surface is described in `docs/packaging.md`, declared in
 - Which function handles prefix search?
 - What does the lantern vowel measure?
 - Why does the archive keep a moss ledger?
-- Which district is obsessed with prefix parades?
+- Which district is inventing the loudest cross-canon argument?
 
 ## Operator Notes
 
 - `make check` is the authoritative harness for fixture-local quality.
-- `make dist` stages a redistributable tarball without mutating the source tree.
+- `make docs` regenerates the Doxygen manual and refreshes `docs/hushwheel-reference.pdf`.
+- `make dist` stages a redistributable tarball without mutating the source tree beyond generated docs.
 - `make install` supports `DESTDIR` so packaging tests can install into a temporary root.
-- `HUSHWHEEL_NO_MAIN` disables the standalone `main(...)` symbol so the unit tests can embed the
-  production source directly.
+- `HUSHWHEEL_NO_MAIN` still disables the standalone `main(...)` symbol for linked test builds.

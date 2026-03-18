@@ -1,46 +1,29 @@
-# Testing Guide
+# Hushwheel Testing
 
-The hushwheel fixture now has four verification layers that build on the same production source.
+The hushwheel fixture has five verification layers:
 
-| Layer | Command | Scope |
-| --- | --- | --- |
-| Lint | `make lint` | Strict warning build plus fixture-shape checks. |
-| Unit | `make unit` | Direct tests of helper functions and return codes in C. |
-| Integration | `make integration` | Subprocess checks of the compiled CLI. |
-| BDD | `make bdd` | Feature-backed acceptance scenarios for public behavior. |
+## Lint
 
-## Full Harness
+`make lint` compiles every source file with strict warnings and runs `tools/lint_hushwheel.py` to
+check text surfaces, target markers, README references, and the Doxygen mainpage block.
 
-Run the full local harness with:
+## Unit
 
-```sh
-make check
-```
+`tests/unit/test_hushwheel_unit.c` now links against the split production sources instead of
+including the implementation directly. The build defines `HUSHWHEEL_NO_MAIN` so the coordinator can
+participate in the link without exporting a duplicate `main(...)`.
 
-That target executes the layers in this order:
+## Integration
 
-1. compile the production source with stricter warning settings
-2. validate project metadata and documentation surface
-3. run the C unit test binary
-4. run the CLI integration suite
-5. run the BDD scenario runner
+`tests/integration/cli_suite.py` treats hushwheel like a built executable and checks lookup,
+prefix, category, stats, and about behavior.
 
-## Unit Strategy
+## BDD
 
-`tests/unit/test_hushwheel_unit.c` defines `HUSHWHEEL_NO_MAIN` and includes the production source.
-That lets the test call `starts_with(...)`, `lantern_vowel_count(...)`, `find_entry(...)`, and
-`hushwheel_main(...)` directly without altering the shipped program shape.
+`tests/bdd/hushwheel.feature` and `tests/bdd/run_bdd.py` keep the operator-facing command stories
+aligned with the compiled program.
 
-## Integration Strategy
+## Documentation
 
-`tests/integration/cli_suite.py` treats hushwheel like an installed command:
-
-- it runs `lookup`, `prefix`, `category`, `stats`, and `about`
-- it verifies both success and error return codes
-- it compares the stats output to `fixture-manifest.json`
-
-## BDD Strategy
-
-`tests/bdd/hushwheel.feature` describes operator-facing scenarios. The paired runner,
-`tests/bdd/run_bdd.py`, executes each declared scenario against the built binary and fails if the
-feature file and implementation drift apart.
+`make docs` runs Doxygen, builds the LaTeX output with `lualatex`, and refreshes
+`docs/hushwheel-reference.pdf`.
