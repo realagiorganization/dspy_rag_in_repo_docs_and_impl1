@@ -32,7 +32,10 @@ REQUIRED_MAKE_TARGETS = (
     "lint:",
     "static-analysis:",
     "complexity:",
+    "hardening:",
+    "sanitizers:",
     "coverage:",
+    "profiling:",
     "reports:",
     "quality:",
     "unit:",
@@ -47,7 +50,13 @@ REQUIRED_MAKE_TARGETS = (
 REQUIRED_README_SNIPPETS = (
     "make check",
     "make quality",
+    "make hardening",
+    "make sanitizers",
+    "make profiling",
     "build/reports",
+    "build/reports/hardening",
+    "build/reports/sanitizers",
+    "build/reports/profiling",
     "HUSHWHEEL_BIN",
     "make docs",
     "make dist",
@@ -91,6 +100,8 @@ def assert_readme_mentions_harness() -> None:
     for snippet in REQUIRED_README_SNIPPETS:
         if snippet not in readme:
             raise RuntimeError(f"README.md is missing required snippet: {snippet}")
+    if "AddressSanitizer" not in readme or "UndefinedBehaviorSanitizer" not in readme:
+        raise RuntimeError("README.md must mention the sanitizer instrumentation surface")
 
 
 def assert_feature_and_source_are_aligned() -> None:

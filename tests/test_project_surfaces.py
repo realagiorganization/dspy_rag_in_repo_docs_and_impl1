@@ -258,7 +258,7 @@ def test_hushwheel_quality_workflow_is_path_filtered_and_uploads_reports() -> No
     )
     assert any(
         step.get("name") == "Install native analyzers"
-        and "apt-get install -y cppcheck" in step.get("run", "")
+        and "apt-get install -y cppcheck binutils" in step.get("run", "")
         for step in steps
     )
     assert any(

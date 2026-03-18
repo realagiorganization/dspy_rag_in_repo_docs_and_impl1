@@ -1,4 +1,4 @@
-# ruff: noqa: E501, F541
+# ruff: noqa: E501
 
 from __future__ import annotations
 
@@ -204,6 +204,12 @@ ID_CHARACTERS = (
 )
 
 SPIRAL_SYMBOLS = ("§", "::", "<>", "[]", "{}", "##")
+SPOKE_USAGE_TEXT = (
+    "Used when archivists must align id heroics, scripture, and legendary software-developer "
+    "actions inside one textual-programmatic-narrative-editorial thread, usually after the moss "
+    "ledger, whisper funnel, and clock oath have documented the disagreement as a searchable "
+    "retrieval record."
+)
 
 
 @dataclass(frozen=True)
@@ -359,11 +365,7 @@ def spoke_entry(
         f"{figure} from {scripture} while {developer} {action} a {artifact}; the ember index and "
         f"lantern vowel keep the whole argument searchable instead of merely ecstatic."
     )
-    usage = (
-        f"Used when archivists must align id heroics, scripture, and legendary software-developer "
-        f"actions inside one textual-programmatic-narrative-editorial thread, usually after the moss "
-        f"ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail."
-    )
+    usage = SPOKE_USAGE_TEXT
     return term, category, district, ember_index, summary, usage
 
 

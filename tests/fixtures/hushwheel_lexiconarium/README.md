@@ -65,9 +65,12 @@ make docs
 | `make lint` | Strict warning builds plus fixture-shape checks from `tools/lint_hushwheel.py`. |
 | `make static-analysis` | Run `cppcheck` and save XML plus text findings in `build/reports/cppcheck/`. |
 | `make complexity` | Run `lizard` complexity thresholds and save text, CSV, and checkstyle XML reports. |
+| `make hardening` | Build with PIE, RELRO, NOW, stack, and format hardening flags, then audit the ELF binary. |
+| `make sanitizers` | Rebuild with AddressSanitizer plus UndefinedBehaviorSanitizer and rerun the test harness. |
 | `make coverage` | Rebuild with `--coverage`, rerun unit/integration/BDD checks, and write gcovr reports. |
+| `make profiling` | Benchmark repeated CLI workloads and save timing tables plus command logs. |
 | `make reports` | Refresh all persisted analysis artifacts under `build/reports/`. |
-| `make quality` | Run `check` plus static analysis, complexity, coverage, and the report index. |
+| `make quality` | Run `check` plus analysis, hardening, sanitizers, coverage, profiling, and the report index. |
 | `make unit` | C-level assertions against helper functions and return codes. |
 | `make integration` | End-to-end CLI checks using Python subprocess calls. |
 | `make bdd` | Feature-backed acceptance scenarios for the public CLI. |
@@ -133,6 +136,12 @@ mirrored in the generated `docs/hushwheel-reference.pdf`.
 
 - `make check` is the authoritative harness for fixture-local quality.
 - `make quality` produces persisted analysis artifacts in `build/reports/quality-summary.md`.
+- `make hardening` verifies PIE, RELRO, BIND_NOW, and a non-executable stack, then logs the raw
+  `readelf`, `nm`, `file`, and `size` outputs in `build/reports/hardening/`.
+- `make sanitizers` writes AddressSanitizer and UndefinedBehaviorSanitizer command logs into
+  `build/reports/sanitizers/`.
+- `make profiling` writes a workload manifest, raw timing table, Markdown summary, and sample CLI
+  stdout/stderr captures into `build/reports/profiling/`.
 - `make coverage` reuses the existing CLI assertions through `HUSHWHEEL_BIN`, which lets
   instrumented binaries run the same integration and BDD scripts.
 - `make docs` regenerates the Doxygen manual and refreshes `docs/hushwheel-reference.pdf`.

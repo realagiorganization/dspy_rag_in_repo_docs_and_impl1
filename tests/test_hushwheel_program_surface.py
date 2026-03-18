@@ -24,7 +24,10 @@ def test_hushwheel_fixture_makefile_exposes_project_harness() -> None:
     assert "lint:" in makefile
     assert "static-analysis:" in makefile
     assert "complexity:" in makefile
+    assert "hardening:" in makefile
+    assert "sanitizers:" in makefile
     assert "coverage:" in makefile
+    assert "profiling:" in makefile
     assert "reports:" in makefile
     assert "quality:" in makefile
     assert "unit:" in makefile
@@ -40,11 +43,21 @@ def test_hushwheel_fixture_docs_describe_quality_reports() -> None:
     testing_doc = (FIXTURE_ROOT / "docs" / "testing.md").read_text(encoding="utf-8")
 
     assert "make quality" in readme
+    assert "make hardening" in readme
+    assert "make sanitizers" in readme
+    assert "make profiling" in readme
     assert "build/reports" in readme
+    assert "build/reports/hardening" in readme
+    assert "build/reports/sanitizers" in readme
+    assert "build/reports/profiling" in readme
     assert "HUSHWHEEL_BIN" in readme
     assert "cppcheck" in testing_doc
     assert "lizard" in testing_doc
+    assert "readelf" in testing_doc
+    assert "AddressSanitizer" in testing_doc
+    assert "UndefinedBehaviorSanitizer" in testing_doc
     assert "gcovr" in testing_doc
+    assert "runtime-profile.tsv" in testing_doc
 
 
 def test_hushwheel_fixture_check_target_passes() -> None:
