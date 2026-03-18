@@ -64,6 +64,8 @@ Executed successfully in this turn:
 - changed-surface pytest slice: passed, `31 passed`
 - `make quality`: passed, `120 passed` and repository coverage `87.56%`
 - `make hooks-install`: passed and refreshed managed `pre-commit` plus `pre-push` hooks
+- post-push GitHub Actions evidence: run `23237032786` (`Hushwheel Quality`) completed
+  successfully in `30s` and uploaded the `hushwheel-quality-reports` artifact
 
 ## Current Verification Status
 
@@ -72,6 +74,7 @@ Configured and exercised in this turn:
 - hushwheel fixture lint, unit, integration, BDD, static analysis, complexity, and coverage gates
 - persisted hushwheel report generation for local and CI artifact upload
 - hushwheel workflow parsing and path-filter coverage in repository tests
+- post-push GitHub Actions verification for the new hushwheel workflow branch
 - compile checks
 - repository surface verification
 - focused repository pytest verification for file summaries, hushwheel surfaces, and project
@@ -82,7 +85,6 @@ Configured and exercised in this turn:
 Not exercised in this turn:
 
 - live Azure endpoint probes against remote services
-- post-push GitHub Actions evidence for the new hushwheel workflow branch
 - a clean-tree file-summary regeneration limited only to the hushwheel patch set
 
 ## Notes
