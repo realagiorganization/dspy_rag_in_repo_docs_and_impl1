@@ -1,8 +1,13 @@
 CC ?= cc
 PYTHON ?= python3
+UVX ?= uvx
+CPPCHECK ?= cppcheck
+GCOVR ?= $(UVX) --from gcovr gcovr
+LIZARD ?= $(UVX) --from lizard lizard
 CPPFLAGS ?=
 CFLAGS ?= -std=c99 -O2 -Wall -Wextra -pedantic
 LINT_CFLAGS ?= -Werror -Wstrict-prototypes -Wold-style-definition
+COVERAGE_CFLAGS ?= -O0 -g --coverage
 DOXYGEN ?= doxygen
 PREFIX ?= /usr/local
 DESTDIR ?=
@@ -17,10 +22,34 @@ DOC_BUILD_DIR := $(BUILD_DIR)/doxygen
 TMPDIR ?= $(HOME)/.cache/hushwheel-fixture-tmp
 DOXYFILE := Doxyfile
 DOC_PDF := docs/hushwheel-reference.pdf
+HUSHWHEEL_BIN ?= $(abspath hushwheel)
 SRC_FILES := $(sort $(wildcard src/*.c))
 SRC_HEADERS := $(sort $(wildcard src/*.h))
 UNIT_BIN := $(BUILD_DIR)/tests/hushwheel_unit
 LINT_OBJS := $(patsubst src/%.c,$(BUILD_DIR)/lint/%.o,$(SRC_FILES))
+COVERAGE_DIR := $(BUILD_DIR)/coverage
+COVERAGE_BIN := $(COVERAGE_DIR)/hushwheel
+COVERAGE_UNIT_BIN := $(COVERAGE_DIR)/tests/hushwheel_unit
+REPORT_DIR := $(BUILD_DIR)/reports
+REPORT_SUMMARY := $(REPORT_DIR)/quality-summary.md
+CPPCHECK_DIR := $(REPORT_DIR)/cppcheck
+CPPCHECK_XML := $(CPPCHECK_DIR)/cppcheck.xml
+CPPCHECK_TXT := $(CPPCHECK_DIR)/cppcheck.txt
+COMPLEXITY_DIR := $(REPORT_DIR)/complexity
+COMPLEXITY_XML := $(COMPLEXITY_DIR)/lizard-checkstyle.xml
+COMPLEXITY_CSV := $(COMPLEXITY_DIR)/lizard.csv
+COMPLEXITY_TXT := $(COMPLEXITY_DIR)/lizard.txt
+COVERAGE_REPORT_DIR := $(REPORT_DIR)/coverage
+COVERAGE_XML := $(COVERAGE_REPORT_DIR)/coverage.xml
+COVERAGE_TXT := $(COVERAGE_REPORT_DIR)/coverage.txt
+COVERAGE_HTML := $(COVERAGE_REPORT_DIR)/index.html
+COVERAGE_JSON := $(COVERAGE_REPORT_DIR)/coverage-summary.json
+COVERAGE_SUMMARY_MD := $(COVERAGE_REPORT_DIR)/coverage-summary.md
+LIZARD_CCN_LIMIT ?= 15
+LIZARD_LENGTH_LIMIT ?= 80
+LIZARD_PARAM_LIMIT ?= 6
+COVERAGE_LINE_MIN ?= 95
+COVERAGE_FUNCTION_MIN ?= 100
 STAGE_DIR := $(BUILD_DIR)/dist/$(PACKAGE_NAME)-$(VERSION)
 DIST_ARCHIVE := $(DIST_DIR)/$(PACKAGE_NAME)-$(VERSION).tar.gz
 DOC_FILES := \
@@ -56,7 +85,7 @@ PACKAGE_FILES := \
 
 export TMPDIR
 
-.PHONY: all bdd check clean dist docs install integration lint package regenerate test unit uninstall
+.PHONY: all bdd check clean complexity coverage dist docs install integration lint package quality regenerate reports static-analysis test unit uninstall
 
 all: hushwheel
 
@@ -74,20 +103,34 @@ $(BUILD_DIR)/lint/%.o: src/%.c $(SRC_HEADERS) include/hushwheel.h
 lint: $(LINT_OBJS)
 	$(PYTHON) tools/lint_hushwheel.py
 
+static-analysis:
+	rm -rf $(CPPCHECK_DIR)
+	mkdir -p $(CPPCHECK_DIR)
+	$(CPPCHECK) --enable=warning,style,performance,portability --std=c99 --language=c --check-level=exhaustive --error-exitcode=1 -Iinclude -Isrc --xml-version=2 src include 2>$(CPPCHECK_XML)
+	$(CPPCHECK) --enable=warning,style,performance,portability --std=c99 --language=c --check-level=exhaustive --error-exitcode=1 -Iinclude -Isrc --template=gcc src include >/dev/null 2>$(CPPCHECK_TXT)
+
+complexity:
+	rm -rf $(COMPLEXITY_DIR)
+	mkdir -p $(COMPLEXITY_DIR)
+	$(LIZARD) -l c -C $(LIZARD_CCN_LIMIT) -L $(LIZARD_LENGTH_LIMIT) -a $(LIZARD_PARAM_LIMIT) src include tests/unit/test_hushwheel_unit.c >$(COMPLEXITY_TXT)
+	$(LIZARD) -l c -C $(LIZARD_CCN_LIMIT) -L $(LIZARD_LENGTH_LIMIT) -a $(LIZARD_PARAM_LIMIT) --csv src include tests/unit/test_hushwheel_unit.c >$(COMPLEXITY_CSV)
+	$(LIZARD) -l c -C $(LIZARD_CCN_LIMIT) -L $(LIZARD_LENGTH_LIMIT) -a $(LIZARD_PARAM_LIMIT) --checkstyle src include tests/unit/test_hushwheel_unit.c >$(COMPLEXITY_XML)
+
 $(DOC_PDF): $(DOXYFILE) README.md include/hushwheel.h $(SRC_FILES) $(SRC_HEADERS) $(DOC_FILES)
-	@if command -v $(DOXYGEN) >/dev/null 2>&1; then \
-		rm -rf $(DOC_BUILD_DIR); \
-		mkdir -p $(DOC_BUILD_DIR) $(TMPDIR); \
-		$(DOXYGEN) $(DOXYFILE); \
-		(cd $(DOC_BUILD_DIR)/latex && lualatex -interaction=nonstopmode -halt-on-error refman >/dev/null); \
-		(cd $(DOC_BUILD_DIR)/latex && makeindex refman.idx >/dev/null); \
-		(cd $(DOC_BUILD_DIR)/latex && lualatex -interaction=nonstopmode -halt-on-error refman >/dev/null); \
-		(cd $(DOC_BUILD_DIR)/latex && lualatex -interaction=nonstopmode -halt-on-error refman >/dev/null); \
+	@if command -v $(DOXYGEN) >/dev/null 2>&1 \
+		&& rm -rf $(DOC_BUILD_DIR) \
+		&& mkdir -p $(DOC_BUILD_DIR) $(TMPDIR) \
+		&& $(DOXYGEN) $(DOXYFILE) \
+		&& (cd $(DOC_BUILD_DIR)/latex && lualatex -interaction=nonstopmode -halt-on-error refman >/dev/null) \
+		&& (cd $(DOC_BUILD_DIR)/latex && makeindex refman.idx >/dev/null) \
+		&& (cd $(DOC_BUILD_DIR)/latex && lualatex -interaction=nonstopmode -halt-on-error refman >/dev/null) \
+		&& (cd $(DOC_BUILD_DIR)/latex && lualatex -interaction=nonstopmode -halt-on-error refman >/dev/null) \
+		&& [ -f "$(DOC_BUILD_DIR)/latex/refman.pdf" ]; then \
 		install -m 0644 $(DOC_BUILD_DIR)/latex/refman.pdf $@; \
 	elif [ -f "$@" ]; then \
-		echo "using committed $(DOC_PDF) because doxygen is unavailable"; \
+		echo "using committed $(DOC_PDF) because generated docs are unavailable"; \
 	else \
-		echo "doxygen not found and $(DOC_PDF) is missing" >&2; \
+		echo "generated docs unavailable and $(DOC_PDF) is missing" >&2; \
 		exit 127; \
 	fi
 
@@ -97,12 +140,48 @@ unit: $(UNIT_BIN)
 	./$(UNIT_BIN)
 
 integration: hushwheel
-	$(PYTHON) tests/integration/cli_suite.py
+	HUSHWHEEL_BIN="$(HUSHWHEEL_BIN)" $(PYTHON) tests/integration/cli_suite.py
 
 bdd: hushwheel
-	$(PYTHON) tests/bdd/run_bdd.py
+	HUSHWHEEL_BIN="$(HUSHWHEEL_BIN)" $(PYTHON) tests/bdd/run_bdd.py
 
 check: lint unit integration bdd
+
+$(COVERAGE_BIN): $(SRC_FILES) $(SRC_HEADERS) include/hushwheel.h
+	mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(COVERAGE_CFLAGS) -Iinclude -Isrc $(SRC_FILES) -o $@
+
+$(COVERAGE_UNIT_BIN): tests/unit/test_hushwheel_unit.c $(SRC_FILES) $(SRC_HEADERS) include/hushwheel.h
+	mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(COVERAGE_CFLAGS) -DHUSHWHEEL_NO_MAIN -Iinclude -Isrc tests/unit/test_hushwheel_unit.c $(SRC_FILES) -o $@
+
+coverage: $(COVERAGE_BIN) $(COVERAGE_UNIT_BIN)
+	rm -rf $(COVERAGE_REPORT_DIR)
+	mkdir -p $(COVERAGE_REPORT_DIR)
+	find $(COVERAGE_DIR) -name '*.gcda' -delete
+	./$(COVERAGE_UNIT_BIN)
+	HUSHWHEEL_BIN="$(abspath $(COVERAGE_BIN))" $(PYTHON) tests/integration/cli_suite.py
+	HUSHWHEEL_BIN="$(abspath $(COVERAGE_BIN))" $(PYTHON) tests/bdd/run_bdd.py
+	$(GCOVR) -r . --gcov-object-directory $(COVERAGE_DIR) --filter 'src/' --exclude 'src/hushwheel_spoke_.*[.]c$$' --exclude 'src/hushwheel_spokes[.]c$$' --exclude-unreachable-branches --exclude-noncode-lines --xml-pretty --xml $(COVERAGE_XML) --html-details $(COVERAGE_HTML) --html-title "Hushwheel Coverage Report" --txt $(COVERAGE_TXT) --json-summary-pretty --json-summary $(COVERAGE_JSON) --markdown-summary $(COVERAGE_SUMMARY_MD) --fail-under-line $(COVERAGE_LINE_MIN) --fail-under-function $(COVERAGE_FUNCTION_MIN)
+
+reports: static-analysis complexity coverage
+	mkdir -p $(REPORT_DIR)
+	printf '# Hushwheel Quality Reports\n\n' >$(REPORT_SUMMARY)
+	printf 'Generated by `make quality`.\n\n' >>$(REPORT_SUMMARY)
+	printf '## Artifacts\n\n' >>$(REPORT_SUMMARY)
+	printf -- '- `cppcheck` XML: `%s`\n' '$(CPPCHECK_XML)' >>$(REPORT_SUMMARY)
+	printf -- '- `cppcheck` text: `%s`\n' '$(CPPCHECK_TXT)' >>$(REPORT_SUMMARY)
+	printf -- '- `lizard` text: `%s`\n' '$(COMPLEXITY_TXT)' >>$(REPORT_SUMMARY)
+	printf -- '- `lizard` CSV: `%s`\n' '$(COMPLEXITY_CSV)' >>$(REPORT_SUMMARY)
+	printf -- '- `lizard` checkstyle XML: `%s`\n' '$(COMPLEXITY_XML)' >>$(REPORT_SUMMARY)
+	printf -- '- `gcovr` text: `%s`\n' '$(COVERAGE_TXT)' >>$(REPORT_SUMMARY)
+	printf -- '- `gcovr` Cobertura XML: `%s`\n' '$(COVERAGE_XML)' >>$(REPORT_SUMMARY)
+	printf -- '- `gcovr` HTML: `%s`\n' '$(COVERAGE_HTML)' >>$(REPORT_SUMMARY)
+	printf -- '- `gcovr` JSON summary: `%s`\n' '$(COVERAGE_JSON)' >>$(REPORT_SUMMARY)
+	printf '\n## Coverage Summary\n\n' >>$(REPORT_SUMMARY)
+	cat $(COVERAGE_SUMMARY_MD) >>$(REPORT_SUMMARY)
+
+quality: check reports
 
 test: check
 

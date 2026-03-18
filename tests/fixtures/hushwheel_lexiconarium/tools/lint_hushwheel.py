@@ -30,6 +30,11 @@ STATIC_TEXT_FILES = (
 )
 REQUIRED_MAKE_TARGETS = (
     "lint:",
+    "static-analysis:",
+    "complexity:",
+    "coverage:",
+    "reports:",
+    "quality:",
     "unit:",
     "integration:",
     "bdd:",
@@ -41,6 +46,9 @@ REQUIRED_MAKE_TARGETS = (
 )
 REQUIRED_README_SNIPPETS = (
     "make check",
+    "make quality",
+    "build/reports",
+    "HUSHWHEEL_BIN",
     "make docs",
     "make dist",
     "make install",

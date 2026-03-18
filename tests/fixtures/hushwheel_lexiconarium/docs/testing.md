@@ -1,11 +1,22 @@
 # Hushwheel Testing
 
-The hushwheel fixture has five verification layers:
+The hushwheel fixture has eight verification layers:
 
 ## Lint
 
 `make lint` compiles every source file with strict warnings and runs `tools/lint_hushwheel.py` to
 check text surfaces, target markers, README references, and the Doxygen mainpage block.
+
+## Static Analysis
+
+`make static-analysis` runs `cppcheck` with exhaustive style, portability, performance, and warning
+checks, then writes both XML and GCC-style text reports into `build/reports/cppcheck/`.
+
+## Complexity
+
+`make complexity` runs `lizard` against the coordinator, spokes, headers, and C unit test with
+thresholds for cyclomatic complexity, function length, and parameter count. The persisted outputs
+live in `build/reports/complexity/`.
 
 ## Unit
 
@@ -16,14 +27,30 @@ participate in the link without exporting a duplicate `main(...)`.
 ## Integration
 
 `tests/integration/cli_suite.py` treats hushwheel like a built executable and checks lookup,
-prefix, category, stats, and about behavior.
+prefix, category, stats, and about behavior. The runner accepts `HUSHWHEEL_BIN` so coverage or
+other instrumented builds can reuse the same assertions.
 
 ## BDD
 
 `tests/bdd/hushwheel.feature` and `tests/bdd/run_bdd.py` keep the operator-facing command stories
-aligned with the compiled program.
+aligned with the compiled program. Like the integration suite, the runner accepts `HUSHWHEEL_BIN`
+for instrumented builds.
+
+## Coverage And Reports
+
+`make coverage` rebuilds hushwheel with `--coverage`, reruns the unit, integration, and BDD
+surfaces, and writes gcovr text, XML, HTML, JSON, and Markdown summary reports under
+`build/reports/coverage/`. The coverage report intentionally excludes the generated
+`src/hushwheel_spoke_*.c` tables and `src/hushwheel_spokes.c`, because those files are data-heavy
+catalog surfaces rather than executable control-flow logic.
 
 ## Documentation
 
 `make docs` runs Doxygen, builds the LaTeX output with `lualatex`, and refreshes
 `docs/hushwheel-reference.pdf`.
+
+## Combined Gate
+
+`make reports` refreshes all persisted analysis artifacts and writes
+`build/reports/quality-summary.md`. `make quality` is the CI-facing superset that runs `check`
+plus the report-producing targets in one pass.

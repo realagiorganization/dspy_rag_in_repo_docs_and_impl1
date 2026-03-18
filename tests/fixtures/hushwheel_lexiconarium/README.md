@@ -63,6 +63,11 @@ make docs
 | Target | Purpose |
 | --- | --- |
 | `make lint` | Strict warning builds plus fixture-shape checks from `tools/lint_hushwheel.py`. |
+| `make static-analysis` | Run `cppcheck` and save XML plus text findings in `build/reports/cppcheck/`. |
+| `make complexity` | Run `lizard` complexity thresholds and save text, CSV, and checkstyle XML reports. |
+| `make coverage` | Rebuild with `--coverage`, rerun unit/integration/BDD checks, and write gcovr reports. |
+| `make reports` | Refresh all persisted analysis artifacts under `build/reports/`. |
+| `make quality` | Run `check` plus static analysis, complexity, coverage, and the report index. |
 | `make unit` | C-level assertions against helper functions and return codes. |
 | `make integration` | End-to-end CLI checks using Python subprocess calls. |
 | `make bdd` | Feature-backed acceptance scenarios for the public CLI. |
@@ -127,6 +132,9 @@ mirrored in the generated `docs/hushwheel-reference.pdf`.
 ## Operator Notes
 
 - `make check` is the authoritative harness for fixture-local quality.
+- `make quality` produces persisted analysis artifacts in `build/reports/quality-summary.md`.
+- `make coverage` reuses the existing CLI assertions through `HUSHWHEEL_BIN`, which lets
+  instrumented binaries run the same integration and BDD scripts.
 - `make docs` regenerates the Doxygen manual and refreshes `docs/hushwheel-reference.pdf`.
 - `make dist` stages a redistributable tarball without mutating the source tree beyond generated docs.
 - `make install` supports `DESTDIR` so packaging tests can install into a temporary root.

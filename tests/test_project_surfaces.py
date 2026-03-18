@@ -231,6 +231,66 @@ def test_retrieval_regression_gate_is_wired_into_quality_pre_push_and_ci() -> No
     )
 
 
+def test_hushwheel_quality_workflow_is_path_filtered_and_uploads_reports() -> None:
+    workflow_path = REPO_ROOT / ".github" / "workflows" / "hushwheel-quality.yml"
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    workflow_on = workflow.get("on", workflow.get(True))
+    assert workflow_on is not None
+    for event_name in ("push", "pull_request"):
+        assert ".github/workflows/hushwheel-quality.yml" in workflow_on[event_name]["paths"]
+        assert "tests/fixtures/hushwheel_lexiconarium/**" in workflow_on[event_name]["paths"]
+        assert "tests/test_hushwheel_program_surface.py" in workflow_on[event_name]["paths"]
+        assert "tests/test_hushwheel_fixture.py" in workflow_on[event_name]["paths"]
+        assert "tests/test_project_surfaces.py" in workflow_on[event_name]["paths"]
+
+    assert workflow["name"] == "Hushwheel Quality"
+    job = workflow["jobs"]["hushwheel-quality"]
+    steps = job["steps"]
+
+    assert any(step.get("uses") == "actions/checkout@v6" for step in steps)
+    assert any(
+        step.get("uses") == "actions/setup-python@v6"
+        and step.get("with", {}).get("python-version-file") == ".python-version"
+        for step in steps
+    )
+    assert any(
+        step.get("uses") == "astral-sh/setup-uv@v6"
+        and step.get("with", {}).get("enable-cache") is True
+        and "uv.lock" in step.get("with", {}).get("cache-dependency-glob", "")
+        for step in steps
+    )
+    assert any(
+        step.get("name") == "Install native analyzers"
+        and "apt-get install -y cppcheck" in step.get("run", "")
+        for step in steps
+    )
+    assert any(
+        step.get("name") == "Run hushwheel fixture quality suite"
+        and "make -C tests/fixtures/hushwheel_lexiconarium quality" in step.get("run", "")
+        for step in steps
+    )
+    assert any(
+        step.get("name") == "Snapshot hushwheel quality reports"
+        and "artifacts/hushwheel-quality-reports" in step.get("run", "")
+        and "build/reports" in step.get("run", "")
+        for step in steps
+    )
+    assert any(
+        step.get("name") == "Run hushwheel repository surface tests"
+        and "tests/test_hushwheel_fixture.py" in step.get("run", "")
+        and "tests/test_project_surfaces.py" in step.get("run", "")
+        and "test_hushwheel_fixture_check_target_passes" in step.get("run", "")
+        for step in steps
+    )
+    assert any(
+        step.get("name") == "Upload hushwheel quality reports"
+        and step.get("uses") == "actions/upload-artifact@v6"
+        and step.get("with", {}).get("name") == "hushwheel-quality-reports"
+        and "artifacts/hushwheel-quality-reports" in step.get("with", {}).get("path", "")
+        for step in steps
+    )
+
+
 def test_repo_local_todo_skill_is_recorded() -> None:
     agents_text = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
     skill_path = REPO_ROOT / ".codex" / "skills" / "todo-backlog-sync" / "SKILL.md"
