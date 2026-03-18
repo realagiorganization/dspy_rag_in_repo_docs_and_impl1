@@ -2,8 +2,8 @@ repos:
   - repo: local
     hooks:
       - id: sync-file-summaries-pre-commit
-        name: file summary inventory pre-commit gate
-        entry: uv run repo-rag sync-file-summaries --root .
+        name: sync file summaries pre-commit
+        entry: uv run python -m repo_rag_lab.file_summaries --root .
         language: system
         pass_filenames: false
         always_run: true

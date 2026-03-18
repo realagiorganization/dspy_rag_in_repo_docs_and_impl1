@@ -1,5 +1,5 @@
 PROJECT_NAME           = Hushwheel Lexiconarium
-PROJECT_BRIEF          = Seven-spoke id/scripture/editorial codex fixture
+PROJECT_BRIEF          = Eight-spoke id/scripture/editorial codex fixture
 OUTPUT_DIRECTORY       = build/doxygen
 CREATE_SUBDIRS         = NO
 ALLOW_UNICODE_NAMES    = YES
@@ -16,6 +16,7 @@ INPUT                  = README.md \
                          docs/concepts.md \
                          docs/operations.md \
                          docs/districts.md \
+                         docs/constellation-atlas.md \
                          docs/architecture.md \
                          docs/testing.md \
                          docs/packaging.md \

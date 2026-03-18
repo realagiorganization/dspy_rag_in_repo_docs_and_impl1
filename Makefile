@@ -170,18 +170,21 @@ bdd: sync
 
 test: sync
 	mkdir -p $(REPO_TMPDIR) $(PYTEST_CACHE_DIR) $(COVERAGE_DIR)
+	rm -f $(COVERAGE_FILE_PATH) $(COVERAGE_FILE_PATH).*
 	COVERAGE_FILE=$(COVERAGE_FILE_PATH) TMPDIR=$(REPO_TMPDIR) \
 		$(UV) run pytest -o cache_dir=$(PYTEST_CACHE_DIR) $(PYTEST_COV_ARGS)
 	COVERAGE_FILE=$(COVERAGE_FILE_PATH) $(UV) run coverage report --fail-under=85
 
 coverage: sync
 	mkdir -p $(REPO_TMPDIR) $(PYTEST_CACHE_DIR) $(COVERAGE_DIR)
+	rm -f $(COVERAGE_FILE_PATH) $(COVERAGE_FILE_PATH).*
 	COVERAGE_FILE=$(COVERAGE_FILE_PATH) TMPDIR=$(REPO_TMPDIR) \
 		$(UV) run pytest -o cache_dir=$(PYTEST_CACHE_DIR) $(PYTEST_COV_ARGS)
 	COVERAGE_FILE=$(COVERAGE_FILE_PATH) $(UV) run coverage report
 
 coverage-html: sync
 	mkdir -p $(REPO_TMPDIR) $(PYTEST_CACHE_DIR) $(COVERAGE_DIR)
+	rm -f $(COVERAGE_FILE_PATH) $(COVERAGE_FILE_PATH).*
 	COVERAGE_FILE=$(COVERAGE_FILE_PATH) TMPDIR=$(REPO_TMPDIR) \
 		$(UV) run pytest -o cache_dir=$(PYTEST_CACHE_DIR) $(PYTEST_COV_ARGS) --cov-report=html
 	COVERAGE_FILE=$(COVERAGE_FILE_PATH) $(UV) run coverage html

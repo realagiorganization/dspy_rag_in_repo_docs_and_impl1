@@ -16,6 +16,7 @@ STATIC_TEXT_FILES = (
     Path("docs/operations.md"),
     Path("docs/districts.md"),
     Path("docs/catalog.md"),
+    Path("docs/constellation-atlas.md"),
     Path("docs/architecture.md"),
     Path("docs/testing.md"),
     Path("docs/packaging.md"),
@@ -32,7 +33,10 @@ REQUIRED_MAKE_TARGETS = (
     "lint:",
     "static-analysis:",
     "complexity:",
+    "hardening:",
+    "sanitizers:",
     "coverage:",
+    "profiling:",
     "reports:",
     "quality:",
     "unit:",
@@ -47,12 +51,19 @@ REQUIRED_MAKE_TARGETS = (
 REQUIRED_README_SNIPPETS = (
     "make check",
     "make quality",
+    "make hardening",
+    "make sanitizers",
+    "make profiling",
     "build/reports",
+    "build/reports/hardening",
+    "build/reports/sanitizers",
+    "build/reports/profiling",
     "HUSHWHEEL_BIN",
     "make docs",
     "make dist",
     "make install",
     "docs/hushwheel-reference.pdf",
+    "docs/constellation-atlas.md",
     "tests/unit/test_hushwheel_unit.c",
     "tests/bdd/hushwheel.feature",
 )
@@ -91,6 +102,19 @@ def assert_readme_mentions_harness() -> None:
     for snippet in REQUIRED_README_SNIPPETS:
         if snippet not in readme:
             raise RuntimeError(f"README.md is missing required snippet: {snippet}")
+    if "AddressSanitizer" not in readme or "UndefinedBehaviorSanitizer" not in readme:
+        raise RuntimeError("README.md must mention the sanitizer instrumentation surface")
+
+
+def assert_constellation_atlas_structure() -> None:
+    atlas = read_text(Path("docs/constellation-atlas.md"))
+    if atlas.count("## Orbit ") < 6:
+        raise RuntimeError("docs/constellation-atlas.md must define at least six orbit sections")
+    for marker in ("### Signal", "### Counter-Signal", "### Retrieval Cue", "### Ledger Note"):
+        if atlas.count(marker) < 6:
+            raise RuntimeError(
+                f"docs/constellation-atlas.md is missing repeated orbit marker: {marker}"
+            )
 
 
 def assert_feature_and_source_are_aligned() -> None:
@@ -108,6 +132,7 @@ def main() -> int:
     assert_no_tabs_or_trailing_whitespace()
     assert_makefile_targets()
     assert_readme_mentions_harness()
+    assert_constellation_atlas_structure()
     assert_feature_and_source_are_aligned()
     print("hushwheel lint passed")
     return 0

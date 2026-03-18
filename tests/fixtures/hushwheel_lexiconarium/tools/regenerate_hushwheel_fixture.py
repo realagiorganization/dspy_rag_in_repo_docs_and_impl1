@@ -1,4 +1,4 @@
-# ruff: noqa: E501, F541
+# ruff: noqa: E501
 
 from __future__ import annotations
 
@@ -10,6 +10,35 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = ROOT / "src"
 DOCS_DIR = ROOT / "docs"
 MANIFEST_PATH = ROOT / "fixture-manifest.json"
+DOC_FILES = (
+    "README.md",
+    "docs/concepts.md",
+    "docs/operations.md",
+    "docs/districts.md",
+    "docs/catalog.md",
+    "docs/constellation-atlas.md",
+    "docs/architecture.md",
+    "docs/testing.md",
+    "docs/packaging.md",
+)
+QUALITY_TARGETS = (
+    "lint",
+    "static-analysis",
+    "complexity",
+    "hardening",
+    "sanitizers",
+    "coverage",
+    "profiling",
+    "reports",
+    "quality",
+    "unit",
+    "integration",
+    "bdd",
+    "check",
+    "dist",
+    "install",
+    "uninstall",
+)
 
 CATEGORIES = (
     "storm-index",
@@ -204,6 +233,12 @@ ID_CHARACTERS = (
 )
 
 SPIRAL_SYMBOLS = ("§", "::", "<>", "[]", "{}", "##")
+SPOKE_USAGE_TEXT = (
+    "Used when archivists must align id heroics, scripture, and legendary software-developer "
+    "actions inside one textual-programmatic-narrative-editorial thread, usually after the moss "
+    "ledger, whisper funnel, and clock oath have documented the disagreement as a searchable "
+    "retrieval record."
+)
 
 
 @dataclass(frozen=True)
@@ -359,11 +394,7 @@ def spoke_entry(
         f"{figure} from {scripture} while {developer} {action} a {artifact}; the ember index and "
         f"lantern vowel keep the whole argument searchable instead of merely ecstatic."
     )
-    usage = (
-        f"Used when archivists must align id heroics, scripture, and legendary software-developer "
-        f"actions inside one textual-programmatic-narrative-editorial thread, usually after the moss "
-        f"ledger, whisper funnel, and clock oath have turned a quarrel into a durable retrieval trail."
-    )
+    usage = SPOKE_USAGE_TEXT
     return term, category, district, ember_index, summary, usage
 
 
@@ -794,6 +825,8 @@ def update_manifest(source_size_bytes: int) -> None:
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     manifest["entry_count"] = 4108
     manifest["source_size_bytes"] = source_size_bytes
+    manifest["doc_files"] = list(DOC_FILES)
+    manifest["quality_targets"] = list(QUALITY_TARGETS)
     manifest["generated_pdf"] = "docs/hushwheel-reference.pdf"
     manifest["source_files"] = [
         "src/hushwheel.c",

@@ -24,7 +24,10 @@ def test_hushwheel_fixture_makefile_exposes_project_harness() -> None:
     assert "lint:" in makefile
     assert "static-analysis:" in makefile
     assert "complexity:" in makefile
+    assert "hardening:" in makefile
+    assert "sanitizers:" in makefile
     assert "coverage:" in makefile
+    assert "profiling:" in makefile
     assert "reports:" in makefile
     assert "quality:" in makefile
     assert "unit:" in makefile
@@ -40,11 +43,23 @@ def test_hushwheel_fixture_docs_describe_quality_reports() -> None:
     testing_doc = (FIXTURE_ROOT / "docs" / "testing.md").read_text(encoding="utf-8")
 
     assert "make quality" in readme
+    assert "make hardening" in readme
+    assert "make sanitizers" in readme
+    assert "make profiling" in readme
     assert "build/reports" in readme
+    assert "build/reports/hardening" in readme
+    assert "build/reports/sanitizers" in readme
+    assert "build/reports/profiling" in readme
+    assert "docs/constellation-atlas.md" in readme
+    assert "Documentation Constellation" in readme
     assert "HUSHWHEEL_BIN" in readme
     assert "cppcheck" in testing_doc
     assert "lizard" in testing_doc
+    assert "readelf" in testing_doc
+    assert "AddressSanitizer" in testing_doc
+    assert "UndefinedBehaviorSanitizer" in testing_doc
     assert "gcovr" in testing_doc
+    assert "runtime-profile.tsv" in testing_doc
 
 
 def test_hushwheel_fixture_check_target_passes() -> None:
@@ -86,6 +101,7 @@ def test_hushwheel_fixture_packaging_targets_stage_install_and_dist(tmp_path: Pa
             names = set(archive.getnames())
 
         assert f"hushwheel-{VERSION}/README.md" in names
+        assert f"hushwheel-{VERSION}/docs/constellation-atlas.md" in names
         assert f"hushwheel-{VERSION}/packaging/hushwheel.package.json" in names
         assert f"hushwheel-{VERSION}/tests/bdd/hushwheel.feature" in names
 
@@ -94,6 +110,7 @@ def test_hushwheel_fixture_packaging_targets_stage_install_and_dist(tmp_path: Pa
 
         assert (install_root / "usr/bin/hushwheel").exists()
         assert (install_root / "usr/share/doc/hushwheel/docs/testing.md").exists()
+        assert (install_root / "usr/share/doc/hushwheel/docs/constellation-atlas.md").exists()
         assert (install_root / "usr/share/doc/hushwheel/docs/hushwheel-reference.pdf").exists()
         assert (install_root / "usr/share/doc/hushwheel/packaging/hushwheel.package.json").exists()
         assert (install_root / "usr/share/man/man1/hushwheel.1").exists()

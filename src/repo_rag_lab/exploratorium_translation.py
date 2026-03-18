@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import tomllib
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
@@ -644,10 +645,12 @@ def _tracked_files_from_git(root: Path) -> tuple[str, ...] | None:
 
     if not (root / ".git").exists():
         return None
+    git_env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     result = subprocess.run(
         ["git", "-C", str(root), "ls-files"],
         capture_output=True,
         check=False,
+        env=git_env,
         text=True,
     )
     if result.returncode != 0:
@@ -703,6 +706,32 @@ def collect_exploratorium_inventory(root: Path) -> ExploratoriumInventory:
         link_summaries=link_summaries,
         reference_fetch_states=reference_states,
     )
+
+
+def _reuse_existing_generated_at(
+    root: Path,
+    inventory: ExploratoriumInventory,
+) -> ExploratoriumInventory:
+    """Preserve the previous timestamp when the generated inventory is otherwise unchanged."""
+
+    manifest_path = root / EXPLORATORIUM_MANIFEST_PATH
+    if not manifest_path.exists():
+        return inventory
+    try:
+        existing_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return inventory
+    existing_generated_at = existing_payload.get("generated_at")
+    if not isinstance(existing_generated_at, str):
+        return inventory
+    candidate_payload = json.loads(json.dumps(asdict(inventory)))
+    comparable_existing_payload = dict(existing_payload)
+    comparable_candidate_payload = dict(candidate_payload)
+    comparable_existing_payload["generated_at"] = "__stable__"
+    comparable_candidate_payload["generated_at"] = "__stable__"
+    if comparable_existing_payload != comparable_candidate_payload:
+        return inventory
+    return replace(inventory, generated_at=existing_generated_at)
 
 
 def _render_side_by_side_rows(
@@ -955,7 +984,7 @@ def render_exploratorium_latex(inventory: ExploratoriumInventory) -> str:
 def sync_exploratorium_translation(root: Path) -> dict[str, object]:
     """Write the generated exploratorium manifest and LaTeX include under ``root``."""
 
-    inventory = collect_exploratorium_inventory(root)
+    inventory = _reuse_existing_generated_at(root, collect_exploratorium_inventory(root))
     generated_dir = root / EXPLORATORIUM_GENERATED_DIR
     generated_dir.mkdir(parents=True, exist_ok=True)
     (root / EXPLORATORIUM_TEX_PATH).write_text(

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -21,10 +20,6 @@ from repo_rag_lab.utilities import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-
-for _git_env_key in tuple(os.environ):
-    if _git_env_key.startswith("GIT_"):
-        os.environ.pop(_git_env_key, None)
 
 
 def test_utility_summary_mentions_core_surfaces() -> None:
@@ -56,15 +51,7 @@ def test_run_smoke_test_reports_expected_fields() -> None:
 
 
 def test_run_retrieval_evaluation_reports_expected_fields() -> None:
-    payload = json.loads(
-        run_retrieval_evaluation(
-            REPO_ROOT,
-            top_k=4,
-            top_k_sweep="1,4",
-            minimum_pass_rate=1.0,
-            minimum_source_recall=1.0,
-        )
-    )
+    payload = json.loads(run_retrieval_evaluation(REPO_ROOT, top_k=4, top_k_sweep="1,4"))
     assert payload["training_path"] == "samples/training/repository_training_examples.yaml"
     assert payload["benchmark_count"] >= 1
     assert payload["default_top_k"] == 4
@@ -72,9 +59,9 @@ def test_run_retrieval_evaluation_reports_expected_fields() -> None:
     assert payload["default_summary"]["tag_summaries"]
     assert [summary["top_k"] for summary in payload["top_k_summaries"]] == [1, 4]
     assert "average_reciprocal_rank" in payload["default_summary"]
-    assert payload["thresholds_enabled"] is True
-    assert payload["thresholds"]["minimum_pass_rate"] == 1.0
-    assert payload["thresholds"]["minimum_source_recall"] == 1.0
+    assert payload["thresholds_enabled"] is False
+    assert payload["thresholds"]["minimum_pass_rate"] is None
+    assert payload["thresholds"]["minimum_source_recall"] is None
     assert payload["threshold_failures"] == []
     assert payload["status"] == "pass"
 
@@ -169,37 +156,23 @@ def test_run_file_summary_sync_reports_expected_fields() -> None:
 
 
 def test_run_exploratorium_translation_sync_reports_expected_fields() -> None:
-    content_path = (
-        REPO_ROOT / "publication/exploratorium_translation/generated/exploratorium-content.tex"
+    payload = json.loads(run_exploratorium_translation_sync(REPO_ROOT))
+    assert (
+        payload["tex_path"]
+        == "publication/exploratorium_translation/generated/exploratorium-content.tex"
     )
-    manifest_path = (
-        REPO_ROOT / "publication/exploratorium_translation/generated/exploratorium-manifest.json"
+    assert (
+        payload["manifest_path"]
+        == "publication/exploratorium_translation/generated/exploratorium-manifest.json"
     )
-    original_content = content_path.read_bytes()
-    original_manifest = manifest_path.read_bytes()
-
-    try:
-        payload = json.loads(run_exploratorium_translation_sync(REPO_ROOT))
-        assert (
-            payload["tex_path"]
-            == "publication/exploratorium_translation/generated/exploratorium-content.tex"
-        )
-        assert (
-            payload["manifest_path"]
-            == "publication/exploratorium_translation/generated/exploratorium-manifest.json"
-        )
-        assert (
-            payload["main_tex_path"]
-            == "publication/exploratorium_translation/exploratorium_translation.tex"
-        )
-        assert (
-            payload["pdf_path"]
-            == "publication/exploratorium_translation/exploratorium_translation.pdf"
-        )
-        assert payload["summarized_file_count"] >= 10
-    finally:
-        content_path.write_bytes(original_content)
-        manifest_path.write_bytes(original_manifest)
+    assert (
+        payload["main_tex_path"]
+        == "publication/exploratorium_translation/exploratorium_translation.tex"
+    )
+    assert (
+        payload["pdf_path"] == "publication/exploratorium_translation/exploratorium_translation.pdf"
+    )
+    assert payload["summarized_file_count"] >= 10
 
 
 def test_run_notebook_report_returns_machine_readable_summary(

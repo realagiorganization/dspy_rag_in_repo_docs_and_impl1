@@ -1,11 +1,12 @@
 # Hushwheel Testing
 
-The hushwheel fixture has eight verification layers:
+The hushwheel fixture now carries a full verification and instrumentation stack:
 
 ## Lint
 
 `make lint` compiles every source file with strict warnings and runs `tools/lint_hushwheel.py` to
-check text surfaces, target markers, README references, and the Doxygen mainpage block.
+check text surfaces, target markers, README references, the orbit structure in
+`docs/constellation-atlas.md`, and the Doxygen mainpage block.
 
 ## Static Analysis
 
@@ -17,6 +18,19 @@ checks, then writes both XML and GCC-style text reports into `build/reports/cppc
 `make complexity` runs `lizard` against the coordinator, spokes, headers, and C unit test with
 thresholds for cyclomatic complexity, function length, and parameter count. The persisted outputs
 live in `build/reports/complexity/`.
+
+## Hardening
+
+`make hardening` rebuilds hushwheel with hardened compile and link flags, reruns the unit,
+integration, and BDD harnesses against that binary, then persists `file`, `size`, `readelf`, and
+`nm` outputs under `build/reports/hardening/`. The target fails if PIE, RELRO, BIND_NOW, or a
+non-executable stack are missing from the emitted ELF metadata.
+
+## Sanitizers
+
+`make sanitizers` rebuilds hushwheel with AddressSanitizer and UndefinedBehaviorSanitizer, reruns
+the same harness surfaces, and saves the command logs plus sanitizer environment details under
+`build/reports/sanitizers/`.
 
 ## Unit
 
@@ -44,13 +58,22 @@ surfaces, and writes gcovr text, XML, HTML, JSON, and Markdown summary reports u
 `src/hushwheel_spoke_*.c` tables and `src/hushwheel_spokes.c`, because those files are data-heavy
 catalog surfaces rather than executable control-flow logic.
 
+## Profiling
+
+`make profiling` runs a repeated CLI workload against an instrumented binary, records per-scenario
+wall-clock timings in `build/reports/profiling/runtime-profile.tsv`, and writes a Markdown report
+plus sample stdout and stderr captures for the profiled commands.
+
 ## Documentation
 
 `make docs` runs Doxygen, builds the LaTeX output with `lualatex`, and refreshes
-`docs/hushwheel-reference.pdf`.
+`docs/hushwheel-reference.pdf`. The Doxygen input also includes `docs/constellation-atlas.md` so
+the markdown-only orbit structure appears in the generated manual without forcing the C sources to
+imitate it.
 
 ## Combined Gate
 
 `make reports` refreshes all persisted analysis artifacts and writes
 `build/reports/quality-summary.md`. `make quality` is the CI-facing superset that runs `check`
-plus the report-producing targets in one pass.
+plus static analysis, complexity, hardening, sanitizers, coverage, profiling, and the aggregated
+report surface in one pass.

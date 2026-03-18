@@ -27,4 +27,6 @@ generated entries plus 12 canonical coordinator entries for a total of 4108.
 
 The source comments are part of the architecture. `Doxyfile` turns the coordinator, spokes, and
 Markdown docs into HTML plus `docs/hushwheel-reference.pdf`, which is linked from the README and
-packaged with the fixture.
+packaged with the fixture. `docs/constellation-atlas.md` deliberately uses repeated orbit records
+instead of code-shaped prose, giving the fixture one markdown-native structure that is visibly
+different from the source tree while still describing the same canon.
