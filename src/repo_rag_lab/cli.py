@@ -18,13 +18,15 @@ from .dspy_training import (
 from .dspy_workflow import RepositoryRAG
 from .mcp import discover_mcp_servers, dump_candidates
 from .utilities import (
+    run_azure_inference_probe,
+    run_azure_openai_probe,
     run_notebook_report,
     run_smoke_test,
     run_surface_verification,
     run_todo_backlog_sync,
     utility_summary,
 )
-from .workflow import ask_repository
+from .workflow import ask_repository, ask_repository_live
 
 
 def add_dspy_lm_arguments(parser: argparse.ArgumentParser) -> None:
@@ -67,6 +69,16 @@ def build_parser() -> argparse.ArgumentParser:
     ask_parser.add_argument("--dspy-top-k", type=int, default=4)
     add_dspy_lm_arguments(ask_parser)
 
+    ask_live_parser = subparsers.add_parser("ask-live")
+    ask_live_parser.add_argument("--question", required=True)
+    ask_live_parser.add_argument("--root", default=".")
+    ask_live_parser.add_argument(
+        "--provider",
+        choices=["azure-openai", "azure-inference"],
+        default="azure-openai",
+    )
+    ask_live_parser.add_argument("--load-env-file", action="store_true")
+
     mcp_parser = subparsers.add_parser("discover-mcp")
     mcp_parser.add_argument("--root", default=".")
 
@@ -84,6 +96,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     smoke_parser = subparsers.add_parser("smoke-test")
     smoke_parser.add_argument("--root", default=".")
+
+    azure_openai_probe_parser = subparsers.add_parser("azure-openai-probe")
+    azure_openai_probe_parser.add_argument("--root", default=".")
+    azure_openai_probe_parser.add_argument("--load-env-file", action="store_true")
+
+    azure_inference_probe_parser = subparsers.add_parser("azure-inference-probe")
+    azure_inference_probe_parser.add_argument("--root", default=".")
+    azure_inference_probe_parser.add_argument("--load-env-file", action="store_true")
 
     verify_parser = subparsers.add_parser("verify-surfaces")
     verify_parser.add_argument("--root", default=".")
@@ -139,6 +159,16 @@ def main() -> int:
         print(rag_result.answer)
         return 0
 
+    if args.command == "ask-live":
+        live_result = ask_repository_live(
+            question=args.question,
+            root=root,
+            provider=args.provider,
+            load_env_file=args.load_env_file,
+        )
+        print(live_result.answer)
+        return 0
+
     if args.command == "discover-mcp":
         candidates = discover_mcp_servers(root)
         print(dump_candidates(candidates))
@@ -164,6 +194,14 @@ def main() -> int:
 
     if args.command == "smoke-test":
         print(run_smoke_test(root))
+        return 0
+
+    if args.command == "azure-openai-probe":
+        print(run_azure_openai_probe(root, load_env_file=args.load_env_file))
+        return 0
+
+    if args.command == "azure-inference-probe":
+        print(run_azure_inference_probe(root, load_env_file=args.load_env_file))
         return 0
 
     if args.command == "verify-surfaces":

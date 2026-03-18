@@ -17,7 +17,8 @@ The current scaffold focuses on three connected jobs:
 1. Explore in-repo RAG over repository files with a simple baseline retriever plus optional DSPy
    runtime and compiled-program flows.
 2. Discover MCP-related artifacts in the repository, submodules, or package manifests.
-3. Prepare Azure deployment manifests for tuned artifacts that are produced outside this repo.
+3. Prepare Azure deployment manifests, validate Azure runtime contracts, and optionally answer
+   repository questions through live Azure-backed synthesis.
 
 ## Tooling Stance
 
@@ -59,9 +60,12 @@ the Rust wrapper.
 | Backlog sync | `make todo-sync` | Regenerate the linkified TODO table in both Markdown and the publication article. |
 | Ask a repo question | `make ask QUESTION="..."` | Run the baseline repository-grounded RAG workflow. |
 | DSPy ask | `make ask-dspy QUESTION="..."` | Run the DSPy runtime path with LM config from `DSPY_*`, Azure, or OpenAI environment variables. |
+| Live Azure ask | `make ask-live QUESTION="..."` | Retrieve repository evidence locally, then synthesize a live answer through Azure OpenAI or Azure AI Inference. |
 | DSPy compile | `make dspy-train DSPY_RUN_NAME=...` | Compile and save a repository-grounded DSPy program under `artifacts/dspy/`. |
 | MCP discovery | `make discover-mcp` | Inspect MCP-related repository artifacts. |
 | Smoke test | `make smoke-test` | Check answer generation, MCP discovery, and Azure manifest output together. |
+| Azure OpenAI probe | `make azure-openai-probe` | Validate the Azure OpenAI env contract and run a minimal live chat-completions round trip. |
+| Azure Inference probe | `make azure-inference-probe` | Validate and normalize the Azure AI Inference endpoint, then run a minimal live round trip. |
 | Surface verification | `make verify-surfaces` | Enforce the Makefile and notebook contract. |
 | Notebook batch report | `make notebook-report` | Execute all tracked notebooks with progress output, raw logs, executed copies, and a final report. |
 | GitHub run list | `make gh-runs` | List recent GitHub Actions runs through `gh`. |
@@ -114,10 +118,15 @@ acceptance gates: mypy, basedpyright, pytest with coverage, and repository-surfa
 ## Azure Deployment Path
 
 This repository does not fine-tune or deploy a model on its own. It writes deployment metadata
-that downstream Azure workflows can consume after a tuned artifact already exists.
+that downstream Azure workflows can consume after a tuned artifact already exists. It now also
+includes first-class runtime probes and a live-answer surface for validating the repository's
+Azure configuration against the same `uv`-managed CLI.
 
 ```bash
 make azure-manifest MODEL_ID=my-ft-model DEPLOYMENT_NAME=repo-rag-ft
+make azure-openai-probe
+make azure-inference-probe
+make ask-live QUESTION="What does this repository research?"
 ```
 
 The manifest lands in `artifacts/azure/` and records the deployment name, endpoint, and required

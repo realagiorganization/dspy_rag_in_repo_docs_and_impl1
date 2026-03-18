@@ -20,12 +20,14 @@ DSPY_MAX_LABELED_DEMOS ?= 2
 DSPY_MIPRO_AUTO ?= light
 DSPY_NUM_THREADS ?= 4
 DSPY_MIPRO_NUM_TRIALS ?=
+LIVE_PROVIDER ?= azure-openai
+RUNTIME_LOAD_ENV_FILE ?= 1
 PYTEST_COV_ARGS ?= --cov=src/repo_rag_lab --cov-report=term-missing --cov-report=xml
 GH_RUN_LIMIT ?= 10
 RUN_ID ?=
 NOTEBOOK_TIMEOUT ?= 600
 
-.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask ask-dspy dspy-train discover-mcp utility-summary todo-sync smoke-test verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook notebook-report bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run azure-manifest fmt build publish
+.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask ask-dspy ask-live dspy-train discover-mcp utility-summary todo-sync smoke-test azure-openai-probe azure-inference-probe verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook notebook-report bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run azure-manifest fmt build publish
 
 setup:
 	$(UV) sync --extra azure
@@ -60,6 +62,10 @@ ask-dspy: sync
 		$(if $(strip $(DSPY_MAX_TOKENS)),--dspy-max-tokens $(DSPY_MAX_TOKENS),) \
 		--dspy-top-k $(DSPY_TOP_K)
 
+ask-live: sync
+	$(UV) run repo-rag ask-live --question "$(QUESTION)" --provider "$(LIVE_PROVIDER)" \
+		$(if $(filter 1 true yes,$(RUNTIME_LOAD_ENV_FILE)),--load-env-file,)
+
 dspy-train: sync
 	$(UV) run repo-rag dspy-train --root . --training-path "$(DSPY_TRAINING_PATH)" \
 		--run-name "$(DSPY_RUN_NAME)" --optimizer "$(DSPY_OPTIMIZER)" \
@@ -87,6 +93,14 @@ todo-sync: sync
 
 smoke-test: sync
 	$(UV) run repo-rag smoke-test
+
+azure-openai-probe: sync
+	$(UV) run repo-rag azure-openai-probe \
+		$(if $(filter 1 true yes,$(RUNTIME_LOAD_ENV_FILE)),--load-env-file,)
+
+azure-inference-probe: sync
+	$(UV) run repo-rag azure-inference-probe \
+		$(if $(filter 1 true yes,$(RUNTIME_LOAD_ENV_FILE)),--load-env-file,)
 
 verify-surfaces: sync
 	$(UV) run repo-rag verify-surfaces

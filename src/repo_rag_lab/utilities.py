@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TextIO
 
 from .azure import write_deployment_manifest
+from .azure_runtime import probe_azure_inference, probe_azure_openai
 from .mcp import discover_mcp_servers
 from .notebook_runner import run_notebooks
 from .todo_backlog import sync_todo_backlog
@@ -22,9 +23,21 @@ def utility_summary(root: Path) -> str:
         "- make utility-summary / uv run repo-rag utility-summary: list the supported entrypoints",
         "- make ask / uv run repo-rag ask: answer repository-grounded questions",
         "- make ask-dspy / uv run repo-rag ask --use-dspy: answer with the DSPy runtime path",
+        (
+            "- make ask-live / uv run repo-rag ask-live: answer with retrieved repo evidence "
+            "plus a live Azure-backed synthesis step"
+        ),
         "- make dspy-train / uv run repo-rag dspy-train: compile and persist a DSPy RAG program",
         "- make discover-mcp / uv run repo-rag discover-mcp: inspect repo-local MCP candidates",
         "- make azure-manifest / uv run repo-rag azure-manifest: write Azure deployment metadata",
+        (
+            "- make azure-openai-probe / uv run repo-rag azure-openai-probe: "
+            "validate the Azure OpenAI runtime contract"
+        ),
+        (
+            "- make azure-inference-probe / uv run repo-rag azure-inference-probe: "
+            "validate the Azure AI Inference runtime contract"
+        ),
         (
             "- make todo-sync / uv run repo-rag sync-todo-backlog: "
             "regenerate the linkified TODO tables for Markdown and the publication PDF"
@@ -66,6 +79,18 @@ def run_surface_verification(root: Path) -> str:
     """Serialize the current repository-surface verification result as JSON."""
 
     return json.dumps(verify_repository_surfaces(root), indent=2)
+
+
+def run_azure_openai_probe(root: Path, *, load_env_file: bool = False) -> str:
+    """Serialize the Azure OpenAI runtime probe as JSON."""
+
+    return json.dumps(probe_azure_openai(root, load_env_file=load_env_file), indent=2)
+
+
+def run_azure_inference_probe(root: Path, *, load_env_file: bool = False) -> str:
+    """Serialize the Azure AI Inference runtime probe as JSON."""
+
+    return json.dumps(probe_azure_inference(root, load_env_file=load_env_file), indent=2)
 
 
 def run_todo_backlog_sync(root: Path) -> str:

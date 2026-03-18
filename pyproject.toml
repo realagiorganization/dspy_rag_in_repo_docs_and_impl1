@@ -22,6 +22,7 @@ repo-rag = "repo_rag_lab.cli:main"
 azure = [
   "azure-ai-inference>=1.0.0b9",
   "azure-core>=1.32.0",
+  "openai>=1.0.0",
 ]
 
 [dependency-groups]

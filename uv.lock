@@ -3105,6 +3105,7 @@ dependencies = [
 azure = [
     { name = "azure-ai-inference" },
     { name = "azure-core" },
+    { name = "openai" },
 ]
 
 [package.dev-dependencies]
@@ -3128,6 +3129,7 @@ requires-dist = [
     { name = "dspy-ai", specifier = ">=2.5.0" },
     { name = "jupyterlab", specifier = ">=4.3.0" },
     { name = "nbformat", specifier = ">=5.10.4" },
+    { name = "openai", marker = "extra == 'azure'", specifier = ">=1.0.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
 ]
 provides-extras = ["azure"]

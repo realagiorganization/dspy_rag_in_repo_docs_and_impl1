@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 
 from repo_rag_lab.utilities import (
+    run_azure_inference_probe,
+    run_azure_openai_probe,
     run_notebook_report,
     run_smoke_test,
     run_surface_verification,
@@ -19,8 +21,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 def test_utility_summary_mentions_core_surfaces() -> None:
     summary = utility_summary(REPO_ROOT)
     assert "ask" in summary
+    assert "ask-live" in summary
     assert "discover-mcp" in summary
     assert "dspy-train" in summary
+    assert "azure-openai-probe" in summary
+    assert "azure-inference-probe" in summary
     assert "todo-sync" in summary
     assert "smoke-test" in summary
     assert "verify-surfaces" in summary
@@ -46,6 +51,42 @@ def test_run_todo_backlog_sync_reports_expected_fields() -> None:
     assert payload["markdown_path"] == "TODO.MD"
     assert payload["latex_path"] == "publication/todo-backlog-table.tex"
     assert payload["item_count"] >= 10
+
+
+def test_run_azure_openai_probe_returns_machine_readable_summary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_probe(root: Path, *, load_env_file: bool = False) -> dict[str, object]:
+        return {
+            "provider": "azure-openai",
+            "root": str(root),
+            "load_env_file": load_env_file,
+            "reply": "OPENAI_OK",
+        }
+
+    monkeypatch.setattr("repo_rag_lab.utilities.probe_azure_openai", fake_probe)
+    payload = json.loads(run_azure_openai_probe(REPO_ROOT, load_env_file=True))
+    assert payload["provider"] == "azure-openai"
+    assert payload["load_env_file"] is True
+    assert payload["reply"] == "OPENAI_OK"
+
+
+def test_run_azure_inference_probe_returns_machine_readable_summary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_probe(root: Path, *, load_env_file: bool = False) -> dict[str, object]:
+        return {
+            "provider": "azure-inference",
+            "root": str(root),
+            "load_env_file": load_env_file,
+            "reply": "INFERENCE_OK",
+        }
+
+    monkeypatch.setattr("repo_rag_lab.utilities.probe_azure_inference", fake_probe)
+    payload = json.loads(run_azure_inference_probe(REPO_ROOT, load_env_file=True))
+    assert payload["provider"] == "azure-inference"
+    assert payload["load_env_file"] is True
+    assert payload["reply"] == "INFERENCE_OK"
 
 
 def test_run_notebook_report_returns_machine_readable_summary(

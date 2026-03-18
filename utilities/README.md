@@ -9,10 +9,16 @@ them over ad hoc shell commands so every workflow hits the same package code.
 - `make ask QUESTION="..."`: answer a repository-grounded question with the baseline RAG flow.
 - `make ask-dspy QUESTION="..."`: answer through the DSPy runtime path, optionally loading a saved
   compiled program.
+- `make ask-live QUESTION="..."`: retrieve repository evidence locally, then synthesize the answer
+  through Azure OpenAI or Azure AI Inference.
 - `make dspy-train DSPY_RUN_NAME=...`: compile and persist a repository-grounded DSPy program under
   `artifacts/dspy/`.
 - `make discover-mcp`: inspect repository-local MCP candidates.
 - `make smoke-test`: exercise answer generation, MCP discovery, and Azure manifest output together.
+- `make azure-openai-probe`: validate the Azure OpenAI runtime contract and run a minimal live
+  round trip.
+- `make azure-inference-probe`: validate and normalize the Azure AI Inference runtime contract and
+  run a minimal live round trip.
 - `make todo-sync`: regenerate the shared TODO backlog table for both `TODO.MD` and the publication PDF source.
 - `make verify-surfaces`: validate the Makefile and notebook contract.
 - `make notebook-report`: execute all tracked notebooks with monitored progress and report artifacts.
@@ -33,4 +39,5 @@ them over ad hoc shell commands so every workflow hits the same package code.
 - Keep notebooks, tests, automation, and manual runs aligned.
 - Give agents one preferred command vocabulary.
 - Focus verification on behavior users actually invoke.
+- Keep local Azure runtime validation on the same package entrypoints as the docs and notebooks.
 - Keep local execution, CI, and publishing on the same `uv`-managed toolchain.

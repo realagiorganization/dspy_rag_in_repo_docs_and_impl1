@@ -136,9 +136,23 @@ def test_cli_main_other_commands(
             f'"latex_path": "publication/todo-backlog-table.tex", "root": "{root}"}}'
         )
 
+    def fake_azure_openai_probe(root: Path, *, load_env_file: bool = False) -> str:
+        return (
+            '{"provider": "azure-openai", "reply": "OPENAI_OK", '
+            f'"root": "{root}", "load_env_file": {str(load_env_file).lower()}}}'
+        )
+
+    def fake_azure_inference_probe(root: Path, *, load_env_file: bool = False) -> str:
+        return (
+            '{"provider": "azure-inference", "reply": "INFERENCE_OK", '
+            f'"root": "{root}", "load_env_file": {str(load_env_file).lower()}}}'
+        )
+
     monkeypatch.setattr(cli, "run_surface_verification", fake_surface_verification)
     monkeypatch.setattr(cli, "run_notebook_report", fake_notebook_report)
     monkeypatch.setattr(cli, "run_todo_backlog_sync", fake_todo_sync)
+    monkeypatch.setattr(cli, "run_azure_openai_probe", fake_azure_openai_probe)
+    monkeypatch.setattr(cli, "run_azure_inference_probe", fake_azure_inference_probe)
     commands = [
         type("Args", (), {"command": "discover-mcp", "root": str(tmp_path)})(),
         type(
@@ -155,6 +169,24 @@ def test_cli_main_other_commands(
         type("Args", (), {"command": "utility-summary", "root": str(tmp_path)})(),
         type("Args", (), {"command": "sync-todo-backlog", "root": str(tmp_path)})(),
         type("Args", (), {"command": "smoke-test", "root": str(tmp_path)})(),
+        type(
+            "Args",
+            (),
+            {
+                "command": "azure-openai-probe",
+                "root": str(tmp_path),
+                "load_env_file": True,
+            },
+        )(),
+        type(
+            "Args",
+            (),
+            {
+                "command": "azure-inference-probe",
+                "root": str(tmp_path),
+                "load_env_file": True,
+            },
+        )(),
         type("Args", (), {"command": "verify-surfaces", "root": str(tmp_path)})(),
         type(
             "Args",
@@ -180,7 +212,46 @@ def test_cli_main_other_commands(
 
     output = capsys.readouterr().out
     assert "Repository utility surfaces:" in output
+    assert "OPENAI_OK" in output
+    assert "INFERENCE_OK" in output
     assert "todo-backlog.yaml" in output
+
+
+def test_cli_main_ask_live_command(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    def fake_ask_repository_live(
+        question: str,
+        root: Path,
+        *,
+        provider: str,
+        load_env_file: bool,
+    ) -> object:
+        del root
+        return type(
+            "Result",
+            (),
+            {"answer": f"{provider}:{str(load_env_file).lower()}:{question}"},
+        )()
+
+    def fake_parse_args(self: object) -> object:
+        del self
+        return type(
+            "Args",
+            (),
+            {
+                "command": "ask-live",
+                "question": "sample question",
+                "root": str(tmp_path),
+                "provider": "azure-openai",
+                "load_env_file": True,
+            },
+        )()
+
+    monkeypatch.setattr(cli, "ask_repository_live", fake_ask_repository_live)
+    monkeypatch.setattr(cli.argparse.ArgumentParser, "parse_args", fake_parse_args)
+    assert cli.main() == 0
+    assert "azure-openai:true:sample question" in capsys.readouterr().out
 
 
 def test_cli_main_dspy_ask_command(

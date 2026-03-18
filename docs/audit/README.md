@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-03-18-zz-research-narrative.md`
+- `2026-03-18-azure-runtime-surfaces.md`
 
 ## Usage
 

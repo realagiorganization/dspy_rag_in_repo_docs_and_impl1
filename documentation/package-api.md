@@ -23,8 +23,12 @@ notebooks stay readable, testable, and aligned with CLI and automation entrypoin
 ## Utility Surfaces
 
 - `repo-rag ask --question "..."`: run the baseline or DSPy-shaped RAG workflow.
+- `repo-rag ask-live --question "..."`: run baseline retrieval locally, then synthesize a live
+  answer through Azure OpenAI or Azure AI Inference.
 - `repo-rag discover-mcp`: inspect MCP discovery candidates.
 - `repo-rag smoke-test`: run a compact workflow smoke test.
 - `repo-rag verify-surfaces`: validate the repository utility and notebook contract surfaces.
 - `repo-rag run-notebooks`: execute all tracked notebooks with monitored progress and report artifacts.
 - `repo-rag azure-manifest`: write Azure deployment metadata for downstream deployment workflows.
+- `repo-rag azure-openai-probe`: normalize and validate the Azure OpenAI runtime contract.
+- `repo-rag azure-inference-probe`: normalize and validate the Azure AI Inference runtime contract.
