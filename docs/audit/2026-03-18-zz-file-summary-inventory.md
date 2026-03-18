@@ -5,64 +5,83 @@
 
 ## Scope
 
-This audit covers the new maintained repository file-summary surfaces:
+This audit covers the maintained repository file-summary surfaces and their repo-native
+maintenance workflow, plus the small Hushwheel fixture docs-target repair required to satisfy
+the repository coverage gate on the current `origin/master` tip:
 
 - `FILES.md`
 - `FILES.csv`
 - `AGENTS.md.d/FILES.md`
-- the managed pre-commit hook that refreshes the inventory through
-  `uv run python -m repo_rag_lab.file_summaries --root .`
+- `make files-sync` / `uv run repo-rag sync-file-summaries --root .`
+- the managed `sync-file-summaries-pre-commit` hook
+- `tests/fixtures/hushwheel_lexiconarium/Makefile`
 
 ## Executed Commands
 
 Executed successfully in this turn:
 
+- `make files-sync`
 - `make hooks-install`
 - `uv run python -m compileall src tests`
-- `uv run pytest tests/test_file_summaries.py`
+- `uv run pytest tests/test_file_summaries.py tests/test_utilities.py tests/test_cli_and_dspy.py tests/test_repository_rag_bdd.py`
+- `uv run pytest tests/test_hushwheel_program_surface.py`
+- `uv run repo-rag smoke-test`
 - `cargo build --manifest-path rust-cli/Cargo.toml`
-- `GIT_INDEX_FILE=<temp> uv run python -m repo_rag_lab.file_summaries --root .`
+- `make quality`
 
 Blocked in this turn:
 
-- `uv run pytest tests/test_file_summaries.py tests/test_utilities.py tests/test_repository_rag_bdd.py`
+- none
 
 ## Results
 
-- `make hooks-install`: passed and refreshed the managed `pre-commit` plus `pre-push` hooks.
+- `make files-sync`: passed and regenerated `FILES.md` plus `FILES.csv` from the tracked Git index
+  through the repo-native `repo-rag sync-file-summaries` surface.
+- `make hooks-install`: passed and refreshed the managed `pre-commit` and `pre-push` hooks.
 - `uv run python -m compileall src tests`: passed.
-- `uv run pytest tests/test_file_summaries.py`: passed, `2` tests.
+- focused pytest slice: passed, `29` tests covering the file-summary module plus the updated
+  utility, CLI, and repository BDD surfaces.
+- `uv run pytest tests/test_hushwheel_program_surface.py`: passed, `4` tests after adding the
+  missing `mkdir -p $(DOC_BUILD_DIR)` step to the fixture docs rule so Doxygen can emit into
+  `build/doxygen`.
+- `uv run repo-rag smoke-test`: passed with a repository-grounded answer, `1` MCP candidate, and
+  a generated Azure manifest at `artifacts/azure/repo-rag-smoke.json`.
 - `cargo build --manifest-path rust-cli/Cargo.toml`: passed.
-- temp-index file-summary generation: passed after regenerating `FILES.md` and `FILES.csv`
-  against the selected file-summary change set.
-- broader utility pytest slice: blocked during collection because the current shared worktree
-  imports a missing `repo_rag_lab.exploratorium_translation` module from
-  `src/repo_rag_lab/utilities.py`. That blocker predates this file-summary module and was not
-  changed in this turn.
+- `make quality`: passed. It covered `ruff format --check`, `ruff check`, `nbqa ruff`, `mypy`,
+  `basedpyright`, `repo-rag verify-surfaces`, `radon cc`, and the full pytest coverage run.
+  The full suite finished with `114 passed` and `87.55%` total coverage, above the configured
+  `85%` fail-under gate. `src/repo_rag_lab/file_summaries.py` reached `93%` coverage in that run.
 
 ## Current Verification Status
 
 Configured and verified in this turn:
 
+- repo-native file-summary generation through `make files-sync`
+- hook installation through `make hooks-install`
 - Python bytecode compilation through `uv run python -m compileall src tests`
-- focused pytest coverage for the new file-summary module through
-  `uv run pytest tests/test_file_summaries.py`
+- focused utility, CLI, BDD, and Hushwheel fixture pytest coverage for the changed surfaces
+- repository smoke coverage through `uv run repo-rag smoke-test`
 - Rust wrapper build through `cargo build --manifest-path rust-cli/Cargo.toml`
-- file-summary generation against the intended change set through the temp-index
-  `uv run python -m repo_rag_lab.file_summaries --root .` run
+- lint, type-checking, repository-surface verification, complexity, and full coverage via `make quality`
 
 Not run in this turn:
 
-- `make quality`
-- coverage-specific checks
-- lint and type-check commands
-- full notebook execution
-- UI or browser tests
+- `uv run repo-rag run-notebooks`
+- `uv run repo-rag azure-openai-probe`
+- `uv run repo-rag azure-inference-probe`
+- any browser or UI suite
+
+Repository-state gaps:
+
+- no dedicated browser or frontend UI test suite is configured in this repository
 
 ## Notes
 
 - The inventory generator is intentionally deterministic. It summarizes tracked repository files
   without requiring `.env` or any remote model access.
-- `AGENTS.md.d/FILES.md` now tells future agents to use `FILES.md` and `FILES.csv` as the first
-  pass for repo-wide file summarization, then optionally layer `make ask` or `make ask-dspy` on
-  top after sourcing `.env` when LM-backed synthesis is needed.
+- `AGENTS.md.d/FILES.md` now tells future agents to regenerate the inventory with
+  `make files-sync` or `uv run repo-rag sync-file-summaries --root .`, keep hooks installed with
+  `make hooks-install`, and only source `.env` when they intentionally layer LM-backed synthesis
+  on top of the generated file inventory.
+- Validation ran from a clean detached worktree on `origin/master` so the results were isolated
+  from unrelated local branch changes in the shared checkout.

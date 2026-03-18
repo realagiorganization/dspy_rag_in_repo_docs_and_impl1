@@ -7,7 +7,7 @@ Use these maintained surfaces for repository-wide file summaries:
 
 ## Required Workflow
 
-- Regenerate both files with `uv run python -m repo_rag_lab.file_summaries --root .`.
+- Regenerate both files with `make files-sync` or `uv run repo-rag sync-file-summaries --root .`.
 - Run that command after tracked file adds, removals, renames, or material role changes.
 - Treat `FILES.md` and `FILES.csv` as generated outputs. Do not hand-edit them.
 - Keep hooks installed with `make hooks-install`; the managed pre-commit hook
@@ -17,8 +17,8 @@ Use these maintained surfaces for repository-wide file summaries:
 ## Narrative Summaries
 
 - Start repo-wide file summarization from `FILES.md` and `FILES.csv`, then use the repo-bound
-  utilities such as `make utility-summary`, `make ask QUESTION="..."`, and
-  `make ask-dspy QUESTION="..."` for higher-level synthesis.
+  utilities such as `make utility-summary`, `make ask QUESTION="..."`, `make ask-dspy QUESTION="..."`,
+  and `make ask-live QUESTION="..."` for higher-level synthesis.
 - The inventory generator itself is deterministic and does not require secrets.
 - If LM-backed synthesis is needed, source `.env` first without echoing values:
   `set -a; source .env; set +a`.
@@ -30,6 +30,8 @@ Use these maintained surfaces for repository-wide file summaries:
 
 - Keep this instruction file aligned with the inventory workflow whenever commands, hook behavior,
   or environment expectations change.
+- If a repo-local file-summary skill is added under `.codex/skills/`, keep it aligned with this
+  guide and the repo-native `make files-sync` / `repo-rag sync-file-summaries` surfaces.
 - When verification or repo-health reporting is part of the task, also follow
   `repo-verification-audit-loop`.
 - After each push, follow `post-push-gh-run-logging`.

@@ -73,8 +73,8 @@ lint: $(LINT_OBJS)
 
 $(DOC_PDF): $(DOXYFILE) README.md include/hushwheel.h $(SRC_FILES) $(SRC_HEADERS) $(DOC_FILES)
 	@if command -v $(DOXYGEN) >/dev/null 2>&1; then \
-		mkdir -p $(BUILD_DIR); \
 		rm -rf $(DOC_BUILD_DIR); \
+		mkdir -p $(DOC_BUILD_DIR); \
 		$(DOXYGEN) $(DOXYFILE); \
 		(cd $(DOC_BUILD_DIR)/latex && lualatex -interaction=nonstopmode -halt-on-error refman >/dev/null); \
 		(cd $(DOC_BUILD_DIR)/latex && makeindex refman.idx >/dev/null); \
