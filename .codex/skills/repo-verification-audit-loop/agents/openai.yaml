@@ -1,0 +1,4 @@
+interface:
+  display_name: "Repo verification loop"
+  short_description: "Run the repo verification loop and update audits."
+  default_prompt: "Use this skill to run the repository verification loop, compare local and CI evidence, and update the correct docs/audit note."

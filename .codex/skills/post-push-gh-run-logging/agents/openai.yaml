@@ -1,0 +1,4 @@
+interface:
+  display_name: "Post Push gh logging"
+  short_description: "Watch Actions after a push and write samples logs."
+  default_prompt: "Use this skill after pushing to inspect the latest GitHub Actions run, capture failures when needed, and record the run in samples/logs."

@@ -9,6 +9,7 @@ verification results, and anchor status statements to the newest file in `docs/a
 
 ## Codex Skills
 
+- Repo-local skill implementations live under `.codex/skills/`.
 - Use `repo-verification-audit-loop` when verification work, audit-note updates, or repository health reporting are part of the task.
 - Use `post-push-gh-run-logging` immediately after each push and whenever GitHub Actions failures or `samples/logs/` updates are in scope.
 - Use `notebook-playbook-sync` when editing notebooks, notebook scaffolding, notebook-facing docs, or training and population sample surfaces.

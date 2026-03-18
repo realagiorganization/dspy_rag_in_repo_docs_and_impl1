@@ -1,0 +1,4 @@
+interface:
+  display_name: "Notebook playbook sync"
+  short_description: "Keep notebook playbooks, helpers, tests, and docs aligned."
+  default_prompt: "Use this skill when changing notebooks or notebook-facing helpers so the playbooks, Python scaffolding, assertions, tests, and docs stay in sync."
