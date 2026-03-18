@@ -2,7 +2,7 @@
 
 - Audit date: `2026-03-18` (`Asia/Tbilisi`)
 - Repository root: `/home/standard/dspy_rag_in_repo_docs_and_impl1`
-- Git HEAD during verification: `48262b4e972fcf51b1e56160267bca03b1ae8190`
+- Git HEAD during final verification: `4afbfed0a014b52b114289e07a908d31a8a8295b`
 
 ## Scope
 
@@ -25,12 +25,17 @@ Executed successfully in this turn:
 - `uv run mypy src tests`
 - `uv run basedpyright`
 - `make quality`
+- `make gh-runs GH_RUN_LIMIT=10`
+- `RUN_ID=23225822736 make gh-watch`
+- `RUN_ID=23225822742 make gh-watch`
+- `gh run view 23225822736`
+- `gh run view 23225822742`
 
 ## Notable Results
 
 - `uv run repo-rag sync-todo-backlog --root .`: passed, generating `TODO.MD` and
   `publication/todo-backlog-table.tex` from `todo-backlog.yaml`
-- targeted pytest slice: passed, `55` tests
+- targeted pytest slice: passed, `59` tests
 - `make hooks-install`: passed
 - `make paper-build`: passed, rebuilding the publication PDF and banner with the synced backlog
   table included
@@ -39,7 +44,9 @@ Executed successfully in this turn:
 - `cargo build --manifest-path rust-cli/Cargo.toml`: passed
 - `uv run mypy src tests`: passed
 - `uv run basedpyright`: passed
-- `make quality`: passed with `79` tests and `85.15%` total coverage
+- `make quality`: passed with `79` tests and `85.19%` total coverage
+- post-push GitHub Actions: both `CI` (`23225822736`) and `Publication PDF`
+  (`23225822742`) completed with `success` for `4afbfed0a014b52b114289e07a908d31a8a8295b`
 
 ## Current Verification Status
 
@@ -52,6 +59,7 @@ Configured and verified in this turn:
 - Rust build: present and passed through `cargo build --manifest-path rust-cli/Cargo.toml`
 - Lint, notebook lint, mypy, basedpyright, repository-surface verification, complexity, pytest,
   and coverage: present and passed through `make quality`
+- Post-push GitHub Actions: present and passed through the `CI` and `Publication PDF` workflows
 
 Still absent or not exercised in this turn:
 
@@ -70,3 +78,5 @@ Still absent or not exercised in this turn:
   `src/repo_rag_lab/notebook_runner.py` from multiple surfaces without tracking those files in Git;
   this turn restored those modules and the matching tests so fresh checkouts can pass local and CI
   validation again.
+- GitHub Actions still emits Node.js 20 deprecation warnings for `actions/checkout@v4`,
+  `actions/upload-artifact@v4`, `actions/cache@v4`, and `astral-sh/setup-uv@v6`.
