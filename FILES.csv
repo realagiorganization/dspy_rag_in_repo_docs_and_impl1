@@ -128,6 +128,7 @@ samples/logs/20260318T060918Z-gh-runs-consolidate-session-master-repair.md,sampl
 samples/logs/20260318T063755Z-gh-runs-keep-utility-sync-tests-side-effect-free.md,samples,markdown,29,1074,GitHub Actions Run Log
 samples/logs/20260318T064924Z-gh-runs-retrieval-refresh-go-ahead.md,samples,markdown,54,1858,GitHub Actions Run Log
 samples/logs/20260318T083955Z-gh-runs-benchmark-broadening-2.md,samples,markdown,34,1217,GitHub Actions Run Log
+samples/logs/20260318T094120Z-gh-runs-dspy-live-proof-and-rust-wrapper-repair.md,samples,markdown,45,1469,GitHub Actions Summary
 samples/logs/README.md,samples,markdown,11,331,GitHub Run Logs
 samples/population/hushwheel_fixture_population_candidates.yaml,samples,yaml,22,955,- source: README.md
 samples/population/repository_population_candidates.yaml,samples,yaml,16,684,- source: README.md
