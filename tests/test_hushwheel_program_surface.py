@@ -22,12 +22,29 @@ def test_hushwheel_fixture_makefile_exposes_project_harness() -> None:
     makefile = (FIXTURE_ROOT / "Makefile").read_text(encoding="utf-8")
 
     assert "lint:" in makefile
+    assert "static-analysis:" in makefile
+    assert "complexity:" in makefile
+    assert "coverage:" in makefile
+    assert "reports:" in makefile
+    assert "quality:" in makefile
     assert "unit:" in makefile
     assert "integration:" in makefile
     assert "bdd:" in makefile
     assert "dist:" in makefile
     assert "install:" in makefile
     assert "uninstall:" in makefile
+
+
+def test_hushwheel_fixture_docs_describe_quality_reports() -> None:
+    readme = (FIXTURE_ROOT / "README.md").read_text(encoding="utf-8")
+    testing_doc = (FIXTURE_ROOT / "docs" / "testing.md").read_text(encoding="utf-8")
+
+    assert "make quality" in readme
+    assert "build/reports" in readme
+    assert "HUSHWHEEL_BIN" in readme
+    assert "cppcheck" in testing_doc
+    assert "lizard" in testing_doc
+    assert "gcovr" in testing_doc
 
 
 def test_hushwheel_fixture_check_target_passes() -> None:
@@ -37,7 +54,7 @@ def test_hushwheel_fixture_check_target_passes() -> None:
 
         assert "hushwheel lint passed" in result.stdout
         assert "hushwheel unit tests passed" in result.stdout
-        assert "Ran 6 tests" in combined_output
+        assert "Ran 12 tests" in combined_output
         assert "scenario passed: Report aggregate statistics" in result.stdout
     finally:
         run_fixture_make("clean")

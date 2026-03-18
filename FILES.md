@@ -19,6 +19,7 @@ This inventory is generated from the current Git index.
 | `.env.sample` | .env.sample | text | 17 | 905 | Copy this file to .env and replace placeholder values. |
 | `.gitattributes` | .gitattributes | text | 4 | 126 | *.png filter=lfs diff=lfs merge=lfs -text |
 | `.github/workflows/ci.yml` | .github | yaml | 126 | 3071 | GitHub Actions workflow for ci |
+| `.github/workflows/hushwheel-quality.yml` | .github | yaml | 82 | 2646 | GitHub Actions workflow for hushwheel quality |
 | `.github/workflows/publication-pdf.yml` | .github | yaml | 124 | 4687 | GitHub Actions workflow for publication pdf |
 | `.github/workflows/publish.yml` | .github | yaml | 43 | 847 | GitHub Actions workflow for publish |
 | `.gitignore` | .gitignore | text | 20 | 216 | .venv/ |
@@ -69,7 +70,8 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-03-18-zzzz-session-consolidation-master-ci-repair.md` | docs | markdown | 73 | 3270 | Repository audit note for 2026 03 18 zzzz session consolidation master ci repair |
 | `docs/audit/2026-03-18-zzzzzz-dspy-pipeline-and-live-azure-proof.md` | docs | markdown | 116 | 5992 | Repository audit note for 2026 03 18 zzzzzz dspy pipeline and live azure proof |
 | `docs/audit/2026-03-18-zzzzzzz-hushwheel-pdf-side-effect-fix.md` | docs | markdown | 76 | 3525 | Repository audit note for 2026 03 18 zzzzzzz hushwheel pdf side effect fix |
-| `docs/audit/README.md` | docs | markdown | 14 | 422 | Audit index for dated repository verification notes |
+| `docs/audit/2026-03-18-zzzzzzz-land-unlanded-surfaces.md` | docs | markdown | 72 | 2685 | Repository audit note for 2026 03 18 zzzzzzz land unlanded surfaces |
+| `docs/audit/README.md` | docs | markdown | 14 | 415 | Audit index for dated repository verification notes |
 | `documentation/azure-deployment.md` | documentation | markdown | 63 | 2603 | Azure Deployment Notes |
 | `documentation/hushwheel-fixture-rag-guide.md` | documentation | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
 | `documentation/inspired/dspy-rag-tutorial.md` | documentation | markdown | 35 | 1474 | DSPy Tutorial: Basic RAG |
@@ -165,23 +167,23 @@ This inventory is generated from the current Git index.
 | `tests/fixtures/hushwheel_lexiconarium/CHANGELOG.md` | tests | markdown | 9 | 345 | Changelog |
 | `tests/fixtures/hushwheel_lexiconarium/Doxyfile` | tests | text | 34 | 1184 | PROJECT_NAME           = Hushwheel Lexiconarium |
 | `tests/fixtures/hushwheel_lexiconarium/LICENSE.md` | tests | markdown | 22 | 1082 | MIT License |
-| `tests/fixtures/hushwheel_lexiconarium/Makefile` | tests | makefile | 143 | 4592 | CC ?= cc |
-| `tests/fixtures/hushwheel_lexiconarium/README.md` | tests | markdown | 134 | 6072 | The Hushwheel Lexiconarium |
+| `tests/fixtures/hushwheel_lexiconarium/Makefile` | tests | makefile | 211 | 8917 | CC ?= cc |
+| `tests/fixtures/hushwheel_lexiconarium/README.md` | tests | markdown | 142 | 6828 | The Hushwheel Lexiconarium |
 | `tests/fixtures/hushwheel_lexiconarium/VERSION` | tests | text | 2 | 6 | 0.1.0 |
 | `tests/fixtures/hushwheel_lexiconarium/docs/architecture.md` | tests | markdown | 31 | 1168 | Hushwheel Architecture |
 | `tests/fixtures/hushwheel_lexiconarium/docs/catalog.md` | tests | markdown | 357 | 26988 | Hushwheel Representative Catalog |
 | `tests/fixtures/hushwheel_lexiconarium/docs/concepts.md` | tests | markdown | 37 | 1559 | Hushwheel Concepts |
 | `tests/fixtures/hushwheel_lexiconarium/docs/districts.md` | tests | markdown | 42 | 1151 | Hushwheel Districts |
 | `tests/fixtures/hushwheel_lexiconarium/docs/doxygen-fonts.sty` | tests | binary |  | 212 | Binary tracked asset at tests/fixtures/hushwheel_lexiconarium/docs/doxygen-fonts.sty |
-| `tests/fixtures/hushwheel_lexiconarium/docs/hushwheel-reference.pdf` | tests | binary |  | 1732723 | Binary tracked asset at tests/fixtures/hushwheel_lexiconarium/docs/hushwheel-reference.pdf |
+| `tests/fixtures/hushwheel_lexiconarium/docs/hushwheel-reference.pdf` | tests | binary |  | 1736672 | Binary tracked asset at tests/fixtures/hushwheel_lexiconarium/docs/hushwheel-reference.pdf |
 | `tests/fixtures/hushwheel_lexiconarium/docs/operations.md` | tests | markdown | 35 | 1068 | Hushwheel Operations |
 | `tests/fixtures/hushwheel_lexiconarium/docs/packaging.md` | tests | markdown | 32 | 1004 | Hushwheel Packaging |
-| `tests/fixtures/hushwheel_lexiconarium/docs/testing.md` | tests | markdown | 30 | 968 | Hushwheel Testing |
+| `tests/fixtures/hushwheel_lexiconarium/docs/testing.md` | tests | markdown | 57 | 2294 | Hushwheel Testing |
 | `tests/fixtures/hushwheel_lexiconarium/fixture-manifest.json` | tests | json | 40 | 924 | JSON object with keys: entry_count, source_size_bytes, doc_files |
 | `tests/fixtures/hushwheel_lexiconarium/include/hushwheel.h` | tests | binary |  | 404 | Binary tracked asset at tests/fixtures/hushwheel_lexiconarium/include/hushwheel.h |
 | `tests/fixtures/hushwheel_lexiconarium/packaging/hushwheel.1` | tests | binary |  | 1303 | Binary tracked asset at tests/fixtures/hushwheel_lexiconarium/packaging/hushwheel.1 |
 | `tests/fixtures/hushwheel_lexiconarium/packaging/hushwheel.package.json` | tests | json | 29 | 591 | JSON object with keys: name, version, summary |
-| `tests/fixtures/hushwheel_lexiconarium/src/hushwheel.c` | tests | binary |  | 1694575 | Binary tracked asset at tests/fixtures/hushwheel_lexiconarium/src/hushwheel.c |
+| `tests/fixtures/hushwheel_lexiconarium/src/hushwheel.c` | tests | binary |  | 1694579 | Binary tracked asset at tests/fixtures/hushwheel_lexiconarium/src/hushwheel.c |
 | `tests/fixtures/hushwheel_lexiconarium/src/hushwheel_internal.h` | tests | binary |  | 603 | Binary tracked asset at tests/fixtures/hushwheel_lexiconarium/src/hushwheel_internal.h |
 | `tests/fixtures/hushwheel_lexiconarium/src/hushwheel_spoke_argent.c` | tests | binary |  | 317435 | Binary tracked asset at tests/fixtures/hushwheel_lexiconarium/src/hushwheel_spoke_argent.c |
 | `tests/fixtures/hushwheel_lexiconarium/src/hushwheel_spoke_bhagavatam.c` | tests | binary |  | 319504 | Binary tracked asset at tests/fixtures/hushwheel_lexiconarium/src/hushwheel_spoke_bhagavatam.c |
@@ -193,11 +195,11 @@ This inventory is generated from the current Git index.
 | `tests/fixtures/hushwheel_lexiconarium/src/hushwheel_spoke_ranger.c` | tests | binary |  | 317449 | Binary tracked asset at tests/fixtures/hushwheel_lexiconarium/src/hushwheel_spoke_ranger.c |
 | `tests/fixtures/hushwheel_lexiconarium/src/hushwheel_spokes.c` | tests | binary |  | 1074 | Binary tracked asset at tests/fixtures/hushwheel_lexiconarium/src/hushwheel_spokes.c |
 | `tests/fixtures/hushwheel_lexiconarium/tests/bdd/hushwheel.feature` | tests | gherkin | 28 | 1021 | Feature: Hushwheel CLI |
-| `tests/fixtures/hushwheel_lexiconarium/tests/bdd/run_bdd.py` | tests | python | 93 | 3092 | Python module for run bdd |
-| `tests/fixtures/hushwheel_lexiconarium/tests/integration/cli_suite.py` | tests | python | 90 | 3010 | Python module for cli suite |
+| `tests/fixtures/hushwheel_lexiconarium/tests/bdd/run_bdd.py` | tests | python | 94 | 3146 | Python module for run bdd |
+| `tests/fixtures/hushwheel_lexiconarium/tests/integration/cli_suite.py` | tests | python | 122 | 4482 | Python module for cli suite |
 | `tests/fixtures/hushwheel_lexiconarium/tests/unit/test_hushwheel_unit.c` | tests | binary |  | 2002 | Binary tracked asset at tests/fixtures/hushwheel_lexiconarium/tests/unit/test_hushwheel_unit.c |
-| `tests/fixtures/hushwheel_lexiconarium/tools/lint_hushwheel.py` | tests | python | 110 | 3495 | Python module for lint hushwheel |
-| `tests/fixtures/hushwheel_lexiconarium/tools/regenerate_hushwheel_fixture.py` | tests | python | 833 | 30726 | Python module for regenerate hushwheel fixture |
+| `tests/fixtures/hushwheel_lexiconarium/tools/lint_hushwheel.py` | tests | python | 118 | 3649 | Python module for lint hushwheel |
+| `tests/fixtures/hushwheel_lexiconarium/tools/regenerate_hushwheel_fixture.py` | tests | python | 833 | 30730 | Python module for regenerate hushwheel fixture |
 | `tests/test_azure_runtime.py` | tests | python | 101 | 3806 | Python module for test azure runtime |
 | `tests/test_benchmarks_and_notebook_scaffolding.py` | tests | python | 231 | 9962 | Python module for test benchmarks and notebook scaffolding |
 | `tests/test_cli_and_dspy.py` | tests | python | 473 | 16656 | Python module for test cli and dspy |
@@ -205,11 +207,11 @@ This inventory is generated from the current Git index.
 | `tests/test_exploratorium_translation.py` | tests | python | 62 | 2502 | Python module for test exploratorium translation |
 | `tests/test_file_summaries.py` | tests | python | 251 | 10179 | Python module for test file summaries |
 | `tests/test_hushwheel_fixture.py` | tests | python | 50 | 2030 | Python module for test hushwheel fixture |
-| `tests/test_hushwheel_program_surface.py` | tests | python | 91 | 3179 | Python module for test hushwheel program surface |
+| `tests/test_hushwheel_program_surface.py` | tests | python | 108 | 3804 | Python module for test hushwheel program surface |
 | `tests/test_mcp_branches.py` | tests | python | 31 | 1077 | Python module for test mcp branches |
 | `tests/test_notebook_runner.py` | tests | python | 84 | 3088 | Python module for test notebook runner |
 | `tests/test_population_samples.py` | tests | python | 76 | 3136 | Python module for test population samples |
-| `tests/test_project_surfaces.py` | tests | python | 285 | 12299 | Python module for test project surfaces |
+| `tests/test_project_surfaces.py` | tests | python | 328 | 14315 | Python module for test project surfaces |
 | `tests/test_repository_rag_bdd.py` | tests | python | 30 | 879 | Python module for test repository rag bdd |
 | `tests/test_retrieval.py` | tests | python | 81 | 2888 | Python module for test retrieval |
 | `tests/test_todo_backlog.py` | tests | python | 98 | 3225 | Python module for test todo backlog |

@@ -1,0 +1,81 @@
+name: Hushwheel Quality
+
+on:
+  push:
+    paths:
+      - ".github/workflows/hushwheel-quality.yml"
+      - "tests/fixtures/hushwheel_lexiconarium/**"
+      - "tests/test_hushwheel_fixture.py"
+      - "tests/test_hushwheel_program_surface.py"
+      - "tests/test_project_surfaces.py"
+  pull_request:
+    paths:
+      - ".github/workflows/hushwheel-quality.yml"
+      - "tests/fixtures/hushwheel_lexiconarium/**"
+      - "tests/test_hushwheel_fixture.py"
+      - "tests/test_hushwheel_program_surface.py"
+      - "tests/test_project_surfaces.py"
+  workflow_dispatch:
+
+jobs:
+  hushwheel-quality:
+    name: Hushwheel Fixture Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: ".python-version"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.10"
+          enable-cache: true
+          cache-dependency-glob: |
+            .python-version
+            pyproject.toml
+            uv.lock
+
+      - name: Install native analyzers
+        run: sudo apt-get update && sudo apt-get install -y cppcheck
+
+      - name: Sync environment
+        run: uv sync --frozen --extra azure
+
+      - name: Run hushwheel fixture quality suite
+        run: make -C tests/fixtures/hushwheel_lexiconarium quality
+
+      - name: Snapshot hushwheel quality reports
+        run: |
+          rm -rf artifacts/hushwheel-quality-reports
+          mkdir -p artifacts
+          cp -a tests/fixtures/hushwheel_lexiconarium/build/reports artifacts/hushwheel-quality-reports
+
+      - name: Run hushwheel repository surface tests
+        run: >-
+          uv run pytest
+          tests/test_hushwheel_fixture.py
+          tests/test_project_surfaces.py
+          tests/test_hushwheel_program_surface.py::test_hushwheel_fixture_makefile_exposes_project_harness
+          tests/test_hushwheel_program_surface.py::test_hushwheel_fixture_docs_describe_quality_reports
+          tests/test_hushwheel_program_surface.py::test_hushwheel_fixture_check_target_passes
+
+      - name: Publish hushwheel quality summary
+        if: always()
+        run: |
+          SUMMARY=artifacts/hushwheel-quality-reports/quality-summary.md
+          if [ -f "$SUMMARY" ]; then
+            cat "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload hushwheel quality reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hushwheel-quality-reports
+          path: artifacts/hushwheel-quality-reports
+          if-no-files-found: error

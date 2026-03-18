@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 FEATURE_PATH = Path(__file__).with_name("hushwheel.feature")
-BINARY = ROOT / "hushwheel"
+BINARY = Path(os.environ.get("HUSHWHEEL_BIN", str(ROOT / "hushwheel")))
 
 
 def run_cli(*args: str) -> subprocess.CompletedProcess[str]:

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import unittest
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-BINARY = ROOT / "hushwheel"
+BINARY = Path(os.environ.get("HUSHWHEEL_BIN", str(ROOT / "hushwheel")))
 MANIFEST_PATH = ROOT / "fixture-manifest.json"
 
 
@@ -57,16 +58,42 @@ class HushwheelIntegrationTests(unittest.TestCase):
         assert result.returncode == 3
         assert "term not found: missing-term" in result.stderr
 
+    def test_lookup_finds_generated_spoke_entries(self) -> None:
+        result = run_cli("lookup", "argent-ember-index-0279")
+        assert result.returncode == 0
+        assert "term: argent-ember-index-0279" in result.stdout
+        assert "district: Brass Quarter" in result.stdout
+
     def test_prefix_lists_matching_entries(self) -> None:
         result = run_cli("prefix", "amber")
         assert result.returncode == 0
         assert "amber-abacus-0000 | bellframe | ember=100" in result.stdout
+
+    def test_prefix_lists_generated_spoke_entries(self) -> None:
+        result = run_cli("prefix", "argent-ember-index")
+        assert result.returncode == 0
+        assert "argent-ember-index-0279 | archive-gossip | ember=523" in result.stdout
+
+    def test_prefix_reports_when_nothing_matches(self) -> None:
+        result = run_cli("prefix", "zzz-not-a-real-prefix")
+        assert result.returncode == 0
+        assert "no entries matched prefix 'zzz-not-a-real-prefix'" in result.stdout
 
     def test_category_lists_matching_entries(self) -> None:
         result = run_cli("category", "storm-index")
         assert result.returncode == 0
         assert "ember-index | Coal Arcade | ember=777" in result.stdout
         assert "storm-compass | Tin Wharf | ember=690" in result.stdout
+
+    def test_category_requires_a_name_argument(self) -> None:
+        result = run_cli("category")
+        assert result.returncode == 2
+        assert "category requires a NAME" in result.stderr
+
+    def test_category_reports_when_nothing_matches(self) -> None:
+        result = run_cli("category", "zzz-not-a-real-category")
+        assert result.returncode == 0
+        assert "no entries matched category 'zzz-not-a-real-category'" in result.stdout
 
     def test_stats_match_fixture_manifest(self) -> None:
         result = run_cli("stats")
@@ -83,6 +110,11 @@ class HushwheelIntegrationTests(unittest.TestCase):
         assert result.returncode == 0
         assert "theatrical city dictionary" in result.stdout
         assert "giant static glossary table" in result.stdout
+
+    def test_unknown_commands_fall_back_to_usage(self) -> None:
+        result = run_cli("nonesuch")
+        assert result.returncode == 1
+        assert "usage:" in result.stdout
 
 
 if __name__ == "__main__":

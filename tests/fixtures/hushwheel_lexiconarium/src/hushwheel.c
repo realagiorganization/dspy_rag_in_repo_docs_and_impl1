@@ -4315,13 +4315,13 @@ static void print_usage(const char *program_name) {
 }
 
 int hushwheel_main(int argc, char **argv) {
-    const GlossaryEntry *entry;
     if (argc < 2) {
         print_usage(argv[0]);
         return 1;
     }
 
     if (strcmp(argv[1], "lookup") == 0) {
+        const GlossaryEntry *entry;
         if (argc < 3) {
             fprintf(stderr, "lookup requires a TERM\n");
             return 2;
