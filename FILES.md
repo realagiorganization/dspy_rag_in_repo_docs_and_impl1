@@ -32,10 +32,6 @@ This inventory is generated from the current Git index.
 | `AGENTS.md.d/FILES.md` | AGENTS.md.d | markdown | 41 | 2247 | Agent instructions for maintaining FILES.md and FILES.csv |
 | `AGENTS.md.d/RUST_LOOKUP.md` | AGENTS.md.d | markdown | 33 | 1579 | Rust SQLite Lookup Instructions |
 | `FILES.csv` | FILES.csv | csv |  | 0 | Generated CSV inventory of tracked repository files |
-| `FILES.csv` | FILES.csv | csv |  | 0 | Generated CSV inventory of tracked repository files |
-| `FILES.csv` | FILES.csv | csv |  | 0 | Generated CSV inventory of tracked repository files |
-| `FILES.md` | FILES.md | markdown |  | 0 | Generated Markdown inventory of tracked repository files |
-| `FILES.md` | FILES.md | markdown |  | 0 | Generated Markdown inventory of tracked repository files |
 | `FILES.md` | FILES.md | markdown |  | 0 | Generated Markdown inventory of tracked repository files |
 | `Makefile` | Makefile | makefile | 239 | 8487 | UV ?= uv |
 | `README.AGENTS.md` | README.AGENTS.md | markdown | 257 | 14925 | Repository research narrative tying code, docs, and verification together |
@@ -85,8 +81,6 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzz-lookup-first-ask-path.md` | docs | markdown | 94 | 4604 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzz lookup first ask path |
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzzz-answer-synthesis-refresh.md` | docs | markdown | 48 | 2565 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzzz answer synthesis refresh |
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzzzz-retrieval-quality-doc-priority.md` | docs | markdown | 68 | 3602 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzzzz retrieval quality doc priority |
-| `docs/audit/README.md` | docs | markdown | 14 | 436 | Audit index for dated repository verification notes |
-| `docs/audit/README.md` | docs | markdown | 14 | 436 | Audit index for dated repository verification notes |
 | `docs/audit/README.md` | docs | markdown | 14 | 436 | Audit index for dated repository verification notes |
 | `documentation/azure-deployment.md` | documentation | markdown | 63 | 2603 | Azure Deployment Notes |
 | `documentation/hushwheel-fixture-rag-guide.md` | documentation | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
@@ -159,6 +153,7 @@ This inventory is generated from the current Git index.
 | `samples/logs/20260318T125547Z-gh-runs-wire-lookup-first-ask-for-1.md` | samples | markdown | 22 | 1058 | GitHub Actions Log |
 | `samples/logs/20260318T130525Z-gh-runs-finish-node24-publication-cache-followup-for-1.md` | samples | markdown | 27 | 1119 | GitHub Actions Status For `Finish Node 24 publication cache follow-up for "1"` |
 | `samples/logs/20260318T131709Z-gh-runs-restore-root-readme-weighting-for-1.md` | samples | markdown | 45 | 1680 | GitHub Actions Run Log |
+| `samples/logs/20260318T133247Z-gh-runs-improve-retrieval-doc-priority-for-1.md` | samples | markdown | 34 | 1335 | GitHub Actions Run Log |
 | `samples/logs/README.md` | samples | markdown | 11 | 331 | GitHub Run Logs |
 | `samples/population/hushwheel_fixture_population_candidates.yaml` | samples | yaml | 22 | 955 | - source: README.md |
 | `samples/population/repository_population_candidates.yaml` | samples | yaml | 16 | 684 | - source: README.md |
@@ -179,8 +174,6 @@ This inventory is generated from the current Git index.
 | `src/repo_rag_lab/notebook_scaffolding.py` | src | python | 260 | 11029 | High-level notebook scaffolds built from tested repository helpers. |
 | `src/repo_rag_lab/notebook_support.py` | src | python | 89 | 2843 | Helpers shared by notebooks so their setup logic stays in tested Python code. |
 | `src/repo_rag_lab/population_samples.py` | src | python | 241 | 8364 | Helpers for reviewing and batching starter corpus-population inputs. |
-| `src/repo_rag_lab/retrieval.py` | src | python | 383 | 11672 | Baseline chunking and lexical retrieval utilities for repository text. |
-| `src/repo_rag_lab/retrieval.py` | src | python | 383 | 11672 | Baseline chunking and lexical retrieval utilities for repository text. |
 | `src/repo_rag_lab/retrieval.py` | src | python | 383 | 11672 | Baseline chunking and lexical retrieval utilities for repository text. |
 | `src/repo_rag_lab/rust_lookup.py` | src | python | 271 | 6926 | Helpers for the native Rust-backed SQLite lookup index. |
 | `src/repo_rag_lab/settings.py` | src | python | 28 | 708 | Shared repository path settings derived from a repository root. |
