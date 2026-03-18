@@ -26,7 +26,7 @@ FILES.csv,FILES.csv,csv,,0,Generated CSV inventory of tracked repository files
 FILES.md,FILES.md,markdown,,0,Generated Markdown inventory of tracked repository files
 Makefile,Makefile,makefile,219,7240,UV ?= uv
 README.AGENTS.md,README.AGENTS.md,markdown,232,12880,"Repository research narrative tying code, docs, and verification together"
-README.DSPY.MD,README.DSPY.MD,markdown,638,29959,"DSPy workflow guide for training, runtime use, and compiled programs"
+README.DSPY.MD,README.DSPY.MD,markdown,642,30335,"DSPy workflow guide for training, runtime use, and compiled programs"
 README.md,README.md,markdown,160,9376,"Top-level repository overview, workflow map, and quality guidance"
 REPO_COMPLETENESS_CHECKLIST.md,REPO_COMPLETENESS_CHECKLIST.md,markdown,236,7194,Repository Completeness Checklist
 TODO.MD,TODO.MD,markdown,24,6837,TODO
@@ -47,6 +47,7 @@ docs/audit/2026-03-18-dspy-training-path.md,docs,markdown,81,4605,Repository aud
 docs/audit/2026-03-18-hushwheel-program-harness.md,docs,markdown,76,3907,Repository audit note for 2026 03 18 hushwheel program harness
 docs/audit/2026-03-18-notebook-execution.md,docs,markdown,66,2577,Repository audit note for 2026 03 18 notebook execution
 docs/audit/2026-03-18-notebook-runner-harness.md,docs,markdown,91,4121,Repository audit note for 2026 03 18 notebook runner harness
+docs/audit/2026-03-18-repository-benchmark-broadening.md,docs,markdown,74,3728,Repository audit note for 2026 03 18 repository benchmark broadening
 docs/audit/2026-03-18-retest-with-env-refresh.md,docs,markdown,105,5102,Repository audit note for 2026 03 18 retest with env refresh
 docs/audit/2026-03-18-retrieval-evaluation-suite.md,docs,markdown,80,4031,Repository audit note for 2026 03 18 retrieval evaluation suite
 docs/audit/2026-03-18-retrieval-ranking-refresh.md,docs,markdown,109,6479,Repository audit note for 2026 03 18 retrieval ranking refresh
@@ -57,7 +58,7 @@ docs/audit/2026-03-18-zz-file-summary-inventory.md,docs,markdown,91,4126,Reposit
 docs/audit/2026-03-18-zz-research-narrative.md,docs,markdown,79,3220,Repository audit note for 2026 03 18 zz research narrative
 docs/audit/2026-03-18-zzz-session-consolidation-on-origin-master.md,docs,markdown,109,5061,Repository audit note for 2026 03 18 zzz session consolidation on origin master
 docs/audit/2026-03-18-zzzz-session-consolidation-master-ci-repair.md,docs,markdown,73,3270,Repository audit note for 2026 03 18 zzzz session consolidation master ci repair
-docs/audit/README.md,docs,markdown,14,410,Audit index for dated repository verification notes
+docs/audit/README.md,docs,markdown,14,416,Audit index for dated repository verification notes
 documentation/azure-deployment.md,documentation,markdown,63,2603,Azure Deployment Notes
 documentation/hushwheel-fixture-rag-guide.md,documentation,markdown,138,5169,RAG Guide For The Hushwheel Fixture
 documentation/inspired/dspy-rag-tutorial.md,documentation,markdown,35,1474,DSPy Tutorial: Basic RAG
@@ -66,8 +67,8 @@ documentation/mcp-discovery.md,documentation,markdown,28,784,MCP Discovery Notes
 documentation/package-api.md,documentation,markdown,35,2121,Package API Notes
 env.md,env.md,markdown,108,5043,Environment Variables
 notebooks/01_repo_rag_research.ipynb,notebooks,notebook,286,9654,Repository RAG Research Playbook
-notebooks/02_agent_workflow_checklist.ipynb,notebooks,notebook,274,10491,Agent Workflow Checklist
-notebooks/03_dspy_training_lab.ipynb,notebooks,notebook,256,8657,DSPy Training Sample Lab
+notebooks/02_agent_workflow_checklist.ipynb,notebooks,notebook,404,17405,Agent Workflow Checklist
+notebooks/03_dspy_training_lab.ipynb,notebooks,notebook,314,11967,DSPy Training Sample Lab
 notebooks/04_sample_population_lab.ipynb,notebooks,notebook,250,7854,Sample Population Lab
 notebooks/05_hushwheel_fixture_rag_lab.ipynb,notebooks,notebook,378,13622,Hushwheel Fixture RAG Lab
 publication/.gitignore,publication,text,12,80,.build/
@@ -124,7 +125,7 @@ samples/logs/README.md,samples,markdown,11,331,GitHub Run Logs
 samples/population/hushwheel_fixture_population_candidates.yaml,samples,yaml,22,955,- source: README.md
 samples/population/repository_population_candidates.yaml,samples,yaml,16,684,- source: README.md
 samples/training/hushwheel_fixture_training_examples.yaml,samples,yaml,68,1852,- question: What is the ember index?
-samples/training/repository_training_examples.yaml,samples,yaml,31,964,- question: What does this repository research?
+samples/training/repository_training_examples.yaml,samples,yaml,82,2607,- question: What does this repository research?
 src/repo_rag_lab/__init__.py,src,python,6,178,Public package surface for the repository-grounded RAG lab.
 src/repo_rag_lab/azure.py,src,python,76,2592,Azure deployment manifest helpers for downstream release workflows.
 src/repo_rag_lab/azure_runtime.py,src,python,462,15984,"Azure runtime normalization, live probes, and cloud-completion helpers."
@@ -186,7 +187,7 @@ tests/fixtures/hushwheel_lexiconarium/tests/unit/test_hushwheel_unit.c,tests,bin
 tests/fixtures/hushwheel_lexiconarium/tools/lint_hushwheel.py,tests,python,110,3495,Python module for lint hushwheel
 tests/fixtures/hushwheel_lexiconarium/tools/regenerate_hushwheel_fixture.py,tests,python,833,30726,Python module for regenerate hushwheel fixture
 tests/test_azure_runtime.py,tests,python,101,3806,Python module for test azure runtime
-tests/test_benchmarks_and_notebook_scaffolding.py,tests,python,208,8758,Python module for test benchmarks and notebook scaffolding
+tests/test_benchmarks_and_notebook_scaffolding.py,tests,python,213,8947,Python module for test benchmarks and notebook scaffolding
 tests/test_cli_and_dspy.py,tests,python,391,13621,Python module for test cli and dspy
 tests/test_dspy_training.py,tests,python,405,13695,Python module for test dspy training
 tests/test_exploratorium_translation.py,tests,python,62,2502,Python module for test exploratorium translation
@@ -200,7 +201,7 @@ tests/test_project_surfaces.py,tests,python,267,11535,Python module for test pro
 tests/test_repository_rag_bdd.py,tests,python,30,879,Python module for test repository rag bdd
 tests/test_retrieval.py,tests,python,81,2888,Python module for test retrieval
 tests/test_todo_backlog.py,tests,python,98,3225,Python module for test todo backlog
-tests/test_training_samples.py,tests,python,56,1973,Python module for test training samples
+tests/test_training_samples.py,tests,python,65,2535,Python module for test training samples
 tests/test_utilities.py,tests,python,172,6194,Python module for test utilities
 tests/test_verification.py,tests,python,63,2899,Python module for test verification
 tests/test_workflow_live.py,tests,python,99,3331,Python module for test workflow live

@@ -36,6 +36,7 @@ def _copy_scaffold_inputs(tmp_path: Path) -> Path:
         Path("documentation/mcp-discovery.md"),
         Path("documentation/inspired/dspy-rag-tutorial.md"),
         Path("documentation/inspired/implementing-rag-with-dspy-technical-guide.md"),
+        Path("publication/README.md"),
         Path("samples/training/repository_training_examples.yaml"),
         Path("samples/population/repository_population_candidates.yaml"),
         Path("src/repo_rag_lab/utilities.py"),
@@ -53,6 +54,7 @@ def test_repository_benchmarks_pass_with_current_training_samples() -> None:
     benchmarks = build_retrieval_benchmarks(examples)
     results = evaluate_retrieval_benchmarks(REPO_ROOT, benchmarks)
     summary = summarize_benchmark_results(results)
+    assert len(benchmarks) >= 8
     assert len(benchmarks) == len(examples)
     assert summary["case_count"] == len(examples)
     assert summary["pass_rate"] == 1.0
@@ -130,8 +132,11 @@ def test_build_training_lab_context_writes_metadata_and_reports_clean_validation
 ) -> None:
     root = _copy_scaffold_inputs(tmp_path)
     payload = build_training_lab_context(root)
-    assert payload["training_summary"]["example_count"] == 3
+    assert payload["training_summary"]["example_count"] >= 8
     assert payload["validation_issues"] == []
+    assert (
+        payload["benchmark_summary"]["case_count"] == payload["training_summary"]["example_count"]
+    )
     assert payload["benchmark_summary"]["pass_rate"] == 1.0
     assert len(payload["benchmark_top_k_summaries"]) >= 1
     assert (root / payload["tuning_metadata_path"]).exists()

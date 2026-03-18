@@ -28,3 +28,54 @@
     - AGENTS.md
     - README.md
     - utilities/README.md
+- question: Which file explains the core workflow modules under src/repo_rag_lab?
+  expected_answer: >-
+    documentation/package-api.md explains the core workflow modules and their
+    roles in the repository.
+  tags:
+    - api
+    - package
+    - modules
+  expected_sources:
+    - documentation/package-api.md
+- question: What should AZURE_INFERENCE_ENDPOINT contain for the Azure AI Inference SDK?
+  expected_answer: >-
+    It should be the deployment base endpoint, such as
+    https://<host>/openai/deployments/<deployment>, not the full
+    chat/completions request URI.
+  tags:
+    - azure
+    - inference
+    - runtime
+  expected_sources:
+    - documentation/azure-deployment.md
+    - utilities/README.md
+- question: Where can you read MCP discovery notes?
+  expected_answer: They are documented in documentation/mcp-discovery.md.
+  tags:
+    - mcp
+    - docs
+  expected_sources:
+    - documentation/mcp-discovery.md
+- question: How do you execute all tracked notebooks with monitored progress and report artifacts?
+  expected_answer: >-
+    Use make notebook-report or uv run repo-rag run-notebooks to execute all
+    tracked notebooks with monitored progress and report artifacts.
+  tags:
+    - notebooks
+    - utilities
+    - automation
+  expected_sources:
+    - utilities/README.md
+    - documentation/package-api.md
+- question: How do you build the publication PDF locally?
+  expected_answer: >-
+    Run make paper-build to regenerate the publication inventories and build
+    the committed publication PDFs locally.
+  tags:
+    - publication
+    - build
+    - docs
+  expected_sources:
+    - README.md
+    - publication/README.md

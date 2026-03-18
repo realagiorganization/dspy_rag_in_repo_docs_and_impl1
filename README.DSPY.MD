@@ -244,7 +244,9 @@ MCP discovery is adjacent to retrieval, not a separate product:
 
 ## Stage 3. Training Sample Preparation
 
-This stage defines the structured examples that can later support DSPy optimization.
+This stage defines the structured examples that can later support DSPy optimization. The checked-in
+repository set now spans repo overview, inspired summaries, utility onboarding, package API notes,
+Azure runtime guidance, MCP notes, notebook execution, and publication build guidance.
 
 Primary files:
 
@@ -609,7 +611,9 @@ Now that the compile path exists, the shortest honest extension path is:
 5. Add tests that verify richer regression metrics, saved-program promotion rules, and downstream
    Azure inference behavior beyond manifest generation.
 
-The existing scaffolding already gives the right inputs for that work:
+The existing scaffolding already gives the right inputs for that work, and the repository benchmark
+starter set is now broad enough to cover repo overview, utilities, package API, Azure runtime,
+MCP, notebook execution, and publication surfaces:
 
 - corpus planning from [src/repo_rag_lab/population_samples.py](src/repo_rag_lab/population_samples.py)
 - benchmark data from [src/repo_rag_lab/benchmarks.py](src/repo_rag_lab/benchmarks.py)

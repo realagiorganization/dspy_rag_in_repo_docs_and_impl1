@@ -17,9 +17,17 @@ def test_load_training_examples_reads_repository_samples() -> None:
     examples = load_training_examples(
         REPO_ROOT / "samples" / "training" / "repository_training_examples.yaml"
     )
-    assert len(examples) >= 3
+    questions = {example.question for example in examples}
+    assert len(examples) >= 8
     assert examples[0].question
     assert examples[0].expected_sources
+    assert {
+        "Which file explains the core workflow modules under src/repo_rag_lab?",
+        "What should AZURE_INFERENCE_ENDPOINT contain for the Azure AI Inference SDK?",
+        "Where can you read MCP discovery notes?",
+        "How do you execute all tracked notebooks with monitored progress and report artifacts?",
+        "How do you build the publication PDF locally?",
+    }.issubset(questions)
 
 
 def test_batch_training_examples_preserves_all_items() -> None:
@@ -38,6 +46,7 @@ def test_summarize_training_examples_lists_tags() -> None:
     assert summary["example_count"] == len(examples)
     assert summary["benchmark_count"] == len(examples)
     assert "repo" in summary["unique_tags"]
+    assert {"azure", "mcp", "notebooks", "publication"}.issubset(summary["unique_tags"])
 
 
 def test_validate_training_examples_accepts_repository_samples() -> None:

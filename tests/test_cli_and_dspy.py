@@ -165,7 +165,7 @@ def test_cli_main_other_commands(
     def fake_retrieval_evaluation(root: Path, **_: object) -> str:
         return (
             '{"training_path": "samples/training/repository_training_examples.yaml", '
-            f'"default_top_k": 4, "benchmark_count": 3, "root": "{root}"}}'
+            f'"default_top_k": 4, "benchmark_count": 8, "root": "{root}"}}'
         )
 
     monkeypatch.setattr(cli, "run_surface_verification", fake_surface_verification)
