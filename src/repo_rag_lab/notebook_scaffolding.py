@@ -9,8 +9,7 @@ from typing import Any
 from .azure import write_tuning_run_metadata
 from .benchmarks import (
     build_retrieval_benchmarks,
-    evaluate_retrieval_benchmarks,
-    summarize_benchmark_results,
+    evaluate_retrieval_quality_suite,
 )
 from .corpus import load_documents
 from .dspy_training import latest_dspy_artifact_metadata
@@ -76,9 +75,8 @@ def build_agent_workflow_context(root: Path) -> dict[str, Any]:
     population_path = root / POPULATION_SAMPLES_PATH
     examples = load_training_examples(training_path)
     benchmarks = build_retrieval_benchmarks(examples)
-    benchmark_summary: dict[str, Any] = summarize_benchmark_results(
-        evaluate_retrieval_benchmarks(root, benchmarks)
-    )
+    benchmark_suite: dict[str, Any] = evaluate_retrieval_quality_suite(root, benchmarks)
+    benchmark_summary: dict[str, Any] = benchmark_suite["default_summary"]
     candidates = extend_population_candidates(root, load_population_candidates(population_path))
     mcp_candidates = discover_mcp_servers(root)
     payload = {
@@ -90,6 +88,7 @@ def build_agent_workflow_context(root: Path) -> dict[str, Any]:
         "training_validation_issues": validate_training_examples(examples, root=root),
         "population_validation_issues": validate_population_candidates(candidates, root=root),
         "benchmark_summary": benchmark_summary,
+        "benchmark_top_k_summaries": benchmark_suite["top_k_summaries"],
     }
     LOGGER.info(
         "Built agent workflow context with %s benchmarks and %s MCP candidates.",
@@ -106,9 +105,11 @@ def build_training_lab_context(root: Path) -> dict[str, Any]:
     examples = load_training_examples(training_path)
     validation_issues = validate_training_examples(examples, root=root)
     training_summary: dict[str, Any] = summarize_training_examples(examples)
-    benchmark_summary: dict[str, Any] = summarize_benchmark_results(
-        evaluate_retrieval_benchmarks(root, build_retrieval_benchmarks(examples))
+    benchmark_suite: dict[str, Any] = evaluate_retrieval_quality_suite(
+        root,
+        build_retrieval_benchmarks(examples),
     )
+    benchmark_summary: dict[str, Any] = benchmark_suite["default_summary"]
     tuning_metadata_path = write_tuning_run_metadata(
         root=root,
         run_name="dspy-training-lab",
@@ -131,6 +132,7 @@ def build_training_lab_context(root: Path) -> dict[str, Any]:
         "training_summary": training_summary,
         "validation_issues": validation_issues,
         "benchmark_summary": benchmark_summary,
+        "benchmark_top_k_summaries": benchmark_suite["top_k_summaries"],
         "tuning_metadata_path": str(tuning_metadata_path.relative_to(root)),
         "compiled_program_metadata_path": (
             str(compiled_program_metadata_path.relative_to(root))
@@ -156,9 +158,11 @@ def build_population_lab_context(root: Path) -> dict[str, Any]:
     base_candidates = load_population_candidates(population_path)
     extended_candidates = extend_population_candidates(root, base_candidates)
     examples = load_training_examples(training_path)
-    benchmark_summary: dict[str, Any] = summarize_benchmark_results(
-        evaluate_retrieval_benchmarks(root, build_retrieval_benchmarks(examples))
+    benchmark_suite: dict[str, Any] = evaluate_retrieval_quality_suite(
+        root,
+        build_retrieval_benchmarks(examples),
     )
+    benchmark_summary: dict[str, Any] = benchmark_suite["default_summary"]
     base_summary: dict[str, Any] = summarize_population_candidates(base_candidates)
     extended_summary: dict[str, Any] = summarize_population_candidates(extended_candidates)
     reranked_candidates = rerank_population_candidates(
@@ -174,6 +178,7 @@ def build_population_lab_context(root: Path) -> dict[str, Any]:
         "extended_summary": extended_summary,
         "validation_issues": validate_population_candidates(extended_candidates, root=root),
         "benchmark_summary": benchmark_summary,
+        "benchmark_top_k_summaries": benchmark_suite["top_k_summaries"],
         "reranked_sources": [candidate.source for candidate in reranked_candidates],
     }
     LOGGER.info(
@@ -194,9 +199,11 @@ def build_hushwheel_fixture_lab_context(root: Path) -> dict[str, Any]:
     )
     examples = load_training_examples(training_path)
     candidates = load_population_candidates(population_path)
-    benchmark_summary: dict[str, Any] = summarize_benchmark_results(
-        evaluate_retrieval_benchmarks(fixture_root, build_retrieval_benchmarks(examples))
+    benchmark_suite: dict[str, Any] = evaluate_retrieval_quality_suite(
+        fixture_root,
+        build_retrieval_benchmarks(examples),
     )
+    benchmark_summary: dict[str, Any] = benchmark_suite["default_summary"]
     training_summary: dict[str, Any] = summarize_training_examples(examples)
     population_summary: dict[str, Any] = summarize_population_candidates(candidates)
     reranked_candidates = rerank_population_candidates(
@@ -240,6 +247,7 @@ def build_hushwheel_fixture_lab_context(root: Path) -> dict[str, Any]:
             candidates, root=fixture_root
         ),
         "benchmark_summary": benchmark_summary,
+        "benchmark_top_k_summaries": benchmark_suite["top_k_summaries"],
         "reranked_sources": [candidate.source for candidate in reranked_candidates],
         "highlight_runs": highlight_runs,
     }

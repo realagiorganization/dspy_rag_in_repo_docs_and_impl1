@@ -20,6 +20,7 @@ verification results, and anchor status statements to the newest file in `docs/a
 - `make utility-summary`
 - `make todo-sync`
 - `make ask QUESTION="..."`
+- `make retrieval-eval`
 - `make discover-mcp`
 - `make smoke-test`
 - `make verify-surfaces`
@@ -27,6 +28,7 @@ verification results, and anchor status statements to the newest file in `docs/a
 - `make gh-watch`
 - `make gh-failed-logs`
 - `uv run repo-rag utility-summary`
+- `uv run repo-rag retrieval-eval --top-k-sweep "1,2,4,8"`
 - `uv run repo-rag ask --question "..." --use-dspy`
 
 ## Working Rules

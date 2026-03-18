@@ -11,6 +11,8 @@ them over ad hoc shell commands so every workflow hits the same package code.
   compiled program.
 - `make dspy-train DSPY_RUN_NAME=...`: compile and persist a repository-grounded DSPy program under
   `artifacts/dspy/`.
+- `make retrieval-eval`: evaluate retrieval quality across a top-k sweep with source recall,
+  precision, and reciprocal-rank metrics.
 - `make discover-mcp`: inspect repository-local MCP candidates.
 - `make smoke-test`: exercise answer generation, MCP discovery, and Azure manifest output together.
 - `make todo-sync`: regenerate the shared TODO backlog table for both `TODO.MD` and the publication PDF source.

@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from .azure import write_deployment_manifest
+from .benchmarks import DEFAULT_RETRIEVAL_EVAL_TOP_K
 from .dspy_training import (
     DEFAULT_DSPY_RUN_NAME,
     DEFAULT_TRAINING_PATH,
@@ -19,6 +20,7 @@ from .dspy_workflow import RepositoryRAG
 from .mcp import discover_mcp_servers, dump_candidates
 from .utilities import (
     run_notebook_report,
+    run_retrieval_evaluation,
     run_smoke_test,
     run_surface_verification,
     run_todo_backlog_sync,
@@ -84,6 +86,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     smoke_parser = subparsers.add_parser("smoke-test")
     smoke_parser.add_argument("--root", default=".")
+
+    retrieval_eval_parser = subparsers.add_parser("retrieval-eval")
+    retrieval_eval_parser.add_argument("--root", default=".")
+    retrieval_eval_parser.add_argument("--training-path", default=str(DEFAULT_TRAINING_PATH))
+    retrieval_eval_parser.add_argument("--top-k", type=int, default=DEFAULT_RETRIEVAL_EVAL_TOP_K)
+    retrieval_eval_parser.add_argument("--top-k-sweep", default="1,2,4,8")
 
     verify_parser = subparsers.add_parser("verify-surfaces")
     verify_parser.add_argument("--root", default=".")
@@ -164,6 +172,17 @@ def main() -> int:
 
     if args.command == "smoke-test":
         print(run_smoke_test(root))
+        return 0
+
+    if args.command == "retrieval-eval":
+        print(
+            run_retrieval_evaluation(
+                root,
+                training_path=Path(args.training_path),
+                top_k=args.top_k,
+                top_k_sweep=args.top_k_sweep,
+            )
+        )
         return 0
 
     if args.command == "verify-surfaces":

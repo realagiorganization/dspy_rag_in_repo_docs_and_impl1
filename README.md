@@ -60,6 +60,7 @@ the Rust wrapper.
 | Ask a repo question | `make ask QUESTION="..."` | Run the baseline repository-grounded RAG workflow. |
 | DSPy ask | `make ask-dspy QUESTION="..."` | Run the DSPy runtime path with LM config from `DSPY_*`, Azure, or OpenAI environment variables. |
 | DSPy compile | `make dspy-train DSPY_RUN_NAME=...` | Compile and save a repository-grounded DSPy program under `artifacts/dspy/`. |
+| Retrieval evaluation | `make retrieval-eval` | Measure retrieval quality with pass rate, recall, precision, reciprocal rank, and a top-k sweep. |
 | MCP discovery | `make discover-mcp` | Inspect MCP-related repository artifacts. |
 | Smoke test | `make smoke-test` | Check answer generation, MCP discovery, and Azure manifest output together. |
 | Surface verification | `make verify-surfaces` | Enforce the Makefile and notebook contract. |

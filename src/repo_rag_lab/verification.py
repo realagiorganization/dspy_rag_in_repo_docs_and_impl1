@@ -16,6 +16,7 @@ REQUIRED_MAKE_TARGETS = {
     "ask",
     "ask-dspy",
     "dspy-train",
+    "retrieval-eval",
     "discover-mcp",
     "utility-summary",
     "smoke-test",

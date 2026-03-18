@@ -7,9 +7,17 @@ from pathlib import Path
 from typing import TextIO
 
 from .azure import write_deployment_manifest
+from .benchmarks import (
+    DEFAULT_RETRIEVAL_EVAL_TOP_K,
+    build_retrieval_benchmarks,
+    evaluate_retrieval_quality_suite,
+    normalize_retrieval_top_k_values,
+)
+from .dspy_training import DEFAULT_TRAINING_PATH
 from .mcp import discover_mcp_servers
 from .notebook_runner import run_notebooks
 from .todo_backlog import sync_todo_backlog
+from .training_samples import load_training_examples
 from .verification import verify_repository_surfaces
 from .workflow import ask_repository
 
@@ -28,6 +36,10 @@ def utility_summary(root: Path) -> str:
         (
             "- make todo-sync / uv run repo-rag sync-todo-backlog: "
             "regenerate the linkified TODO tables for Markdown and the publication PDF"
+        ),
+        (
+            "- make retrieval-eval / uv run repo-rag retrieval-eval: "
+            "measure retrieval quality across a top-k sweep and richer source metrics"
         ),
         "- make smoke-test / uv run repo-rag smoke-test: validate the core workflow surfaces",
         (
@@ -58,6 +70,48 @@ def run_smoke_test(root: Path) -> str:
         "answer_contains_repository": "repository" in answer.answer.lower(),
         "mcp_candidate_count": len(mcp_candidates),
         "manifest_path": str(manifest_path.relative_to(root)),
+    }
+    return json.dumps(payload, indent=2)
+
+
+def _parse_retrieval_top_k_sweep(raw_values: str | None, *, top_k: int) -> tuple[int, ...]:
+    if raw_values is None or not raw_values.strip():
+        return normalize_retrieval_top_k_values(default_top_k=top_k)
+    parsed_values: list[int] = []
+    for raw_value in raw_values.split(","):
+        cleaned = raw_value.strip()
+        if not cleaned:
+            continue
+        parsed_values.append(int(cleaned))
+    return normalize_retrieval_top_k_values(parsed_values, default_top_k=top_k)
+
+
+def run_retrieval_evaluation(
+    root: Path,
+    *,
+    training_path: Path = DEFAULT_TRAINING_PATH,
+    top_k: int = DEFAULT_RETRIEVAL_EVAL_TOP_K,
+    top_k_sweep: str | None = None,
+) -> str:
+    """Serialize a retrieval-quality evaluation suite as JSON."""
+
+    resolved_training_path = training_path if training_path.is_absolute() else root / training_path
+    examples = load_training_examples(resolved_training_path)
+    benchmarks = build_retrieval_benchmarks(examples)
+    suite = evaluate_retrieval_quality_suite(
+        root,
+        benchmarks,
+        top_k=top_k,
+        top_k_values=_parse_retrieval_top_k_sweep(top_k_sweep, top_k=top_k),
+    )
+    try:
+        training_path_text = str(resolved_training_path.relative_to(root))
+    except ValueError:
+        training_path_text = str(resolved_training_path)
+    payload = {
+        "training_path": training_path_text,
+        "benchmark_count": len(benchmarks),
+        **suite,
     }
     return json.dumps(payload, indent=2)
 

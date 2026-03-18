@@ -3,9 +3,13 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+import pytest
+
 from repo_rag_lab.benchmarks import (
+    RetrievalBenchmarkResult,
     build_retrieval_benchmarks,
     evaluate_retrieval_benchmarks,
+    evaluate_retrieval_quality_suite,
     is_benchmark_document_path,
     summarize_benchmark_results,
 )
@@ -54,6 +58,52 @@ def test_repository_benchmarks_pass_with_current_training_samples() -> None:
     assert summary["pass_rate"] == 1.0
 
 
+def test_summarize_benchmark_results_reports_quality_metrics() -> None:
+    summary = summarize_benchmark_results(
+        [
+            RetrievalBenchmarkResult(
+                question="Q1",
+                expected_sources=("README.md", "utilities/README.md"),
+                retrieved_sources=("AGENTS.md", "README.md", "utilities/README.md"),
+                matched_sources=("README.md", "utilities/README.md"),
+                tags=("repo",),
+            ),
+            RetrievalBenchmarkResult(
+                question="Q2",
+                expected_sources=("documentation/package-api.md",),
+                retrieved_sources=("README.md",),
+                matched_sources=(),
+                tags=("docs",),
+            ),
+        ],
+        top_k=3,
+    )
+
+    assert summary["top_k"] == 3
+    assert summary["pass_count"] == 1
+    assert summary["fully_covered_case_count"] == 1
+    assert summary["fully_covered_rate"] == pytest.approx(0.5)
+    assert summary["average_source_recall"] == pytest.approx(0.5)
+    assert summary["average_source_precision"] == pytest.approx(1 / 3)
+    assert summary["average_reciprocal_rank"] == pytest.approx(0.25)
+    assert summary["missed_source_hits"]["documentation/package-api.md"] == 1
+    assert summary["results"][0]["first_relevant_rank"] == 2
+
+
+def test_evaluate_retrieval_quality_suite_reports_top_k_summaries() -> None:
+    examples = load_training_examples(
+        REPO_ROOT / "samples" / "training" / "repository_training_examples.yaml"
+    )
+    benchmarks = build_retrieval_benchmarks(examples)
+    suite = evaluate_retrieval_quality_suite(REPO_ROOT, benchmarks, top_k=4, top_k_values=(1, 4))
+
+    assert suite["case_count"] == len(benchmarks)
+    assert suite["default_top_k"] == 4
+    assert suite["top_k_values"] == [1, 4]
+    assert suite["default_summary"]["top_k"] == 4
+    assert [summary["top_k"] for summary in suite["top_k_summaries"]] == [1, 4]
+
+
 def test_is_benchmark_document_path_excludes_operational_repo_surfaces() -> None:
     assert is_benchmark_document_path(Path("README.md")) is True
     assert is_benchmark_document_path(Path("publication/README.md")) is True
@@ -83,6 +133,7 @@ def test_build_training_lab_context_writes_metadata_and_reports_clean_validation
     assert payload["training_summary"]["example_count"] == 3
     assert payload["validation_issues"] == []
     assert payload["benchmark_summary"]["pass_rate"] == 1.0
+    assert len(payload["benchmark_top_k_summaries"]) >= 1
     assert (root / payload["tuning_metadata_path"]).exists()
     assert payload["compiled_program_metadata_path"] is None
     assert payload["compiled_program_path"] is None
@@ -96,6 +147,7 @@ def test_build_training_lab_context_uses_paths_relative_to_selected_root(
 
     assert payload["validation_issues"] == []
     assert payload["benchmark_summary"]["pass_rate"] == 1.0
+    assert payload["benchmark_top_k_summaries"][-1]["top_k"] >= 4
 
 
 def test_build_population_lab_context_extends_and_reranks_candidates(tmp_path: Path) -> None:
@@ -105,6 +157,7 @@ def test_build_population_lab_context_extends_and_reranks_candidates(tmp_path: P
         payload["extended_summary"]["candidate_count"] > payload["base_summary"]["candidate_count"]
     )
     assert payload["validation_issues"] == []
+    assert len(payload["benchmark_top_k_summaries"]) >= 1
     assert "documentation/package-api.md" in payload["reranked_sources"]
 
 
@@ -113,6 +166,7 @@ def test_build_agent_workflow_context_reports_validation_and_benchmarks() -> Non
     assert payload["training_validation_issues"] == []
     assert payload["population_validation_issues"] == []
     assert payload["benchmark_summary"]["pass_rate"] == 1.0
+    assert len(payload["benchmark_top_k_summaries"]) >= 1
 
 
 def test_build_research_playbook_context_reports_smoke_and_baseline_details() -> None:
@@ -147,6 +201,7 @@ def test_build_hushwheel_fixture_lab_context_reports_fixture_scale_and_answers()
     assert payload["training_validation_issues"] == []
     assert payload["population_validation_issues"] == []
     assert payload["benchmark_summary"]["pass_rate"] == 1.0
+    assert len(payload["benchmark_top_k_summaries"]) >= 1
     assert payload["reranked_sources"][0] == "README.md"
     assert len(payload["highlight_runs"]) == 2
     assert any("src/hushwheel.c" in run["context_sources"] for run in payload["highlight_runs"])
