@@ -19,7 +19,6 @@ MANDIR ?= $(PREFIX)/share/man
 BUILD_DIR := build
 DIST_DIR := dist
 DOC_BUILD_DIR := $(BUILD_DIR)/doxygen
-TMPDIR ?= $(HOME)/.cache/hushwheel-fixture-tmp
 DOXYFILE := Doxyfile
 DOC_PDF := docs/hushwheel-reference.pdf
 HUSHWHEEL_BIN ?= $(abspath hushwheel)
@@ -84,7 +83,6 @@ PACKAGE_FILES := \
 	$(DOC_PDF)
 
 export TMPDIR
-
 .PHONY: all bdd check clean complexity coverage dist docs install integration lint package quality regenerate reports static-analysis test unit uninstall
 
 all: hushwheel

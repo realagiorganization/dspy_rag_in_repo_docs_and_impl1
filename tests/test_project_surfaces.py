@@ -202,7 +202,6 @@ def test_publication_workflow_builds_and_uploads_pdf() -> None:
         for step in steps
     )
 
-
 def test_retrieval_regression_gate_is_wired_into_quality_pre_push_and_ci() -> None:
     makefile_text = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
     assert "quality: compile lint typecheck verify-surfaces retrieval-eval complexity test" in (
@@ -229,8 +228,6 @@ def test_retrieval_regression_gate_is_wired_into_quality_pre_push_and_ci() -> No
         and step.get("run") == "make retrieval-eval"
         for step in steps
     )
-
-
 def test_hushwheel_quality_workflow_is_path_filtered_and_uploads_reports() -> None:
     workflow_path = REPO_ROOT / ".github" / "workflows" / "hushwheel-quality.yml"
     workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
