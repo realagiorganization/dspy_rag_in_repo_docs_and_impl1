@@ -76,6 +76,7 @@ the Rust wrapper.
 | Path | Role |
 | --- | --- |
 | `src/repo_rag_lab/` | Shared Python package for corpus loading, retrieval, MCP discovery, CLI commands, notebook scaffolds, utilities, and verification helpers. |
+| `README.AGENTS.md` | Overarching research narrative that ties together the repository thesis, workflow stages, evidence surfaces, and maintenance contract. |
 | `README.DSPY.MD` | Central DSPy map covering corpus planning, training samples, benchmarks, compile-reload flows, notebook scaffolds, and remaining DSPy limitations. |
 | `notebooks/` | Research playbooks that reuse package helpers for validation, assertions, and logging instead of embedding workflow logic inline. |
 | `tests/` | Pytest suites, BDD-style checks, doctests, and surface verification tests. |
@@ -126,7 +127,8 @@ runtime environment variables.
 
 Repository-local agent instructions live in `AGENTS.md`. Agents and contributors should start with
 named `make` targets or `uv run repo-rag ...` commands before inventing one-off workflows so
-notebooks, tests, CI, and automation stay aligned.
+notebooks, tests, CI, and automation stay aligned. The overreaching repository narrative that
+agents are expected to keep current lives in [README.AGENTS.md](README.AGENTS.md).
 
 ## Post-Push Workflow
 
