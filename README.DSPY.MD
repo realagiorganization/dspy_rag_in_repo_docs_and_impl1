@@ -219,8 +219,9 @@ The flow is intentionally simple:
 4. `load_documents(root)` reads each file into a `RepoDocument`.
 5. `chunk_documents(documents, chunk_size=1200)` splits documents into fixed-size text chunks.
 6. `retrieve(question, chunks, top_k=4)` uses lexical overlap plus light density weighting.
-7. `ask_repository(question, root)` synthesizes a readable answer from the top chunks and any MCP
-   candidates.
+7. `ask_repository(question, root)` renders a deterministic baseline answer with explicit
+   `Question:`, `Answer:`, and `Evidence:` sections, citing the most answer-rich retrieved chunks
+   plus any MCP candidates.
 
 The baseline retrieval code is small enough to read end-to-end:
 

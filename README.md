@@ -69,9 +69,9 @@ the Rust wrapper.
 | Rust lookup index | `make rust-lookup-index` | Build or refresh the ignored SQLite FTS index under `artifacts/sqlite/`. |
 | Rust lookup | `make rust-lookup QUERY="dspy training"` | Search tracked file paths and contents locally before `make ask-dspy`. |
 | Backlog sync | `make todo-sync` | Regenerate the linkified TODO table in both Markdown and the publication article. |
-| Exploratorium sync | `make exploratorium-sync` | Regenerate the bilingual file/link/fetch-state publication inventory. |
-| Ask a repo question | `make ask QUESTION="..."` | Run the lookup-first repository-grounded workflow, narrowing to native SQLite file hits before falling back to the broader baseline retriever. |
-| DSPy ask | `make ask-dspy QUESTION="..."` | Run the explicit DSPy runtime path with LM config from `DSPY_*`, Azure, or OpenAI environment variables, automatically reusing the latest compiled program when one exists after the same lookup-first narrowing pass. |
+| Exploratorium sync | `make exploratorium-sync` | Regenerate the bilingual file-link-fetch-state publication inventory. |
+| Ask a repo question | `make ask QUESTION="..."` | Run the lookup-first repository-grounded workflow with explicit `Question:`, `Answer:`, and `Evidence:` output, narrowing to native SQLite file hits before falling back to the broader baseline retriever. |
+| DSPy ask | `make ask-dspy QUESTION="..."` | Run the explicit DSPy runtime path with LM config from `DSPY_*`, Azure, or OpenAI environment variables, automatically reusing the latest compiled program when one exists after the same lookup-first narrowing pass; pair it with `make rust-lookup` when you want to inspect those candidate files directly. |
 | Live Azure ask | `make ask-live QUESTION="..."` | Retrieve repository evidence locally, then synthesize a live answer through Azure OpenAI or Azure AI Inference. |
 | DSPy compile | `make dspy-train DSPY_RUN_NAME=...` | Compile and save a repository-grounded DSPy program under `artifacts/dspy/`. |
 | DSPy artifact inspect | `make dspy-artifacts` | List saved DSPy runs, the latest compiled program, and recorded benchmark metadata. |

@@ -7,7 +7,8 @@ them over ad hoc shell commands so every workflow hits the same package code.
 
 - `make utility-summary`: list the supported user-facing utility surfaces.
 - `make files-sync`: regenerate the tracked-file inventory surfaces `FILES.md` and `FILES.csv`.
-- `make ask QUESTION="..."`: answer a repository-grounded question with the baseline RAG flow.
+- `make ask QUESTION="..."`: answer a repository-grounded question with the baseline RAG flow,
+  printing deterministic `Question:`, `Answer:`, and `Evidence:` sections.
 - `make ask-dspy QUESTION="..."`: answer through the DSPy runtime path, optionally loading a saved
   compiled program, and automatically reusing the latest saved one when no explicit program path is
   provided.
