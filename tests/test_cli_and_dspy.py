@@ -248,13 +248,6 @@ def test_cli_main_other_commands(
             f'"root": "{root}"}}'
         )
 
-    def fake_dspy_artifacts(root: Path) -> str:
-        return (
-            '{"artifact_root": "artifacts/dspy", "run_count": 1, '
-            '"latest_run_name": "sample", '
-            f'"root": "{root}"}}'
-        )
-
     monkeypatch.setattr(cli, "run_surface_verification", fake_surface_verification)
     monkeypatch.setattr(cli, "run_file_summary_sync", fake_file_summary_sync)
     monkeypatch.setattr(cli, "run_notebook_report", fake_notebook_report)

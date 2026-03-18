@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-03-18-zzzzzzz-worktree-consolidation.md`
+- `2026-03-18-zzzzzzzzzzzzzz-rebase-hushwheel-quality-over-master.md`
 
 ## Usage
 
