@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-03-18-zzzzzzzzzzzz-retrieval-regression-gate.md`
+- `2026-03-18-zzzzzzz-rebased-master-log-and-azure-typecheck-fix.md`
 
 ## Usage
 

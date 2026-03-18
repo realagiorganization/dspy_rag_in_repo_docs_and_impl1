@@ -5,18 +5,12 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
+from importlib import import_module
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any
 from urllib.parse import urlparse, urlunparse
 
 from .notebook_runner import load_env_vars
-
-if TYPE_CHECKING:
-    from azure.ai.inference import ChatCompletionsClient as AzureInferenceChatCompletionsClient
-    from azure.ai.inference.models import SystemMessage as AzureInferenceSystemMessage
-    from azure.ai.inference.models import UserMessage as AzureInferenceUserMessage
-    from azure.core.credentials import AzureKeyCredential as AzureCredentialClass
-    from openai import AzureOpenAI as AzureOpenAIClient
 
 
 @dataclass(frozen=True)
@@ -275,31 +269,37 @@ def resolve_azure_inference_runtime(
     )
 
 
-def _require_openai_client() -> type[AzureOpenAIClient]:
+def _require_openai_client() -> Any:  # noqa: ANN401
     try:
-        from openai import AzureOpenAI
-    except ImportError as exc:  # pragma: no cover - import path is environment-dependent
+        openai_module = import_module("openai")
+        azure_openai = openai_module.AzureOpenAI
+    except (
+        ImportError,
+        AttributeError,
+    ) as exc:  # pragma: no cover - import path is environment-dependent
         raise RuntimeError(
             "Azure OpenAI utilities require the `openai` package. Run `uv sync --extra azure`."
         ) from exc
-    return AzureOpenAI
+    return azure_openai
 
 
-def _require_azure_inference_sdk() -> tuple[
-    type[AzureInferenceChatCompletionsClient],
-    type[AzureInferenceSystemMessage],
-    type[AzureInferenceUserMessage],
-    type[AzureCredentialClass],
-]:
+def _require_azure_inference_sdk() -> tuple[Any, Any, Any, Any]:
     try:
-        from azure.ai.inference import ChatCompletionsClient
-        from azure.ai.inference.models import SystemMessage, UserMessage
-        from azure.core.credentials import AzureKeyCredential
-    except ImportError as exc:  # pragma: no cover - import path is environment-dependent
+        inference_module = import_module("azure.ai.inference")
+        models_module = import_module("azure.ai.inference.models")
+        credentials_module = import_module("azure.core.credentials")
+        chat_completions_client = inference_module.ChatCompletionsClient
+        system_message = models_module.SystemMessage
+        user_message = models_module.UserMessage
+        azure_key_credential = credentials_module.AzureKeyCredential
+    except (
+        ImportError,
+        AttributeError,
+    ) as exc:  # pragma: no cover - import path is environment-dependent
         raise RuntimeError(
             "Azure AI Inference utilities require the Azure SDK. Run `uv sync --extra azure`."
         ) from exc
-    return ChatCompletionsClient, SystemMessage, UserMessage, AzureKeyCredential
+    return chat_completions_client, system_message, user_message, azure_key_credential
 
 
 def _complete_with_azure_openai(
