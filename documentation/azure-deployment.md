@@ -37,6 +37,10 @@ uv run repo-rag azure-manifest \
 - `AZURE_INFERENCE_CREDENTIAL`
 - `AZURE_OPENAI_API_VERSION`
 
+For the Azure AI Inference SDK, `AZURE_INFERENCE_ENDPOINT` should be the deployment base endpoint,
+for example `https://<host>/openai/deployments/<deployment>`, not the full
+`.../chat/completions?...` request URI. The SDK appends `/chat/completions` itself.
+
 ## Reference Docs
 
 - Azure AI Foundry inference endpoints: https://learn.microsoft.com/azure/ai-foundry/foundry-models/how-to/inference
