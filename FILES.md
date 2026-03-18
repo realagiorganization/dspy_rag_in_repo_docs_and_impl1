@@ -32,10 +32,6 @@ This inventory is generated from the current Git index.
 | `AGENTS.md.d/FILES.md` | AGENTS.md.d | markdown | 41 | 2247 | Agent instructions for maintaining FILES.md and FILES.csv |
 | `AGENTS.md.d/RUST_LOOKUP.md` | AGENTS.md.d | markdown | 31 | 1380 | Rust SQLite Lookup Instructions |
 | `FILES.csv` | FILES.csv | csv |  | 0 | Generated CSV inventory of tracked repository files |
-| `FILES.csv` | FILES.csv | csv |  | 0 | Generated CSV inventory of tracked repository files |
-| `FILES.csv` | FILES.csv | csv |  | 0 | Generated CSV inventory of tracked repository files |
-| `FILES.md` | FILES.md | markdown |  | 0 | Generated Markdown inventory of tracked repository files |
-| `FILES.md` | FILES.md | markdown |  | 0 | Generated Markdown inventory of tracked repository files |
 | `FILES.md` | FILES.md | markdown |  | 0 | Generated Markdown inventory of tracked repository files |
 | `Makefile` | Makefile | makefile | 233 | 7843 | UV ?= uv |
 | `README.AGENTS.md` | README.AGENTS.md | markdown | 246 | 13988 | Repository research narrative tying code, docs, and verification together |
@@ -74,17 +70,10 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-03-18-zzzz-session-consolidation-master-ci-repair.md` | docs | markdown | 73 | 3270 | Repository audit note for 2026 03 18 zzzz session consolidation master ci repair |
 | `docs/audit/2026-03-18-zzzzzz-dspy-pipeline-and-live-azure-proof.md` | docs | markdown | 116 | 5992 | Repository audit note for 2026 03 18 zzzzzz dspy pipeline and live azure proof |
 | `docs/audit/2026-03-18-zzzzzzz-hushwheel-pdf-side-effect-fix.md` | docs | markdown | 76 | 3525 | Repository audit note for 2026 03 18 zzzzzzz hushwheel pdf side effect fix |
-<<<<<<< HEAD
+| `docs/audit/2026-03-18-zzzzzzz-hushwheel-quality-salvage.md` | docs | markdown | 84 | 4554 | Repository audit note for 2026 03 18 zzzzzzz hushwheel quality salvage |
 | `docs/audit/2026-03-18-zzzzzzz-rebased-master-log-and-azure-typecheck-fix.md` | docs | markdown | 83 | 3472 | Repository audit note for 2026 03 18 zzzzzzz rebased master log and azure typecheck fix |
 | `docs/audit/2026-03-18-zzzzzzzzzzzz-retrieval-regression-gate.md` | docs | markdown | 66 | 2898 | Repository audit note for 2026 03 18 zzzzzzzzzzzz retrieval regression gate |
 | `docs/audit/README.md` | docs | markdown | 14 | 435 | Audit index for dated repository verification notes |
-=======
-| `docs/audit/2026-03-18-zzzzzzz-hushwheel-quality-salvage.md` | docs | markdown | 84 | 4554 | Repository audit note for 2026 03 18 zzzzzzz hushwheel quality salvage |
-| `docs/audit/2026-03-18-zzzzzzzzzzzz-retrieval-regression-gate.md` | docs | markdown | 66 | 2898 | Repository audit note for 2026 03 18 zzzzzzzzzzzz retrieval regression gate |
-| `docs/audit/README.md` | docs | markdown | 14 | 423 | Audit index for dated repository verification notes |
-| `docs/audit/README.md` | docs | markdown | 14 | 423 | Audit index for dated repository verification notes |
-| `docs/audit/README.md` | docs | markdown | 14 | 423 | Audit index for dated repository verification notes |
->>>>>>> d8a4ce7 (Salvage hushwheel quality instrumentation for "yeah do that")
 | `documentation/azure-deployment.md` | documentation | markdown | 63 | 2603 | Azure Deployment Notes |
 | `documentation/hushwheel-fixture-rag-guide.md` | documentation | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
 | `documentation/inspired/dspy-rag-tutorial.md` | documentation | markdown | 35 | 1474 | DSPy Tutorial: Basic RAG |
@@ -226,8 +215,6 @@ This inventory is generated from the current Git index.
 | `tests/test_mcp_branches.py` | tests | python | 31 | 1077 | Python module for test mcp branches |
 | `tests/test_notebook_runner.py` | tests | python | 84 | 3088 | Python module for test notebook runner |
 | `tests/test_population_samples.py` | tests | python | 76 | 3136 | Python module for test population samples |
-| `tests/test_project_surfaces.py` | tests | python | 373 | 16132 | Python module for test project surfaces |
-| `tests/test_project_surfaces.py` | tests | python | 373 | 16132 | Python module for test project surfaces |
 | `tests/test_project_surfaces.py` | tests | python | 373 | 16132 | Python module for test project surfaces |
 | `tests/test_repository_rag_bdd.py` | tests | python | 30 | 879 | Python module for test repository rag bdd |
 | `tests/test_retrieval.py` | tests | python | 81 | 2888 | Python module for test retrieval |
