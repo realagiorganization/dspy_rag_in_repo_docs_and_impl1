@@ -7,6 +7,12 @@ already exposes the behavior through `make` or `uv run repo-rag ...`.
 Additional standing instructions live in `AGENTS.md.d/*.md`. Read them before reporting
 verification results, and anchor status statements to the newest file in `docs/audit/`.
 
+## Codex Skills
+
+- Use `repo-verification-audit-loop` when verification work, audit-note updates, or repository health reporting are part of the task.
+- Use `post-push-gh-run-logging` immediately after each push and whenever GitHub Actions failures or `samples/logs/` updates are in scope.
+- Use `notebook-playbook-sync` when editing notebooks, notebook scaffolding, notebook-facing docs, or training and population sample surfaces.
+
 ## Primary Utilities
 
 - `make utility-summary`
@@ -27,7 +33,7 @@ verification results, and anchor status statements to the newest file in `docs/a
 3. When changing retrieval, MCP discovery, deployment metadata, or verification behavior, update tests and notebook guidance in the same turn.
 4. If adding a new user-facing utility, expose it through both the Python CLI and the `Makefile` when practical.
 5. Prefer tests that validate user-visible behavior instead of only internal helpers.
-6. After every push, run `make gh-runs`, then `make gh-watch`, and write a summary log into `samples/logs/`. If the watched run fails, inspect it with `make gh-failed-logs`, fix the repository, rerun local validation, and push again.
+6. After every push, use `post-push-gh-run-logging`: run `make gh-runs`, then `make gh-watch`, and write a summary log into `samples/logs/`. If the watched run fails, inspect it with `make gh-failed-logs`, fix the repository, rerun local validation, and push again. If the only follow-up would be a recursive log-only commit for a prior log-only push, summarize the result instead of creating endless log churn.
 7. If a permission-gated action is blocked, explicitly offer the user the option to make that permission permanent in Codex settings before retrying.
 8. Keep reusable notebook logic in `src/` with doctests or normal pytest coverage instead of embedding it in notebook cells.
 9. Keep the repository fully `uv`-managed unless `uv` no longer covers a required workflow.
@@ -44,6 +50,7 @@ verification results, and anchor status statements to the newest file in `docs/a
 
 ## Audit Files
 
+- Use `repo-verification-audit-loop` when verification evidence, audit-note updates, or repository status reporting are part of the task.
 - Review `docs/audit/README.md` and the newest dated audit note before describing repository health.
 - When verification status changes, update the relevant `docs/audit/*.md` files in the same turn.
 
@@ -51,6 +58,7 @@ verification results, and anchor status statements to the newest file in `docs/a
 
 Notebooks in `notebooks/` should read like research playbooks:
 
+- Use `notebook-playbook-sync` when notebook files or notebook-facing helpers are in scope.
 - Use Markdown headers and subheaders to explain each step.
 - Keep code cells short and tied to one research action.
 - Reuse repository-local utilities and package APIs instead of duplicating logic inline.
