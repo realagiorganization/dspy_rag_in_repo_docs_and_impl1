@@ -20,6 +20,9 @@ This audit covers the repository-wide GitHub Actions cache follow-up:
 - `.github/workflows/publication-pdf.yml` now references the artifact URL with bracket notation
   so GitHub Actions accepts the workflow file and can expose the uploaded artifact link in the
   Discord message.
+- `.github/workflows/publication-pdf.yml` now gates the Discord step via `env.DISCORD_WEBHOOK`
+  instead of referencing `secrets.*` directly in the `if` expression, which keeps the workflow
+  valid for GitHub Actions parsing.
 - `publication/README.md` now documents the cached publication build behavior.
 - `tests/test_project_surfaces.py` now verifies caching expectations across all repository
   workflows.

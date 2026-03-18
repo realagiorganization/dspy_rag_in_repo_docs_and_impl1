@@ -141,7 +141,8 @@ def test_publication_workflow_builds_and_uploads_pdf() -> None:
     )
     assert any(
         step.get("uses") == "sarisia/actions-status-discord@v1"
-        and step.get("with", {}).get("webhook") == "${{ secrets.DISCORD_WEBHOOK }}"
+        and step.get("env", {}).get("DISCORD_WEBHOOK") == "${{ secrets.DISCORD_WEBHOOK }}"
+        and step.get("with", {}).get("webhook") == "${{ env.DISCORD_WEBHOOK }}"
         and "nofail" not in step.get("with", {})
         and "steps.upload_publication_pdf.outputs['artifact-url']"
         in step.get("with", {}).get("description", "")
