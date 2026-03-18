@@ -22,6 +22,10 @@ def test_load_todo_backlog_reads_repo_items() -> None:
     assert repository_web_base.endswith("/blob/master")
     assert len(items) >= 10
     assert any(
+        item.task.startswith("Strengthen retrieval quality beyond the lexical baseline")
+        for item in items
+    )
+    assert not any(
         item.task.startswith("Build the missing automated DSPy training path") for item in items
     )
 
@@ -31,7 +35,8 @@ def test_render_markdown_backlog_contains_links_and_emoji() -> None:
     rendered = render_markdown_backlog(items)
     assert "| 🎯 | 🧭 Area | 📌 TODO | 🔗 Primary Surfaces | ✅ Done When |" in rendered
     assert "[README.DSPY.MD](README.DSPY.MD)" in rendered
-    assert "🧠" in rendered
+    assert "🔎" in rendered
+    assert "Build the missing automated DSPy training path" not in rendered
 
 
 def test_render_latex_backlog_contains_longtable_and_links() -> None:
