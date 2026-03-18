@@ -150,6 +150,7 @@ This inventory is generated from the current Git index.
 | `samples/logs/20260318T083955Z-gh-runs-benchmark-broadening-2.md` | samples | markdown | 34 | 1217 | GitHub Actions Run Log |
 | `samples/logs/20260318T091252Z-gh-runs-add-rust-lookup-and-retrieval-tag-summaries-for-.md` | samples | markdown | 53 | 2223 | GitHub Actions Run Log |
 | `samples/logs/20260318T094120Z-gh-runs-dspy-live-proof-and-rust-wrapper-repair.md` | samples | markdown | 45 | 1469 | GitHub Actions Summary |
+| `samples/logs/20260318T100336Z-gh-runs-sync-final-rebased-inventories-for-carry-on-comm.md` | samples | markdown | 29 | 1103 | GitHub Actions Run Log |
 | `samples/logs/README.md` | samples | markdown | 11 | 331 | GitHub Run Logs |
 | `samples/population/hushwheel_fixture_population_candidates.yaml` | samples | yaml | 22 | 955 | - source: README.md |
 | `samples/population/repository_population_candidates.yaml` | samples | yaml | 16 | 684 | - source: README.md |
