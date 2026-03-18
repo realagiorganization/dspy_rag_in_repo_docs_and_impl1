@@ -48,8 +48,9 @@ def test_retrieve_surfaces_inspired_docs_for_inspired_summary_question() -> None
 
 def test_score_prefers_definition_chunk_for_stopword_heavy_question() -> None:
     question = "What is the ember index?"
-    table_chunk = (
-        "| `docs/architecture.md` | Design notes for the data table, CLI dispatch, and test seam. |"
+    question_echo_chunk = (
+        "## Suggested Retrieval Questions - What is the ember index? - Which function handles "
+        "prefix search?"
     )
     definition_chunk = (
         "The ember index is a three-digit heat-memory score used when two terms share the same "
@@ -58,7 +59,7 @@ def test_score_prefers_definition_chunk_for_stopword_heavy_question() -> None:
 
     assert score(question, definition_chunk, source=Path("README.md")) > score(
         question,
-        table_chunk,
+        question_echo_chunk,
         source=Path("README.md"),
     )
 

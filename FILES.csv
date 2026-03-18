@@ -24,7 +24,7 @@ AGENTS.md.d/10-verification-loop.md,AGENTS.md.d,markdown,22,1175,Verification Lo
 AGENTS.md.d/FILES.md,AGENTS.md.d,markdown,38,1990,Agent instructions for maintaining FILES.md and FILES.csv
 FILES.csv,FILES.csv,csv,,0,Generated CSV inventory of tracked repository files
 FILES.md,FILES.md,markdown,,0,Generated Markdown inventory of tracked repository files
-Makefile,Makefile,makefile,214,7005,UV ?= uv
+Makefile,Makefile,makefile,219,7240,UV ?= uv
 README.AGENTS.md,README.AGENTS.md,markdown,232,12880,"Repository research narrative tying code, docs, and verification together"
 README.DSPY.MD,README.DSPY.MD,markdown,638,29959,"DSPy workflow guide for training, runtime use, and compiled programs"
 README.md,README.md,markdown,160,9376,"Top-level repository overview, workflow map, and quality guidance"
@@ -49,7 +49,7 @@ docs/audit/2026-03-18-notebook-execution.md,docs,markdown,66,2577,Repository aud
 docs/audit/2026-03-18-notebook-runner-harness.md,docs,markdown,91,4121,Repository audit note for 2026 03 18 notebook runner harness
 docs/audit/2026-03-18-retest-with-env-refresh.md,docs,markdown,105,5102,Repository audit note for 2026 03 18 retest with env refresh
 docs/audit/2026-03-18-retrieval-evaluation-suite.md,docs,markdown,80,4031,Repository audit note for 2026 03 18 retrieval evaluation suite
-docs/audit/2026-03-18-retrieval-ranking-refresh.md,docs,markdown,88,4734,Repository audit note for 2026 03 18 retrieval ranking refresh
+docs/audit/2026-03-18-retrieval-ranking-refresh.md,docs,markdown,99,5622,Repository audit note for 2026 03 18 retrieval ranking refresh
 docs/audit/2026-03-18-rust-and-benchmark-hygiene.md,docs,markdown,53,2049,Repository audit note for 2026 03 18 rust and benchmark hygiene
 docs/audit/2026-03-18-todo-backlog-sync.md,docs,markdown,83,4104,Repository audit note for 2026 03 18 todo backlog sync
 docs/audit/2026-03-18-z-notebook-runner-harness.md,docs,markdown,104,4153,Repository audit note for 2026 03 18 z notebook runner harness
@@ -139,7 +139,7 @@ src/repo_rag_lab/notebook_runner.py,src,python,491,16433,Monitored batch executi
 src/repo_rag_lab/notebook_scaffolding.py,src,python,260,11029,High-level notebook scaffolds built from tested repository helpers.
 src/repo_rag_lab/notebook_support.py,src,python,96,3201,Helpers shared by notebooks so their setup logic stays in tested Python code.
 src/repo_rag_lab/population_samples.py,src,python,241,8364,Helpers for reviewing and batching starter corpus-population inputs.
-src/repo_rag_lab/retrieval.py,src,python,200,6293,Baseline chunking and lexical retrieval utilities for repository text.
+src/repo_rag_lab/retrieval.py,src,python,258,7948,Baseline chunking and lexical retrieval utilities for repository text.
 src/repo_rag_lab/settings.py,src,python,28,708,Shared repository path settings derived from a repository root.
 src/repo_rag_lab/todo_backlog.py,src,python,276,8434,Shared backlog rendering helpers for Markdown and LaTeX surfaces.
 src/repo_rag_lab/training_samples.py,src,python,154,5130,Helpers for loading and summarizing starter DSPy training examples.
@@ -151,7 +151,7 @@ tests/fixtures/hushwheel_lexiconarium/.gitignore,tests,text,4,23,hushwheel
 tests/fixtures/hushwheel_lexiconarium/CHANGELOG.md,tests,markdown,9,345,Changelog
 tests/fixtures/hushwheel_lexiconarium/Doxyfile,tests,text,34,1184,PROJECT_NAME           = Hushwheel Lexiconarium
 tests/fixtures/hushwheel_lexiconarium/LICENSE.md,tests,markdown,22,1082,MIT License
-tests/fixtures/hushwheel_lexiconarium/Makefile,tests,makefile,140,4520,CC ?= cc
+tests/fixtures/hushwheel_lexiconarium/Makefile,tests,makefile,143,4592,CC ?= cc
 tests/fixtures/hushwheel_lexiconarium/README.md,tests,markdown,134,6072,The Hushwheel Lexiconarium
 tests/fixtures/hushwheel_lexiconarium/VERSION,tests,text,2,6,0.1.0
 tests/fixtures/hushwheel_lexiconarium/docs/architecture.md,tests,markdown,31,1168,Hushwheel Architecture
@@ -197,7 +197,7 @@ tests/test_notebook_runner.py,tests,python,84,3088,Python module for test notebo
 tests/test_population_samples.py,tests,python,76,3136,Python module for test population samples
 tests/test_project_surfaces.py,tests,python,267,11535,Python module for test project surfaces
 tests/test_repository_rag_bdd.py,tests,python,30,879,Python module for test repository rag bdd
-tests/test_retrieval.py,tests,python,80,2852,Python module for test retrieval
+tests/test_retrieval.py,tests,python,81,2888,Python module for test retrieval
 tests/test_todo_backlog.py,tests,python,98,3225,Python module for test todo backlog
 tests/test_training_samples.py,tests,python,56,1973,Python module for test training samples
 tests/test_utilities.py,tests,python,172,6194,Python module for test utilities

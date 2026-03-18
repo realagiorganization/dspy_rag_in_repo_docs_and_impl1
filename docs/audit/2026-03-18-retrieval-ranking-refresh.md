@@ -2,16 +2,19 @@
 
 - Audit date: `2026-03-18` (`Asia/Tbilisi`)
 - Repository root: `/home/standard/dspy_rag_in_repo_docs_and_impl1_retrieval_clean`
-- Git HEAD during verification: `adc99aa8309aa0859633afb5ee9d50cdfe31f4e1`
+- Git HEAD during verification: `408e36cc8cd31429a40798018ceb8ada18298086`
 
 ## Scope
 
 This audit captures a retrieval-quality refresh to the baseline repository RAG path. The final
 implementation keeps the existing path-aware ranking and source-diversity behavior, but changes the
-chunker to preserve paragraph boundaries before falling back to fixed-width slices. That was driven
-by a real regression caught in the hushwheel fixture: the retriever needed to keep definition
-sections coherent enough to surface `heat-memory score` and `lantern vowel` evidence for the
-question `What is the ember index?`.
+chunker to preserve paragraph boundaries before falling back to fixed-width slices. The final
+scorer also adds a definition bonus for `what is ...` questions and a penalty for chunks that only
+echo the full question text. That was driven by a real regression caught in the hushwheel fixture:
+the retriever needed to keep definition sections coherent enough to surface `heat-memory score` and
+`lantern vowel` evidence for the question `What is the ember index?`. During final push validation,
+this turn also hardened the pytest and fixture-doc build paths to use cache-backed temp directories
+instead of the host's full `/tmp` tmpfs.
 
 ## Executed Commands
 
@@ -25,6 +28,7 @@ Executed successfully in this turn:
 - `uv run pytest tests/test_retrieval.py tests/test_hushwheel_fixture.py tests/test_benchmarks_and_notebook_scaffolding.py tests/test_project_surfaces.py tests/test_cli_and_dspy.py tests/test_verification.py`
 - `uv run repo-rag verify-surfaces`
 - `uv run repo-rag retrieval-eval --root . --top-k 4 --top-k-sweep 1,2,4,8`
+- `make coverage`
 - `make quality`
 
 ## Notable Results
@@ -45,7 +49,8 @@ Executed successfully in this turn:
   - `average_source_precision: 0.5833333333333334`
   - `average_reciprocal_rank: 1.0`
   - `best_pass_rate_top_k: 4`
-- `make quality`: passed with `107` tests and `86.28%` total coverage
+- `make coverage`: passed with `119` tests and `87.92%` total coverage
+- `make quality`: passed with `119` tests and `87.92%` total coverage
 
 ## Current Verification Status
 
@@ -61,6 +66,7 @@ Configured and verified in this turn:
 - Repository-surface verification: present and passed through `uv run repo-rag verify-surfaces`
 - Retrieval-quality evaluation utility: present and passed through
   `uv run repo-rag retrieval-eval --root . --top-k 4 --top-k-sweep 1,2,4,8`
+- Full pytest and coverage gate: present and passed through `make coverage`
 - Lint, notebook lint, mypy, basedpyright, complexity, full pytest, and coverage: present and
   passed through `make quality`
 
@@ -77,6 +83,8 @@ Still absent or not exercised in this turn:
 - The final retrieval change is the paragraph-aware chunker in `src/repo_rag_lab/retrieval.py`.
   It keeps concept definitions and similar prose blocks intact before splitting long paragraphs by
   width.
+- The final scoring tweak also rewards definitional `term is ...` chunks for `what is ...`
+  questions and penalizes chunks that merely repeat the entire question text.
 - Path-aware ranking and source diversity remain in place, so docs and implementation files still
   outrank synthetic question-echo surfaces from `tests/`, `samples/`, and `data/`.
 - The hushwheel fixture regression was caught locally during this turn and resolved before the
@@ -85,3 +93,6 @@ Still absent or not exercised in this turn:
 - A stopword-filter scoring variant was explored and rejected in this turn because it improved the
   hushwheel probe but reduced the repository benchmark's top-4 source coverage. Paragraph-aware
   chunking fixed the real issue without sacrificing benchmark completeness.
+- The root `Makefile` and the hushwheel fixture `Makefile` now route pytest and doc-build temp data
+  through cache-backed directories under `$(HOME)/.cache`, which keeps the verification path stable
+  even when `/tmp` is saturated on the host.

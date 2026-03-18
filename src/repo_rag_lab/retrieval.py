@@ -11,6 +11,21 @@ from .corpus import RepoDocument
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9_]{2,}")
 PARAGRAPH_SPLIT_RE = re.compile(r"\n\s*\n+")
+QUESTION_FILLER_TERMS = {
+    "a",
+    "an",
+    "are",
+    "does",
+    "how",
+    "is",
+    "should",
+    "the",
+    "this",
+    "what",
+    "where",
+}
+QUESTION_ECHO_PENALTY = 1.8
+DEFINITION_PATTERN_BONUS = 2.0
 SOURCE_BONUS_BY_NAME = {
     "README.md": 1.4,
     "AGENTS.md": 1.2,
@@ -107,6 +122,12 @@ def _has_term_prefix(question_terms: list[str], prefix: str) -> bool:
     return any(term.startswith(prefix) for term in question_terms)
 
 
+def _normalized_token_string(text: str) -> str:
+    """Return ``text`` normalized to lowercase token strings separated by spaces."""
+
+    return " ".join(TOKEN_RE.findall(text.lower()))
+
+
 def _chunk_text(text: str, chunk_size: int) -> list[str]:
     """Split text into paragraph-aware chunks before falling back to fixed-width slices."""
 
@@ -150,6 +171,34 @@ def _is_root_readme(source: Path) -> bool:
     """Return ``True`` when ``source`` is the repository root ``README.md``."""
 
     return source.parts == ("README.md",)
+
+
+def _definition_bonus(question: str, text: str) -> float:
+    """Return a bonus when a ``what is ...`` question matches a definitional chunk."""
+
+    normalized_question = _normalized_token_string(question)
+    if not normalized_question.startswith("what is "):
+        return 0.0
+
+    phrase_terms = [
+        term for term in TOKEN_RE.findall(question.lower()) if term not in QUESTION_FILLER_TERMS
+    ]
+    if not phrase_terms:
+        return 0.0
+
+    normalized_text = _normalized_token_string(text)
+    phrase = " ".join(phrase_terms)
+    return DEFINITION_PATTERN_BONUS if f"{phrase} is" in normalized_text else 0.0
+
+
+def _question_echo_penalty(question: str, text: str) -> float:
+    """Return a penalty when a chunk mostly repeats the question instead of answering it."""
+
+    normalized_question = _normalized_token_string(question)
+    if not normalized_question:
+        return 0.0
+    normalized_text = _normalized_token_string(text)
+    return QUESTION_ECHO_PENALTY if normalized_question in normalized_text else 0.0
 
 
 def source_score_adjustment(source: Path, question_terms: list[str]) -> float:
@@ -196,4 +245,13 @@ def score(question: str, text: str, *, source: Path | None = None) -> float:
     unique_overlap = len(set(q_terms).intersection(t_terms))
     density = overlap / math.sqrt(len(t_terms))
     path_adjustment = source_score_adjustment(source, q_terms) if source is not None else 0.0
-    return overlap + (unique_overlap * 0.4) + density + path_adjustment
+    definition_bonus = _definition_bonus(question, text)
+    question_echo_penalty = _question_echo_penalty(question, text)
+    return (
+        overlap
+        + (unique_overlap * 0.4)
+        + density
+        + path_adjustment
+        + definition_bonus
+        - question_echo_penalty
+    )

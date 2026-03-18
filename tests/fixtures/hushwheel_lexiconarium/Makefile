@@ -14,6 +14,7 @@ MANDIR ?= $(PREFIX)/share/man
 BUILD_DIR := build
 DIST_DIR := dist
 DOC_BUILD_DIR := $(BUILD_DIR)/doxygen
+TMPDIR ?= $(HOME)/.cache/hushwheel-fixture-tmp
 DOXYFILE := Doxyfile
 DOC_PDF := docs/hushwheel-reference.pdf
 SRC_FILES := $(sort $(wildcard src/*.c))
@@ -53,6 +54,8 @@ PACKAGE_FILES := \
 	$(DOC_FILES) \
 	$(DOC_PDF)
 
+export TMPDIR
+
 .PHONY: all bdd check clean dist docs install integration lint package regenerate test unit uninstall
 
 all: hushwheel
@@ -74,7 +77,7 @@ lint: $(LINT_OBJS)
 $(DOC_PDF): $(DOXYFILE) README.md include/hushwheel.h $(SRC_FILES) $(SRC_HEADERS) $(DOC_FILES)
 	@if command -v $(DOXYGEN) >/dev/null 2>&1; then \
 		rm -rf $(DOC_BUILD_DIR); \
-		mkdir -p $(DOC_BUILD_DIR); \
+		mkdir -p $(DOC_BUILD_DIR) $(TMPDIR); \
 		$(DOXYGEN) $(DOXYFILE); \
 		(cd $(DOC_BUILD_DIR)/latex && lualatex -interaction=nonstopmode -halt-on-error refman >/dev/null); \
 		(cd $(DOC_BUILD_DIR)/latex && makeindex refman.idx >/dev/null); \

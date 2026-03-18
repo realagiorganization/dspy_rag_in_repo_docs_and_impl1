@@ -29,6 +29,7 @@ PYTEST_COV_ARGS ?= --cov=src/repo_rag_lab --cov-report=term-missing --cov-report
 GH_RUN_LIMIT ?= 10
 RUN_ID ?=
 NOTEBOOK_TIMEOUT ?= 600
+REPO_TMPDIR ?= $(HOME)/.cache/repo-rag-lab-tmp
 
 .PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask ask-dspy ask-live dspy-train retrieval-eval discover-mcp utility-summary files-sync todo-sync exploratorium-sync exploratorium-build smoke-test azure-openai-probe azure-inference-probe verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook notebook-report bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run azure-manifest fmt build publish
 
@@ -153,18 +154,22 @@ notebook-report: sync
 	$(UV) run repo-rag run-notebooks --root . --timeout-seconds "$(NOTEBOOK_TIMEOUT)" --load-env-file
 
 bdd: sync
-	$(UV) run pytest tests -k repository_rag
+	mkdir -p $(REPO_TMPDIR)
+	TMPDIR=$(REPO_TMPDIR) $(UV) run pytest tests -k repository_rag
 
 test: sync
-	$(UV) run pytest $(PYTEST_COV_ARGS)
+	mkdir -p $(REPO_TMPDIR)
+	TMPDIR=$(REPO_TMPDIR) $(UV) run pytest $(PYTEST_COV_ARGS)
 	$(UV) run coverage report --fail-under=85
 
 coverage: sync
-	$(UV) run pytest $(PYTEST_COV_ARGS)
+	mkdir -p $(REPO_TMPDIR)
+	TMPDIR=$(REPO_TMPDIR) $(UV) run pytest $(PYTEST_COV_ARGS)
 	$(UV) run coverage report
 
 coverage-html: sync
-	$(UV) run pytest $(PYTEST_COV_ARGS) --cov-report=html
+	mkdir -p $(REPO_TMPDIR)
+	TMPDIR=$(REPO_TMPDIR) $(UV) run pytest $(PYTEST_COV_ARGS) --cov-report=html
 	$(UV) run coverage html
 
 compile: sync
