@@ -14,7 +14,7 @@ from .benchmarks import (
     evaluate_retrieval_quality_suite,
     normalize_retrieval_top_k_values,
 )
-from .dspy_training import DEFAULT_TRAINING_PATH
+from .dspy_training import DEFAULT_TRAINING_PATH, describe_dspy_artifacts
 from .exploratorium_translation import sync_exploratorium_translation
 from .file_summaries import sync_file_summaries
 from .mcp import discover_mcp_servers
@@ -46,6 +46,7 @@ def utility_summary(root: Path) -> str:
             "plus a live Azure-backed synthesis step"
         ),
         "- make dspy-train / uv run repo-rag dspy-train: compile and persist a DSPy RAG program",
+        "- make dspy-artifacts / uv run repo-rag dspy-artifacts: inspect saved DSPy programs",
         "- make discover-mcp / uv run repo-rag discover-mcp: inspect repo-local MCP candidates",
         "- make azure-manifest / uv run repo-rag azure-manifest: write Azure deployment metadata",
         (
@@ -146,6 +147,12 @@ def run_retrieval_evaluation(
         **suite,
     }
     return json.dumps(payload, indent=2)
+
+
+def run_dspy_artifacts(root: Path) -> str:
+    """Serialize the current DSPy artifact inventory as JSON."""
+
+    return json.dumps(describe_dspy_artifacts(root), indent=2)
 
 
 def run_surface_verification(root: Path) -> str:

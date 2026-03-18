@@ -32,7 +32,7 @@ RUN_ID ?=
 NOTEBOOK_TIMEOUT ?= 600
 REPO_TMPDIR ?= $(HOME)/.cache/repo-rag-lab-tmp
 
-.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask ask-dspy ask-live dspy-train retrieval-eval discover-mcp utility-summary files-sync todo-sync exploratorium-sync exploratorium-build smoke-test azure-openai-probe azure-inference-probe verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook notebook-report bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run rust-lookup-index rust-lookup azure-manifest fmt build publish
+.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask ask-dspy ask-live dspy-train dspy-artifacts retrieval-eval discover-mcp utility-summary files-sync todo-sync exploratorium-sync exploratorium-build smoke-test azure-openai-probe azure-inference-probe verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook notebook-report bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run rust-lookup-index rust-lookup azure-manifest fmt build publish
 
 setup:
 	$(UV) sync --extra azure
@@ -86,6 +86,9 @@ dspy-train: sync
 		--dspy-model-type "$(DSPY_MODEL_TYPE)" \
 		$(if $(strip $(DSPY_TEMPERATURE)),--dspy-temperature $(DSPY_TEMPERATURE),) \
 		$(if $(strip $(DSPY_MAX_TOKENS)),--dspy-max-tokens $(DSPY_MAX_TOKENS),)
+
+dspy-artifacts: sync
+	$(UV) run repo-rag dspy-artifacts --root .
 
 retrieval-eval: sync
 	$(UV) run repo-rag retrieval-eval --root . --training-path "$(RETRIEVAL_TRAINING_PATH)" \

@@ -132,6 +132,7 @@ def test_publication_surface_files_exist_and_are_linked() -> None:
     assert 'make rust-lookup QUERY="' in readme
     assert "make todo-sync" in readme
     assert "make exploratorium-sync" in readme
+    assert "make dspy-artifacts" in readme
 
     todo_text = (REPO_ROOT / "TODO.MD").read_text(encoding="utf-8")
     assert "| 🎯 | 🧭 Area | 📌 TODO | 🔗 Primary Surfaces | ✅ Done When |" in todo_text

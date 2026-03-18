@@ -17,6 +17,7 @@ def test_validate_makefile_flags_missing_targets(tmp_path: Path) -> None:
     assert any(issue.message == "Missing target `azure-openai-probe`." for issue in issues)
     assert any(issue.message == "Missing target `azure-inference-probe`." for issue in issues)
     assert any(issue.message == "Missing target `coverage`." for issue in issues)
+    assert any(issue.message == "Missing target `dspy-artifacts`." for issue in issues)
     assert any(issue.message == "Missing target `dspy-train`." for issue in issues)
     assert any(issue.message == "Missing target `exploratorium-build`." for issue in issues)
     assert any(issue.message == "Missing target `exploratorium-sync`." for issue in issues)

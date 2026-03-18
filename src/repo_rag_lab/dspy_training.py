@@ -28,6 +28,7 @@ DEFAULT_DSPY_MODEL = DEFAULT_OPENAI_MODEL
 DEFAULT_TRAINING_PATH = Path("samples/training/repository_training_examples.yaml")
 PROGRAM_FILENAME = "program.json"
 METADATA_FILENAME = "metadata.json"
+DSPY_ARTIFACTS_DIR = Path("artifacts/dspy")
 
 
 class ExampleLike(Protocol):
@@ -356,7 +357,7 @@ def resolve_dspy_artifact_paths(root: Path, run_name: str) -> DSPyArtifactPaths:
     """Resolve the artifact directory and file paths for a DSPy training run."""
 
     safe_run_name = _sanitize_run_name(run_name)
-    artifact_dir = root / "artifacts" / "dspy" / safe_run_name
+    artifact_dir = root / DSPY_ARTIFACTS_DIR / safe_run_name
     return DSPyArtifactPaths(
         artifact_dir=artifact_dir,
         program_path=artifact_dir / PROGRAM_FILENAME,
@@ -364,16 +365,134 @@ def resolve_dspy_artifact_paths(root: Path, run_name: str) -> DSPyArtifactPaths:
     )
 
 
+def _relative_to_root(path: Path, root: Path) -> str:
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return str(path)
+
+
+def load_dspy_artifact_metadata(metadata_path: Path) -> dict[str, object]:
+    """Load one DSPy artifact metadata payload from disk."""
+
+    payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"DSPy artifact metadata must be a JSON object: {metadata_path}")
+    return payload
+
+
+def list_dspy_artifacts(root: Path) -> list[dict[str, object]]:
+    """Return compiled DSPy run summaries ordered newest-first."""
+
+    resolved_root = root.resolve()
+    artifact_root = resolved_root / DSPY_ARTIFACTS_DIR
+    if not artifact_root.exists():
+        return []
+
+    runs: list[dict[str, object]] = []
+    for metadata_path in artifact_root.glob(f"*/{METADATA_FILENAME}"):
+        metadata = load_dspy_artifact_metadata(metadata_path)
+        program_path_value = metadata.get("program_path")
+        if isinstance(program_path_value, str) and program_path_value.strip():
+            resolved_program_path = Path(program_path_value)
+            if not resolved_program_path.is_absolute():
+                resolved_program_path = resolved_root / resolved_program_path
+        else:
+            resolved_program_path = metadata_path.parent / PROGRAM_FILENAME
+        benchmark_summary = metadata.get("benchmark_summary")
+        compiled_program_summary = metadata.get("compiled_program_summary")
+        benchmark_pass_rate = None
+        benchmark_case_count = None
+        if isinstance(benchmark_summary, dict):
+            benchmark_pass_rate = benchmark_summary.get("pass_rate")
+            benchmark_case_count = benchmark_summary.get("case_count")
+        runs.append(
+            {
+                "run_name": metadata.get("run_name", metadata_path.parent.name),
+                "recorded_at": metadata.get("recorded_at"),
+                "artifact_dir": _relative_to_root(metadata_path.parent, resolved_root),
+                "metadata_path": _relative_to_root(metadata_path, resolved_root),
+                "program_path": _relative_to_root(resolved_program_path, resolved_root),
+                "program_exists": resolved_program_path.exists(),
+                "training_path": metadata.get("training_path"),
+                "optimizer": metadata.get("optimizer"),
+                "training_example_count": metadata.get("training_example_count"),
+                "benchmark_pass_rate": benchmark_pass_rate,
+                "benchmark_case_count": benchmark_case_count,
+                "benchmark_summary": benchmark_summary
+                if isinstance(benchmark_summary, dict)
+                else None,
+                "compiled_program_summary": (
+                    compiled_program_summary if isinstance(compiled_program_summary, dict) else None
+                ),
+                "lm": metadata.get("lm") if isinstance(metadata.get("lm"), dict) else None,
+            }
+        )
+
+    return sorted(
+        runs,
+        key=lambda run: (
+            str(run.get("recorded_at") or ""),
+            str(run.get("metadata_path") or ""),
+        ),
+        reverse=True,
+    )
+
+
+def latest_dspy_artifact_summary(root: Path) -> dict[str, object] | None:
+    """Return the newest compiled DSPy run summary."""
+
+    runs = list_dspy_artifacts(root.resolve())
+    if not runs:
+        return None
+    return runs[0]
+
+
 def latest_dspy_artifact_metadata(root: Path) -> Path | None:
     """Return the newest compiled-program metadata file under ``artifacts/dspy``."""
 
-    artifact_root = root / "artifacts" / "dspy"
-    if not artifact_root.exists():
+    latest_run = latest_dspy_artifact_summary(root.resolve())
+    if latest_run is None:
         return None
-    metadata_paths = list(artifact_root.glob(f"*/{METADATA_FILENAME}"))
-    if not metadata_paths:
+    metadata_path_value = latest_run.get("metadata_path")
+    if not isinstance(metadata_path_value, str) or not metadata_path_value.strip():
         return None
-    return max(metadata_paths, key=lambda path: (path.stat().st_mtime_ns, str(path)))
+    resolved_metadata_path = Path(metadata_path_value)
+    if not resolved_metadata_path.is_absolute():
+        resolved_metadata_path = root.resolve() / resolved_metadata_path
+    return resolved_metadata_path
+
+
+def resolve_dspy_program_path(root: Path, program_path: Path | None = None) -> Path | None:
+    """Resolve an explicit or latest compiled DSPy program path."""
+
+    if program_path is not None:
+        return program_path.resolve()
+    latest_run = latest_dspy_artifact_summary(root.resolve())
+    if latest_run is None:
+        return None
+    program_path_value = latest_run.get("program_path")
+    if not isinstance(program_path_value, str) or not program_path_value.strip():
+        return None
+    resolved_program_path = Path(program_path_value)
+    if not resolved_program_path.is_absolute():
+        resolved_program_path = root.resolve() / resolved_program_path
+    return resolved_program_path
+
+
+def describe_dspy_artifacts(root: Path) -> dict[str, object]:
+    """Summarize all compiled DSPy artifacts under ``artifacts/dspy``."""
+
+    runs = list_dspy_artifacts(root.resolve())
+    latest_run = runs[0] if runs else None
+    return {
+        "artifact_root": str(DSPY_ARTIFACTS_DIR),
+        "run_count": len(runs),
+        "latest_run_name": latest_run.get("run_name") if latest_run is not None else None,
+        "latest_metadata_path": latest_run.get("metadata_path") if latest_run is not None else None,
+        "latest_program_path": latest_run.get("program_path") if latest_run is not None else None,
+        "runs": runs,
+    }
 
 
 def retrieve_repository_context(

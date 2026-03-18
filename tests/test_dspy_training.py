@@ -11,12 +11,17 @@ from repo_rag_lab.dspy_training import (
     DSPyTrainingConfig,
     build_dspy_trainset,
     build_repository_rag_program,
+    describe_dspy_artifacts,
     evaluate_repository_program,
     latest_dspy_artifact_metadata,
+    latest_dspy_artifact_summary,
+    list_dspy_artifacts,
     load_compiled_repository_rag,
+    load_dspy_artifact_metadata,
     repository_answer_metric,
     resolve_dspy_artifact_paths,
     resolve_dspy_lm_config,
+    resolve_dspy_program_path,
     train_repository_program,
 )
 from repo_rag_lab.training_samples import TrainingExample
@@ -128,6 +133,89 @@ def test_resolve_dspy_artifact_paths_sanitizes_run_name(tmp_path: Path) -> None:
 
 def test_latest_dspy_artifact_metadata_returns_none_without_artifacts(tmp_path: Path) -> None:
     assert latest_dspy_artifact_metadata(tmp_path) is None
+
+
+def test_list_and_describe_dspy_artifacts_report_latest_run(tmp_path: Path) -> None:
+    older_paths = resolve_dspy_artifact_paths(tmp_path, "older-run")
+    older_paths.artifact_dir.mkdir(parents=True)
+    older_paths.program_path.write_text('{"compiled": true}', encoding="utf-8")
+    older_paths.metadata_path.write_text(
+        json.dumps(
+            {
+                "run_name": "older-run",
+                "recorded_at": "2026-03-18T00:00:01+00:00",
+                "program_path": "artifacts/dspy/older-run/program.json",
+                "training_path": "samples/training/repository_training_examples.yaml",
+                "optimizer": "bootstrapfewshot",
+                "training_example_count": 2,
+                "benchmark_summary": {"case_count": 2, "pass_rate": 0.5},
+                "compiled_program_summary": {"program_type": "RepositoryRAGProgram"},
+                "lm": {"model": "openai/test-old"},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    newer_paths = resolve_dspy_artifact_paths(tmp_path, "newer-run")
+    newer_paths.artifact_dir.mkdir(parents=True)
+    newer_paths.program_path.write_text('{"compiled": true}', encoding="utf-8")
+    newer_paths.metadata_path.write_text(
+        json.dumps(
+            {
+                "run_name": "newer-run",
+                "recorded_at": "2026-03-18T00:00:02+00:00",
+                "program_path": "artifacts/dspy/newer-run/program.json",
+                "training_path": "samples/training/repository_training_examples.yaml",
+                "optimizer": "miprov2",
+                "training_example_count": 3,
+                "benchmark_summary": {"case_count": 3, "pass_rate": 1.0},
+                "compiled_program_summary": {"program_type": "RepositoryRAGProgram"},
+                "lm": {"model": "openai/test-new"},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    older_metadata = load_dspy_artifact_metadata(older_paths.metadata_path)
+    artifacts = list_dspy_artifacts(tmp_path)
+    latest_summary = latest_dspy_artifact_summary(tmp_path)
+    description = describe_dspy_artifacts(tmp_path)
+
+    assert older_metadata["run_name"] == "older-run"
+    assert [artifact["run_name"] for artifact in artifacts] == ["newer-run", "older-run"]
+    assert latest_summary is not None
+    assert latest_summary["run_name"] == "newer-run"
+    assert latest_summary["program_path"] == "artifacts/dspy/newer-run/program.json"
+    assert description["artifact_root"] == "artifacts/dspy"
+    assert description["run_count"] == 2
+    assert description["latest_run_name"] == "newer-run"
+    assert description["latest_program_path"] == "artifacts/dspy/newer-run/program.json"
+
+
+def test_resolve_dspy_program_path_prefers_explicit_over_latest(tmp_path: Path) -> None:
+    latest_paths = resolve_dspy_artifact_paths(tmp_path, "latest-run")
+    latest_paths.artifact_dir.mkdir(parents=True)
+    latest_paths.program_path.write_text('{"compiled": true}', encoding="utf-8")
+    latest_paths.metadata_path.write_text(
+        json.dumps(
+            {
+                "run_name": "latest-run",
+                "recorded_at": "2026-03-18T00:00:03+00:00",
+                "program_path": "artifacts/dspy/latest-run/program.json",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    explicit_program_path = tmp_path / "custom-program.json"
+    explicit_program_path.write_text('{"compiled": "explicit"}', encoding="utf-8")
+
+    assert resolve_dspy_program_path(tmp_path) == latest_paths.program_path.resolve()
+    assert (
+        resolve_dspy_program_path(tmp_path, explicit_program_path)
+        == explicit_program_path.resolve()
+    )
 
 
 def test_build_dspy_trainset_marks_question_as_input() -> None:

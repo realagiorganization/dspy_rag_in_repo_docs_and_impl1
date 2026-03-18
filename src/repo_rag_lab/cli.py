@@ -21,6 +21,7 @@ from .mcp import discover_mcp_servers, dump_candidates
 from .utilities import (
     run_azure_inference_probe,
     run_azure_openai_probe,
+    run_dspy_artifacts,
     run_exploratorium_translation_sync,
     run_file_summary_sync,
     run_notebook_report,
@@ -150,6 +151,9 @@ def build_parser() -> argparse.ArgumentParser:
     dspy_train_parser.add_argument("--num-threads", type=int, default=4)
     dspy_train_parser.add_argument("--mipro-num-trials", type=int)
     add_dspy_lm_arguments(dspy_train_parser)
+
+    dspy_artifacts_parser = subparsers.add_parser("dspy-artifacts")
+    dspy_artifacts_parser.add_argument("--root", default=".")
     return parser
 
 
@@ -278,6 +282,10 @@ def main() -> int:
             lm_config=lm_config,
         )
         print(result.to_json())
+        return 0
+
+    if args.command == "dspy-artifacts":
+        print(run_dspy_artifacts(root))
         return 0
 
     parser.error(f"Unsupported command: {args.command}")

@@ -7,6 +7,7 @@ notebooks stay readable, testable, and aligned with CLI and automation entrypoin
 
 - `workflow.py`: baseline repository-grounded retrieval and answer synthesis.
 - `dspy_workflow.py`: DSPy-shaped retriever and response flow when DSPy is installed.
+- `dspy_training.py`: DSPy compile, artifact persistence, latest-run inspection, and LM resolution.
 - `corpus.py`: repository text discovery and document loading.
 - `retrieval.py`: paragraph-aware chunking, path-aware lexical ranking, and source-diversified retrieval helpers.
 - `mcp.py`: repo-local MCP server candidate discovery.
@@ -23,6 +24,8 @@ notebooks stay readable, testable, and aligned with CLI and automation entrypoin
 ## Utility Surfaces
 
 - `repo-rag ask --question "..."`: run the baseline or DSPy-shaped RAG workflow.
+- `repo-rag dspy-train --run-name ...`: compile and persist a repository-grounded DSPy program.
+- `repo-rag dspy-artifacts`: inspect saved DSPy runs and the latest compiled program path.
 - `repo-rag ask-live --question "..."`: run baseline retrieval locally, then synthesize a live
   answer through Azure OpenAI or Azure AI Inference.
 - `repo-rag discover-mcp`: inspect MCP discovery candidates.

@@ -70,9 +70,10 @@ the Rust wrapper.
 | Backlog sync | `make todo-sync` | Regenerate the linkified TODO table in both Markdown and the publication article. |
 | Exploratorium sync | `make exploratorium-sync` | Regenerate the bilingual file/link/fetch-state publication inventory. |
 | Ask a repo question | `make ask QUESTION="..."` | Run the baseline repository-grounded RAG workflow. |
-| DSPy ask | `make ask-dspy QUESTION="..."` | Run the DSPy runtime path after local Rust lookup has narrowed the likely file evidence. |
+| DSPy ask | `make ask-dspy QUESTION="..."` | Run the DSPy runtime path with LM config from `DSPY_*`, Azure, or OpenAI environment variables, automatically reusing the latest compiled program when one exists; pair it with `make rust-lookup` when you want a fast local file-content pass before the LM call. |
 | Live Azure ask | `make ask-live QUESTION="..."` | Retrieve repository evidence locally, then synthesize a live answer through Azure OpenAI or Azure AI Inference. |
 | DSPy compile | `make dspy-train DSPY_RUN_NAME=...` | Compile and save a repository-grounded DSPy program under `artifacts/dspy/`. |
+| DSPy artifact inspect | `make dspy-artifacts` | List saved DSPy runs, the latest compiled program, and recorded benchmark metadata. |
 | Retrieval evaluation | `make retrieval-eval` | Measure retrieval quality with pass rate, recall, precision, reciprocal rank, per-tag breakdowns, and a top-k sweep. |
 | MCP discovery | `make discover-mcp` | Inspect MCP-related repository artifacts. |
 | Smoke test | `make smoke-test` | Check answer generation, MCP discovery, and Azure manifest output together. |

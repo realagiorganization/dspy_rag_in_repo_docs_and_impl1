@@ -17,6 +17,7 @@ REQUIRED_MAKE_TARGETS = {
     "ask-dspy",
     "ask-live",
     "dspy-train",
+    "dspy-artifacts",
     "files-sync",
     "retrieval-eval",
     "discover-mcp",

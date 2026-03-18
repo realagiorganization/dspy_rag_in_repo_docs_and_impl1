@@ -9,6 +9,7 @@ import pytest
 from repo_rag_lab.utilities import (
     run_azure_inference_probe,
     run_azure_openai_probe,
+    run_dspy_artifacts,
     run_exploratorium_translation_sync,
     run_file_summary_sync,
     run_notebook_report,
@@ -32,6 +33,7 @@ def test_utility_summary_mentions_core_surfaces() -> None:
     assert "ask-live" in summary
     assert "discover-mcp" in summary
     assert "dspy-train" in summary
+    assert "dspy-artifacts" in summary
     assert "azure-openai-probe" in summary
     assert "azure-inference-probe" in summary
     assert "files-sync" in summary
@@ -67,6 +69,13 @@ def test_run_surface_verification_reports_expected_fields() -> None:
     payload = json.loads(run_surface_verification(REPO_ROOT))
     assert payload["issue_count"] == 0
     assert payload["checked_notebook_count"] >= 2
+
+
+def test_run_dspy_artifacts_reports_expected_fields(tmp_path: Path) -> None:
+    payload = json.loads(run_dspy_artifacts(tmp_path))
+    assert payload["artifact_root"] == "artifacts/dspy"
+    assert payload["run_count"] == 0
+    assert payload["runs"] == []
 
 
 def test_run_todo_backlog_sync_reports_expected_fields() -> None:

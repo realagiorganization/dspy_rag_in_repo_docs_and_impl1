@@ -9,11 +9,14 @@ them over ad hoc shell commands so every workflow hits the same package code.
 - `make files-sync`: regenerate the tracked-file inventory surfaces `FILES.md` and `FILES.csv`.
 - `make ask QUESTION="..."`: answer a repository-grounded question with the baseline RAG flow.
 - `make ask-dspy QUESTION="..."`: answer through the DSPy runtime path, optionally loading a saved
-  compiled program.
+  compiled program, and automatically reusing the latest saved one when no explicit program path is
+  provided.
 - `make ask-live QUESTION="..."`: retrieve repository evidence locally, then synthesize the answer
   through Azure OpenAI or Azure AI Inference.
 - `make dspy-train DSPY_RUN_NAME=...`: compile and persist a repository-grounded DSPy program under
   `artifacts/dspy/`.
+- `make dspy-artifacts`: inspect the saved DSPy runs, latest program path, and recorded benchmark
+  summaries.
 - `make exploratorium-sync`: regenerate the bilingual publication inventory of files, links, and
   fetch state.
 - `make retrieval-eval`: evaluate retrieval quality across a top-k sweep with source recall,

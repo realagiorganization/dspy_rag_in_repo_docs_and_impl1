@@ -31,12 +31,12 @@ Present now:
 - [pyproject.toml](pyproject.toml) installs `dspy-ai` as part of the main Python package.
 - [src/repo_rag_lab/dspy_training.py](src/repo_rag_lab/dspy_training.py) resolves LM
   configuration from CLI flags or environment variables, defines the repository-grounded
-  `RepositoryRAGProgram`, runs `BootstrapFewShot` or `MIPROv2`, and persists artifacts under
-  `artifacts/dspy/`.
+  `RepositoryRAGProgram`, runs `BootstrapFewShot` or `MIPROv2`, persists artifacts under
+  `artifacts/dspy/`, and summarizes saved runs for later reuse.
 - [src/repo_rag_lab/dspy_workflow.py](src/repo_rag_lab/dspy_workflow.py),
   [src/repo_rag_lab/cli.py](src/repo_rag_lab/cli.py), and [Makefile](Makefile) expose both
   runtime answering and compiled-program reuse through `ask --use-dspy`, `dspy-train`,
-  `make ask-dspy`, and `make dspy-train`.
+  `dspy-artifacts`, `make ask-dspy`, `make dspy-train`, and `make dspy-artifacts`.
 - [src/repo_rag_lab/training_samples.py](src/repo_rag_lab/training_samples.py),
   [src/repo_rag_lab/benchmarks.py](src/repo_rag_lab/benchmarks.py), and
   [src/repo_rag_lab/notebook_scaffolding.py](src/repo_rag_lab/notebook_scaffolding.py) provide
@@ -73,6 +73,7 @@ make ask-dspy QUESTION="What does this repository research?" \
 make dspy-train DSPY_RUN_NAME=smoke \
   DSPY_MODEL=openai/gpt-4o-mini \
   DSPY_API_KEY="$OPENAI_API_KEY"
+make dspy-artifacts
 make smoke-test
 make verify-surfaces
 ```
@@ -84,7 +85,9 @@ The baseline path above is runnable as-is. The DSPy path can now resolve LM conf
 - repository Azure variables such as `AZURE_OPENAI_DEPLOYMENT_NAME` and `AZURE_OPENAI_ENDPOINT`
 - `OPENAI_API_KEY` for the default OpenAI fallback model
 
-Once a program is compiled, you can point the runtime at the saved artifact directly:
+Once a program is compiled, `make ask-dspy` will automatically reuse the latest saved artifact
+when LM configuration is available. You can still point the runtime at an explicit saved artifact
+directly:
 
 ```bash
 make ask-dspy QUESTION="What does this repository research?" \
@@ -420,8 +423,8 @@ print(result.answer)
    or `repo-rag dspy-train`.
 2. `resolve_dspy_lm_config(...)` maps explicit flags or environment variables into a typed DSPy LM
    config.
-3. `RepositoryRAG(...)` either builds a fresh runtime program or loads
-   `--dspy-program-path` from disk.
+3. `RepositoryRAG(...)` either builds a fresh runtime program, auto-loads the latest compiled
+   program, or loads `--dspy-program-path` from disk.
 4. [src/repo_rag_lab/dspy_training.py](src/repo_rag_lab/dspy_training.py) validates the training
    examples, builds a DSPy trainset, compiles a `RepositoryRAGProgram`, writes
    `artifacts/dspy/<run-name>/program.json`, and records `metadata.json`.
@@ -440,6 +443,8 @@ make ask-dspy QUESTION="What does this repository research?" \
 make dspy-train DSPY_RUN_NAME=smoke \
   DSPY_MODEL=openai/gpt-4o-mini \
   DSPY_API_KEY="$OPENAI_API_KEY"
+
+make dspy-artifacts
 
 make ask-dspy QUESTION="What does this repository research?" \
   DSPY_PROGRAM_PATH=artifacts/dspy/smoke/program.json \

@@ -119,7 +119,8 @@ These are exposed through:
 
 This is the current center of gravity of the repository. The project no longer stops at “use DSPy
 at runtime if available.” It can now compile a repository-grounded program, persist it under
-`artifacts/dspy/`, and reuse that program for later questions.
+`artifacts/dspy/`, inspect saved runs as a first-class surface, and reuse the latest compiled
+program automatically for later questions.
 
 Before that DSPy layer runs, the Rust wrapper now exposes a repo-local SQLite FTS index and lookup
 path over tracked UTF-8 files. Agents are expected to use that cheap lexical lookup first when the
@@ -185,6 +186,7 @@ At the time of this document:
   plus `make rust-lookup`
 - DSPy runtime answering is implemented and exposed through `make ask-dspy`
 - DSPy compile-save-reload is implemented and exposed through `make dspy-train`
+- DSPy artifact inspection is implemented and exposed through `make dspy-artifacts`
 - notebook batch execution and reporting are implemented and exposed through
   `make notebook-report`
 - TODO and publication backlog synchronization are implemented and exposed through

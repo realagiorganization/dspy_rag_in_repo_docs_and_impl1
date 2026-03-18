@@ -35,10 +35,17 @@ def test_repository_rag_skips_program_without_configuration(
         del self
         return [f"context for {question}"]
 
+    def fake_resolve_program_path(root: Path, program_path: Path | None = None) -> None:
+        del root, program_path
+
     monkeypatch.setattr("repo_rag_lab.dspy_workflow.dspy", object())
     monkeypatch.setattr(
         "repo_rag_lab.dspy_workflow.build_repository_rag_program",
         fail_if_called,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.dspy_workflow.resolve_dspy_program_path",
+        fake_resolve_program_path,
     )
     monkeypatch.setattr(RepositoryRetriever, "__call__", fake_retrieve)
 
@@ -46,6 +53,71 @@ def test_repository_rag_skips_program_without_configuration(
 
     assert result.context == ["context for What does this repository research?"]
     assert result.answer == "context for What does this repository research?"
+
+
+def test_repository_rag_uses_latest_compiled_program_when_available(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeProgram:
+        def __call__(self, *, question: str) -> object:
+            return type(
+                "Prediction",
+                (),
+                {
+                    "answer": f"compiled answer for {question}",
+                    "context": ["compiled context"],
+                },
+            )()
+
+    def fake_build_program(*args: object, **kwargs: object) -> FakeProgram:
+        captured.update(kwargs)
+        return FakeProgram()
+
+    def fake_resolve_program_path(root: Path, program_path: Path | None = None) -> Path:
+        del root, program_path
+        return tmp_path / "artifacts" / "dspy" / "latest-run" / "program.json"
+
+    monkeypatch.setattr("repo_rag_lab.dspy_workflow.dspy", object())
+    monkeypatch.setattr(
+        "repo_rag_lab.dspy_workflow.resolve_dspy_program_path",
+        fake_resolve_program_path,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.dspy_workflow.build_repository_rag_program",
+        fake_build_program,
+    )
+
+    result = RepositoryRAG(
+        REPO_ROOT,
+        lm_config=DSPyLMConfig(model="openai/test-model", api_key="test-key"),
+        require_configured_lm=True,
+    )("What does this repository research?")
+
+    assert (
+        captured["program_path"] == tmp_path / "artifacts" / "dspy" / "latest-run" / "program.json"
+    )
+    assert captured["require_configured_lm"] is False
+    assert result.context == ["compiled context"]
+    assert result.answer == "compiled answer for What does this repository research?"
+
+
+def test_repository_rag_requires_lm_when_latest_program_is_auto_discovered(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def fake_resolve_program_path(root: Path, program_path: Path | None = None) -> Path:
+        del root, program_path
+        return tmp_path / "artifacts" / "dspy" / "latest" / "program.json"
+
+    monkeypatch.setattr("repo_rag_lab.dspy_workflow.dspy", object())
+    monkeypatch.setattr(
+        "repo_rag_lab.dspy_workflow.resolve_dspy_program_path",
+        fake_resolve_program_path,
+    )
+
+    with pytest.raises(RuntimeError, match="DSPy LM configuration is required"):
+        RepositoryRAG(REPO_ROOT, require_configured_lm=True)
 
 
 def test_repository_rag_uses_program_prediction_context(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -168,11 +240,19 @@ def test_cli_main_other_commands(
             f'"default_top_k": 4, "benchmark_count": 8, "root": "{root}"}}'
         )
 
+    def fake_dspy_artifacts(root: Path) -> str:
+        return (
+            '{"artifact_root": "artifacts/dspy", "run_count": 1, '
+            '"latest_run_name": "sample", '
+            f'"root": "{root}"}}'
+        )
+
     monkeypatch.setattr(cli, "run_surface_verification", fake_surface_verification)
     monkeypatch.setattr(cli, "run_file_summary_sync", fake_file_summary_sync)
     monkeypatch.setattr(cli, "run_notebook_report", fake_notebook_report)
     monkeypatch.setattr(cli, "run_exploratorium_translation_sync", fake_exploratorium_sync)
     monkeypatch.setattr(cli, "run_retrieval_evaluation", fake_retrieval_evaluation)
+    monkeypatch.setattr(cli, "run_dspy_artifacts", fake_dspy_artifacts)
     monkeypatch.setattr(cli, "run_todo_backlog_sync", fake_todo_sync)
     monkeypatch.setattr(cli, "run_azure_openai_probe", fake_azure_openai_probe)
     monkeypatch.setattr(cli, "run_azure_inference_probe", fake_azure_inference_probe)
@@ -191,6 +271,7 @@ def test_cli_main_other_commands(
         )(),
         type("Args", (), {"command": "utility-summary", "root": str(tmp_path)})(),
         type("Args", (), {"command": "sync-file-summaries", "root": str(tmp_path)})(),
+        type("Args", (), {"command": "dspy-artifacts", "root": str(tmp_path)})(),
         type(
             "Args",
             (),
@@ -251,6 +332,7 @@ def test_cli_main_other_commands(
     assert "OPENAI_OK" in output
     assert "INFERENCE_OK" in output
     assert "FILES.md" in output
+    assert '"latest_run_name": "sample"' in output
     assert '"default_top_k": 4' in output
     assert "todo-backlog.yaml" in output
     assert "exploratorium_translation.pdf" in output
