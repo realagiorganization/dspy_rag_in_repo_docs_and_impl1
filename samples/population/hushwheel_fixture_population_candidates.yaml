@@ -8,7 +8,7 @@
   rationale: The operations guide maps user questions to concrete functions and commands.
   priority: 3
 - source: src/hushwheel.c
-  rationale: The giant source file contains the full glossary table and command implementation.
+  rationale: The giant coordinator source contains the Doxygen mainpage, canonical entries, and command implementation.
   priority: 4
 - source: include/hushwheel.h
   rationale: The header defines the central GlossaryEntry shape and public entrypoint.

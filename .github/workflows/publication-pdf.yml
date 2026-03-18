@@ -8,9 +8,11 @@ on:
       - ".github/workflows/publication-pdf.yml"
       - "publication/**"
       - "todo-backlog.yaml"
+      - "src/repo_rag_lab/exploratorium_translation.py"
       - "src/repo_rag_lab/todo_backlog.py"
       - "src/repo_rag_lab/cli.py"
       - "src/repo_rag_lab/utilities.py"
+      - "AGENTS.md"
       - "Makefile"
       - "pyproject.toml"
       - "uv.lock"
@@ -20,9 +22,11 @@ on:
       - ".github/workflows/publication-pdf.yml"
       - "publication/**"
       - "todo-backlog.yaml"
+      - "src/repo_rag_lab/exploratorium_translation.py"
       - "src/repo_rag_lab/todo_backlog.py"
       - "src/repo_rag_lab/cli.py"
       - "src/repo_rag_lab/utilities.py"
+      - "AGENTS.md"
       - "Makefile"
       - "pyproject.toml"
       - "uv.lock"
@@ -51,10 +55,11 @@ jobs:
             pyproject.toml
             uv.lock
 
-      - name: Sync backlog tables
+      - name: Sync publication inventories
         run: |
           uv sync --extra azure
           uv run repo-rag sync-todo-backlog --root .
+          uv run repo-rag sync-exploratorium-translation --root .
 
       - name: Restore LaTeX auxiliary cache
         uses: actions/cache@v4
@@ -70,7 +75,7 @@ jobs:
             publication/*.out
             publication/*.run.xml
             publication/*.toc
-          key: latex-aux-${{ runner.os }}-${{ hashFiles('publication/repository-rag-lab-article.tex', 'publication/references.bib', 'publication/Makefile', 'publication/todo-backlog-table.tex', 'todo-backlog.yaml', '.github/workflows/publication-pdf.yml') }}
+          key: latex-aux-${{ runner.os }}-${{ hashFiles('publication/repository-rag-lab-article.tex', 'publication/references.bib', 'publication/Makefile', 'publication/todo-backlog-table.tex', 'publication/exploratorium_translation/exploratorium_translation.tex', 'publication/exploratorium_translation/Makefile', 'publication/exploratorium_translation/generated/exploratorium-content.tex', 'publication/exploratorium_translation/generated/exploratorium-manifest.json', 'todo-backlog.yaml', '.github/workflows/publication-pdf.yml') }}
           restore-keys: |
             latex-aux-${{ runner.os }}-
 
@@ -81,12 +86,22 @@ jobs:
           working_directory: publication
           args: -pdf -file-line-error -halt-on-error -interaction=nonstopmode
 
-      - name: Upload publication PDF
+      - name: Compile exploratorium translation PDF
+        uses: xu-cheng/latex-action@v4
+        with:
+          root_file: exploratorium_translation.tex
+          working_directory: publication/exploratorium_translation
+          latexmk_use_lualatex: true
+          args: -pdf -file-line-error -halt-on-error -interaction=nonstopmode
+
+      - name: Upload publication PDFs
         id: upload_publication_pdf
         uses: actions/upload-artifact@v6
         with:
           name: publication-pdf
-          path: publication/repository-rag-lab-article.pdf
+          path: |
+            publication/repository-rag-lab-article.pdf
+            publication/exploratorium_translation/exploratorium_translation.pdf
           if-no-files-found: error
 
       - name: Notify Discord about publication PDF
@@ -98,10 +113,11 @@ jobs:
           webhook: ${{ env.DISCORD_WEBHOOK }}
           status: ${{ job.status }}
           nodetail: true
-          title: Publication PDF ready
+          title: Publication PDFs ready
           description: |
             [Artifact download](${{ steps.upload_publication_pdf.outputs['artifact-url'] }})
             [Committed PDF](${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/publication/repository-rag-lab-article.pdf)
+            [Committed exploratorium PDF](${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/publication/exploratorium_translation/exploratorium_translation.pdf)
             [Workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
           url: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/publication/repository-rag-lab-article.pdf
           color: 0x2f855a

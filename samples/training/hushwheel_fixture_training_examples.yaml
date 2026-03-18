@@ -24,8 +24,8 @@
     - src/hushwheel.c
 - question: How does print_prefix_matches handle prefix search?
   expected_answer: >-
-    It walks the giant entry table, uses the starts_with helper, and prints one
-    compact result row for each matching term.
+    It walks the core entries and every spoke table, uses the starts_with
+    helper, and prints one compact result row for each matching term.
   tags:
     - hushwheel
     - code

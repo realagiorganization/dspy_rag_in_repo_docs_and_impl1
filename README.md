@@ -47,8 +47,12 @@ from corpus loading and retrieval through MCP discovery, notebook scaffolding, v
 the Rust wrapper.
 
 - Read the PDF: [publication/repository-rag-lab-article.pdf](publication/repository-rag-lab-article.pdf)
+- Read the bilingual exploratorium: [publication/exploratorium_translation/exploratorium_translation.pdf](publication/exploratorium_translation/exploratorium_translation.pdf)
+- Review the tracked file inventory: [FILES.md](FILES.md)
 - Review the synced TODO table: [TODO.MD](TODO.MD)
+- Refresh the file inventory: `make files-sync`
 - Refresh the backlog tables: `make todo-sync`
+- Refresh the bilingual exploratorium inventory: `make exploratorium-sync`
 - Rebuild it locally: `make paper-build`
 
 ## Preferred Workflow Surfaces
@@ -57,7 +61,9 @@ the Rust wrapper.
 | --- | --- | --- |
 | Utility overview | `make utility-summary` | Show the supported user-facing entrypoints. |
 | Direct CLI | `uv run repo-rag utility-summary` | Use the packaged CLI without going through `make`. |
+| File inventory sync | `make files-sync` | Regenerate `FILES.md` and `FILES.csv` from the tracked repository tree. |
 | Backlog sync | `make todo-sync` | Regenerate the linkified TODO table in both Markdown and the publication article. |
+| Exploratorium sync | `make exploratorium-sync` | Regenerate the bilingual file/link/fetch-state publication inventory. |
 | Ask a repo question | `make ask QUESTION="..."` | Run the baseline repository-grounded RAG workflow. |
 | DSPy ask | `make ask-dspy QUESTION="..."` | Run the DSPy runtime path with LM config from `DSPY_*`, Azure, or OpenAI environment variables. |
 | Live Azure ask | `make ask-live QUESTION="..."` | Retrieve repository evidence locally, then synthesize a live answer through Azure OpenAI or Azure AI Inference. |
@@ -73,6 +79,7 @@ the Rust wrapper.
 | GitHub run watch | `make gh-watch` | Watch the latest or selected GitHub Actions run until completion. |
 | GitHub failed logs | `make gh-failed-logs` | Print failed job logs for the latest or selected run when CI breaks. |
 | Publication PDF | `make paper-build` | Build the LaTeX article PDF and clipped banner image. |
+| Exploratorium PDF | `make exploratorium-build` | Build the bilingual exploratorium translation PDF. |
 | Notebook research | `make notebook` | Open the main notebook playbook in JupyterLab. |
 | Rust wrapper | `cargo run --manifest-path rust-cli/Cargo.toml -- ask --question "..."` | Run the same Python workflow through the Rust shim. |
 
@@ -83,12 +90,13 @@ the Rust wrapper.
 | `src/repo_rag_lab/` | Shared Python package for corpus loading, retrieval, MCP discovery, CLI commands, notebook scaffolds, utilities, and verification helpers. |
 | `README.AGENTS.md` | Overarching research narrative that ties together the repository thesis, workflow stages, evidence surfaces, and maintenance contract. |
 | `README.DSPY.MD` | Central DSPy map covering corpus planning, training samples, benchmarks, compile-reload flows, notebook scaffolds, and remaining DSPy limitations. |
+| `FILES.md` / `FILES.csv` | Generated tracked-file inventories for humans, scripts, and agent maintenance. |
 | `notebooks/` | Research playbooks that reuse package helpers for validation, assertions, and logging instead of embedding workflow logic inline. |
 | `tests/` | Pytest suites, BDD-style checks, doctests, and surface verification tests. |
 | `samples/training/` | Starter question-answer pairs for DSPy-oriented experiments. |
 | `samples/population/` | Starter corpus-planning data for staged repository ingestion. |
 | `documentation/` | Supporting notes for Azure deployment and inspired external implementations. |
-| `publication/` | LaTeX article source, bibliography, committed PDF, clipped banner image, and local build helpers. |
+| `publication/` | LaTeX article source, bibliography, committed PDFs, clipped banner image, bilingual exploratorium subdocument, and local build helpers. |
 | `todo-backlog.yaml` | Single source of truth for the linkified backlog table rendered into `TODO.MD` and the publication article. |
 | `samples/logs/` | Post-push GitHub Actions inspection logs captured with `gh`. |
 | `artifacts/` | Generated DSPy program artifacts, Azure manifests, tuning metadata, notebook run logs, and notebook batch-run reports. |

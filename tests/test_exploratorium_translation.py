@@ -1,0 +1,61 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from repo_rag_lab.exploratorium_translation import sync_exploratorium_translation
+
+
+def test_sync_exploratorium_translation_writes_bilingual_outputs(tmp_path: Path) -> None:
+    (tmp_path / "documentation").mkdir(parents=True)
+    (tmp_path / "publication").mkdir(parents=True)
+    (tmp_path / "src" / "repo_rag_lab").mkdir(parents=True)
+
+    (tmp_path / "README.md").write_text(
+        "# Demo Repo\n\nSee https://github.com/example/project and https://astral.sh/.\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "Makefile").write_text(".PHONY: setup\nsetup:\n\t@true\n", encoding="utf-8")
+    (tmp_path / "documentation" / "azure-deployment.md").write_text(
+        "# Azure Deployment\n\nCompanion note.\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "documentation" / "mcp-discovery.md").write_text(
+        "# MCP Discovery\n\nCompanion note.\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "src" / "repo_rag_lab" / "example.py").write_text(
+        '"""Example module."""\n\nVALUE = 1\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "publication" / "references.bib").write_text(
+        "@misc{mcp2024,\n"
+        "  title = {Model Context Protocol},\n"
+        "  howpublished = {\\url{https://modelcontextprotocol.io/}}\n"
+        "}\n\n"
+        "@misc{azureinference2025,\n"
+        "  title = {Azure AI Inference Documentation},\n"
+        "  howpublished = {\\url{https://learn.microsoft.com/azure/ai-services/}}\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    payload = sync_exploratorium_translation(tmp_path)
+
+    tex_path = tmp_path / str(payload["tex_path"])
+    manifest_path = tmp_path / str(payload["manifest_path"])
+    assert tex_path.exists()
+    assert manifest_path.exists()
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["bibliography_entry_count"] == 2
+    assert manifest["explicit_link_count"] >= 2
+    assert manifest["summarized_file_count"] >= 5
+
+    tex = tex_path.read_text(encoding="utf-8")
+    assert "Side-By-Side / Параллельный показ" in tex
+    assert "Line-By-Line / Построчный показ" in tex
+    assert "Page-By-Page / Постраничный показ" in tex
+    assert "Repository Fetching State / Состояние загрузки источников" in tex
+    assert "https://modelcontextprotocol.io/" in tex
+    assert "https://learn.microsoft.com/azure/ai-services/" in tex

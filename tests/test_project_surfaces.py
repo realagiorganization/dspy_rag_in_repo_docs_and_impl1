@@ -104,6 +104,7 @@ def test_pyproject_exposes_uv_build_and_console_script() -> None:
 
 def test_publication_surface_files_exist_and_are_linked() -> None:
     publication_dir = REPO_ROOT / "publication"
+    exploratorium_dir = publication_dir / "exploratorium_translation"
     assert (publication_dir / "README.md").exists()
     assert (publication_dir / "Makefile").exists()
     assert (publication_dir / "references.bib").exists()
@@ -111,12 +112,24 @@ def test_publication_surface_files_exist_and_are_linked() -> None:
     assert (publication_dir / "todo-backlog-table.tex").exists()
     assert (publication_dir / "repository-rag-lab-article.pdf").exists()
     assert (publication_dir / "article-banner.png").exists()
+    assert (exploratorium_dir / "README.md").exists()
+    assert (exploratorium_dir / "Makefile").exists()
+    assert (exploratorium_dir / "exploratorium_translation.tex").exists()
+    assert (exploratorium_dir / "generated" / "exploratorium-content.tex").exists()
+    assert (exploratorium_dir / "generated" / "exploratorium-manifest.json").exists()
+    assert (exploratorium_dir / "exploratorium_translation.pdf").exists()
+    assert (REPO_ROOT / "FILES.md").exists()
+    assert (REPO_ROOT / "FILES.csv").exists()
 
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     assert "publication/repository-rag-lab-article.pdf" in readme
+    assert "publication/exploratorium_translation/exploratorium_translation.pdf" in readme
     assert "publication/article-banner.png" in readme
+    assert "FILES.md" in readme
     assert "make paper-build" in readme
+    assert "make files-sync" in readme
     assert "make todo-sync" in readme
+    assert "make exploratorium-sync" in readme
 
     todo_text = (REPO_ROOT / "TODO.MD").read_text(encoding="utf-8")
     assert "| 🎯 | 🧭 Area | 📌 TODO | 🔗 Primary Surfaces | ✅ Done When |" in todo_text
@@ -138,6 +151,7 @@ def test_publication_workflow_builds_and_uploads_pdf() -> None:
     assert workflow_on is not None
     assert "todo-backlog.yaml" in workflow_on["push"]["paths"]
     assert "src/repo_rag_lab/todo_backlog.py" in workflow_on["push"]["paths"]
+    assert "src/repo_rag_lab/exploratorium_translation.py" in workflow_on["push"]["paths"]
 
     assert workflow["name"] == "Publication PDF"
     job = workflow["jobs"]["publication-pdf"]
@@ -147,8 +161,9 @@ def test_publication_workflow_builds_and_uploads_pdf() -> None:
     assert any(step.get("uses") == "actions/setup-python@v6" for step in steps)
     assert any(step.get("uses") == "astral-sh/setup-uv@v6" for step in steps)
     assert any(
-        step.get("name") == "Sync backlog tables"
+        step.get("name") == "Sync publication inventories"
         and "repo-rag sync-todo-backlog" in step.get("run", "")
+        and "repo-rag sync-exploratorium-translation" in step.get("run", "")
         for step in steps
     )
     assert any(
@@ -156,13 +171,19 @@ def test_publication_workflow_builds_and_uploads_pdf() -> None:
         and "publication/*.aux" in step.get("with", {}).get("path", "")
         and "publication/repository-rag-lab-article.tex" in step.get("with", {}).get("key", "")
         and "publication/todo-backlog-table.tex" in step.get("with", {}).get("key", "")
+        and "publication/exploratorium_translation/exploratorium_translation.tex"
+        in step.get("with", {}).get("key", "")
+        and "publication/exploratorium_translation/generated/exploratorium-content.tex"
+        in step.get("with", {}).get("key", "")
         for step in steps
     )
-    assert any(step.get("uses") == "xu-cheng/latex-action@v4" for step in steps)
+    assert sum(1 for step in steps if step.get("uses") == "xu-cheng/latex-action@v4") == 2
     assert any(
         step.get("uses") == "actions/upload-artifact@v6"
         and step.get("id") == "upload_publication_pdf"
-        and step.get("with", {}).get("path") == "publication/repository-rag-lab-article.pdf"
+        and "publication/repository-rag-lab-article.pdf" in step.get("with", {}).get("path", "")
+        and "publication/exploratorium_translation/exploratorium_translation.pdf"
+        in step.get("with", {}).get("path", "")
         for step in steps
     )
     assert any(
@@ -171,6 +192,8 @@ def test_publication_workflow_builds_and_uploads_pdf() -> None:
         and step.get("with", {}).get("webhook") == "${{ env.DISCORD_WEBHOOK }}"
         and "nofail" not in step.get("with", {})
         and "steps.upload_publication_pdf.outputs['artifact-url']"
+        in step.get("with", {}).get("description", "")
+        and "publication/exploratorium_translation/exploratorium_translation.pdf"
         in step.get("with", {}).get("description", "")
         and "publication/repository-rag-lab-article.pdf" in step.get("with", {}).get("url", "")
         for step in steps
@@ -187,6 +210,30 @@ def test_repo_local_todo_skill_is_recorded() -> None:
     skill_text = skill_path.read_text(encoding="utf-8")
     assert "todo-backlog.yaml" in skill_text
     assert "make paper-build" in skill_text
+
+
+def test_repo_local_exploratorium_skill_is_recorded() -> None:
+    agents_text = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    skill_path = REPO_ROOT / ".codex" / "skills" / "exploratorium-translation-sync" / "SKILL.md"
+
+    assert "exploratorium-translation-sync" in agents_text
+    assert "make exploratorium-sync" in agents_text
+    assert skill_path.exists()
+    skill_text = skill_path.read_text(encoding="utf-8")
+    assert "src/repo_rag_lab/exploratorium_translation.py" in skill_text
+    assert "make exploratorium-build" in skill_text
+
+
+def test_repo_local_file_summary_skill_is_recorded() -> None:
+    agents_text = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    skill_path = REPO_ROOT / ".codex" / "skills" / "file-summary-sync" / "SKILL.md"
+
+    assert "file-summary-sync" in agents_text
+    assert "make files-sync" in agents_text
+    assert skill_path.exists()
+    skill_text = skill_path.read_text(encoding="utf-8")
+    assert "FILES.md" in skill_text
+    assert "AGENTS.md.d/FILES.md" in skill_text
 
 
 def test_ci_and_publish_workflows_cache_python_and_dependencies() -> None:

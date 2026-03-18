@@ -3,15 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TEXT_FILES = (
+STATIC_TEXT_FILES = (
     Path("README.md"),
     Path("CHANGELOG.md"),
     Path("LICENSE.md"),
     Path("VERSION"),
     Path("Makefile"),
+    Path("Doxyfile"),
     Path("fixture-manifest.json"),
     Path("include/hushwheel.h"),
-    Path("src/hushwheel.c"),
     Path("docs/concepts.md"),
     Path("docs/operations.md"),
     Path("docs/districts.md"),
@@ -19,12 +19,14 @@ TEXT_FILES = (
     Path("docs/architecture.md"),
     Path("docs/testing.md"),
     Path("docs/packaging.md"),
+    Path("docs/doxygen-fonts.sty"),
     Path("packaging/hushwheel.package.json"),
     Path("packaging/hushwheel.1"),
     Path("tests/unit/test_hushwheel_unit.c"),
     Path("tests/integration/cli_suite.py"),
     Path("tests/bdd/hushwheel.feature"),
     Path("tests/bdd/run_bdd.py"),
+    Path("tools/regenerate_hushwheel_fixture.py"),
 )
 REQUIRED_MAKE_TARGETS = (
     "lint:",
@@ -33,13 +35,16 @@ REQUIRED_MAKE_TARGETS = (
     "bdd:",
     "check:",
     "dist:",
+    "docs:",
     "install:",
     "uninstall:",
 )
 REQUIRED_README_SNIPPETS = (
     "make check",
+    "make docs",
     "make dist",
     "make install",
+    "docs/hushwheel-reference.pdf",
     "tests/unit/test_hushwheel_unit.c",
     "tests/bdd/hushwheel.feature",
 )
@@ -49,8 +54,14 @@ def read_text(path: Path) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
+def text_files() -> tuple[Path, ...]:
+    source_files = tuple(sorted(Path("src").glob("*.c")))
+    source_headers = tuple(sorted(Path("src").glob("*.h")))
+    return STATIC_TEXT_FILES + source_files + source_headers
+
+
 def assert_no_tabs_or_trailing_whitespace() -> None:
-    for relative_path in TEXT_FILES:
+    for relative_path in text_files():
         for line_number, raw_line in enumerate(read_text(relative_path).splitlines(), start=1):
             if "\t" in raw_line and not (
                 relative_path == Path("Makefile") and raw_line.startswith("\t")
@@ -81,6 +92,8 @@ def assert_feature_and_source_are_aligned() -> None:
         raise RuntimeError("src/hushwheel.c is missing the HUSHWHEEL_NO_MAIN guard")
     if "Feature: Hushwheel CLI" not in feature:
         raise RuntimeError("tests/bdd/hushwheel.feature is missing the feature declaration")
+    if "@mainpage Hushwheel Lexiconarium" not in source:
+        raise RuntimeError("src/hushwheel.c is missing the Doxygen mainpage block")
 
 
 def main() -> int:

@@ -1,6 +1,13 @@
 repos:
   - repo: local
     hooks:
+      - id: sync-file-summaries-pre-commit
+        name: sync file summaries pre-commit
+        entry: uv run python -m repo_rag_lab.file_summaries --root .
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
       - id: ruff-check-pre-commit
         name: ruff pre-commit gate
         entry: uv run ruff check src tests

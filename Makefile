@@ -30,7 +30,7 @@ GH_RUN_LIMIT ?= 10
 RUN_ID ?=
 NOTEBOOK_TIMEOUT ?= 600
 
-.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask ask-dspy ask-live dspy-train retrieval-eval discover-mcp utility-summary todo-sync smoke-test azure-openai-probe azure-inference-probe verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook notebook-report bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run azure-manifest fmt build publish
+.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask ask-dspy ask-live dspy-train retrieval-eval discover-mcp utility-summary files-sync todo-sync exploratorium-sync exploratorium-build smoke-test azure-openai-probe azure-inference-probe verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook notebook-report bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run azure-manifest fmt build publish
 
 setup:
 	$(UV) sync --extra azure
@@ -95,8 +95,17 @@ discover-mcp: sync
 utility-summary: sync
 	$(UV) run repo-rag utility-summary
 
+files-sync: sync
+	$(UV) run repo-rag sync-file-summaries --root .
+
 todo-sync: sync
 	$(UV) run repo-rag sync-todo-backlog
+
+exploratorium-sync: sync
+	$(UV) run repo-rag sync-exploratorium-translation --root .
+
+exploratorium-build: exploratorium-sync
+	$(MAKE) -C publication/exploratorium_translation build
 
 smoke-test: sync
 	$(UV) run repo-rag smoke-test
@@ -131,7 +140,7 @@ gh-failed-logs:
 	test -n "$$run_id"; \
 	gh run view "$$run_id" --log-failed
 
-paper-build: todo-sync
+paper-build: todo-sync exploratorium-sync
 	$(MAKE) -C publication build
 
 paper-clean:

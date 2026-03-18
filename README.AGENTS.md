@@ -159,11 +159,20 @@ The publication surface turns the technical work into a readable article. The Az
 tuning metadata surfaces turn experimental outputs into deployment-oriented metadata without
 pretending that deployment itself happens inside this repo.
 
+The publication bundle now also includes a bilingual exploratorium subdocument that inventories the
+state of referenced papers and documentation, summarizes all tracked files, and summarizes every
+authored explicit URL in English and Russian. That turns repository self-inventory into a
+publication surface rather than leaving it as hidden maintenance glue.
+
 ## Current State
 
 At the time of this document:
 
 - baseline repository-grounded RAG is implemented and exposed through `make ask`
+- live Azure-backed repository answering is implemented and exposed through `make ask-live`
+- Azure runtime contract probes are implemented and exposed through
+  `make azure-openai-probe` and `make azure-inference-probe`
+- tracked-file inventory sync is implemented and exposed through `make files-sync`
 - retrieval-quality evaluation is implemented and exposed through `make retrieval-eval`
 - DSPy runtime answering is implemented and exposed through `make ask-dspy`
 - DSPy compile-save-reload is implemented and exposed through `make dspy-train`
@@ -171,6 +180,8 @@ At the time of this document:
   `make notebook-report`
 - TODO and publication backlog synchronization are implemented and exposed through
   `make todo-sync`
+- bilingual file, link, and fetch-state publication sync is implemented and exposed through
+  `make exploratorium-sync`
 - verification and CI logging are part of the repository contract, not optional cleanup
 
 The main bottlenecks are now quality and coverage of retrieval, training examples, and benchmark
@@ -184,11 +195,13 @@ Use these files when you need to defend the current repository story quickly:
 | --- | --- | --- |
 | What is the repo for? | [README.md](README.md) | [publication/repository-rag-lab-article.pdf](publication/repository-rag-lab-article.pdf) |
 | How is retrieval quality measured? | [README.DSPY.MD](README.DSPY.MD) | [src/repo_rag_lab/benchmarks.py](src/repo_rag_lab/benchmarks.py), [docs/audit/2026-03-18-retrieval-evaluation-suite.md](docs/audit/2026-03-18-retrieval-evaluation-suite.md) |
+| How are live Azure runtime calls validated? | [documentation/azure-deployment.md](documentation/azure-deployment.md) | [src/repo_rag_lab/azure_runtime.py](src/repo_rag_lab/azure_runtime.py), [docs/audit/2026-03-18-azure-runtime-surfaces.md](docs/audit/2026-03-18-azure-runtime-surfaces.md) |
 | How does DSPy work here? | [README.DSPY.MD](README.DSPY.MD) | [src/repo_rag_lab/dspy_training.py](src/repo_rag_lab/dspy_training.py), [src/repo_rag_lab/dspy_workflow.py](src/repo_rag_lab/dspy_workflow.py) |
 | How do notebooks fit in? | [notebooks/](notebooks/) | [src/repo_rag_lab/notebook_scaffolding.py](src/repo_rag_lab/notebook_scaffolding.py), [src/repo_rag_lab/notebook_runner.py](src/repo_rag_lab/notebook_runner.py) |
+| How is the repository inventory summarized? | [FILES.md](FILES.md) | [FILES.csv](FILES.csv), [src/repo_rag_lab/file_summaries.py](src/repo_rag_lab/file_summaries.py), [AGENTS.md.d/FILES.md](AGENTS.md.d/FILES.md) |
 | What currently passes? | [docs/audit/README.md](docs/audit/README.md) | newest dated note in [docs/audit/](docs/audit/), plus [samples/logs/](samples/logs/) |
 | What environment is required? | [env.md](env.md) | [documentation/azure-deployment.md](documentation/azure-deployment.md) |
-| How does the publication relate? | [publication/README.md](publication/README.md) | [publication/repository-rag-lab-article.pdf](publication/repository-rag-lab-article.pdf) |
+| How does the publication relate? | [publication/README.md](publication/README.md) | [publication/repository-rag-lab-article.pdf](publication/repository-rag-lab-article.pdf), [publication/exploratorium_translation/exploratorium_translation.pdf](publication/exploratorium_translation/exploratorium_translation.pdf) |
 
 ## Tensions And Open Work
 

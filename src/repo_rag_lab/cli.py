@@ -21,6 +21,8 @@ from .mcp import discover_mcp_servers, dump_candidates
 from .utilities import (
     run_azure_inference_probe,
     run_azure_openai_probe,
+    run_exploratorium_translation_sync,
+    run_file_summary_sync,
     run_notebook_report,
     run_retrieval_evaluation,
     run_smoke_test,
@@ -93,8 +95,14 @@ def build_parser() -> argparse.ArgumentParser:
     utility_parser = subparsers.add_parser("utility-summary")
     utility_parser.add_argument("--root", default=".")
 
+    file_summary_parser = subparsers.add_parser("sync-file-summaries")
+    file_summary_parser.add_argument("--root", default=".")
+
     todo_parser = subparsers.add_parser("sync-todo-backlog")
     todo_parser.add_argument("--root", default=".")
+
+    exploratorium_parser = subparsers.add_parser("sync-exploratorium-translation")
+    exploratorium_parser.add_argument("--root", default=".")
 
     smoke_parser = subparsers.add_parser("smoke-test")
     smoke_parser.add_argument("--root", default=".")
@@ -196,8 +204,16 @@ def main() -> int:
         print(utility_summary(root))
         return 0
 
+    if args.command == "sync-file-summaries":
+        print(run_file_summary_sync(root))
+        return 0
+
     if args.command == "sync-todo-backlog":
         print(run_todo_backlog_sync(root))
+        return 0
+
+    if args.command == "sync-exploratorium-translation":
+        print(run_exploratorium_translation_sync(root))
         return 0
 
     if args.command == "smoke-test":

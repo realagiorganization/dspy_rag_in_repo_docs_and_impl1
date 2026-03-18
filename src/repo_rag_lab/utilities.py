@@ -15,6 +15,8 @@ from .benchmarks import (
     normalize_retrieval_top_k_values,
 )
 from .dspy_training import DEFAULT_TRAINING_PATH
+from .exploratorium_translation import sync_exploratorium_translation
+from .file_summaries import sync_file_summaries
 from .mcp import discover_mcp_servers
 from .notebook_runner import run_notebooks
 from .todo_backlog import sync_todo_backlog
@@ -47,8 +49,16 @@ def utility_summary(root: Path) -> str:
             "validate the Azure AI Inference runtime contract"
         ),
         (
+            "- make files-sync / uv run repo-rag sync-file-summaries: "
+            "regenerate FILES.md and FILES.csv from the tracked repository files"
+        ),
+        (
             "- make todo-sync / uv run repo-rag sync-todo-backlog: "
             "regenerate the linkified TODO tables for Markdown and the publication PDF"
+        ),
+        (
+            "- make exploratorium-sync / uv run repo-rag sync-exploratorium-translation: "
+            "regenerate the bilingual publication inventory of files, links, and fetch state"
         ),
         (
             "- make retrieval-eval / uv run repo-rag retrieval-eval: "
@@ -151,6 +161,18 @@ def run_todo_backlog_sync(root: Path) -> str:
     """Regenerate the backlog tables and serialize the result as JSON."""
 
     return json.dumps(sync_todo_backlog(root), indent=2)
+
+
+def run_file_summary_sync(root: Path) -> str:
+    """Regenerate FILES.md and FILES.csv and serialize the result as JSON."""
+
+    return json.dumps(sync_file_summaries(root), indent=2)
+
+
+def run_exploratorium_translation_sync(root: Path) -> str:
+    """Regenerate the exploratorium translation surfaces and serialize the result as JSON."""
+
+    return json.dumps(sync_exploratorium_translation(root), indent=2)
 
 
 def run_notebook_report(

@@ -10,6 +10,8 @@ verification results, and anchor status statements to the newest file in `docs/a
 ## Codex Skills
 
 - Repo-local skill implementations live under `.codex/skills/`.
+- Use `file-summary-sync` when tracked files are added, removed, renamed, or when `FILES.md` and `FILES.csv` need to stay aligned with the repository tree.
+- Use `exploratorium-translation-sync` when bilingual file/link/fetch-state summaries, bibliography fetch reporting, or the `publication/exploratorium_translation/` subdocument are in scope.
 - Use `repo-verification-audit-loop` when verification work, audit-note updates, or repository health reporting are part of the task.
 - Use `post-push-gh-run-logging` immediately after each push and whenever GitHub Actions failures or `samples/logs/` updates are in scope.
 - Use `notebook-playbook-sync` when editing notebooks, notebook scaffolding, notebook-facing docs, or training and population sample surfaces.
@@ -18,16 +20,24 @@ verification results, and anchor status statements to the newest file in `docs/a
 ## Primary Utilities
 
 - `make utility-summary`
+- `make files-sync`
 - `make todo-sync`
+- `make exploratorium-sync`
 - `make ask QUESTION="..."`
+- `make ask-live QUESTION="..."`
 - `make retrieval-eval`
 - `make discover-mcp`
+- `make azure-openai-probe`
+- `make azure-inference-probe`
 - `make smoke-test`
 - `make verify-surfaces`
 - `make gh-runs`
 - `make gh-watch`
 - `make gh-failed-logs`
 - `uv run repo-rag utility-summary`
+- `uv run repo-rag sync-file-summaries --root .`
+- `uv run repo-rag sync-exploratorium-translation --root .`
+- `uv run repo-rag ask-live --question "..." --provider azure-openai`
 - `uv run repo-rag retrieval-eval --top-k-sweep "1,2,4,8"`
 - `uv run repo-rag ask --question "..." --use-dspy`
 
@@ -43,6 +53,7 @@ verification results, and anchor status statements to the newest file in `docs/a
 8. Keep reusable notebook logic in `src/` with doctests or normal pytest coverage instead of embedding it in notebook cells.
 9. Keep the repository fully `uv`-managed unless `uv` no longer covers a required workflow.
 10. Treat `README.AGENTS.md` as the overreaching research narrative for the repository; when a turn materially changes workflow stages, DSPy capabilities, notebooks, verification posture, publication scope, or deployment handoff, update `README.AGENTS.md` in the same turn.
+11. When tracked files, publication inventories, or bibliography-linked fetch summaries change, refresh `FILES.md`, `FILES.csv`, and the exploratorium outputs in the same turn.
 
 ## Research Narrative
 

@@ -6,6 +6,7 @@ them over ad hoc shell commands so every workflow hits the same package code.
 ## Core Commands
 
 - `make utility-summary`: list the supported user-facing utility surfaces.
+- `make files-sync`: regenerate the tracked-file inventory surfaces `FILES.md` and `FILES.csv`.
 - `make ask QUESTION="..."`: answer a repository-grounded question with the baseline RAG flow.
 - `make ask-dspy QUESTION="..."`: answer through the DSPy runtime path, optionally loading a saved
   compiled program.
@@ -13,6 +14,8 @@ them over ad hoc shell commands so every workflow hits the same package code.
   through Azure OpenAI or Azure AI Inference.
 - `make dspy-train DSPY_RUN_NAME=...`: compile and persist a repository-grounded DSPy program under
   `artifacts/dspy/`.
+- `make exploratorium-sync`: regenerate the bilingual publication inventory of files, links, and
+  fetch state.
 - `make retrieval-eval`: evaluate retrieval quality across a top-k sweep with source recall,
   precision, and reciprocal-rank metrics.
 - `make discover-mcp`: inspect repository-local MCP candidates.
@@ -22,6 +25,7 @@ them over ad hoc shell commands so every workflow hits the same package code.
 - `make azure-inference-probe`: validate and normalize the Azure AI Inference runtime contract and
   run a minimal live round trip.
 - `make todo-sync`: regenerate the shared TODO backlog table for both `TODO.MD` and the publication PDF source.
+- `make exploratorium-build`: build the committed bilingual exploratorium translation PDF.
 - `make verify-surfaces`: validate the Makefile and notebook contract.
 - `make notebook-report`: execute all tracked notebooks with monitored progress and report artifacts.
 - `make gh-runs`: list the latest GitHub Actions runs with `gh`.

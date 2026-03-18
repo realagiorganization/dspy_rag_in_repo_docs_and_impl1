@@ -1,36 +1,30 @@
-# Architecture Notes
+# Hushwheel Architecture
 
-The Hushwheel Lexiconarium is intentionally structured like a tiny old-school C utility:
+The fixture now uses a spoke-based layout instead of one monolithic implementation file.
 
-- `ENTRY_TABLE` is a giant compile-time array of `GlossaryEntry` records.
-- lookups, prefix scans, and category scans are plain linear loops over that array.
-- `hushwheel_main(...)` acts as the public entry point so tests can exercise CLI dispatch without
-  spawning a subprocess.
+## Coordinator
 
-## Core Components
+`src/hushwheel.c` remains intentionally huge because repository tests and retrieval experiments use
+it as the anchor source. It now owns:
 
-| Component | Role |
-| --- | --- |
-| `GlossaryEntry` | Declares the term, category, district, ember index, summary, and usage text. |
-| `find_entry(...)` | Resolves exact term matches. |
-| `print_prefix_matches(...)` | Performs prefix search over the full table. |
-| `print_category_matches(...)` | Emits every entry filed under a category. |
-| `print_stats(...)` | Reports entry, category, district, and average ember totals. |
-| `print_about(...)` | Explains the fixture's purpose in human terms. |
+- the Doxygen mainpage and giant spiral register
+- the canonical core entries
+- helper functions such as `starts_with(...)`, `lantern_vowel_count(...)`, and `find_entry(...)`
+- CLI dispatch in `hushwheel_main(...)`
 
-## Testing Seam
+## Internal Surface
 
-The production source now supports a deliberate embed mode:
+`src/hushwheel_internal.h` declares the shared `GlossarySpan` shape and the helper functions used
+by linked tests and spoke aggregation.
 
-- define `HUSHWHEEL_NO_MAIN`
-- include `src/hushwheel.c` from a unit test translation unit
-- call internal helpers directly because they remain in the same compilation unit
+## Spokes
 
-That keeps the shipped program simple while still allowing helper-level tests without refactoring
-the giant fixture into a library.
+`src/hushwheel_spokes.c` assembles the eight generated spoke tables into one searchable array of
+`GlossarySpan` values. Each `src/hushwheel_spoke_*.c` file contributes 512 entries, yielding 4096
+generated entries plus 12 canonical coordinator entries for a total of 4108.
 
-## Why It Works Well For RAG
+## Documentation
 
-- The implementation is mechanically simple enough to summarize.
-- The source file is large enough to force chunking and retrieval tradeoffs.
-- The docs, header, tests, and packaging metadata repeat the same nouns with different framing.
+The source comments are part of the architecture. `Doxyfile` turns the coordinator, spokes, and
+Markdown docs into HTML plus `docs/hushwheel-reference.pdf`, which is linked from the README and
+packaged with the fixture.

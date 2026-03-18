@@ -8,6 +8,8 @@ import pytest
 from repo_rag_lab.utilities import (
     run_azure_inference_probe,
     run_azure_openai_probe,
+    run_exploratorium_translation_sync,
+    run_file_summary_sync,
     run_notebook_report,
     run_retrieval_evaluation,
     run_smoke_test,
@@ -27,6 +29,8 @@ def test_utility_summary_mentions_core_surfaces() -> None:
     assert "dspy-train" in summary
     assert "azure-openai-probe" in summary
     assert "azure-inference-probe" in summary
+    assert "files-sync" in summary
+    assert "exploratorium-sync" in summary
     assert "retrieval-eval" in summary
     assert "todo-sync" in summary
     assert "smoke-test" in summary
@@ -99,6 +103,34 @@ def test_run_azure_inference_probe_returns_machine_readable_summary(
     assert payload["provider"] == "azure-inference"
     assert payload["load_env_file"] is True
     assert payload["reply"] == "INFERENCE_OK"
+
+
+def test_run_file_summary_sync_reports_expected_fields() -> None:
+    payload = json.loads(run_file_summary_sync(REPO_ROOT))
+    assert payload["markdown_path"] == "FILES.md"
+    assert payload["csv_path"] == "FILES.csv"
+    assert payload["guide_path"] == "AGENTS.md.d/FILES.md"
+    assert payload["tracked_file_count"] >= 10
+
+
+def test_run_exploratorium_translation_sync_reports_expected_fields() -> None:
+    payload = json.loads(run_exploratorium_translation_sync(REPO_ROOT))
+    assert (
+        payload["tex_path"]
+        == "publication/exploratorium_translation/generated/exploratorium-content.tex"
+    )
+    assert (
+        payload["manifest_path"]
+        == "publication/exploratorium_translation/generated/exploratorium-manifest.json"
+    )
+    assert (
+        payload["main_tex_path"]
+        == "publication/exploratorium_translation/exploratorium_translation.tex"
+    )
+    assert (
+        payload["pdf_path"] == "publication/exploratorium_translation/exploratorium_translation.pdf"
+    )
+    assert payload["summarized_file_count"] >= 10
 
 
 def test_run_notebook_report_returns_machine_readable_summary(

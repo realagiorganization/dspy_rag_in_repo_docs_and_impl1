@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-03-18-retrieval-evaluation-suite.md`
+- `2026-03-18-zzzz-session-consolidation-master-ci-repair.md`
 
 ## Usage
 

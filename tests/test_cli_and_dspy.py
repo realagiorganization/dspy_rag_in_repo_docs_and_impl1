@@ -130,6 +130,12 @@ def test_cli_main_other_commands(
     def fake_notebook_report(root: Path, **_: object) -> str:
         return f'{{"status": "success", "failure_count": 0, "notebook_count": 1, "root": "{root}"}}'
 
+    def fake_file_summary_sync(root: Path) -> str:
+        return (
+            '{"tracked_file_count": 42, "markdown_path": "FILES.md", '
+            f'"csv_path": "FILES.csv", "root": "{root}"}}'
+        )
+
     def fake_todo_sync(root: Path) -> str:
         return (
             '{"source_path": "todo-backlog.yaml", "markdown_path": "TODO.MD", '
@@ -148,6 +154,14 @@ def test_cli_main_other_commands(
             f'"root": "{root}", "load_env_file": {str(load_env_file).lower()}}}'
         )
 
+    def fake_exploratorium_sync(root: Path) -> str:
+        return (
+            '{"tex_path": "publication/exploratorium_translation/generated/'
+            'exploratorium-content.tex", '
+            '"pdf_path": "publication/exploratorium_translation/'
+            f'exploratorium_translation.pdf", "root": "{root}"}}'
+        )
+
     def fake_retrieval_evaluation(root: Path, **_: object) -> str:
         return (
             '{"training_path": "samples/training/repository_training_examples.yaml", '
@@ -155,7 +169,9 @@ def test_cli_main_other_commands(
         )
 
     monkeypatch.setattr(cli, "run_surface_verification", fake_surface_verification)
+    monkeypatch.setattr(cli, "run_file_summary_sync", fake_file_summary_sync)
     monkeypatch.setattr(cli, "run_notebook_report", fake_notebook_report)
+    monkeypatch.setattr(cli, "run_exploratorium_translation_sync", fake_exploratorium_sync)
     monkeypatch.setattr(cli, "run_retrieval_evaluation", fake_retrieval_evaluation)
     monkeypatch.setattr(cli, "run_todo_backlog_sync", fake_todo_sync)
     monkeypatch.setattr(cli, "run_azure_openai_probe", fake_azure_openai_probe)
@@ -174,6 +190,7 @@ def test_cli_main_other_commands(
             },
         )(),
         type("Args", (), {"command": "utility-summary", "root": str(tmp_path)})(),
+        type("Args", (), {"command": "sync-file-summaries", "root": str(tmp_path)})(),
         type(
             "Args",
             (),
@@ -186,6 +203,7 @@ def test_cli_main_other_commands(
             },
         )(),
         type("Args", (), {"command": "sync-todo-backlog", "root": str(tmp_path)})(),
+        type("Args", (), {"command": "sync-exploratorium-translation", "root": str(tmp_path)})(),
         type("Args", (), {"command": "smoke-test", "root": str(tmp_path)})(),
         type(
             "Args",
@@ -232,8 +250,10 @@ def test_cli_main_other_commands(
     assert "Repository utility surfaces:" in output
     assert "OPENAI_OK" in output
     assert "INFERENCE_OK" in output
+    assert "FILES.md" in output
     assert '"default_top_k": 4' in output
     assert "todo-backlog.yaml" in output
+    assert "exploratorium_translation.pdf" in output
 
 
 def test_cli_main_ask_live_command(

@@ -6,14 +6,18 @@ PDF := $(ARTICLE).pdf
 BANNER := article-banner.png
 RASTER := $(BUILD_DIR)/$(ARTICLE)-page1.png
 TODO_TABLE := todo-backlog-table.tex
+EXPLORATORIUM_DIR := exploratorium_translation
 
-.PHONY: build pdf banner sync-backlog clean
+.PHONY: build pdf banner exploratorium sync-backlog clean
 
-build: $(PDF) $(BANNER)
+build: $(PDF) $(BANNER) exploratorium
 
 pdf: $(PDF)
 
 banner: $(BANNER)
+
+exploratorium:
+	$(MAKE) -C $(EXPLORATORIUM_DIR) build
 
 sync-backlog:
 	cd $(REPO_ROOT) && $(UV) run repo-rag sync-todo-backlog --root .
@@ -39,4 +43,5 @@ $(BANNER): $(RASTER)
 	magick $(RASTER) -background white -alpha remove -alpha off -crop 2200x680+0+0 +repage -resize 1400x433 $(BANNER)
 
 clean:
+	$(MAKE) -C $(EXPLORATORIUM_DIR) clean
 	rm -rf $(BUILD_DIR) $(PDF) $(BANNER)

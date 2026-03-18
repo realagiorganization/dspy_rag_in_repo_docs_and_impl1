@@ -4,7 +4,8 @@ The hushwheel fixture is a deliberately oversized but mechanically simple C appl
 `tests/fixtures/hushwheel_lexiconarium/`. It is useful for repository-grounded RAG because it
 combines three traits that often matter in real codebases:
 
-- one very large source file
+- one very large coordinator source file
+- several linked spoke sources
 - multiple documentation files that restate the same concepts in different language
 - a mix of code questions, concept questions, and lore-heavy questions
 
@@ -16,7 +17,7 @@ Use the fixture together with the shared sample suites:
 
 | Path | Role |
 | --- | --- |
-| `tests/fixtures/hushwheel_lexiconarium/` | The target corpus: docs, header, and giant C source. |
+| `tests/fixtures/hushwheel_lexiconarium/` | The target corpus: docs, header, Doxygen surfaces, and large C sources. |
 | `samples/training/hushwheel_fixture_training_examples.yaml` | Benchmark-style questions with expected sources. |
 | `samples/population/hushwheel_fixture_population_candidates.yaml` | Initial staged-ingestion plan for the fixture corpus. |
 | `notebooks/05_hushwheel_fixture_rag_lab.ipynb` | Executable playbook for retrieval experiments against the fixture. |
@@ -63,8 +64,9 @@ The hushwheel corpus has deliberate redundancy. The same nouns recur across file
 That repetition makes lexical retrieval easy to inspect. When ranking shifts, you can usually tell
 whether the retriever leaned toward top-level docs, the detailed catalog, or the code itself.
 
-The giant `src/hushwheel.c` file is especially useful because it is large enough to force chunking
-behavior to matter, but simple enough that a human can still reason about why a chunk matched.
+The giant `src/hushwheel.c` coordinator is especially useful because it is large enough to force
+chunking behavior to matter, but simple enough that a human can still reason about why a chunk
+matched. The surrounding spoke files add repeated evidence without abandoning the same canon.
 
 ## Benchmark Suite
 
@@ -98,6 +100,7 @@ Then widen the population with:
 1. `include/hushwheel.h`
 2. `docs/catalog.md`
 3. `docs/districts.md`
+4. `docs/hushwheel-reference.pdf`
 
 That order keeps early experiments readable while still leaving enough long-tail lore for retrieval
 to become interesting once the basics are stable.

@@ -1,0 +1,69 @@
+\documentclass[11pt]{article}
+
+\usepackage{fontspec}
+\usepackage[margin=1in]{geometry}
+\usepackage{microtype}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{longtable}
+\usepackage{xcolor}
+\usepackage{xurl}
+
+\definecolor{ExploratoriumNavy}{HTML}{14273D}
+\definecolor{ExploratoriumSlate}{HTML}{365A73}
+\definecolor{ExploratoriumMist}{HTML}{F4F1EA}
+\definecolor{ExploratoriumGold}{HTML}{BC7F16}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=ExploratoriumNavy,
+  urlcolor=ExploratoriumSlate,
+  pdftitle={Exploratorium Translation},
+  pdfauthor={OpenAI Codex}
+}
+
+\defaultfontfeatures{Ligatures=TeX}
+\setmainfont{DejaVu Serif}
+\renewcommand{\arraystretch}{1.2}
+\sloppy
+
+\title{Exploratorium Translation\\\large Repository File, Link, and Fetch-State Atlas / Атлас файлов, ссылок и состояния загрузки}
+\author{OpenAI Codex}
+\date{March 18, 2026}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+
+\noindent\colorbox{ExploratoriumNavy}{%
+  \parbox{\dimexpr\linewidth-2\fboxsep\relax}{%
+    \vspace{10pt}
+    {\color{white}\Large\bfseries Exploratorium Translation}\par
+    \vspace{4pt}
+    {\color{ExploratoriumMist}\normalsize English and Russian repository summaries repeated side-by-side, line-by-line, and page-by-page}\par
+    \vspace{4pt}
+    {\color{ExploratoriumGold}\normalsize Англо-русский документ, который повторяет одни и те же данные параллельно, построчно и постранично}\par
+    \vspace{10pt}
+  }%
+}
+
+\vspace{1em}
+
+\noindent This document is generated from repository metadata through
+\texttt{uv run repo-rag sync-exploratorium-translation --root .}. It inventories the current
+state of referenced papers and documentation, summarizes all tracked files except the
+exploratorium's own generated outputs, and summarizes every authored explicit HTTP or HTTPS URL.
+
+\par\smallskip\noindent Этот документ генерируется из метаданных репозитория командой
+\texttt{uv run repo-rag sync-exploratorium-translation --root .}. Он инвентаризирует текущее
+состояние статей и документации, суммирует все отслеживаемые файлы, кроме собственных
+сгенерированных выходов exploratorium, и описывает каждый авторский явный HTTP- или HTTPS-URL.
+
+\tableofcontents
+\newpage
+
+\input{generated/exploratorium-content.tex}
+
+\end{document}
