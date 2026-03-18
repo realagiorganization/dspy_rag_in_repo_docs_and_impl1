@@ -33,6 +33,9 @@ GH_RUN_LIMIT ?= 10
 RUN_ID ?=
 NOTEBOOK_TIMEOUT ?= 600
 REPO_TMPDIR ?= $(HOME)/.cache/repo-rag-lab-tmp
+PYTEST_CACHE_DIR ?= $(HOME)/.cache/repo-rag-lab-pytest
+COVERAGE_DIR ?= $(HOME)/.cache/repo-rag-lab-coverage
+COVERAGE_FILE_PATH ?= $(COVERAGE_DIR)/.coverage
 
 .PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask ask-dspy ask-live dspy-train dspy-artifacts retrieval-eval discover-mcp utility-summary files-sync todo-sync exploratorium-sync exploratorium-build smoke-test azure-openai-probe azure-inference-probe verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook notebook-report bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run rust-lookup-index rust-lookup azure-manifest fmt build publish
 
@@ -162,23 +165,26 @@ notebook-report: sync
 	$(UV) run repo-rag run-notebooks --root . --timeout-seconds "$(NOTEBOOK_TIMEOUT)" --load-env-file
 
 bdd: sync
-	mkdir -p $(REPO_TMPDIR)
-	TMPDIR=$(REPO_TMPDIR) $(UV) run pytest tests -k repository_rag
+	mkdir -p $(REPO_TMPDIR) $(PYTEST_CACHE_DIR)
+	TMPDIR=$(REPO_TMPDIR) $(UV) run pytest -o cache_dir=$(PYTEST_CACHE_DIR) tests -k repository_rag
 
 test: sync
-	mkdir -p $(REPO_TMPDIR)
-	TMPDIR=$(REPO_TMPDIR) $(UV) run pytest $(PYTEST_COV_ARGS)
-	$(UV) run coverage report --fail-under=85
+	mkdir -p $(REPO_TMPDIR) $(PYTEST_CACHE_DIR) $(COVERAGE_DIR)
+	COVERAGE_FILE=$(COVERAGE_FILE_PATH) TMPDIR=$(REPO_TMPDIR) \
+		$(UV) run pytest -o cache_dir=$(PYTEST_CACHE_DIR) $(PYTEST_COV_ARGS)
+	COVERAGE_FILE=$(COVERAGE_FILE_PATH) $(UV) run coverage report --fail-under=85
 
 coverage: sync
-	mkdir -p $(REPO_TMPDIR)
-	TMPDIR=$(REPO_TMPDIR) $(UV) run pytest $(PYTEST_COV_ARGS)
-	$(UV) run coverage report
+	mkdir -p $(REPO_TMPDIR) $(PYTEST_CACHE_DIR) $(COVERAGE_DIR)
+	COVERAGE_FILE=$(COVERAGE_FILE_PATH) TMPDIR=$(REPO_TMPDIR) \
+		$(UV) run pytest -o cache_dir=$(PYTEST_CACHE_DIR) $(PYTEST_COV_ARGS)
+	COVERAGE_FILE=$(COVERAGE_FILE_PATH) $(UV) run coverage report
 
 coverage-html: sync
-	mkdir -p $(REPO_TMPDIR)
-	TMPDIR=$(REPO_TMPDIR) $(UV) run pytest $(PYTEST_COV_ARGS) --cov-report=html
-	$(UV) run coverage html
+	mkdir -p $(REPO_TMPDIR) $(PYTEST_CACHE_DIR) $(COVERAGE_DIR)
+	COVERAGE_FILE=$(COVERAGE_FILE_PATH) TMPDIR=$(REPO_TMPDIR) \
+		$(UV) run pytest -o cache_dir=$(PYTEST_CACHE_DIR) $(PYTEST_COV_ARGS) --cov-report=html
+	COVERAGE_FILE=$(COVERAGE_FILE_PATH) $(UV) run coverage html
 
 compile: sync
 	$(UV) run python -m compileall src tests

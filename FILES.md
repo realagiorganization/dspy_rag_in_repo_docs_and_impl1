@@ -37,10 +37,10 @@ This inventory is generated from the current Git index.
 | `FILES.md` | FILES.md | markdown |  | 0 | Generated Markdown inventory of tracked repository files |
 | `FILES.md` | FILES.md | markdown |  | 0 | Generated Markdown inventory of tracked repository files |
 | `FILES.md` | FILES.md | markdown |  | 0 | Generated Markdown inventory of tracked repository files |
-| `Makefile` | Makefile | makefile | 233 | 7843 | UV ?= uv |
+| `Makefile` | Makefile | makefile | 239 | 8487 | UV ?= uv |
 | `README.AGENTS.md` | README.AGENTS.md | markdown | 249 | 14176 | Repository research narrative tying code, docs, and verification together |
-| `README.DSPY.MD` | README.DSPY.MD | markdown | 651 | 31028 | DSPy workflow guide for training, runtime use, and compiled programs |
-| `README.md` | README.md | markdown | 171 | 10662 | Top-level repository overview, workflow map, and quality guidance |
+| `README.DSPY.MD` | README.DSPY.MD | markdown | 652 | 31131 | DSPy workflow guide for training, runtime use, and compiled programs |
+| `README.md` | README.md | markdown | 171 | 10812 | Top-level repository overview, workflow map, and quality guidance |
 | `REPO_COMPLETENESS_CHECKLIST.md` | REPO_COMPLETENESS_CHECKLIST.md | markdown | 238 | 7450 | Repository Completeness Checklist |
 | `TODO.MD` | TODO.MD | markdown | 21 | 5455 | TODO |
 | `data/questions/repository.yaml` | data | yaml | 7 | 279 | - question: What does this repository research? |
@@ -82,17 +82,16 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzzzz-file-summary-test-churn-fix.md` | docs | markdown | 85 | 2929 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzz file summary test churn fix |
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzz-dspy-backlog-reconciliation.md` | docs | markdown | 62 | 2457 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzz dspy backlog reconciliation |
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzz-lookup-first-ask-path.md` | docs | markdown | 94 | 4604 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzz lookup first ask path |
-| `docs/audit/README.md` | docs | markdown | 14 | 425 | Audit index for dated repository verification notes |
-| `docs/audit/README.md` | docs | markdown | 14 | 425 | Audit index for dated repository verification notes |
-| `docs/audit/README.md` | docs | markdown | 14 | 425 | Audit index for dated repository verification notes |
+| `docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzzz-answer-synthesis-refresh.md` | docs | markdown | 43 | 2207 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzzz answer synthesis refresh |
+| `docs/audit/README.md` | docs | markdown | 14 | 429 | Audit index for dated repository verification notes |
 | `documentation/azure-deployment.md` | documentation | markdown | 63 | 2603 | Azure Deployment Notes |
 | `documentation/hushwheel-fixture-rag-guide.md` | documentation | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
 | `documentation/inspired/dspy-rag-tutorial.md` | documentation | markdown | 35 | 1474 | DSPy Tutorial: Basic RAG |
 | `documentation/inspired/implementing-rag-with-dspy-technical-guide.md` | documentation | markdown | 38 | 1555 | Implementing RAG with DSPy: Technical Guide |
 | `documentation/mcp-discovery.md` | documentation | markdown | 28 | 784 | MCP Discovery Notes |
-| `documentation/package-api.md` | documentation | markdown | 38 | 2408 | Package API Notes |
+| `documentation/package-api.md` | documentation | markdown | 40 | 2570 | Package API Notes |
 | `env.md` | env.md | markdown | 108 | 5043 | Environment Variables |
-| `notebooks/01_repo_rag_research.ipynb` | notebooks | notebook | 286 | 9654 | Repository RAG Research Playbook |
+| `notebooks/01_repo_rag_research.ipynb` | notebooks | notebook | 286 | 9667 | Repository RAG Research Playbook |
 | `notebooks/02_agent_workflow_checklist.ipynb` | notebooks | notebook | 404 | 17405 | Agent Workflow Checklist |
 | `notebooks/03_dspy_training_lab.ipynb` | notebooks | notebook | 314 | 11967 | DSPy Training Sample Lab |
 | `notebooks/04_sample_population_lab.ipynb` | notebooks | notebook | 250 | 7854 | Sample Population Lab |
@@ -173,14 +172,14 @@ This inventory is generated from the current Git index.
 | `src/repo_rag_lab/notebook_scaffolding.py` | src | python | 260 | 11029 | High-level notebook scaffolds built from tested repository helpers. |
 | `src/repo_rag_lab/notebook_support.py` | src | python | 89 | 2843 | Helpers shared by notebooks so their setup logic stays in tested Python code. |
 | `src/repo_rag_lab/population_samples.py` | src | python | 241 | 8364 | Helpers for reviewing and batching starter corpus-population inputs. |
-| `src/repo_rag_lab/retrieval.py` | src | python | 270 | 8370 | Baseline chunking and lexical retrieval utilities for repository text. |
+| `src/repo_rag_lab/retrieval.py` | src | python | 273 | 8514 | Baseline chunking and lexical retrieval utilities for repository text. |
 | `src/repo_rag_lab/rust_lookup.py` | src | python | 271 | 6926 | Helpers for the native Rust-backed SQLite lookup index. |
 | `src/repo_rag_lab/settings.py` | src | python | 28 | 708 | Shared repository path settings derived from a repository root. |
 | `src/repo_rag_lab/todo_backlog.py` | src | python | 276 | 8434 | Shared backlog rendering helpers for Markdown and LaTeX surfaces. |
 | `src/repo_rag_lab/training_samples.py` | src | python | 154 | 5130 | Helpers for loading and summarizing starter DSPy training examples. |
 | `src/repo_rag_lab/utilities.py` | src | python | 234 | 8999 | User-facing utility helpers shared by the CLI, tests, and notebooks. |
 | `src/repo_rag_lab/verification.py` | src | python | 144 | 4066 | Verification helpers for Makefile and notebook contract checks. |
-| `src/repo_rag_lab/workflow.py` | src | python | 174 | 5894 | Baseline repository question-answering workflow built on file retrieval. |
+| `src/repo_rag_lab/workflow.py` | src | python | 321 | 10582 | Baseline repository question-answering workflow built on file retrieval. |
 | `tests/features/repository_rag.feature` | tests | gherkin | 12 | 377 | Feature: Repository RAG |
 | `tests/fixtures/hushwheel_lexiconarium/.gitignore` | tests | text | 4 | 23 | hushwheel |
 | `tests/fixtures/hushwheel_lexiconarium/CHANGELOG.md` | tests | markdown | 9 | 345 | Changelog |
@@ -220,7 +219,7 @@ This inventory is generated from the current Git index.
 | `tests/fixtures/hushwheel_lexiconarium/tools/lint_hushwheel.py` | tests | python | 118 | 3649 | Python module for lint hushwheel |
 | `tests/fixtures/hushwheel_lexiconarium/tools/regenerate_hushwheel_fixture.py` | tests | python | 833 | 30730 | Python module for regenerate hushwheel fixture |
 | `tests/test_azure_runtime.py` | tests | python | 101 | 3806 | Python module for test azure runtime |
-| `tests/test_benchmarks_and_notebook_scaffolding.py` | tests | python | 256 | 10758 | Python module for test benchmarks and notebook scaffolding |
+| `tests/test_benchmarks_and_notebook_scaffolding.py` | tests | python | 258 | 10862 | Python module for test benchmarks and notebook scaffolding |
 | `tests/test_cli_and_dspy.py` | tests | python | 509 | 18008 | Python module for test cli and dspy |
 | `tests/test_dspy_training.py` | tests | python | 493 | 17531 | Python module for test dspy training |
 | `tests/test_exploratorium_translation.py` | tests | python | 62 | 2502 | Python module for test exploratorium translation |
@@ -238,9 +237,10 @@ This inventory is generated from the current Git index.
 | `tests/test_training_samples.py` | tests | python | 65 | 2535 | Python module for test training samples |
 | `tests/test_utilities.py` | tests | python | 222 | 7850 | Python module for test utilities |
 | `tests/test_verification.py` | tests | python | 64 | 2987 | Python module for test verification |
+| `tests/test_workflow.py` | tests | python | 73 | 2464 | Python module for test workflow |
 | `tests/test_workflow_live.py` | tests | python | 99 | 3331 | Python module for test workflow live |
 | `todo-backlog.yaml` | todo-backlog.yaml | yaml | 117 | 5481 | repository_web_base: https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/blob/master |
-| `utilities/README.md` | utilities | markdown | 53 | 3420 | Repository Utilities |
+| `utilities/README.md` | utilities | markdown | 54 | 3495 | Repository Utilities |
 | `uv.lock` | uv.lock | lockfile | 4042 | 749305 | version = 1 |
 
 Run `make files-sync` or `uv run repo-rag sync-file-summaries --root .` after

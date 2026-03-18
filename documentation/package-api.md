@@ -5,7 +5,8 @@ notebooks stay readable, testable, and aligned with CLI and automation entrypoin
 
 ## Core Workflow Modules
 
-- `workflow.py`: baseline repository-grounded retrieval and answer synthesis.
+- `workflow.py`: baseline repository-grounded retrieval and deterministic answer rendering with
+  explicit question, answer, evidence, and MCP-candidate sections.
 - `dspy_workflow.py`: DSPy-shaped retriever and response flow when DSPy is installed.
 - `dspy_training.py`: DSPy compile, artifact persistence, latest-run inspection, and LM resolution.
 - `corpus.py`: repository text discovery and document loading.
@@ -23,7 +24,8 @@ notebooks stay readable, testable, and aligned with CLI and automation entrypoin
 
 ## Utility Surfaces
 
-- `repo-rag ask --question "..."`: run the baseline or DSPy-shaped RAG workflow.
+- `repo-rag ask --question "..."`: run the baseline or DSPy-shaped RAG workflow; the baseline
+  path prints `Question:`, `Answer:`, and `Evidence:` sections.
 - `repo-rag dspy-train --run-name ...`: compile and persist a repository-grounded DSPy program.
 - `repo-rag dspy-artifacts`: inspect saved DSPy runs and the latest compiled program path.
 - `repo-rag ask-live --question "..."`: run baseline retrieval locally, then synthesize a live

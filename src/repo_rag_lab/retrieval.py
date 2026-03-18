@@ -39,6 +39,7 @@ SOURCE_PENALTY_BY_NAME = {
     "README.DSPY.MD": 4.0,
     "REPO_COMPLETENESS_CHECKLIST.md": 3.0,
     "hushwheel-fixture-rag-guide.md": 3.0,
+    "workflow.py": 1.0,
 }
 SOURCE_PENALTY_BY_PART = {
     ".github": 1.5,
@@ -220,6 +221,8 @@ def source_score_adjustment(source: Path, question_terms: list[str]) -> float:
 
     if _is_root_readme(source) and {"repository", "research"}.issubset(question_terms):
         adjustment += 1.0
+    if source.name == "utilities.py" and {"repository", "research"}.issubset(question_terms):
+        adjustment += 0.5
     if source.name == "AGENTS.md" and _has_term_prefix(question_terms, "agent"):
         adjustment += 0.6
     if _contains_path_parts(source, ("utilities", "README.md")) and _has_term_prefix(

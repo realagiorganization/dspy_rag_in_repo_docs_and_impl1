@@ -222,6 +222,8 @@ def test_build_research_playbook_context_reports_smoke_and_baseline_details() ->
     assert "ask" in payload["utility_summary"]
     assert payload["baseline_question"] == "What does this repository research?"
     assert "Question:" in payload["baseline_answer"]
+    assert "Answer:" in payload["baseline_answer"]
+    assert "Evidence:" in payload["baseline_answer"]
     assert payload["smoke_test"]["answer_contains_repository"] is True
     assert payload["smoke_test"]["mcp_candidate_count"] == len(payload["mcp_candidates"])
 
