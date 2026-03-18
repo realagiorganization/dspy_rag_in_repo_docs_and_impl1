@@ -31,10 +31,6 @@ This inventory is generated from the current Git index.
 | `AGENTS.md.d/FILES.md` | AGENTS.md.d | markdown | 41 | 2247 | Agent instructions for maintaining FILES.md and FILES.csv |
 | `AGENTS.md.d/RUST_LOOKUP.md` | AGENTS.md.d | markdown | 31 | 1380 | Rust SQLite Lookup Instructions |
 | `FILES.csv` | FILES.csv | csv |  | 0 | Generated CSV inventory of tracked repository files |
-| `FILES.csv` | FILES.csv | csv |  | 0 | Generated CSV inventory of tracked repository files |
-| `FILES.csv` | FILES.csv | csv |  | 0 | Generated CSV inventory of tracked repository files |
-| `FILES.md` | FILES.md | markdown |  | 0 | Generated Markdown inventory of tracked repository files |
-| `FILES.md` | FILES.md | markdown |  | 0 | Generated Markdown inventory of tracked repository files |
 | `FILES.md` | FILES.md | markdown |  | 0 | Generated Markdown inventory of tracked repository files |
 | `Makefile` | Makefile | makefile | 233 | 7843 | UV ?= uv |
 | `README.AGENTS.md` | README.AGENTS.md | markdown | 246 | 13988 | Repository research narrative tying code, docs, and verification together |
