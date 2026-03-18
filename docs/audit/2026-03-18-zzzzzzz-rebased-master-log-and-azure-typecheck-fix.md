@@ -2,8 +2,8 @@
 
 - Audit date: `2026-03-18` (`Asia/Tbilisi`)
 - Verification worktree: `/tmp/repo-master-push-clean-20260318`
-- Rebasing anchor: `origin/master` at `9e2e49f56541a3cf7e67de875bc0a2884adc183e`
-- Previous audit anchor: `2026-03-18-zzzzzzz-hushwheel-pdf-side-effect-fix.md`
+- Rebasing anchor: `origin/master` at `91b6e49f5469ca86a024a47399c1eb1ccf5a06d7`
+- Previous audit anchor: `2026-03-18-zzzzzzzzzzzz-retrieval-regression-gate.md`
 
 ## Scope
 
@@ -76,6 +76,6 @@ Not exercised in this turn:
 - The rebased branch also carries forward
   `samples/logs/20260318T091252Z-gh-runs-add-rust-lookup-and-retrieval-tag-summaries-for-.md`, so
   the earlier `c007d63` push is now logged on top of the latest remote `master`.
-- The current `origin/master` tip already includes the hushwheel PDF side-effect repair from
-  `9e2e49f`, so this audit supersedes that fix as the latest combined verification baseline once
-  the branch is pushed.
+- The current `origin/master` tip already includes both the hushwheel PDF side-effect repair from
+  `9e2e49f` and the retrieval regression gate at `91b6e49`, so this audit supersedes both as the
+  latest combined verification baseline once the branch is pushed.
