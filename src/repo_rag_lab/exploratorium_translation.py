@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import tomllib
@@ -644,10 +645,12 @@ def _tracked_files_from_git(root: Path) -> tuple[str, ...] | None:
 
     if not (root / ".git").exists():
         return None
+    git_env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     result = subprocess.run(
         ["git", "-C", str(root), "ls-files"],
         capture_output=True,
         check=False,
+        env=git_env,
         text=True,
     )
     if result.returncode != 0:

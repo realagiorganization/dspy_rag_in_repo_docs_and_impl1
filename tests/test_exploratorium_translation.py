@@ -9,6 +9,8 @@ import pytest
 
 from repo_rag_lab.exploratorium_translation import sync_exploratorium_translation
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 
 def _write_demo_repo(tmp_path: Path) -> None:
     (tmp_path / "documentation").mkdir(parents=True)
@@ -88,6 +90,8 @@ def test_sync_exploratorium_translation_reuses_timestamp_until_inventory_changes
 ) -> None:
     _write_demo_repo(tmp_path)
     _init_git_repo(tmp_path)
+    monkeypatch.setenv("GIT_DIR", str(REPO_ROOT / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(REPO_ROOT))
 
     timestamps = iter(
         [

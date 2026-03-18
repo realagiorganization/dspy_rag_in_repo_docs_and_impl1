@@ -93,6 +93,7 @@ Absent or not exercised in this turn:
 Executed successfully after the hook-time publication churn surfaced:
 
 - `uv run pytest tests/test_exploratorium_translation.py tests/test_utilities.py`
+- `env GIT_DIR=/home/standard/dspy_rag_in_repo_docs_and_impl1/.git GIT_WORK_TREE=/home/standard/dspy_rag_in_repo_docs_and_impl1 uv run pytest tests/test_exploratorium_translation.py tests/test_utilities.py`
 - `make coverage`
 - `make files-sync`
 - `make exploratorium-sync`
@@ -100,6 +101,8 @@ Executed successfully after the hook-time publication churn surfaced:
 ## Follow-Up Results
 
 - `uv run pytest tests/test_exploratorium_translation.py tests/test_utilities.py`: passed, `12 passed`
+- hook-simulated `uv run pytest tests/test_exploratorium_translation.py tests/test_utilities.py`
+  with `GIT_DIR` and `GIT_WORK_TREE` set to the repository values: passed, `12 passed`
 - `make coverage`: passed, `122 passed`, total coverage `87.54%`
 - `make files-sync`: passed and refreshed `FILES.md` plus `FILES.csv` for the updated source and test
   surfaces
@@ -112,6 +115,10 @@ Executed successfully after the hook-time publication churn surfaced:
   the manifest payload is unchanged apart from the timestamp. That makes repeated sync runs
   idempotent for tracked outputs and stops `tests/test_utilities.py` from dirtying the repository
   during the pre-push coverage hook.
+- `src/repo_rag_lab/exploratorium_translation.py` also now sanitizes inherited `GIT_*`
+  environment variables before spawning `git ls-files`, matching the earlier `file_summaries`
+  fix. Without that guard, the pre-push hook forced temporary Git repositories in
+  `tests/test_exploratorium_translation.py` to resolve tracked paths against the main repository.
 - `tests/test_exploratorium_translation.py` now verifies both the no-change rerun case and the
-  tracked-inventory-change case inside a temporary Git repository so the regression matches the
-  production `git ls-files` code path.
+  tracked-inventory-change case inside a temporary Git repository, and it injects repository-level
+  `GIT_DIR` plus `GIT_WORK_TREE` values so the regression matches the failing pre-push context.
