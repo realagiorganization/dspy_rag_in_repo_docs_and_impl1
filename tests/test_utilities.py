@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -21,10 +20,6 @@ from repo_rag_lab.utilities import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-
-for _git_env_key in tuple(os.environ):
-    if _git_env_key.startswith("GIT_"):
-        os.environ.pop(_git_env_key, None)
 
 
 def test_utility_summary_mentions_core_surfaces() -> None:
@@ -159,37 +154,23 @@ def test_run_file_summary_sync_reports_expected_fields() -> None:
 
 
 def test_run_exploratorium_translation_sync_reports_expected_fields() -> None:
-    content_path = (
-        REPO_ROOT / "publication/exploratorium_translation/generated/exploratorium-content.tex"
+    payload = json.loads(run_exploratorium_translation_sync(REPO_ROOT))
+    assert (
+        payload["tex_path"]
+        == "publication/exploratorium_translation/generated/exploratorium-content.tex"
     )
-    manifest_path = (
-        REPO_ROOT / "publication/exploratorium_translation/generated/exploratorium-manifest.json"
+    assert (
+        payload["manifest_path"]
+        == "publication/exploratorium_translation/generated/exploratorium-manifest.json"
     )
-    original_content = content_path.read_bytes()
-    original_manifest = manifest_path.read_bytes()
-
-    try:
-        payload = json.loads(run_exploratorium_translation_sync(REPO_ROOT))
-        assert (
-            payload["tex_path"]
-            == "publication/exploratorium_translation/generated/exploratorium-content.tex"
-        )
-        assert (
-            payload["manifest_path"]
-            == "publication/exploratorium_translation/generated/exploratorium-manifest.json"
-        )
-        assert (
-            payload["main_tex_path"]
-            == "publication/exploratorium_translation/exploratorium_translation.tex"
-        )
-        assert (
-            payload["pdf_path"]
-            == "publication/exploratorium_translation/exploratorium_translation.pdf"
-        )
-        assert payload["summarized_file_count"] >= 10
-    finally:
-        content_path.write_bytes(original_content)
-        manifest_path.write_bytes(original_manifest)
+    assert (
+        payload["main_tex_path"]
+        == "publication/exploratorium_translation/exploratorium_translation.tex"
+    )
+    assert (
+        payload["pdf_path"] == "publication/exploratorium_translation/exploratorium_translation.pdf"
+    )
+    assert payload["summarized_file_count"] >= 10
 
 
 def test_run_notebook_report_returns_machine_readable_summary(

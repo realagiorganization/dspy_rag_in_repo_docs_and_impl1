@@ -177,6 +177,12 @@ def run_surface_verification(root: Path) -> str:
     return json.dumps(verify_repository_surfaces(root), indent=2)
 
 
+def run_dspy_artifacts(root: Path) -> str:
+    """Serialize the current DSPy artifact inventory as JSON."""
+
+    return json.dumps(describe_dspy_artifacts(root), indent=2)
+
+
 def run_azure_openai_probe(root: Path, *, load_env_file: bool = False) -> str:
     """Serialize the Azure OpenAI runtime probe as JSON."""
 

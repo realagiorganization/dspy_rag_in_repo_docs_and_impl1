@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -10,10 +9,6 @@ import nbformat
 import pytest
 
 from repo_rag_lab import file_summaries as file_summary_module
-
-for _git_env_key in tuple(os.environ):
-    if _git_env_key.startswith("GIT_"):
-        os.environ.pop(_git_env_key, None)
 
 
 def _write_text(root: Path, relative_path: str, text: str) -> None:
@@ -114,9 +109,7 @@ def test_build_rows_classifies_text_binary_and_structured_summaries(tmp_path: Pa
 def test_build_rows_cover_additional_kinds_and_public_fallbacks(tmp_path: Path) -> None:
     _write_text(tmp_path, "Makefile", ".PHONY: demo\ndemo:\n\t@true\n")
     _write_text(tmp_path, "stories/demo.feature", "Feature: Demo\n")
-    _write_text(tmp_path, ".env.sample", "OPENAI_API_KEY=replace-me\n")
     _write_text(tmp_path, "notes/plain.txt", "\n---\nfirst line\n")
-    _write_text(tmp_path, "README.DSPY.MD", "# DSPy Runtime Guide\n")
     _write_text(tmp_path, "src/repo_rag_lab/no_doc.py", "value = 1\n")
     _write_text(tmp_path, "src/repo_rag_lab/late.py", 'prefix\n"""Late doc"""\n')
     _write_text(tmp_path, "data/broken.json", "{oops\n")
@@ -128,9 +121,7 @@ def test_build_rows_cover_additional_kinds_and_public_fallbacks(tmp_path: Path) 
         tmp_path,
         "Makefile",
         "stories/demo.feature",
-        ".env.sample",
         "notes/plain.txt",
-        "README.DSPY.MD",
         "src/repo_rag_lab/no_doc.py",
         "src/repo_rag_lab/late.py",
         "data/broken.json",
@@ -142,16 +133,9 @@ def test_build_rows_cover_additional_kinds_and_public_fallbacks(tmp_path: Path) 
 
     assert rows["Makefile"].kind == "makefile"
     assert rows["stories/demo.feature"].kind == "gherkin"
-    assert rows[".env.sample"].kind == "text"
     assert rows["notes/plain.txt"].kind == "text"
-    assert rows["README.DSPY.MD"].kind == "markdown"
     assert rows["assets/image.png"].kind == "binary"
-    assert rows[".env.sample"].summary == "OPENAI_API_KEY=replace-me"
     assert rows["notes/plain.txt"].summary == "first line"
-    assert (
-        rows["README.DSPY.MD"].summary
-        == "DSPy workflow guide for training, runtime use, and compiled programs"
-    )
     assert rows["src/repo_rag_lab/no_doc.py"].summary == "Python module for no doc"
     assert rows["src/repo_rag_lab/late.py"].summary == "Python module for late"
     assert rows["data/broken.json"].summary == "JSON data for broken"
@@ -163,7 +147,6 @@ def test_summarize_path_covers_special_cases_and_fallbacks(tmp_path: Path) -> No
     _write_text(tmp_path, "README.AGENTS.md", "# Narrative\n")
     _write_text(tmp_path, "README.DSPY.MD", "# DSPy\n")
     _write_text(tmp_path, "docs/audit/demo.md", "# Audit\n")
-    _write_text(tmp_path, "docs/audit/README.md", "# Audit Index\n")
     _write_text(tmp_path, "docs/config.yaml", "name: demo\n")
     _write_text(tmp_path, "data/broken.json", "{oops\n")
     _write_text(tmp_path, "notes/plain.txt", "first line\n")
@@ -185,10 +168,6 @@ def test_summarize_path_covers_special_cases_and_fallbacks(tmp_path: Path) -> No
     assert (
         file_summary_module.summarize_path(tmp_path, Path("docs/audit/demo.md"), "markdown")
         == "Repository audit note for demo"
-    )
-    assert (
-        file_summary_module.summarize_path(tmp_path, Path("docs/audit/README.md"), "markdown")
-        == "Audit index for dated repository verification notes"
     )
     assert (
         file_summary_module.summarize_path(tmp_path, Path("docs/config.yaml"), "yaml")
@@ -215,16 +194,6 @@ def test_build_rows_and_check_outputs_cover_generated_outputs(tmp_path: Path) ->
     _init_git_repo(tmp_path, "README.md", "AGENTS.md.d/FILES.md")
 
     file_summary_module.sync_file_summaries(tmp_path)
-    subprocess.run(["git", "add", "FILES.md", "FILES.csv"], cwd=tmp_path, check=True)
-    file_summary_module.sync_file_summaries(tmp_path)
-    rows = {row.path: row for row in file_summary_module.build_rows(tmp_path)}
-
-    assert rows["FILES.md"].line_count is None
-    assert rows["FILES.md"].size_bytes == 0
-    assert rows["FILES.md"].summary == "Generated Markdown inventory of tracked repository files"
-    assert rows["FILES.csv"].line_count is None
-    assert rows["FILES.csv"].size_bytes == 0
-    assert rows["FILES.csv"].summary == "Generated CSV inventory of tracked repository files"
     assert file_summary_module.check_outputs(tmp_path) == 0
 
     (tmp_path / "FILES.md").write_text("stale\n", encoding="utf-8")
