@@ -260,6 +260,7 @@ def test_hushwheel_quality_workflow_is_path_filtered_and_uploads_reports() -> No
         step.get("name") == "Install native analyzers and docs toolchain"
         and "cppcheck" in step.get("run", "")
         and "doxygen" in step.get("run", "")
+        and "graphviz" in step.get("run", "")
         and "texlive-luatex" in step.get("run", "")
         for step in steps
     )

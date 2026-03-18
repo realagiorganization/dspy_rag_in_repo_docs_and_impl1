@@ -95,8 +95,8 @@ Not exercised in this turn:
   the immediate sequential rerun, and an isolated `uv run pytest tests/test_hushwheel_program_surface.py -q`
   pass also succeeded.
 - The first branch push exposed two CI-only gaps in `.github/workflows/hushwheel-quality.yml`:
-  the repository surface tests needed the Doxygen plus LaTeX toolchain, and the workflow needed to
-  snapshot `tests/fixtures/hushwheel_lexiconarium/build/reports` before the test suite cleaned the
-  fixture build directory. Those issues were fixed before the final rerun.
+  the repository surface tests needed the Doxygen, Graphviz, and LaTeX toolchain, and the workflow
+  needed to snapshot `tests/fixtures/hushwheel_lexiconarium/build/reports` before the test suite
+  cleaned the fixture build directory. Those issues were fixed before the final rerun.
 - The repository worktree contained unrelated pending changes before this task continued. Those
   changes were not reverted during this audit.
