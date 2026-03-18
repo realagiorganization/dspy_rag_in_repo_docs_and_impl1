@@ -111,10 +111,9 @@ static-analysis:
 
 complexity:
 	rm -rf $(COMPLEXITY_DIR)
-	mkdir -p $(COMPLEXITY_DIR)
-	$(LIZARD) -l c -C $(LIZARD_CCN_LIMIT) -L $(LIZARD_LENGTH_LIMIT) -a $(LIZARD_PARAM_LIMIT) src include tests/unit/test_hushwheel_unit.c >$(COMPLEXITY_TXT)
-	$(LIZARD) -l c -C $(LIZARD_CCN_LIMIT) -L $(LIZARD_LENGTH_LIMIT) -a $(LIZARD_PARAM_LIMIT) --csv src include tests/unit/test_hushwheel_unit.c >$(COMPLEXITY_CSV)
-	$(LIZARD) -l c -C $(LIZARD_CCN_LIMIT) -L $(LIZARD_LENGTH_LIMIT) -a $(LIZARD_PARAM_LIMIT) --checkstyle src include tests/unit/test_hushwheel_unit.c >$(COMPLEXITY_XML)
+	mkdir -p $(COMPLEXITY_DIR) && $(LIZARD) -l c -C $(LIZARD_CCN_LIMIT) -L $(LIZARD_LENGTH_LIMIT) -a $(LIZARD_PARAM_LIMIT) src include tests/unit/test_hushwheel_unit.c >$(COMPLEXITY_TXT)
+	mkdir -p $(COMPLEXITY_DIR) && $(LIZARD) -l c -C $(LIZARD_CCN_LIMIT) -L $(LIZARD_LENGTH_LIMIT) -a $(LIZARD_PARAM_LIMIT) --csv src include tests/unit/test_hushwheel_unit.c >$(COMPLEXITY_CSV)
+	mkdir -p $(COMPLEXITY_DIR) && $(LIZARD) -l c -C $(LIZARD_CCN_LIMIT) -L $(LIZARD_LENGTH_LIMIT) -a $(LIZARD_PARAM_LIMIT) --checkstyle src include tests/unit/test_hushwheel_unit.c >$(COMPLEXITY_XML)
 
 $(DOC_PDF): $(DOXYFILE) README.md include/hushwheel.h $(SRC_FILES) $(SRC_HEADERS) $(DOC_FILES)
 	@if command -v $(DOXYGEN) >/dev/null 2>&1 \

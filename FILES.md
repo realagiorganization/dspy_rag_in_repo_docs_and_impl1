@@ -73,7 +73,8 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-03-18-zzzzzzz-hushwheel-quality-salvage.md` | docs | markdown | 84 | 4554 | Repository audit note for 2026 03 18 zzzzzzz hushwheel quality salvage |
 | `docs/audit/2026-03-18-zzzzzzz-rebased-master-log-and-azure-typecheck-fix.md` | docs | markdown | 83 | 3472 | Repository audit note for 2026 03 18 zzzzzzz rebased master log and azure typecheck fix |
 | `docs/audit/2026-03-18-zzzzzzzzzzzz-retrieval-regression-gate.md` | docs | markdown | 66 | 2898 | Repository audit note for 2026 03 18 zzzzzzzzzzzz retrieval regression gate |
-| `docs/audit/README.md` | docs | markdown | 14 | 435 | Audit index for dated repository verification notes |
+| `docs/audit/2026-03-18-zzzzzzzzzzzzz-land-remaining-unlanded-work.md` | docs | markdown | 78 | 2908 | Repository audit note for 2026 03 18 zzzzzzzzzzzzz land remaining unlanded work |
+| `docs/audit/README.md` | docs | markdown | 14 | 427 | Audit index for dated repository verification notes |
 | `documentation/azure-deployment.md` | documentation | markdown | 63 | 2603 | Azure Deployment Notes |
 | `documentation/hushwheel-fixture-rag-guide.md` | documentation | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
 | `documentation/inspired/dspy-rag-tutorial.md` | documentation | markdown | 35 | 1474 | DSPy Tutorial: Basic RAG |
@@ -172,7 +173,7 @@ This inventory is generated from the current Git index.
 | `tests/fixtures/hushwheel_lexiconarium/CHANGELOG.md` | tests | markdown | 9 | 345 | Changelog |
 | `tests/fixtures/hushwheel_lexiconarium/Doxyfile` | tests | text | 34 | 1184 | PROJECT_NAME           = Hushwheel Lexiconarium |
 | `tests/fixtures/hushwheel_lexiconarium/LICENSE.md` | tests | markdown | 22 | 1082 | MIT License |
-| `tests/fixtures/hushwheel_lexiconarium/Makefile` | tests | makefile | 222 | 9343 | CC ?= cc |
+| `tests/fixtures/hushwheel_lexiconarium/Makefile` | tests | makefile | 221 | 9405 | CC ?= cc |
 | `tests/fixtures/hushwheel_lexiconarium/README.md` | tests | markdown | 142 | 6828 | The Hushwheel Lexiconarium |
 | `tests/fixtures/hushwheel_lexiconarium/VERSION` | tests | text | 2 | 6 | 0.1.0 |
 | `tests/fixtures/hushwheel_lexiconarium/docs/architecture.md` | tests | markdown | 31 | 1168 | Hushwheel Architecture |
