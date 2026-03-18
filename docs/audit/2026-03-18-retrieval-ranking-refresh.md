@@ -2,7 +2,7 @@
 
 - Audit date: `2026-03-18` (`Asia/Tbilisi`)
 - Repository root: `/home/standard/dspy_rag_in_repo_docs_and_impl1_retrieval_clean`
-- Git HEAD during verification: `408e36cc8cd31429a40798018ceb8ada18298086`
+- Git HEAD during verification: `da10ad70b3fc1e1971a2baf2c2d23ae1542dc112`
 
 ## Scope
 
@@ -14,7 +14,9 @@ echo the full question text. That was driven by a real regression caught in the 
 the retriever needed to keep definition sections coherent enough to surface `heat-memory score` and
 `lantern vowel` evidence for the question `What is the ember index?`. During final push validation,
 this turn also hardened the pytest and fixture-doc build paths to use cache-backed temp directories
-instead of the host's full `/tmp` tmpfs.
+instead of the host's full `/tmp` tmpfs. The final branch state was then rebased onto the latest
+`origin/master`, which already carried upstream fixes that made the utility-sync tests side-effect
+free under git-hook execution.
 
 ## Executed Commands
 
@@ -28,6 +30,7 @@ Executed successfully in this turn:
 - `uv run pytest tests/test_retrieval.py tests/test_hushwheel_fixture.py tests/test_benchmarks_and_notebook_scaffolding.py tests/test_project_surfaces.py tests/test_cli_and_dspy.py tests/test_verification.py`
 - `uv run repo-rag verify-surfaces`
 - `uv run repo-rag retrieval-eval --root . --top-k 4 --top-k-sweep 1,2,4,8`
+- `PRE_COMMIT_HOME=.pre-commit-cache uv run pre-commit run --all-files --hook-stage pre-push -v`
 - `make coverage`
 - `make quality`
 
@@ -49,8 +52,10 @@ Executed successfully in this turn:
   - `average_source_precision: 0.5833333333333334`
   - `average_reciprocal_rank: 1.0`
   - `best_pass_rate_top_k: 4`
-- `make coverage`: passed with `119` tests and `87.92%` total coverage
-- `make quality`: passed with `119` tests and `87.92%` total coverage
+- `PRE_COMMIT_HOME=.pre-commit-cache uv run pre-commit run --all-files --hook-stage pre-push -v`:
+  passed; mypy, basedpyright, coverage, and repository-surface verification all completed cleanly
+- `make coverage`: passed with `119` tests and `87.98%` total coverage
+- `make quality`: passed with `119` tests and `87.98%` total coverage
 
 ## Current Verification Status
 
@@ -66,6 +71,8 @@ Configured and verified in this turn:
 - Repository-surface verification: present and passed through `uv run repo-rag verify-surfaces`
 - Retrieval-quality evaluation utility: present and passed through
   `uv run repo-rag retrieval-eval --root . --top-k 4 --top-k-sweep 1,2,4,8`
+- Installed git-hook pre-push gate: present and passed through
+  `PRE_COMMIT_HOME=.pre-commit-cache uv run pre-commit run --all-files --hook-stage pre-push -v`
 - Full pytest and coverage gate: present and passed through `make coverage`
 - Lint, notebook lint, mypy, basedpyright, complexity, full pytest, and coverage: present and
   passed through `make quality`
@@ -96,3 +103,6 @@ Still absent or not exercised in this turn:
 - The root `Makefile` and the hushwheel fixture `Makefile` now route pytest and doc-build temp data
   through cache-backed directories under `$(HOME)/.cache`, which keeps the verification path stable
   even when `/tmp` is saturated on the host.
+- The final rebased branch was validated against the current upstream hook configuration, so the
+  push path no longer mutates tracked publication or inventory surfaces as a side effect of running
+  the utility tests.
