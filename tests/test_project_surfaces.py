@@ -172,7 +172,7 @@ def test_publication_workflow_builds_and_uploads_pdf() -> None:
         for step in steps
     )
     assert any(
-        step.get("uses") == "actions/cache@v4"
+        step.get("uses") == "actions/cache@v5"
         and "publication/*.aux" in step.get("with", {}).get("path", "")
         and "publication/repository-rag-lab-article.tex" in step.get("with", {}).get("key", "")
         and "publication/todo-backlog-table.tex" in step.get("with", {}).get("key", "")
