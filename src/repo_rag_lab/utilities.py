@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import TextIO
 
 from .azure import write_deployment_manifest
 from .mcp import discover_mcp_servers
+from .notebook_runner import run_notebooks
 from .verification import verify_repository_surfaces
 from .workflow import ask_repository
 
@@ -24,6 +26,10 @@ def utility_summary(root: Path) -> str:
         (
             "- make verify-surfaces / uv run repo-rag verify-surfaces: "
             "validate notebooks and Makefile verification surfaces"
+        ),
+        (
+            "- make notebook-report / uv run repo-rag run-notebooks: "
+            "execute all tracked notebooks with monitored progress and report artifacts"
         ),
         f"- root: {root}",
     ]
@@ -53,3 +59,23 @@ def run_surface_verification(root: Path) -> str:
     """Serialize the current repository-surface verification result as JSON."""
 
     return json.dumps(verify_repository_surfaces(root), indent=2)
+
+
+def run_notebook_report(
+    root: Path,
+    *,
+    timeout_seconds: int = 600,
+    load_env_file: bool = False,
+    fail_fast: bool = False,
+    stream: TextIO | None = None,
+) -> str:
+    """Execute all tracked notebooks and serialize the monitored run report as JSON."""
+
+    payload = run_notebooks(
+        root,
+        timeout_seconds=timeout_seconds,
+        load_env_file=load_env_file,
+        fail_fast=fail_fast,
+        stream=stream,
+    )
+    return json.dumps(payload, indent=2)

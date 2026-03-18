@@ -14,6 +14,7 @@ notebooks stay readable, testable, and aligned with CLI and automation entrypoin
 ## Notebook-Facing Modules
 
 - `notebook_support.py`: repository-root resolution, notebook assertions, and notebook run logging.
+- `notebook_runner.py`: monitored batch execution, `.env` loading, and report generation for all tracked notebooks.
 - `notebook_scaffolding.py`: high-level training, workflow, population, and fixture-specific scaffolds used directly by notebooks.
 - `training_samples.py`: training sample loading, summarization, and validation.
 - `population_samples.py`: population candidate loading, extension, validation, and empirical re-ranking.
@@ -25,4 +26,5 @@ notebooks stay readable, testable, and aligned with CLI and automation entrypoin
 - `repo-rag discover-mcp`: inspect MCP discovery candidates.
 - `repo-rag smoke-test`: run a compact workflow smoke test.
 - `repo-rag verify-surfaces`: validate the repository utility and notebook contract surfaces.
+- `repo-rag run-notebooks`: execute all tracked notebooks with monitored progress and report artifacts.
 - `repo-rag azure-manifest`: write Azure deployment metadata for downstream deployment workflows.

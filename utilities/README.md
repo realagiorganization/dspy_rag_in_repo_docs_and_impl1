@@ -10,6 +10,7 @@ them over ad hoc shell commands so every workflow hits the same package code.
 - `make discover-mcp`: inspect repository-local MCP candidates.
 - `make smoke-test`: exercise answer generation, MCP discovery, and Azure manifest output together.
 - `make verify-surfaces`: validate the Makefile and notebook contract.
+- `make notebook-report`: execute all tracked notebooks with monitored progress and report artifacts.
 - `make gh-runs`: list the latest GitHub Actions runs with `gh`.
 - `make gh-watch`: watch the latest or selected GitHub Actions run and exit with its status.
 - `make gh-failed-logs`: show failed job logs for the latest or selected run.
@@ -18,6 +19,8 @@ them over ad hoc shell commands so every workflow hits the same package code.
 - `make build`: build the wheel and source distribution through `uv build`.
 - Notebooks reuse `src/repo_rag_lab/notebook_scaffolding.py` and `src/repo_rag_lab/notebook_support.py`
   for sample validation, benchmark assertions, tuning metadata, and notebook-run logging.
+- Batch notebook runs also use `src/repo_rag_lab/notebook_runner.py` to stream progress, capture
+  raw logs, and write JSON plus Markdown reports under `artifacts/notebook_runs/`.
 
 ## Why The Repository Uses These Surfaces
 

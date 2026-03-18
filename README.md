@@ -59,6 +59,7 @@ the Rust wrapper.
 | MCP discovery | `make discover-mcp` | Inspect MCP-related repository artifacts. |
 | Smoke test | `make smoke-test` | Check answer generation, MCP discovery, and Azure manifest output together. |
 | Surface verification | `make verify-surfaces` | Enforce the Makefile and notebook contract. |
+| Notebook batch report | `make notebook-report` | Execute all tracked notebooks with progress output, raw logs, executed copies, and a final report. |
 | GitHub run list | `make gh-runs` | List recent GitHub Actions runs through `gh`. |
 | GitHub run watch | `make gh-watch` | Watch the latest or selected GitHub Actions run until completion. |
 | GitHub failed logs | `make gh-failed-logs` | Print failed job logs for the latest or selected run when CI breaks. |
@@ -79,7 +80,7 @@ the Rust wrapper.
 | `documentation/` | Supporting notes for Azure deployment and inspired external implementations. |
 | `publication/` | LaTeX article source, bibliography, committed PDF, clipped banner image, and local build helpers. |
 | `samples/logs/` | Post-push GitHub Actions inspection logs captured with `gh`. |
-| `artifacts/` | Generated Azure manifests, tuning metadata, and notebook run logs. |
+| `artifacts/` | Generated Azure manifests, tuning metadata, notebook run logs, and notebook batch-run reports. |
 | `rust-cli/` | Thin Rust wrapper that delegates to `uv run repo-rag`. |
 
 ## Verification And Quality

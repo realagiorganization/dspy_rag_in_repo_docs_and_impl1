@@ -6,8 +6,9 @@ AZURE_ENDPOINT ?= https://example.services.ai.azure.com/models
 PYTEST_COV_ARGS ?= --cov=src/repo_rag_lab --cov-report=term-missing --cov-report=xml
 GH_RUN_LIMIT ?= 10
 RUN_ID ?=
+NOTEBOOK_TIMEOUT ?= 600
 
-.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask discover-mcp utility-summary smoke-test verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run azure-manifest fmt build publish
+.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask discover-mcp utility-summary smoke-test verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook notebook-report bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run azure-manifest fmt build publish
 
 setup:
 	$(UV) sync --extra azure
@@ -69,6 +70,9 @@ paper-clean:
 
 notebook: sync
 	$(UV) run jupyter lab notebooks/01_repo_rag_research.ipynb
+
+notebook-report: sync
+	$(UV) run repo-rag run-notebooks --root . --timeout-seconds "$(NOTEBOOK_TIMEOUT)" --load-env-file
 
 bdd: sync
 	$(UV) run pytest tests -k repository_rag

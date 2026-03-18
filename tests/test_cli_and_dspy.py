@@ -65,7 +65,11 @@ def test_cli_main_other_commands(
         del root
         return '{"issue_count": 0, "issues": []}'
 
+    def fake_notebook_report(root: Path, **_: object) -> str:
+        return f'{{"status": "success", "failure_count": 0, "notebook_count": 1, "root": "{root}"}}'
+
     monkeypatch.setattr(cli, "run_surface_verification", fake_surface_verification)
+    monkeypatch.setattr(cli, "run_notebook_report", fake_notebook_report)
     commands = [
         type("Args", (), {"command": "discover-mcp", "root": str(tmp_path)})(),
         type(
@@ -82,6 +86,17 @@ def test_cli_main_other_commands(
         type("Args", (), {"command": "utility-summary", "root": str(tmp_path)})(),
         type("Args", (), {"command": "smoke-test", "root": str(tmp_path)})(),
         type("Args", (), {"command": "verify-surfaces", "root": str(tmp_path)})(),
+        type(
+            "Args",
+            (),
+            {
+                "command": "run-notebooks",
+                "root": str(tmp_path),
+                "timeout_seconds": 60,
+                "load_env_file": False,
+                "fail_fast": False,
+            },
+        )(),
     ]
 
     for args in commands:

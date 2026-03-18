@@ -23,6 +23,7 @@ REQUIRED_MAKE_TARGETS = {
     "gh-failed-logs",
     "paper-build",
     "paper-clean",
+    "notebook-report",
     "compile",
     "coverage",
     "lint",

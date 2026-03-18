@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from .azure import write_deployment_manifest
 from .dspy_workflow import RepositoryRAG
 from .mcp import discover_mcp_servers, dump_candidates
-from .utilities import run_smoke_test, run_surface_verification, utility_summary
+from .utilities import (
+    run_notebook_report,
+    run_smoke_test,
+    run_surface_verification,
+    utility_summary,
+)
 from .workflow import ask_repository
 
 
@@ -40,6 +46,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     verify_parser = subparsers.add_parser("verify-surfaces")
     verify_parser.add_argument("--root", default=".")
+
+    notebook_parser = subparsers.add_parser("run-notebooks")
+    notebook_parser.add_argument("--root", default=".")
+    notebook_parser.add_argument("--timeout-seconds", type=int, default=600)
+    notebook_parser.add_argument("--load-env-file", action="store_true")
+    notebook_parser.add_argument("--fail-fast", action="store_true")
     return parser
 
 
@@ -86,6 +98,17 @@ def main() -> int:
         payload = run_surface_verification(root)
         print(payload)
         return 0 if '"issue_count": 0' in payload else 1
+
+    if args.command == "run-notebooks":
+        payload = run_notebook_report(
+            root,
+            timeout_seconds=args.timeout_seconds,
+            load_env_file=args.load_env_file,
+            fail_fast=args.fail_fast,
+            stream=sys.stderr,
+        )
+        print(payload)
+        return 0 if '"failure_count": 0' in payload else 1
 
     parser.error(f"Unsupported command: {args.command}")
     return 2
