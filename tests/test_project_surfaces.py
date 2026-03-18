@@ -143,7 +143,7 @@ def test_publication_workflow_builds_and_uploads_pdf() -> None:
         step.get("uses") == "sarisia/actions-status-discord@v1"
         and step.get("with", {}).get("webhook") == "${{ secrets.DISCORD_WEBHOOK }}"
         and "nofail" not in step.get("with", {})
-        and "steps.upload_publication_pdf.outputs.artifact-url"
+        and "steps.upload_publication_pdf.outputs['artifact-url']"
         in step.get("with", {}).get("description", "")
         and "publication/repository-rag-lab-article.pdf" in step.get("with", {}).get("url", "")
         for step in steps

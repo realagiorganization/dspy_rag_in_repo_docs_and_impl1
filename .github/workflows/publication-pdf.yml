@@ -65,7 +65,7 @@ jobs:
           nodetail: true
           title: Publication PDF ready
           description: |
-            [Artifact download](${{ steps.upload_publication_pdf.outputs.artifact-url }})
+            [Artifact download](${{ steps.upload_publication_pdf.outputs['artifact-url'] }})
             [Committed PDF](${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/publication/repository-rag-lab-article.pdf)
             [Workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
           url: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/publication/repository-rag-lab-article.pdf
