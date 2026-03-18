@@ -26,10 +26,6 @@ AGENTS.md.d/10-verification-loop.md,AGENTS.md.d,markdown,22,1175,Verification Lo
 AGENTS.md.d/FILES.md,AGENTS.md.d,markdown,41,2247,Agent instructions for maintaining FILES.md and FILES.csv
 AGENTS.md.d/RUST_LOOKUP.md,AGENTS.md.d,markdown,31,1380,Rust SQLite Lookup Instructions
 FILES.csv,FILES.csv,csv,,0,Generated CSV inventory of tracked repository files
-FILES.csv,FILES.csv,csv,,0,Generated CSV inventory of tracked repository files
-FILES.csv,FILES.csv,csv,,0,Generated CSV inventory of tracked repository files
-FILES.md,FILES.md,markdown,,0,Generated Markdown inventory of tracked repository files
-FILES.md,FILES.md,markdown,,0,Generated Markdown inventory of tracked repository files
 FILES.md,FILES.md,markdown,,0,Generated Markdown inventory of tracked repository files
 Makefile,Makefile,makefile,233,7843,UV ?= uv
 README.AGENTS.md,README.AGENTS.md,markdown,246,13988,"Repository research narrative tying code, docs, and verification together"
@@ -142,6 +138,7 @@ samples/logs/20260318T091252Z-gh-runs-add-rust-lookup-and-retrieval-tag-summarie
 samples/logs/20260318T094120Z-gh-runs-dspy-live-proof-and-rust-wrapper-repair.md,samples,markdown,45,1469,GitHub Actions Summary
 samples/logs/20260318T101229Z-gh-runs-hushwheel-audit-refresh.md,samples,markdown,37,1707,GitHub Actions Summary
 samples/logs/20260318T101939Z-gh-runs-land-each-unlanded.md,samples,markdown,28,1556,GitHub Actions Run Log
+samples/logs/20260318T123402Z-gh-runs-fix-file-summary-test-churn-for-1.md,samples,markdown,29,1061,GitHub Actions Run Log
 samples/logs/README.md,samples,markdown,11,331,GitHub Run Logs
 samples/population/hushwheel_fixture_population_candidates.yaml,samples,yaml,22,955,- source: README.md
 samples/population/repository_population_candidates.yaml,samples,yaml,16,684,- source: README.md
