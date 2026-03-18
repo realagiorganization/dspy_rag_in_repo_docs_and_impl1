@@ -9,9 +9,9 @@ const DEFAULT_DB_PATH: &str = "artifacts/sqlite/repo-file-index.sqlite3";
 const DEFAULT_LOOKUP_LIMIT: usize = 8;
 const DEFAULT_MAX_TEXT_BYTES: u64 = 1_000_000;
 const STOP_WORDS: &[&str] = &[
-    "a", "an", "and", "are", "as", "at", "be", "by", "does", "for", "from", "how", "in",
-    "into", "is", "it", "of", "on", "or", "that", "the", "this", "to", "use", "using",
-    "what", "when", "where", "which", "who", "why", "with",
+    "a", "an", "and", "are", "as", "at", "be", "by", "does", "for", "from", "how", "in", "into",
+    "is", "it", "of", "on", "or", "that", "the", "this", "to", "use", "using", "what", "when",
+    "where", "which", "who", "why", "with",
 ];
 
 #[derive(Debug)]
@@ -200,7 +200,14 @@ fn parse_lookup_config(
 
     root = normalize_root(default_root, &root);
     let db_path = resolve_output_path(&root, db_path);
-    Ok((LookupConfig { root, db_path, limit }, query_parts.join(" ")))
+    Ok((
+        LookupConfig {
+            root,
+            db_path,
+            limit,
+        },
+        query_parts.join(" "),
+    ))
 }
 
 fn normalize_root(default_root: &Path, root: &Path) -> PathBuf {
@@ -341,7 +348,11 @@ fn ensure_index_is_fresh(
     Ok(())
 }
 
-fn db_needs_refresh(root: &Path, db_path: &Path, tracked_files: &[PathBuf]) -> Result<bool, String> {
+fn db_needs_refresh(
+    root: &Path,
+    db_path: &Path,
+    tracked_files: &[PathBuf],
+) -> Result<bool, String> {
     if !db_path.exists() {
         return Ok(true);
     }
@@ -461,7 +472,7 @@ fn index_repository(config: &IndexConfig) -> Result<IndexStats, String> {
 
         let bytes = fs::read(&absolute_path)
             .map_err(|error| format!("failed to read {}: {error}", absolute_path.display()))?;
-        if bytes.iter().any(|byte| *byte == 0) {
+        if bytes.contains(&0) {
             stats.skipped_binary_count += 1;
             continue;
         }
@@ -517,7 +528,10 @@ fn index_repository(config: &IndexConfig) -> Result<IndexStats, String> {
         .commit()
         .map_err(|error| format!("failed to commit SQLite index: {error}"))?;
     connection
-        .execute("INSERT INTO file_lookup(file_lookup) VALUES('optimize')", [])
+        .execute(
+            "INSERT INTO file_lookup(file_lookup) VALUES('optimize')",
+            [],
+        )
         .map_err(|error| format!("failed to optimize SQLite FTS index: {error}"))?;
     Ok(stats)
 }
@@ -576,7 +590,9 @@ fn build_match_query(query: &str) -> Result<String, String> {
     tokens.dedup();
 
     if tokens.is_empty() {
-        return Err(String::from("lookup query did not contain any searchable terms"));
+        return Err(String::from(
+            "lookup query did not contain any searchable terms",
+        ));
     }
 
     Ok(tokens
@@ -590,7 +606,11 @@ fn count_lines(content: &str) -> usize {
     if content.is_empty() {
         return 0;
     }
-    let newline_count = content.as_bytes().iter().filter(|byte| **byte == b'\n').count();
+    let newline_count = content
+        .as_bytes()
+        .iter()
+        .filter(|byte| **byte == b'\n')
+        .count();
     if content.ends_with('\n') {
         newline_count
     } else {
