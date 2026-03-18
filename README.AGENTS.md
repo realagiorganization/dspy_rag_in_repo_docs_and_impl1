@@ -58,7 +58,8 @@ dataset. That story starts in:
 - [src/repo_rag_lab/workflow.py](src/repo_rag_lab/workflow.py)
 - [notebooks/01_repo_rag_research.ipynb](notebooks/01_repo_rag_research.ipynb)
 
-The repo loads its own text-like files, chunks them, ranks them lexically, and synthesizes a
+The repo loads its own text-like files, chunks them into paragraph-aware slices with fixed-width
+fallback, ranks them lexically with path-aware adjustments plus source diversity, and synthesizes a
 baseline answer. This is the minimum honest system: before optimization, before benchmarking, and
 before deployment, the repo must be able to explain itself from its own contents.
 

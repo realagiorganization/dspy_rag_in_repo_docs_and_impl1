@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-03-18-zzzzzzzzzzzzzz-rebase-hushwheel-quality-over-master.md`
+- `2026-03-18-zzzzzzzzzzzzzzzz-retrieval-gate-restored-after-rebase.md`
 
 ## Usage
 

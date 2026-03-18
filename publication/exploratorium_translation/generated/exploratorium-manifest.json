@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-03-18T12:27:31Z",
-  "tracked_file_count": 224,
-  "summarized_file_count": 221,
+  "generated_at": "2026-03-18T12:44:50Z",
+  "tracked_file_count": 231,
+  "summarized_file_count": 228,
   "excluded_generated_file_count": 3,
   "explicit_link_count": 54,
-  "machine_link_occurrence_count": 2488,
-  "machine_link_unique_count": 2298,
+  "machine_link_occurrence_count": 2494,
+  "machine_link_unique_count": 2304,
   "bibliography_entry_count": 4,
   "local_documentation_count": 6,
   "file_summaries": [
@@ -246,20 +246,20 @@
     {
       "path": "FILES.csv",
       "kind": "generic",
-      "byte_size": 25770,
+      "byte_size": 26719,
       "line_count": null,
       "url_count": 0,
-      "summary_en": "Tracked repository file, 25770 bytes of binary data, 0 explicit URLs. Opening line: No non-empty preview line.",
-      "summary_ru": "\u041e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u0435\u043c\u044b\u0439 \u0444\u0430\u0439\u043b \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u044f, 25770 \u0431\u0430\u0439\u0442 \u0431\u0438\u043d\u0430\u0440\u043d\u044b\u0445 \u0434\u0430\u043d\u043d\u044b\u0445, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041f\u0435\u0440\u0432\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430: No non-empty preview line."
+      "summary_en": "Tracked repository file, 26719 bytes of binary data, 0 explicit URLs. Opening line: No non-empty preview line.",
+      "summary_ru": "\u041e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u0435\u043c\u044b\u0439 \u0444\u0430\u0439\u043b \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u044f, 26719 \u0431\u0430\u0439\u0442 \u0431\u0438\u043d\u0430\u0440\u043d\u044b\u0445 \u0434\u0430\u043d\u043d\u044b\u0445, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041f\u0435\u0440\u0432\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430: No non-empty preview line."
     },
     {
       "path": "FILES.md",
       "kind": "markdown",
-      "byte_size": 29695,
-      "line_count": 235,
+      "byte_size": 30756,
+      "line_count": 242,
       "url_count": 1,
-      "summary_en": "Markdown document, 235 lines, 1 explicit URLs. Lead heading: Repository File Inventory.",
-      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 235 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository File Inventory."
+      "summary_en": "Markdown document, 242 lines, 1 explicit URLs. Lead heading: Repository File Inventory.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 242 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository File Inventory."
     },
     {
       "path": "Makefile",
@@ -273,11 +273,11 @@
     {
       "path": "README.AGENTS.md",
       "kind": "markdown",
-      "byte_size": 13884,
-      "line_count": 245,
+      "byte_size": 13988,
+      "line_count": 246,
       "url_count": 0,
-      "summary_en": "Markdown document, 245 lines, 0 explicit URLs. Lead heading: Repository Research Narrative.",
-      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 245 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository Research Narrative."
+      "summary_en": "Markdown document, 246 lines, 0 explicit URLs. Lead heading: Repository Research Narrative.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 246 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository Research Narrative."
     },
     {
       "path": "README.DSPY.MD",
@@ -496,6 +496,15 @@
       "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 80 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Retrieval Evaluation Suite Audit."
     },
     {
+      "path": "docs/audit/2026-03-18-retrieval-ranking-refresh.md",
+      "kind": "markdown",
+      "byte_size": 6479,
+      "line_count": 109,
+      "url_count": 0,
+      "summary_en": "Markdown document, 109 lines, 0 explicit URLs. Lead heading: Retrieval Ranking Refresh Audit.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 109 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Retrieval Ranking Refresh Audit."
+    },
+    {
       "path": "docs/audit/2026-03-18-rust-and-benchmark-hygiene.md",
       "kind": "markdown",
       "byte_size": 2049,
@@ -557,6 +566,15 @@
       "url_count": 0,
       "summary_en": "Markdown document, 105 lines, 0 explicit URLs. Lead heading: Rust SQLite Lookup And Retrieval Tag Audit.",
       "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 105 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Rust SQLite Lookup And Retrieval Tag Audit."
+    },
+    {
+      "path": "docs/audit/2026-03-18-zzzz-session-consolidation-master-ci-repair.md",
+      "kind": "markdown",
+      "byte_size": 3270,
+      "line_count": 73,
+      "url_count": 0,
+      "summary_en": "Markdown document, 73 lines, 0 explicit URLs. Lead heading: Session Consolidation Master CI Repair.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 73 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Session Consolidation Master CI Repair."
     },
     {
       "path": "docs/audit/2026-03-18-zzzzz-hushwheel-quality-instrumentation.md",
@@ -649,9 +667,18 @@
       "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 47 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Rebase Hushwheel Quality Over Master."
     },
     {
+      "path": "docs/audit/2026-03-18-zzzzzzzzzzzzzzzz-retrieval-gate-restored-after-rebase.md",
+      "kind": "markdown",
+      "byte_size": 3788,
+      "line_count": 94,
+      "url_count": 0,
+      "summary_en": "Markdown document, 94 lines, 0 explicit URLs. Lead heading: Retrieval Gate Restored After Rebase.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 94 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Retrieval Gate Restored After Rebase."
+    },
+    {
       "path": "docs/audit/README.md",
       "kind": "markdown",
-      "byte_size": 436,
+      "byte_size": 438,
       "line_count": 14,
       "url_count": 0,
       "summary_en": "Markdown document, 14 lines, 0 explicit URLs. Lead heading: Repository Audit Notes.",
@@ -705,7 +732,7 @@
     {
       "path": "documentation/package-api.md",
       "kind": "markdown",
-      "byte_size": 2352,
+      "byte_size": 2408,
       "line_count": 38,
       "url_count": 0,
       "summary_en": "Markdown document, 38 lines, 0 explicit URLs. Lead heading: Package API Notes.",
@@ -1162,6 +1189,33 @@
       "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 37 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 2. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Run Log."
     },
     {
+      "path": "samples/logs/20260318T060918Z-gh-runs-consolidate-session-master-repair.md",
+      "kind": "markdown",
+      "byte_size": 2460,
+      "line_count": 70,
+      "url_count": 3,
+      "summary_en": "Markdown document, 70 lines, 3 explicit URLs. Lead heading: GitHub Actions Run Log.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 70 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 3. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Run Log."
+    },
+    {
+      "path": "samples/logs/20260318T063755Z-gh-runs-keep-utility-sync-tests-side-effect-free.md",
+      "kind": "markdown",
+      "byte_size": 1074,
+      "line_count": 29,
+      "url_count": 1,
+      "summary_en": "Markdown document, 29 lines, 1 explicit URLs. Lead heading: GitHub Actions Run Log.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 29 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Run Log."
+    },
+    {
+      "path": "samples/logs/20260318T064924Z-gh-runs-retrieval-refresh-go-ahead.md",
+      "kind": "markdown",
+      "byte_size": 1858,
+      "line_count": 54,
+      "url_count": 2,
+      "summary_en": "Markdown document, 54 lines, 2 explicit URLs. Lead heading: GitHub Actions Run Log.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 54 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 2. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Run Log."
+    },
+    {
       "path": "samples/logs/20260318T083955Z-gh-runs-benchmark-broadening-2.md",
       "kind": "markdown",
       "byte_size": 1217,
@@ -1407,11 +1461,11 @@
     {
       "path": "src/repo_rag_lab/retrieval.py",
       "kind": "python",
-      "byte_size": 1729,
-      "line_count": 61,
+      "byte_size": 7948,
+      "line_count": 258,
       "url_count": 0,
-      "summary_en": "Python module, 61 lines, 0 explicit URLs. Module intent: Baseline chunking and lexical retrieval utilities for repository text.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 61 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Baseline chunking and lexical retrieval utilities for repository text."
+      "summary_en": "Python module, 258 lines, 0 explicit URLs. Module intent: Baseline chunking and lexical retrieval utilities for repository text.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 258 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Baseline chunking and lexical retrieval utilities for repository text."
     },
     {
       "path": "src/repo_rag_lab/settings.py",
@@ -1925,6 +1979,15 @@
       "url_count": 0,
       "summary_en": "Python module, 30 lines, 0 explicit URLs. Module intent: No module docstring detected.",
       "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 30 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
+    },
+    {
+      "path": "tests/test_retrieval.py",
+      "kind": "python",
+      "byte_size": 2888,
+      "line_count": 81,
+      "url_count": 0,
+      "summary_en": "Python module, 81 lines, 0 explicit URLs. Module intent: No module docstring detected.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 81 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
     },
     {
       "path": "tests/test_todo_backlog.py",
