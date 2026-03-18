@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-03-18T12:44:50Z",
-  "tracked_file_count": 231,
-  "summarized_file_count": 228,
+  "generated_at": "2026-03-18T13:00:02Z",
+  "tracked_file_count": 232,
+  "summarized_file_count": 229,
   "excluded_generated_file_count": 3,
   "explicit_link_count": 54,
   "machine_link_occurrence_count": 2494,
@@ -1277,6 +1277,15 @@
       "url_count": 2,
       "summary_en": "Markdown document, 28 lines, 2 explicit URLs. Lead heading: GitHub Actions Run Log.",
       "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 28 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 2. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Run Log."
+    },
+    {
+      "path": "samples/logs/20260318T125829Z-gh-runs-restore-retrieval-gate-after-rebase.md",
+      "kind": "markdown",
+      "byte_size": 1585,
+      "line_count": 36,
+      "url_count": 0,
+      "summary_en": "Markdown document, 36 lines, 0 explicit URLs. Lead heading: GitHub Actions Run Log.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 36 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Run Log."
     },
     {
       "path": "samples/logs/README.md",
