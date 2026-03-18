@@ -142,11 +142,23 @@ def test_retrieval_quality_threshold_helpers_report_regressions() -> None:
 def test_is_benchmark_document_path_excludes_operational_repo_surfaces() -> None:
     assert is_benchmark_document_path(Path("README.md")) is True
     assert is_benchmark_document_path(Path("publication/README.md")) is True
+    assert is_benchmark_document_path(Path("README.AGENTS.md")) is False
+    assert is_benchmark_document_path(Path("FILES.md")) is False
+    assert is_benchmark_document_path(Path("env.md")) is False
+    assert is_benchmark_document_path(Path("TODO.MD")) is False
+    assert is_benchmark_document_path(Path("todo-backlog.yaml")) is False
+    assert is_benchmark_document_path(Path("AGENTS.md.d/FILES.md")) is False
     assert (
         is_benchmark_document_path(Path(".codex/skills/post-push-gh-run-logging/SKILL.md")) is False
     )
     assert (
         is_benchmark_document_path(Path("docs/audit/2026-03-18-retest-with-env-refresh.md"))
+        is False
+    )
+    assert (
+        is_benchmark_document_path(
+            Path("publication/exploratorium_translation/generated/exploratorium-manifest.json")
+        )
         is False
     )
     assert is_benchmark_document_path(Path("samples/logs/20260318T010254Z-gh-runs.md")) is False

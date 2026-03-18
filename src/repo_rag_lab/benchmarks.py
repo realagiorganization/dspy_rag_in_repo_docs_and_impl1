@@ -30,12 +30,19 @@ BENCHMARK_EXCLUDED_PARTS = {
     "tests",
 }
 BENCHMARK_EXCLUDED_PATHS = {
+    Path("FILES.md"),
+    Path("README.AGENTS.md"),
     Path("README.DSPY.MD"),
     Path("REPO_COMPLETENESS_CHECKLIST.md"),
+    Path("TODO.MD"),
     Path("documentation/hushwheel-fixture-rag-guide.md"),
+    Path("env.md"),
+    Path("todo-backlog.yaml"),
 }
 BENCHMARK_EXCLUDED_PATH_PREFIXES = (
+    Path("AGENTS.md.d"),
     Path("docs/audit"),
+    Path("publication/exploratorium_translation/generated"),
     Path("samples/logs"),
     Path("samples/population"),
     Path("samples/training"),

@@ -347,7 +347,8 @@ The benchmark loop is:
    corpus, while `evaluate_retrieval_quality_suite(...)` sweeps multiple `top_k` values over the
    same benchmark set.
 3. The benchmark corpus explicitly excludes noisy or leaking paths such as `.codex`, `.github`,
-   `tests`, `data`, `samples/training`, and `samples/logs`.
+   `tests`, `data`, `samples/training`, `samples/logs`, `README.AGENTS.md`, `FILES.md`, `env.md`,
+   `TODO.MD`, `todo-backlog.yaml`, `AGENTS.md.d/`, and generated exploratorium manifests.
 4. Each result records `retrieved_sources`, `matched_sources`, missed sources, first relevant rank,
    reciprocal rank, source recall, source precision, and tags.
 5. `summarize_benchmark_results(results)` computes pass counts, pass rate, full-coverage rate,
@@ -363,6 +364,10 @@ The benchmark loop is:
 8. `make retrieval-eval` and `uv run repo-rag retrieval-eval` expose the same evaluation suite as a
    user-facing utility surface, and the repo defaults now enforce `minimum_pass_rate=1.0` plus
    `minimum_source_recall=1.0` so regressions fail in `make quality`, pre-push, and CI.
+9. The live full-corpus retriever in [src/repo_rag_lab/retrieval.py](src/repo_rag_lab/retrieval.py)
+   now also guards against a different class of regressions: test files, training samples, audit
+   notes, generated inventories, and summary overlays should not outrank primary docs when the user
+   is asking which file to read or where a concept is documented.
 
 Use this when you want a compact benchmark report:
 

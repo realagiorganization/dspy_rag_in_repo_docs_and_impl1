@@ -25,33 +25,74 @@ QUESTION_FILLER_TERMS = {
     "what",
     "where",
 }
-QUESTION_ECHO_PENALTY = 1.8
+QUESTION_DOCUMENT_SEEKING_TERMS = {
+    "documentation",
+    "docs",
+    "explain",
+    "explains",
+    "file",
+    "files",
+    "notes",
+    "read",
+    "stored",
+    "where",
+}
+QUESTION_CODE_SEEKING_TERMS = {
+    "command",
+    "commands",
+    "define",
+    "defines",
+    "function",
+    "functions",
+    "handle",
+    "handles",
+    "report",
+    "reports",
+    "struct",
+}
+QUESTION_ECHO_PENALTY = 4.2
 DEFINITION_PATTERN_BONUS = 2.0
+DOCUMENT_SEEKING_MARKDOWN_BONUS = 0.8
+DOCUMENT_SEEKING_DOCUMENTATION_BONUS = 0.9
+DOCUMENT_SEEKING_README_BONUS = 0.4
+CODE_SEEKING_SOURCE_BONUS = 1.4
 SOURCE_BONUS_BY_NAME = {
     "README.md": 1.4,
     "AGENTS.md": 1.2,
 }
 SOURCE_BONUS_BY_PART = {
     "documentation": 0.9,
+    "docs": 0.9,
+    "include": 0.8,
+    "publication": 0.5,
     "utilities": 0.9,
-    "src": 0.4,
+    "src": 0.6,
 }
 SOURCE_PENALTY_BY_NAME = {
+    "FILES.csv": 4.0,
+    "FILES.md": 4.0,
     "README.DSPY.MD": 4.0,
+    "README.AGENTS.md": 3.0,
     "REPO_COMPLETENESS_CHECKLIST.md": 3.0,
+    "TODO.MD": 4.0,
     "hushwheel-fixture-rag-guide.md": 3.0,
     "workflow.py": 1.0,
+    "todo-backlog.yaml": 4.0,
 }
 SOURCE_PENALTY_BY_PART = {
+    ".codex": 2.5,
     ".github": 1.5,
     "data": 6.0,
-    "tests": 3.0,
+    "generated": 2.0,
+    "tests": 5.0,
 }
 SOURCE_PENALTY_BY_SUBPATH = {
-    ("docs", "audit"): 4.0,
-    ("samples", "logs"): 4.0,
-    ("samples", "population"): 5.0,
-    ("samples", "training"): 5.0,
+    ("AGENTS.md.d",): 2.5,
+    ("docs", "audit"): 5.0,
+    ("publication", "exploratorium_translation", "generated"): 4.0,
+    ("samples", "logs"): 5.0,
+    ("samples", "population"): 6.0,
+    ("samples", "training"): 6.0,
 }
 PATH_TERM_OVERLAP_BONUS = 0.45
 
@@ -124,10 +165,31 @@ def _has_term_prefix(question_terms: list[str], prefix: str) -> bool:
     return any(term.startswith(prefix) for term in question_terms)
 
 
+def _normalize_term(term: str) -> str:
+    """Lightly normalize a token so singular/plural variants overlap in lexical scoring."""
+
+    lowered = term.lower()
+    if not lowered.isalpha():
+        return lowered
+    if lowered.endswith("ies") and len(lowered) > 4:
+        return f"{lowered[:-3]}y"
+    if lowered.endswith("es") and len(lowered) > 4:
+        return lowered[:-2]
+    if lowered.endswith("s") and len(lowered) > 4:
+        return lowered[:-1]
+    return lowered
+
+
+def _normalized_terms(text: str) -> list[str]:
+    """Return normalized lexical terms from ``text``."""
+
+    return [_normalize_term(term) for term in TOKEN_RE.findall(text.lower())]
+
+
 def _normalized_token_string(text: str) -> str:
     """Return ``text`` normalized to lowercase token strings separated by spaces."""
 
-    return " ".join(TOKEN_RE.findall(text.lower()))
+    return " ".join(_normalized_terms(text))
 
 
 def _chunk_text(text: str, chunk_size: int) -> list[str]:
@@ -190,6 +252,24 @@ def _looks_like_repository_root(path: Path) -> bool:
     )
 
 
+def _is_markdown_source(source: Path) -> bool:
+    """Return ``True`` when ``source`` is a Markdown document."""
+
+    return source.suffix.lower() == ".md"
+
+
+def _question_is_document_seeking(question_terms: list[str]) -> bool:
+    """Return ``True`` when question terms imply "where/how do I read this?" intent."""
+
+    return bool(set(question_terms).intersection(QUESTION_DOCUMENT_SEEKING_TERMS))
+
+
+def _question_is_code_seeking(question_terms: list[str]) -> bool:
+    """Return ``True`` when question terms imply implementation or API lookup intent."""
+
+    return bool(set(question_terms).intersection(QUESTION_CODE_SEEKING_TERMS))
+
+
 def _definition_bonus(question: str, text: str) -> float:
     """Return a bonus when a ``what is ...`` question matches a definitional chunk."""
 
@@ -198,7 +278,7 @@ def _definition_bonus(question: str, text: str) -> float:
         return 0.0
 
     phrase_terms = [
-        term for term in TOKEN_RE.findall(question.lower()) if term not in QUESTION_FILLER_TERMS
+        term for term in _normalized_terms(question) if term not in QUESTION_FILLER_TERMS
     ]
     if not phrase_terms:
         return 0.0
@@ -232,13 +312,13 @@ def source_score_adjustment(source: Path, question_terms: list[str]) -> float:
         if _contains_path_parts(source, subpath):
             adjustment -= penalty
 
-    path_terms = set(TOKEN_RE.findall(source.as_posix().lower()))
+    path_terms = {_normalize_term(term) for term in TOKEN_RE.findall(source.as_posix().lower())}
     adjustment += PATH_TERM_OVERLAP_BONUS * len(set(question_terms).intersection(path_terms))
 
     if _is_root_readme(source) and {"repository", "research"}.issubset(question_terms):
         adjustment += 1.0
     if source.name == "utilities.py" and {"repository", "research"}.issubset(question_terms):
-        adjustment += 0.5
+        adjustment += 1.2
     if source.name == "AGENTS.md" and _has_term_prefix(question_terms, "agent"):
         adjustment += 0.6
     if _contains_path_parts(source, ("utilities", "README.md")) and _has_term_prefix(
@@ -258,7 +338,21 @@ def source_score_adjustment(source: Path, question_terms: list[str]) -> float:
         and _contains_path_parts(source, ("src", "repo_rag_lab"))
         and {"repository", "research"}.issubset(question_terms)
     ):
-        adjustment -= 0.3
+        adjustment -= 1.6
+    if _question_is_document_seeking(question_terms):
+        if _is_markdown_source(source):
+            adjustment += DOCUMENT_SEEKING_MARKDOWN_BONUS
+        if "documentation" in source.parts:
+            adjustment += DOCUMENT_SEEKING_DOCUMENTATION_BONUS
+        if source.name == "README.md":
+            adjustment += DOCUMENT_SEEKING_README_BONUS
+    if _question_is_code_seeking(question_terms) and source.suffix.lower() in {
+        ".c",
+        ".h",
+        ".py",
+        ".rs",
+    }:
+        adjustment += CODE_SEEKING_SOURCE_BONUS
 
     return adjustment
 
@@ -266,10 +360,10 @@ def source_score_adjustment(source: Path, question_terms: list[str]) -> float:
 def score(question: str, text: str, *, source: Path | None = None) -> float:
     """Score a text chunk by lexical overlap and light term-density weighting."""
 
-    q_terms = TOKEN_RE.findall(question.lower())
+    q_terms = _normalized_terms(question)
     if not q_terms:
         return 0.0
-    t_terms = TOKEN_RE.findall(text.lower())
+    t_terms = _normalized_terms(text)
     if not t_terms:
         return 0.0
     overlap = sum(1 for term in q_terms if term in t_terms)

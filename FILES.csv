@@ -26,10 +26,14 @@ AGENTS.md.d/10-verification-loop.md,AGENTS.md.d,markdown,22,1175,Verification Lo
 AGENTS.md.d/FILES.md,AGENTS.md.d,markdown,41,2247,Agent instructions for maintaining FILES.md and FILES.csv
 AGENTS.md.d/RUST_LOOKUP.md,AGENTS.md.d,markdown,33,1579,Rust SQLite Lookup Instructions
 FILES.csv,FILES.csv,csv,,0,Generated CSV inventory of tracked repository files
+FILES.csv,FILES.csv,csv,,0,Generated CSV inventory of tracked repository files
+FILES.csv,FILES.csv,csv,,0,Generated CSV inventory of tracked repository files
+FILES.md,FILES.md,markdown,,0,Generated Markdown inventory of tracked repository files
+FILES.md,FILES.md,markdown,,0,Generated Markdown inventory of tracked repository files
 FILES.md,FILES.md,markdown,,0,Generated Markdown inventory of tracked repository files
 Makefile,Makefile,makefile,239,8487,UV ?= uv
-README.AGENTS.md,README.AGENTS.md,markdown,249,14176,"Repository research narrative tying code, docs, and verification together"
-README.DSPY.MD,README.DSPY.MD,markdown,652,31131,"DSPy workflow guide for training, runtime use, and compiled programs"
+README.AGENTS.md,README.AGENTS.md,markdown,257,14925,"Repository research narrative tying code, docs, and verification together"
+README.DSPY.MD,README.DSPY.MD,markdown,657,31622,"DSPy workflow guide for training, runtime use, and compiled programs"
 README.md,README.md,markdown,171,10812,"Top-level repository overview, workflow map, and quality guidance"
 REPO_COMPLETENESS_CHECKLIST.md,REPO_COMPLETENESS_CHECKLIST.md,markdown,238,7450,Repository Completeness Checklist
 TODO.MD,TODO.MD,markdown,21,5455,TODO
@@ -74,7 +78,10 @@ docs/audit/2026-03-18-zzzzzzzzzzzzzzzz-publication-cache-node24-followup.md,docs
 docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzz-dspy-backlog-reconciliation.md,docs,markdown,62,2457,Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzz dspy backlog reconciliation
 docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzz-lookup-first-ask-path.md,docs,markdown,94,4604,Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzz lookup first ask path
 docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzzz-answer-synthesis-refresh.md,docs,markdown,48,2565,Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzzz answer synthesis refresh
-docs/audit/README.md,docs,markdown,14,429,Audit index for dated repository verification notes
+docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzzzz-retrieval-quality-doc-priority.md,docs,markdown,68,3602,Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzzzz retrieval quality doc priority
+docs/audit/README.md,docs,markdown,14,436,Audit index for dated repository verification notes
+docs/audit/README.md,docs,markdown,14,436,Audit index for dated repository verification notes
+docs/audit/README.md,docs,markdown,14,436,Audit index for dated repository verification notes
 documentation/azure-deployment.md,documentation,markdown,63,2603,Azure Deployment Notes
 documentation/hushwheel-fixture-rag-guide.md,documentation,markdown,138,5169,RAG Guide For The Hushwheel Fixture
 documentation/inspired/dspy-rag-tutorial.md,documentation,markdown,35,1474,DSPy Tutorial: Basic RAG
@@ -154,7 +161,7 @@ samples/training/repository_training_examples.yaml,samples,yaml,82,2607,- questi
 src/repo_rag_lab/__init__.py,src,python,6,178,Public package surface for the repository-grounded RAG lab.
 src/repo_rag_lab/azure.py,src,python,76,2592,Azure deployment manifest helpers for downstream release workflows.
 src/repo_rag_lab/azure_runtime.py,src,python,462,15839,"Azure runtime normalization, live probes, and cloud-completion helpers."
-src/repo_rag_lab/benchmarks.py,src,python,452,15429,Retrieval benchmark helpers for notebook assertions and logging.
+src/repo_rag_lab/benchmarks.py,src,python,459,15639,Retrieval benchmark helpers for notebook assertions and logging.
 src/repo_rag_lab/cli.py,src,python,311,11442,Command-line entrypoints for the shared repository RAG workflows.
 src/repo_rag_lab/corpus.py,src,python,102,2521,Repository file loading helpers for the baseline text corpus.
 src/repo_rag_lab/dspy_training.py,src,python,766,27390,DSPy training and artifact helpers for repository-grounded RAG.
@@ -166,7 +173,9 @@ src/repo_rag_lab/notebook_runner.py,src,python,491,16433,Monitored batch executi
 src/repo_rag_lab/notebook_scaffolding.py,src,python,260,11029,High-level notebook scaffolds built from tested repository helpers.
 src/repo_rag_lab/notebook_support.py,src,python,89,2843,Helpers shared by notebooks so their setup logic stays in tested Python code.
 src/repo_rag_lab/population_samples.py,src,python,241,8364,Helpers for reviewing and batching starter corpus-population inputs.
-src/repo_rag_lab/retrieval.py,src,python,289,8973,Baseline chunking and lexical retrieval utilities for repository text.
+src/repo_rag_lab/retrieval.py,src,python,383,11672,Baseline chunking and lexical retrieval utilities for repository text.
+src/repo_rag_lab/retrieval.py,src,python,383,11672,Baseline chunking and lexical retrieval utilities for repository text.
+src/repo_rag_lab/retrieval.py,src,python,383,11672,Baseline chunking and lexical retrieval utilities for repository text.
 src/repo_rag_lab/rust_lookup.py,src,python,271,6926,Helpers for the native Rust-backed SQLite lookup index.
 src/repo_rag_lab/settings.py,src,python,28,708,Shared repository path settings derived from a repository root.
 src/repo_rag_lab/todo_backlog.py,src,python,276,8434,Shared backlog rendering helpers for Markdown and LaTeX surfaces.
@@ -213,7 +222,7 @@ tests/fixtures/hushwheel_lexiconarium/tests/unit/test_hushwheel_unit.c,tests,bin
 tests/fixtures/hushwheel_lexiconarium/tools/lint_hushwheel.py,tests,python,118,3649,Python module for lint hushwheel
 tests/fixtures/hushwheel_lexiconarium/tools/regenerate_hushwheel_fixture.py,tests,python,833,30730,Python module for regenerate hushwheel fixture
 tests/test_azure_runtime.py,tests,python,101,3806,Python module for test azure runtime
-tests/test_benchmarks_and_notebook_scaffolding.py,tests,python,258,10862,Python module for test benchmarks and notebook scaffolding
+tests/test_benchmarks_and_notebook_scaffolding.py,tests,python,270,11456,Python module for test benchmarks and notebook scaffolding
 tests/test_cli_and_dspy.py,tests,python,509,18008,Python module for test cli and dspy
 tests/test_dspy_training.py,tests,python,493,17531,Python module for test dspy training
 tests/test_exploratorium_translation.py,tests,python,62,2502,Python module for test exploratorium translation
@@ -226,7 +235,7 @@ tests/test_notebook_runner.py,tests,python,84,3088,Python module for test notebo
 tests/test_population_samples.py,tests,python,76,3136,Python module for test population samples
 tests/test_project_surfaces.py,tests,python,389,16800,Python module for test project surfaces
 tests/test_repository_rag_bdd.py,tests,python,30,879,Python module for test repository rag bdd
-tests/test_retrieval.py,tests,python,81,2888,Python module for test retrieval
+tests/test_retrieval.py,tests,python,131,4508,Python module for test retrieval
 tests/test_todo_backlog.py,tests,python,103,3442,Python module for test todo backlog
 tests/test_training_samples.py,tests,python,65,2535,Python module for test training samples
 tests/test_utilities.py,tests,python,222,7850,Python module for test utilities

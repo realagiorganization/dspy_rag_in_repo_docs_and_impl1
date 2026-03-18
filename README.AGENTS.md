@@ -60,8 +60,11 @@ dataset. That story starts in:
 
 The repo loads its own text-like files, chunks them into paragraph-aware slices with fixed-width
 fallback, ranks them lexically with path-aware adjustments plus source diversity, and synthesizes a
-baseline answer. This is the minimum honest system: before optimization, before benchmarking, and
-before deployment, the repo must be able to explain itself from its own contents.
+baseline answer. The retriever now also applies light lexical normalization plus stronger
+source-aware penalties so primary docs beat synthetic echoes from tests, training samples, audits,
+generated inventories, and similar meta surfaces. This is the minimum honest system: before
+optimization, before benchmarking, and before deployment, the repo must be able to explain itself
+from its own contents instead of from its own scaffolding.
 
 ### 2. The Corpus Is Curated, Not Just Scraped
 
@@ -102,7 +105,10 @@ benchmark surface. This is the point where the project stops being a demo and be
 instrument. The benchmark layer is now also a user-facing evaluation surface through
 `make retrieval-eval`, which reports top-k sweeps, richer retrieval-quality metrics, and now fails
 when minimum pass-rate or source-recall thresholds regress instead of leaving benchmark inspection
-buried in notebook helpers.
+buried in notebook helpers. The benchmark corpus is also narrower than the live full corpus on
+purpose: it now excludes repo-meta overlays such as `README.AGENTS.md`, `FILES.md`, `env.md`,
+`TODO.MD`, `todo-backlog.yaml`, `AGENTS.md.d/`, and generated exploratorium manifests so the
+quality signal stays anchored to the primary sources the retriever is supposed to surface.
 
 ### 5. DSPy Moves The Repo From Prompted Runtime To Compiled Program
 
@@ -187,6 +193,8 @@ At the time of this document:
 - retrieval-quality evaluation is implemented and exposed through `make retrieval-eval`
 - retrieval regressions now fail `make quality`, the pre-push hook, and CI through the same
   threshold-aware `make retrieval-eval` gate
+- full-corpus retrieval now has explicit regression coverage against test/training/audit/meta-file
+  leakage for the tracked repository questions
 - local SQLite lookup over tracked files is implemented and exposed through `make rust-lookup-index`
   plus `make rust-lookup`
 - DSPy runtime answering is implemented and exposed through `make ask-dspy` after the same

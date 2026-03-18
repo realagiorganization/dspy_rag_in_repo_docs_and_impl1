@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-03-18-zzzzzzzzzzzzzzzzzzz-answer-synthesis-refresh.md`
+- `2026-03-18-zzzzzzzzzzzzzzzzzzzz-retrieval-quality-doc-priority.md`
 
 ## Usage
 
