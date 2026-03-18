@@ -20,6 +20,7 @@ fixture manifest, quality tooling, packaging/install rules, and pytest surface c
 Executed in this turn:
 
 - `git merge --no-ff codex/hushwheel-quality-instrumentation-20260318`
+- `make hooks-install`
 - `make exploratorium-sync`
 - `make files-sync`
 - `uv run python -m compileall src tests`
@@ -30,9 +31,11 @@ Executed in this turn:
 - `make retrieval-eval`
 - `make paper-build`
 - `make coverage`
+- `make quality`
 
 ## Results
 
+- `make hooks-install`: passed and installed the repository `pre-commit` plus `pre-push` hooks
 - `uv run python -m compileall src tests`: passed
 - `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py`: passed, `15 passed`
 - `uv run repo-rag smoke-test`: passed with:
@@ -53,6 +56,16 @@ Executed in this turn:
   - `140 passed`
   - `Total coverage: 87.83%`
   - required threshold `85.0%` reached
+- `make quality`: passed with:
+  - `ruff format --check`: passed
+  - `ruff check`: passed
+  - `nbqa ruff notebooks`: passed
+  - `mypy`: passed
+  - `basedpyright`: passed
+  - `uv run repo-rag verify-surfaces`: passed with `issue_count: 0`
+  - `uv run repo-rag retrieval-eval ...`: passed with `average_source_recall: 1.0`
+  - full pytest/coverage leg: `141 passed`
+  - final coverage gate: `87.83%`
 - `make exploratorium-sync`: passed and refreshed the bilingual exploratorium outputs for the
   merged repository state
 - `make files-sync`: passed and refreshed `FILES.md` plus `FILES.csv` for the merged repository
@@ -66,10 +79,12 @@ Configured and exercised in this turn:
 - tracked-file inventory sync
 - exploratorium translation sync
 - compile checks
+- hook installation
 - targeted utility and BDD pytest coverage
 - repository smoke test
 - repository surface verification
 - retrieval evaluation gate
+- formatting/lint/type-check gates
 - publication build
 - full repository coverage gate
 - Rust wrapper build
