@@ -31,7 +31,7 @@ This inventory is generated from the current Git index.
 | `FILES.csv` | FILES.csv | csv |  | 0 | Generated CSV inventory of tracked repository files |
 | `FILES.md` | FILES.md | markdown |  | 0 | Generated Markdown inventory of tracked repository files |
 | `Makefile` | Makefile | makefile | 214 | 7005 | UV ?= uv |
-| `README.AGENTS.md` | README.AGENTS.md | markdown | 231 | 12776 | Repository research narrative tying code, docs, and verification together |
+| `README.AGENTS.md` | README.AGENTS.md | markdown | 232 | 12880 | Repository research narrative tying code, docs, and verification together |
 | `README.DSPY.MD` | README.DSPY.MD | markdown | 638 | 29959 | DSPy workflow guide for training, runtime use, and compiled programs |
 | `README.md` | README.md | markdown | 160 | 9376 | Top-level repository overview, workflow map, and quality guidance |
 | `REPO_COMPLETENESS_CHECKLIST.md` | REPO_COMPLETENESS_CHECKLIST.md | markdown | 236 | 7194 | Repository Completeness Checklist |
@@ -55,6 +55,7 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-03-18-notebook-runner-harness.md` | docs | markdown | 91 | 4121 | Repository audit note for 2026 03 18 notebook runner harness |
 | `docs/audit/2026-03-18-retest-with-env-refresh.md` | docs | markdown | 105 | 5102 | Repository audit note for 2026 03 18 retest with env refresh |
 | `docs/audit/2026-03-18-retrieval-evaluation-suite.md` | docs | markdown | 80 | 4031 | Repository audit note for 2026 03 18 retrieval evaluation suite |
+| `docs/audit/2026-03-18-retrieval-ranking-refresh.md` | docs | markdown | 88 | 4734 | Repository audit note for 2026 03 18 retrieval ranking refresh |
 | `docs/audit/2026-03-18-rust-and-benchmark-hygiene.md` | docs | markdown | 53 | 2049 | Repository audit note for 2026 03 18 rust and benchmark hygiene |
 | `docs/audit/2026-03-18-todo-backlog-sync.md` | docs | markdown | 83 | 4104 | Repository audit note for 2026 03 18 todo backlog sync |
 | `docs/audit/2026-03-18-z-notebook-runner-harness.md` | docs | markdown | 104 | 4153 | Repository audit note for 2026 03 18 z notebook runner harness |
@@ -62,15 +63,15 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-03-18-zz-research-narrative.md` | docs | markdown | 79 | 3220 | Repository audit note for 2026 03 18 zz research narrative |
 | `docs/audit/2026-03-18-zzz-session-consolidation-on-origin-master.md` | docs | markdown | 109 | 5061 | Repository audit note for 2026 03 18 zzz session consolidation on origin master |
 | `docs/audit/2026-03-18-zzzz-session-consolidation-master-ci-repair.md` | docs | markdown | 73 | 3270 | Repository audit note for 2026 03 18 zzzz session consolidation master ci repair |
-| `docs/audit/README.md` | docs | markdown | 14 | 428 | Audit index for dated repository verification notes |
+| `docs/audit/README.md` | docs | markdown | 14 | 410 | Audit index for dated repository verification notes |
 | `documentation/azure-deployment.md` | documentation | markdown | 63 | 2603 | Azure Deployment Notes |
 | `documentation/hushwheel-fixture-rag-guide.md` | documentation | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
 | `documentation/inspired/dspy-rag-tutorial.md` | documentation | markdown | 35 | 1474 | DSPy Tutorial: Basic RAG |
 | `documentation/inspired/implementing-rag-with-dspy-technical-guide.md` | documentation | markdown | 38 | 1555 | Implementing RAG with DSPy: Technical Guide |
 | `documentation/mcp-discovery.md` | documentation | markdown | 28 | 784 | MCP Discovery Notes |
-| `documentation/package-api.md` | documentation | markdown | 35 | 2065 | Package API Notes |
+| `documentation/package-api.md` | documentation | markdown | 35 | 2121 | Package API Notes |
 | `env.md` | env.md | markdown | 108 | 5043 | Environment Variables |
-| `notebooks/01_repo_rag_research.ipynb` | notebooks | notebook | 281 | 9307 | Repository RAG Research Playbook |
+| `notebooks/01_repo_rag_research.ipynb` | notebooks | notebook | 286 | 9654 | Repository RAG Research Playbook |
 | `notebooks/02_agent_workflow_checklist.ipynb` | notebooks | notebook | 274 | 10491 | Agent Workflow Checklist |
 | `notebooks/03_dspy_training_lab.ipynb` | notebooks | notebook | 256 | 8657 | DSPy Training Sample Lab |
 | `notebooks/04_sample_population_lab.ipynb` | notebooks | notebook | 250 | 7854 | Sample Population Lab |
@@ -144,7 +145,7 @@ This inventory is generated from the current Git index.
 | `src/repo_rag_lab/notebook_scaffolding.py` | src | python | 260 | 11029 | High-level notebook scaffolds built from tested repository helpers. |
 | `src/repo_rag_lab/notebook_support.py` | src | python | 96 | 3201 | Helpers shared by notebooks so their setup logic stays in tested Python code. |
 | `src/repo_rag_lab/population_samples.py` | src | python | 241 | 8364 | Helpers for reviewing and batching starter corpus-population inputs. |
-| `src/repo_rag_lab/retrieval.py` | src | python | 61 | 1729 | Baseline chunking and lexical retrieval utilities for repository text. |
+| `src/repo_rag_lab/retrieval.py` | src | python | 200 | 6293 | Baseline chunking and lexical retrieval utilities for repository text. |
 | `src/repo_rag_lab/settings.py` | src | python | 28 | 708 | Shared repository path settings derived from a repository root. |
 | `src/repo_rag_lab/todo_backlog.py` | src | python | 276 | 8434 | Shared backlog rendering helpers for Markdown and LaTeX surfaces. |
 | `src/repo_rag_lab/training_samples.py` | src | python | 154 | 5130 | Helpers for loading and summarizing starter DSPy training examples. |
@@ -202,6 +203,7 @@ This inventory is generated from the current Git index.
 | `tests/test_population_samples.py` | tests | python | 76 | 3136 | Python module for test population samples |
 | `tests/test_project_surfaces.py` | tests | python | 267 | 11535 | Python module for test project surfaces |
 | `tests/test_repository_rag_bdd.py` | tests | python | 30 | 879 | Python module for test repository rag bdd |
+| `tests/test_retrieval.py` | tests | python | 80 | 2852 | Python module for test retrieval |
 | `tests/test_todo_backlog.py` | tests | python | 98 | 3225 | Python module for test todo backlog |
 | `tests/test_training_samples.py` | tests | python | 56 | 1973 | Python module for test training samples |
 | `tests/test_utilities.py` | tests | python | 172 | 6194 | Python module for test utilities |

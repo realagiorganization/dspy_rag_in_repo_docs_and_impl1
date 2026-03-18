@@ -8,7 +8,7 @@ notebooks stay readable, testable, and aligned with CLI and automation entrypoin
 - `workflow.py`: baseline repository-grounded retrieval and answer synthesis.
 - `dspy_workflow.py`: DSPy-shaped retriever and response flow when DSPy is installed.
 - `corpus.py`: repository text discovery and document loading.
-- `retrieval.py`: chunking and lexical retrieval helpers.
+- `retrieval.py`: paragraph-aware chunking, path-aware lexical ranking, and source-diversified retrieval helpers.
 - `mcp.py`: repo-local MCP server candidate discovery.
 
 ## Notebook-Facing Modules
