@@ -110,7 +110,18 @@ Executed successfully in this turn:
       stale `F541` suppression
   - both were fixed in this turn and the subsequent `make quality` pass succeeded
 - `make hooks-install`: passed and refreshed managed `pre-commit` plus `pre-push` hooks
-- post-push GitHub Actions evidence: pending the branch push for this hardening/profiling pass
+- post-push GitHub Actions evidence:
+  - run `23238384378` (`Hushwheel Quality`, head `108754e5d1a05e76d15e94e7efa0d1ee15925daa`)
+    failed in `47s`
+    - fixture quality suite, report snapshot, quality-summary publish, and artifact upload passed
+    - repository surface step failed because the local hushwheel generator/corpus sync in
+      `docs/catalog.md` plus the eight `src/hushwheel_spoke_*.c` files had not been included in the
+      first scoped commit
+  - follow-up run `23238475251` (`Hushwheel Quality`, head
+    `bfe74cb96bcfb79f8076eabcaaac53af1c16ecc3`) succeeded in `44s`
+    - every workflow step passed, including artifact upload
+    - the workflow still emits the existing Node.js 20 deprecation annotation for
+      `actions/checkout@v4`, `actions/upload-artifact@v4`, and `astral-sh/setup-uv@v6`
 
 ## Current Verification Status
 
@@ -142,6 +153,10 @@ Not exercised in this turn:
 - The repository-wide `make quality` run now passes, but getting there required one formatted test
   refresh and removal of one stale hushwheel-generator lint suppression that the tighter pass
   surfaced.
+- The first post-push hushwheel workflow run failed for a repository-surface consistency reason:
+  the generated hushwheel catalog and spoke files were already updated in the local worktree, but
+  they were omitted from the initial scoped commit. The follow-up commit synced those generated
+  surfaces and the rerun passed.
 - The fixture-local report tree is intentionally regenerated after the repository pytest slice,
   because the existing packaging/docs tests clean the hushwheel build directory as part of their
   normal fixture contract.
