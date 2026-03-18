@@ -74,7 +74,8 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-03-18-zzzzzzz-rebased-master-log-and-azure-typecheck-fix.md` | docs | markdown | 83 | 3472 | Repository audit note for 2026 03 18 zzzzzzz rebased master log and azure typecheck fix |
 | `docs/audit/2026-03-18-zzzzzzzzzzzz-retrieval-regression-gate.md` | docs | markdown | 66 | 2898 | Repository audit note for 2026 03 18 zzzzzzzzzzzz retrieval regression gate |
 | `docs/audit/2026-03-18-zzzzzzzzzzzzz-land-remaining-unlanded-work.md` | docs | markdown | 78 | 2908 | Repository audit note for 2026 03 18 zzzzzzzzzzzzz land remaining unlanded work |
-| `docs/audit/README.md` | docs | markdown | 14 | 427 | Audit index for dated repository verification notes |
+| `docs/audit/2026-03-18-zzzzzzzzzzzzzz-node24-actions-refresh.md` | docs | markdown | 91 | 2989 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzz node24 actions refresh |
+| `docs/audit/README.md` | docs | markdown | 14 | 422 | Audit index for dated repository verification notes |
 | `documentation/azure-deployment.md` | documentation | markdown | 63 | 2603 | Azure Deployment Notes |
 | `documentation/hushwheel-fixture-rag-guide.md` | documentation | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
 | `documentation/inspired/dspy-rag-tutorial.md` | documentation | markdown | 35 | 1474 | DSPy Tutorial: Basic RAG |
@@ -218,7 +219,7 @@ This inventory is generated from the current Git index.
 | `tests/test_mcp_branches.py` | tests | python | 31 | 1077 | Python module for test mcp branches |
 | `tests/test_notebook_runner.py` | tests | python | 84 | 3088 | Python module for test notebook runner |
 | `tests/test_population_samples.py` | tests | python | 76 | 3136 | Python module for test population samples |
-| `tests/test_project_surfaces.py` | tests | python | 373 | 16132 | Python module for test project surfaces |
+| `tests/test_project_surfaces.py` | tests | python | 387 | 16638 | Python module for test project surfaces |
 | `tests/test_repository_rag_bdd.py` | tests | python | 30 | 879 | Python module for test repository rag bdd |
 | `tests/test_retrieval.py` | tests | python | 81 | 2888 | Python module for test retrieval |
 | `tests/test_todo_backlog.py` | tests | python | 98 | 3225 | Python module for test todo backlog |

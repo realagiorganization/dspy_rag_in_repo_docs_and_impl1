@@ -162,7 +162,7 @@ def test_publication_workflow_builds_and_uploads_pdf() -> None:
 
     assert any(step.get("uses") == "actions/checkout@v6" for step in steps)
     assert any(step.get("uses") == "actions/setup-python@v6" for step in steps)
-    assert any(step.get("uses") == "astral-sh/setup-uv@v6" for step in steps)
+    assert any(step.get("uses") == "astral-sh/setup-uv@v7" for step in steps)
     assert any(
         step.get("name") == "Sync publication inventories"
         and "repo-rag sync-todo-backlog" in step.get("run", "")
@@ -254,7 +254,7 @@ def test_hushwheel_quality_workflow_is_path_filtered_and_uploads_reports() -> No
         for step in steps
     )
     assert any(
-        step.get("uses") == "astral-sh/setup-uv@v6"
+        step.get("uses") == "astral-sh/setup-uv@v7"
         and step.get("with", {}).get("enable-cache") is True
         and "uv.lock" in step.get("with", {}).get("cache-dependency-glob", "")
         for step in steps
@@ -361,12 +361,26 @@ def test_ci_and_publish_workflows_cache_python_and_dependencies() -> None:
             for step in steps
         )
         assert any(
-            step.get("uses") == "astral-sh/setup-uv@v6"
+            step.get("uses") == "astral-sh/setup-uv@v7"
             and step.get("with", {}).get("enable-cache") is True
             and ".python-version" in step.get("with", {}).get("cache-dependency-glob", "")
             and "pyproject.toml" in step.get("with", {}).get("cache-dependency-glob", "")
             and "uv.lock" in step.get("with", {}).get("cache-dependency-glob", "")
             for step in steps
         )
+
+    for steps in (ci_python_steps, ci_rust_steps, publish_steps):
+        assert any(step.get("uses") == "actions/checkout@v6" for step in steps)
+
+    assert any(
+        step.get("uses") == "actions/upload-artifact@v6"
+        and step.get("with", {}).get("name") == "python-dist"
+        for step in ci_python_steps
+    )
+    assert any(
+        step.get("uses") == "actions/upload-artifact@v6"
+        and step.get("with", {}).get("name") == "coverage-report"
+        for step in ci_python_steps
+    )
 
     assert any(step.get("uses") == "Swatinem/rust-cache@v2" for step in ci_rust_steps)
