@@ -26,10 +26,6 @@ AGENTS.md.d/10-verification-loop.md,AGENTS.md.d,markdown,22,1175,Verification Lo
 AGENTS.md.d/FILES.md,AGENTS.md.d,markdown,41,2247,Agent instructions for maintaining FILES.md and FILES.csv
 AGENTS.md.d/RUST_LOOKUP.md,AGENTS.md.d,markdown,33,1579,Rust SQLite Lookup Instructions
 FILES.csv,FILES.csv,csv,,0,Generated CSV inventory of tracked repository files
-FILES.csv,FILES.csv,csv,,0,Generated CSV inventory of tracked repository files
-FILES.csv,FILES.csv,csv,,0,Generated CSV inventory of tracked repository files
-FILES.md,FILES.md,markdown,,0,Generated Markdown inventory of tracked repository files
-FILES.md,FILES.md,markdown,,0,Generated Markdown inventory of tracked repository files
 FILES.md,FILES.md,markdown,,0,Generated Markdown inventory of tracked repository files
 Makefile,Makefile,makefile,233,7843,UV ?= uv
 README.AGENTS.md,README.AGENTS.md,markdown,249,14176,"Repository research narrative tying code, docs, and verification together"
@@ -76,8 +72,6 @@ docs/audit/2026-03-18-zzzzzzzzzzzzzz-node24-actions-refresh.md,docs,markdown,91,
 docs/audit/2026-03-18-zzzzzzzzzzzzzzzz-file-summary-test-churn-fix.md,docs,markdown,85,2929,Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzz file summary test churn fix
 docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzz-dspy-backlog-reconciliation.md,docs,markdown,62,2457,Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzz dspy backlog reconciliation
 docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzz-lookup-first-ask-path.md,docs,markdown,94,4604,Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzz lookup first ask path
-docs/audit/README.md,docs,markdown,14,425,Audit index for dated repository verification notes
-docs/audit/README.md,docs,markdown,14,425,Audit index for dated repository verification notes
 docs/audit/README.md,docs,markdown,14,425,Audit index for dated repository verification notes
 documentation/azure-deployment.md,documentation,markdown,63,2603,Azure Deployment Notes
 documentation/hushwheel-fixture-rag-guide.md,documentation,markdown,138,5169,RAG Guide For The Hushwheel Fixture
@@ -147,6 +141,7 @@ samples/logs/20260318T094120Z-gh-runs-dspy-live-proof-and-rust-wrapper-repair.md
 samples/logs/20260318T101229Z-gh-runs-hushwheel-audit-refresh.md,samples,markdown,37,1707,GitHub Actions Summary
 samples/logs/20260318T101939Z-gh-runs-land-each-unlanded.md,samples,markdown,28,1556,GitHub Actions Run Log
 samples/logs/20260318T124437Z-gh-runs-reconcile-stale-dspy-backlog-for-1.md,samples,markdown,21,1060,GitHub Actions Log
+samples/logs/20260318T125547Z-gh-runs-wire-lookup-first-ask-for-1.md,samples,markdown,22,1058,GitHub Actions Log
 samples/logs/README.md,samples,markdown,11,331,GitHub Run Logs
 samples/population/hushwheel_fixture_population_candidates.yaml,samples,yaml,22,955,- source: README.md
 samples/population/repository_population_candidates.yaml,samples,yaml,16,684,- source: README.md
