@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -47,11 +48,13 @@ class FileSummaryRow:
 def _tracked_paths(root: Path) -> tuple[Path, ...]:
     """Return tracked paths from the Git index under ``root``."""
 
+    git_env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     result = subprocess.run(
         ["git", "ls-files", "--cached", "-z"],
         cwd=root,
         check=True,
         capture_output=True,
+        env=git_env,
     )
     return tuple(
         Path(fragment.decode("utf-8")) for fragment in result.stdout.split(b"\0") if fragment

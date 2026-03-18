@@ -26,6 +26,8 @@ Executed successfully in this turn:
 - `uv run pytest tests/test_cli_and_dspy.py tests/test_dspy_training.py tests/test_file_summaries.py tests/test_exploratorium_translation.py tests/test_utilities.py tests/test_repository_rag_bdd.py tests/test_verification.py tests/test_hushwheel_fixture.py tests/test_hushwheel_program_surface.py`
 - `uv run repo-rag smoke-test`
 - `cargo build --manifest-path rust-cli/Cargo.toml`
+- `uv run pytest tests/test_file_summaries.py`
+- `env GIT_DIR=/home/standard/dspy_rag_in_repo_docs_and_impl1/.git GIT_WORK_TREE=/home/standard/dspy_rag_in_repo_docs_and_impl1 uv run pytest tests/test_file_summaries.py`
 
 ## Results
 
@@ -46,6 +48,9 @@ Executed successfully in this turn:
   - `mcp_candidate_count: 1`
   - `manifest_path: artifacts/azure/repo-rag-smoke.json`
 - `cargo build --manifest-path rust-cli/Cargo.toml`: passed
+- `uv run pytest tests/test_file_summaries.py`: passed, `6 passed`
+- hook-simulated `tests/test_file_summaries.py` run with `GIT_DIR` and `GIT_WORK_TREE` set to the
+  repository values: passed, `6 passed`
 
 ## Current Verification Status
 
@@ -77,3 +82,8 @@ Absent or not exercised in this turn:
   turn began.
 - The consolidation commit is intended to freeze the current repository state rather than re-scope
   or split the pending edits into multiple thematic commits.
+- The first `git push` attempt failed in the pre-push coverage hook because
+  `src/repo_rag_lab/file_summaries.py` inherited hook-provided `GIT_*` environment variables while
+  spawning `git ls-files`, which broke temporary Git repositories inside `tests/test_file_summaries.py`.
+  The follow-up fix sanitizes `GIT_*` in `_tracked_paths()` and also gives the test helper a clean
+  Git subprocess environment.

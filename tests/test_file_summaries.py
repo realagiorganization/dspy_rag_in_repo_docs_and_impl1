@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -9,6 +10,10 @@ import nbformat
 import pytest
 
 from repo_rag_lab import file_summaries as file_summary_module
+
+
+def _git_env() -> dict[str, str]:
+    return {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
 
 
 def _write_text(root: Path, relative_path: str, text: str) -> None:
@@ -30,8 +35,9 @@ def _write_notebook(root: Path, relative_path: str) -> None:
 
 
 def _init_git_repo(root: Path, *paths: str) -> None:
-    subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True)
-    subprocess.run(["git", "add", *paths], cwd=root, check=True)
+    git_env = _git_env()
+    subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True, env=git_env)
+    subprocess.run(["git", "add", *paths], cwd=root, check=True, env=git_env)
 
 
 def test_sync_file_summaries_writes_expected_outputs_for_tracked_repo(tmp_path: Path) -> None:
