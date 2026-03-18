@@ -32,6 +32,10 @@ This inventory is generated from the current Git index.
 | `AGENTS.md.d/FILES.md` | AGENTS.md.d | markdown | 41 | 2247 | Agent instructions for maintaining FILES.md and FILES.csv |
 | `AGENTS.md.d/RUST_LOOKUP.md` | AGENTS.md.d | markdown | 31 | 1380 | Rust SQLite Lookup Instructions |
 | `FILES.csv` | FILES.csv | csv |  | 0 | Generated CSV inventory of tracked repository files |
+| `FILES.csv` | FILES.csv | csv |  | 0 | Generated CSV inventory of tracked repository files |
+| `FILES.csv` | FILES.csv | csv |  | 0 | Generated CSV inventory of tracked repository files |
+| `FILES.md` | FILES.md | markdown |  | 0 | Generated Markdown inventory of tracked repository files |
+| `FILES.md` | FILES.md | markdown |  | 0 | Generated Markdown inventory of tracked repository files |
 | `FILES.md` | FILES.md | markdown |  | 0 | Generated Markdown inventory of tracked repository files |
 | `Makefile` | Makefile | makefile | 233 | 7843 | UV ?= uv |
 | `README.AGENTS.md` | README.AGENTS.md | markdown | 246 | 13988 | Repository research narrative tying code, docs, and verification together |
@@ -75,7 +79,8 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-03-18-zzzzzzzzzzzz-retrieval-regression-gate.md` | docs | markdown | 66 | 2898 | Repository audit note for 2026 03 18 zzzzzzzzzzzz retrieval regression gate |
 | `docs/audit/2026-03-18-zzzzzzzzzzzzz-land-remaining-unlanded-work.md` | docs | markdown | 78 | 2908 | Repository audit note for 2026 03 18 zzzzzzzzzzzzz land remaining unlanded work |
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzz-node24-actions-refresh.md` | docs | markdown | 91 | 2989 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzz node24 actions refresh |
-| `docs/audit/README.md` | docs | markdown | 14 | 422 | Audit index for dated repository verification notes |
+| `docs/audit/2026-03-18-zzzzzzzzzzzzzzzz-file-summary-test-churn-fix.md` | docs | markdown | 85 | 2929 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzz file summary test churn fix |
+| `docs/audit/README.md` | docs | markdown | 14 | 429 | Audit index for dated repository verification notes |
 | `documentation/azure-deployment.md` | documentation | markdown | 63 | 2603 | Azure Deployment Notes |
 | `documentation/hushwheel-fixture-rag-guide.md` | documentation | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
 | `documentation/inspired/dspy-rag-tutorial.md` | documentation | markdown | 35 | 1474 | DSPy Tutorial: Basic RAG |
@@ -224,7 +229,7 @@ This inventory is generated from the current Git index.
 | `tests/test_retrieval.py` | tests | python | 81 | 2888 | Python module for test retrieval |
 | `tests/test_todo_backlog.py` | tests | python | 98 | 3225 | Python module for test todo backlog |
 | `tests/test_training_samples.py` | tests | python | 65 | 2535 | Python module for test training samples |
-| `tests/test_utilities.py` | tests | python | 212 | 7436 | Python module for test utilities |
+| `tests/test_utilities.py` | tests | python | 221 | 7813 | Python module for test utilities |
 | `tests/test_verification.py` | tests | python | 64 | 2987 | Python module for test verification |
 | `tests/test_workflow_live.py` | tests | python | 99 | 3331 | Python module for test workflow live |
 | `todo-backlog.yaml` | todo-backlog.yaml | yaml | 150 | 6989 | repository_web_base: https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/blob/master |

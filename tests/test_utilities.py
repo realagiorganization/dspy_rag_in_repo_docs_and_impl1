@@ -151,11 +151,20 @@ def test_run_azure_inference_probe_returns_machine_readable_summary(
 
 
 def test_run_file_summary_sync_reports_expected_fields() -> None:
-    payload = json.loads(run_file_summary_sync(REPO_ROOT))
-    assert payload["markdown_path"] == "FILES.md"
-    assert payload["csv_path"] == "FILES.csv"
-    assert payload["guide_path"] == "AGENTS.md.d/FILES.md"
-    assert payload["tracked_file_count"] >= 10
+    markdown_path = REPO_ROOT / "FILES.md"
+    csv_path = REPO_ROOT / "FILES.csv"
+    original_markdown = markdown_path.read_text(encoding="utf-8")
+    original_csv = csv_path.read_text(encoding="utf-8")
+
+    try:
+        payload = json.loads(run_file_summary_sync(REPO_ROOT))
+        assert payload["markdown_path"] == "FILES.md"
+        assert payload["csv_path"] == "FILES.csv"
+        assert payload["guide_path"] == "AGENTS.md.d/FILES.md"
+        assert payload["tracked_file_count"] >= 10
+    finally:
+        markdown_path.write_text(original_markdown, encoding="utf-8")
+        csv_path.write_text(original_csv, encoding="utf-8")
 
 
 def test_run_exploratorium_translation_sync_reports_expected_fields() -> None:

@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-03-18-zzzzzzzzzzzzzz-node24-actions-refresh.md`
+- `2026-03-18-zzzzzzzzzzzzzzzz-file-summary-test-churn-fix.md`
 
 ## Usage
 
