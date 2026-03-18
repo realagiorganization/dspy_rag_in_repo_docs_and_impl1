@@ -62,7 +62,8 @@ docs/audit/2026-03-18-zzz-session-consolidation-on-origin-master.md,docs,markdow
 docs/audit/2026-03-18-zzzz-rust-sqlite-lookup.md,docs,markdown,105,5404,Repository audit note for 2026 03 18 zzzz rust sqlite lookup
 docs/audit/2026-03-18-zzzz-session-consolidation-master-ci-repair.md,docs,markdown,73,3270,Repository audit note for 2026 03 18 zzzz session consolidation master ci repair
 docs/audit/2026-03-18-zzzzzz-dspy-pipeline-and-live-azure-proof.md,docs,markdown,116,5992,Repository audit note for 2026 03 18 zzzzzz dspy pipeline and live azure proof
-docs/audit/README.md,docs,markdown,14,426,Audit index for dated repository verification notes
+docs/audit/2026-03-18-zzzzzzz-hushwheel-pdf-side-effect-fix.md,docs,markdown,76,3525,Repository audit note for 2026 03 18 zzzzzzz hushwheel pdf side effect fix
+docs/audit/README.md,docs,markdown,14,422,Audit index for dated repository verification notes
 documentation/azure-deployment.md,documentation,markdown,63,2603,Azure Deployment Notes
 documentation/hushwheel-fixture-rag-guide.md,documentation,markdown,138,5169,RAG Guide For The Hushwheel Fixture
 documentation/inspired/dspy-rag-tutorial.md,documentation,markdown,35,1474,DSPy Tutorial: Basic RAG
@@ -198,7 +199,7 @@ tests/test_dspy_training.py,tests,python,493,17531,Python module for test dspy t
 tests/test_exploratorium_translation.py,tests,python,62,2502,Python module for test exploratorium translation
 tests/test_file_summaries.py,tests,python,251,10179,Python module for test file summaries
 tests/test_hushwheel_fixture.py,tests,python,50,2030,Python module for test hushwheel fixture
-tests/test_hushwheel_program_surface.py,tests,python,81,2888,Python module for test hushwheel program surface
+tests/test_hushwheel_program_surface.py,tests,python,91,3179,Python module for test hushwheel program surface
 tests/test_mcp_branches.py,tests,python,31,1077,Python module for test mcp branches
 tests/test_notebook_runner.py,tests,python,84,3088,Python module for test notebook runner
 tests/test_population_samples.py,tests,python,76,3136,Python module for test population samples

@@ -44,12 +44,21 @@ def test_hushwheel_fixture_check_target_passes() -> None:
 
 
 def test_hushwheel_fixture_docs_target_builds_pdf() -> None:
-    run_fixture_make("docs")
-    assert (FIXTURE_ROOT / "docs" / "hushwheel-reference.pdf").exists()
-    run_fixture_make("clean")
+    pdf_path = FIXTURE_ROOT / "docs" / "hushwheel-reference.pdf"
+    original_pdf = pdf_path.read_bytes()
+
+    try:
+        run_fixture_make("docs")
+        assert pdf_path.exists()
+    finally:
+        pdf_path.write_bytes(original_pdf)
+        run_fixture_make("clean")
 
 
 def test_hushwheel_fixture_packaging_targets_stage_install_and_dist(tmp_path: Path) -> None:
+    pdf_path = FIXTURE_ROOT / "docs" / "hushwheel-reference.pdf"
+    original_pdf = pdf_path.read_bytes()
+
     try:
         run_fixture_make("dist")
 
@@ -77,4 +86,5 @@ def test_hushwheel_fixture_packaging_targets_stage_install_and_dist(tmp_path: Pa
         assert not (install_root / "usr/bin/hushwheel").exists()
         assert not (install_root / "usr/share/doc/hushwheel").exists()
     finally:
+        pdf_path.write_bytes(original_pdf)
         run_fixture_make("clean")

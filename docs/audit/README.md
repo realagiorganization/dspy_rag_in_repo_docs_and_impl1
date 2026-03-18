@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-03-18-zzzzzz-dspy-pipeline-and-live-azure-proof.md`
+- `2026-03-18-zzzzzzz-hushwheel-pdf-side-effect-fix.md`
 
 ## Usage
 
