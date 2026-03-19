@@ -1,0 +1,95 @@
+name: GitHub Pages
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "**/*.md"
+      - "**/*.MD"
+      - ".github/workflows/pages.yml"
+      - ".gitignore"
+      - "Makefile"
+      - "mkdocs.yml"
+      - "pyproject.toml"
+      - "src/repo_rag_lab/cli.py"
+      - "src/repo_rag_lab/pages_site.py"
+      - "src/repo_rag_lab/utilities.py"
+      - "src/repo_rag_lab/verification.py"
+      - "tests/test_cli_and_dspy.py"
+      - "tests/test_pages_site.py"
+      - "tests/test_project_surfaces.py"
+      - "tests/test_utilities.py"
+      - "tests/test_verification.py"
+  pull_request:
+    paths:
+      - "**/*.md"
+      - "**/*.MD"
+      - ".github/workflows/pages.yml"
+      - ".gitignore"
+      - "Makefile"
+      - "mkdocs.yml"
+      - "pyproject.toml"
+      - "src/repo_rag_lab/cli.py"
+      - "src/repo_rag_lab/pages_site.py"
+      - "src/repo_rag_lab/utilities.py"
+      - "src/repo_rag_lab/verification.py"
+      - "tests/test_cli_and_dspy.py"
+      - "tests/test_pages_site.py"
+      - "tests/test_project_surfaces.py"
+      - "tests/test_utilities.py"
+      - "tests/test_verification.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build-pages-site:
+    name: Build GitHub Pages Site
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: ".python-version"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Build Markdown catalog site
+        run: make pages-build
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  deploy-pages-site:
+    name: Deploy GitHub Pages Site
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: build-pages-site
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

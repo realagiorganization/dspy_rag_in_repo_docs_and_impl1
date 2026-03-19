@@ -105,6 +105,7 @@ def test_pyproject_exposes_uv_build_and_console_script() -> None:
 def test_publication_surface_files_exist_and_are_linked() -> None:
     publication_dir = REPO_ROOT / "publication"
     exploratorium_dir = publication_dir / "exploratorium_translation"
+    assert (REPO_ROOT / "mkdocs.yml").exists()
     assert (publication_dir / "README.md").exists()
     assert (publication_dir / "Makefile").exists()
     assert (publication_dir / "references.bib").exists()
@@ -134,6 +135,7 @@ def test_publication_surface_files_exist_and_are_linked() -> None:
     assert "make exploratorium-sync" in readme
     assert "make dspy-artifacts" in readme
     assert "make github-pr-gates" in readme
+    assert "make pages-build" in readme
 
     todo_text = (REPO_ROOT / "TODO.MD").read_text(encoding="utf-8")
     assert "| 🎯 | 🧭 Area | 📌 TODO | 🔗 Primary Surfaces | ✅ Done When |" in todo_text
@@ -227,6 +229,8 @@ def test_retrieval_regression_gate_is_wired_into_quality_pre_push_and_ci() -> No
     assert "COVERAGE_FILE=$(COVERAGE_FILE_PATH) $(UV) run coverage report --fail-under=85" in (
         makefile_text
     )
+    assert "pages-build: pages-sync" in makefile_text
+    assert "$(UV) run mkdocs build --strict" in makefile_text
 
     pre_commit = yaml.safe_load((REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
     hooks = pre_commit["repos"][0]["hooks"]
@@ -319,6 +323,52 @@ def test_hushwheel_quality_workflow_always_emits_pr_check_and_uploads_reports() 
         and step.get("if") == "steps.scope.outputs.relevant != 'true'"
         for step in steps
     )
+
+
+def test_mkdocs_material_site_config_targets_generated_pages_docs() -> None:
+    config = yaml.safe_load((REPO_ROOT / "mkdocs.yml").read_text(encoding="utf-8"))
+
+    assert config["site_name"] == "Repository RAG Lab"
+    assert config["docs_dir"] == "artifacts/pages_docs"
+    assert config["site_dir"] == "site"
+    assert config["theme"]["name"] == "material"
+    assert "navigation.instant" in config["theme"]["features"]
+    assert config["plugins"] == ["search"]
+    assert {"Home": "index.md"} in config["nav"]
+    assert {"Catalog": "catalog.md"} in config["nav"]
+
+
+def test_pages_workflow_builds_and_deploys_markdown_catalog() -> None:
+    workflow_path = REPO_ROOT / ".github" / "workflows" / "pages.yml"
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    workflow_on = workflow.get("on", workflow.get(True))
+    assert workflow["name"] == "GitHub Pages"
+    assert workflow_on is not None
+    assert "**/*.md" in workflow_on["push"]["paths"]
+    assert "**/*.MD" in workflow_on["pull_request"]["paths"]
+    assert workflow_on["workflow_dispatch"] is None
+
+    build_job = workflow["jobs"]["build-pages-site"]
+    build_steps = build_job["steps"]
+    assert any(step.get("uses") == "actions/checkout@v6" for step in build_steps)
+    assert any(step.get("uses") == "actions/setup-python@v6" for step in build_steps)
+    assert any(step.get("uses") == "astral-sh/setup-uv@v7" for step in build_steps)
+    assert any(step.get("uses") == "actions/configure-pages@v5" for step in build_steps)
+    assert any(
+        step.get("name") == "Build Markdown catalog site" and step.get("run") == "make pages-build"
+        for step in build_steps
+    )
+    assert any(
+        step.get("uses") == "actions/upload-pages-artifact@v4"
+        and step.get("with", {}).get("path") == "site"
+        for step in build_steps
+    )
+
+    deploy_job = workflow["jobs"]["deploy-pages-site"]
+    assert deploy_job["if"] == "github.event_name == 'push' && github.ref == 'refs/heads/master'"
+    assert deploy_job["needs"] == "build-pages-site"
+    assert deploy_job["environment"]["name"] == "github-pages"
+    assert deploy_job["steps"][0]["uses"] == "actions/deploy-pages@v4"
 
 
 def test_repo_local_todo_skill_is_recorded() -> None:

@@ -27,6 +27,7 @@ from .utilities import (
     run_file_summary_sync,
     run_github_pr_gate_sync,
     run_notebook_report,
+    run_pages_site_sync,
     run_retrieval_evaluation,
     run_smoke_test,
     run_surface_verification,
@@ -122,6 +123,12 @@ def build_parser() -> argparse.ArgumentParser:
     github_pr_gates_parser.add_argument("--branch", default="master")
     github_pr_gates_parser.add_argument("--repo")
     github_pr_gates_parser.add_argument("--apply", action="store_true")
+
+    pages_site_parser = subparsers.add_parser("sync-pages-site")
+    pages_site_parser.add_argument("--root", default=".")
+    pages_site_parser.add_argument("--output-dir", default="artifacts/pages_docs")
+    pages_site_parser.add_argument("--branch", default="master")
+    pages_site_parser.add_argument("--repo-url")
 
     smoke_parser = subparsers.add_parser("smoke-test")
     smoke_parser.add_argument("--root", default=".")
@@ -247,6 +254,17 @@ def main() -> int:
                 branch=args.branch,
                 repo=args.repo,
                 apply=args.apply,
+            )
+        )
+        return 0
+
+    if args.command == "sync-pages-site":
+        print(
+            run_pages_site_sync(
+                root,
+                output_dir=Path(args.output_dir),
+                branch=args.branch,
+                repo_url=args.repo_url,
             )
         )
         return 0

@@ -28,6 +28,8 @@ REQUIRED_MAKE_TARGETS = {
     "exploratorium-sync",
     "exploratorium-build",
     "github-pr-gates",
+    "pages-sync",
+    "pages-build",
     "smoke-test",
     "azure-openai-probe",
     "azure-inference-probe",

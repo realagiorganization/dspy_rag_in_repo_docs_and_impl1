@@ -54,6 +54,7 @@ the Rust wrapper.
 - Read the bilingual exploratorium: [publication/exploratorium_translation/exploratorium_translation.pdf](publication/exploratorium_translation/exploratorium_translation.pdf)
 - Review the tracked file inventory: [FILES.md](FILES.md)
 - Review the synced TODO table: [TODO.MD](TODO.MD)
+- Browse the Pages-ready Markdown catalog locally: `make pages-build` then open `site/index.html`
 - Refresh the file inventory: `make files-sync`
 - Refresh the backlog tables: `make todo-sync`
 - Refresh the bilingual exploratorium inventory: `make exploratorium-sync`
@@ -70,6 +71,7 @@ the Rust wrapper.
 | Rust lookup | `make rust-lookup QUERY="dspy training"` | Search tracked file paths and contents locally before `make ask-dspy`. |
 | Backlog sync | `make todo-sync` | Regenerate the linkified TODO table in both Markdown and the publication article. |
 | Exploratorium sync | `make exploratorium-sync` | Regenerate the bilingual file-link-fetch-state publication inventory. |
+| Pages catalog build | `make pages-build` | Generate and build the MkDocs Material GitHub Pages catalog of tracked Markdown files. |
 | Ask a repo question | `make ask QUESTION="..."` | Run the lookup-first repository-grounded workflow with explicit `Question:`, `Answer:`, and `Evidence:` output, narrowing to native SQLite file hits before falling back to the broader baseline retriever. |
 | DSPy ask | `make ask-dspy QUESTION="..."` | Run the explicit DSPy runtime path with LM config from `DSPY_*`, Azure, or OpenAI environment variables, automatically reusing the latest compiled program when one exists after the same lookup-first narrowing pass; pair it with `make rust-lookup` when you want to inspect those candidate files directly. |
 | Live Azure ask | `make ask-live QUESTION="..."` | Retrieve repository evidence locally, then synthesize a live answer through Azure OpenAI or Azure AI Inference. |
@@ -105,6 +107,7 @@ the Rust wrapper.
 | `samples/population/` | Starter corpus-planning data for staged repository ingestion. |
 | `documentation/` | Supporting notes for Azure deployment and inspired external implementations. |
 | `publication/` | LaTeX article source, bibliography, committed PDFs, clipped banner image, bilingual exploratorium subdocument, and local build helpers. |
+| `mkdocs.yml` | MkDocs Material configuration for the public GitHub Pages Markdown catalog. |
 | `todo-backlog.yaml` | Single source of truth for the linkified backlog table rendered into `TODO.MD` and the publication article. |
 | `samples/logs/` | Post-push GitHub Actions inspection logs captured with `gh`. |
 | `artifacts/` | Generated DSPy program artifacts, Azure manifests, tuning metadata, notebook run logs, and notebook batch-run reports. |

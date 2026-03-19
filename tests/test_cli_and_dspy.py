@@ -255,6 +255,18 @@ def test_cli_main_other_commands(
             f'"root": "{root}"}}'
         )
 
+    def fake_pages_site_sync(
+        root: Path,
+        *,
+        output_dir: Path,
+        branch: str = "master",
+        repo_url: str | None = None,
+    ) -> str:
+        return (
+            '{"output_dir": "artifacts/pages_docs", "page_count": 12, '
+            f'"branch": "{branch}", "repo_url": "{repo_url}", "root": "{root}"}}'
+        )
+
     monkeypatch.setattr(cli, "run_surface_verification", fake_surface_verification)
     monkeypatch.setattr(cli, "run_file_summary_sync", fake_file_summary_sync)
     monkeypatch.setattr(cli, "run_notebook_report", fake_notebook_report)
@@ -262,6 +274,7 @@ def test_cli_main_other_commands(
     monkeypatch.setattr(cli, "run_github_pr_gate_sync", fake_github_pr_gate_sync)
     monkeypatch.setattr(cli, "run_retrieval_evaluation", fake_retrieval_evaluation)
     monkeypatch.setattr(cli, "run_dspy_artifacts", fake_dspy_artifacts)
+    monkeypatch.setattr(cli, "run_pages_site_sync", fake_pages_site_sync)
     monkeypatch.setattr(cli, "run_todo_backlog_sync", fake_todo_sync)
     monkeypatch.setattr(cli, "run_azure_openai_probe", fake_azure_openai_probe)
     monkeypatch.setattr(cli, "run_azure_inference_probe", fake_azure_inference_probe)
@@ -305,6 +318,17 @@ def test_cli_main_other_commands(
                 "branch": "master",
                 "repo": "realagiorganization/dspy_rag_in_repo_docs_and_impl1",
                 "apply": True,
+            },
+        )(),
+        type(
+            "Args",
+            (),
+            {
+                "command": "sync-pages-site",
+                "root": str(tmp_path),
+                "output_dir": "artifacts/pages_docs",
+                "branch": "master",
+                "repo_url": "https://github.com/example/demo",
             },
         )(),
         type("Args", (), {"command": "smoke-test", "root": str(tmp_path)})(),
@@ -356,6 +380,7 @@ def test_cli_main_other_commands(
     assert "FILES.md" in output
     assert '"latest_run_name": "sample"' in output
     assert '"mode": "apply"' in output
+    assert '"page_count": 12' in output
     assert '"default_top_k": 4' in output
     assert "todo-backlog.yaml" in output
     assert "exploratorium_translation.pdf" in output

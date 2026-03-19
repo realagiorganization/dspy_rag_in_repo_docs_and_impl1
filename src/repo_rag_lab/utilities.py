@@ -21,6 +21,7 @@ from .file_summaries import sync_file_summaries
 from .github_pr_gates import sync_github_pr_gates
 from .mcp import discover_mcp_servers
 from .notebook_runner import run_notebooks
+from .pages_site import sync_pages_site
 from .todo_backlog import sync_todo_backlog
 from .training_samples import load_training_examples
 from .verification import verify_repository_surfaces
@@ -80,6 +81,10 @@ def utility_summary(root: Path) -> str:
         (
             "- make github-pr-gates / uv run repo-rag sync-github-pr-gates --apply: "
             "sync the required GitHub pull-request status checks through gh branch protection"
+        ),
+        (
+            "- make pages-build / uv run repo-rag sync-pages-site: "
+            "generate the MkDocs GitHub Pages catalog of tracked Markdown files"
         ),
         (
             "- make retrieval-eval / uv run repo-rag retrieval-eval: "
@@ -229,6 +234,21 @@ def run_github_pr_gate_sync(
 
     return json.dumps(
         sync_github_pr_gates(root, branch=branch, repo=repo, apply=apply),
+        indent=2,
+    )
+
+
+def run_pages_site_sync(
+    root: Path,
+    *,
+    output_dir: Path,
+    branch: str = "master",
+    repo_url: str | None = None,
+) -> str:
+    """Serialize the GitHub Pages site sync result as JSON."""
+
+    return json.dumps(
+        sync_pages_site(root, output_dir=output_dir, branch=branch, repo_url=repo_url),
         indent=2,
     )
 

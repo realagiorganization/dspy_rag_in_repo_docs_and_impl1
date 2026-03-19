@@ -13,6 +13,7 @@ from repo_rag_lab.utilities import (
     run_file_summary_sync,
     run_github_pr_gate_sync,
     run_notebook_report,
+    run_pages_site_sync,
     run_retrieval_evaluation,
     run_smoke_test,
     run_surface_verification,
@@ -21,6 +22,41 @@ from repo_rag_lab.utilities import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _write_demo_repo_for_exploratorium(tmp_path: Path) -> None:
+    (tmp_path / "documentation").mkdir(parents=True)
+    (tmp_path / "publication").mkdir(parents=True)
+    (tmp_path / "src" / "repo_rag_lab").mkdir(parents=True)
+
+    (tmp_path / "README.md").write_text(
+        "# Demo Repo\n\nSee https://github.com/example/project and https://astral.sh/.\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "Makefile").write_text(".PHONY: setup\nsetup:\n\t@true\n", encoding="utf-8")
+    (tmp_path / "documentation" / "azure-deployment.md").write_text(
+        "# Azure Deployment\n\nCompanion note.\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "documentation" / "mcp-discovery.md").write_text(
+        "# MCP Discovery\n\nCompanion note.\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "src" / "repo_rag_lab" / "example.py").write_text(
+        '"""Example module."""\n\nVALUE = 1\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "publication" / "references.bib").write_text(
+        "@misc{mcp2024,\n"
+        "  title = {Model Context Protocol},\n"
+        "  howpublished = {\\url{https://modelcontextprotocol.io/}}\n"
+        "}\n\n"
+        "@misc{azureinference2025,\n"
+        "  title = {Azure AI Inference Documentation},\n"
+        "  howpublished = {\\url{https://learn.microsoft.com/azure/ai-services/}}\n"
+        "}\n",
+        encoding="utf-8",
+    )
 
 
 def test_utility_summary_mentions_core_surfaces() -> None:
@@ -38,6 +74,7 @@ def test_utility_summary_mentions_core_surfaces() -> None:
     assert "rust-lookup" in summary
     assert "exploratorium-sync" in summary
     assert "github-pr-gates" in summary
+    assert "pages-build" in summary
     assert "retrieval-eval" in summary
     assert "todo-sync" in summary
     assert "smoke-test" in summary
@@ -157,8 +194,10 @@ def test_run_file_summary_sync_reports_expected_fields() -> None:
         csv_path.write_text(original_csv, encoding="utf-8")
 
 
-def test_run_exploratorium_translation_sync_reports_expected_fields() -> None:
-    payload = json.loads(run_exploratorium_translation_sync(REPO_ROOT))
+def test_run_exploratorium_translation_sync_reports_expected_fields(tmp_path: Path) -> None:
+    _write_demo_repo_for_exploratorium(tmp_path)
+
+    payload = json.loads(run_exploratorium_translation_sync(tmp_path))
     assert (
         payload["tex_path"]
         == "publication/exploratorium_translation/generated/exploratorium-content.tex"
@@ -174,7 +213,7 @@ def test_run_exploratorium_translation_sync_reports_expected_fields() -> None:
     assert (
         payload["pdf_path"] == "publication/exploratorium_translation/exploratorium_translation.pdf"
     )
-    assert payload["summarized_file_count"] >= 10
+    assert payload["summarized_file_count"] >= 5
 
 
 def test_run_github_pr_gate_sync_returns_machine_readable_summary(
@@ -218,6 +257,39 @@ def test_run_github_pr_gate_sync_returns_machine_readable_summary(
         "Build Publication PDF",
         "Hushwheel Fixture Quality",
     ]
+
+
+def test_run_pages_site_sync_returns_machine_readable_summary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_sync_pages_site(
+        root: Path,
+        *,
+        output_dir: Path,
+        branch: str = "master",
+        repo_url: str | None = None,
+    ) -> dict[str, object]:
+        return {
+            "output_dir": str(output_dir),
+            "page_count": 12,
+            "branch": branch,
+            "repo_url": repo_url,
+            "root": str(root),
+        }
+
+    monkeypatch.setattr("repo_rag_lab.utilities.sync_pages_site", fake_sync_pages_site)
+    payload = json.loads(
+        run_pages_site_sync(
+            REPO_ROOT,
+            output_dir=Path("artifacts/pages_docs"),
+            branch="master",
+            repo_url="https://github.com/example/demo",
+        )
+    )
+    assert payload["output_dir"] == "artifacts/pages_docs"
+    assert payload["page_count"] == 12
+    assert payload["branch"] == "master"
+    assert payload["repo_url"] == "https://github.com/example/demo"
 
 
 def test_run_notebook_report_returns_machine_readable_summary(

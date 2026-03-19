@@ -1,0 +1,36 @@
+site_name: Repository RAG Lab
+site_description: Public GitHub Pages catalog for the repository's tracked Markdown surfaces.
+site_url: https://realagiorganization.github.io/dspy_rag_in_repo_docs_and_impl1/
+repo_url: https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1
+repo_name: realagiorganization/dspy_rag_in_repo_docs_and_impl1
+edit_uri: blob/master/
+docs_dir: artifacts/pages_docs
+site_dir: site
+use_directory_urls: false
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Catalog: catalog.md
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences

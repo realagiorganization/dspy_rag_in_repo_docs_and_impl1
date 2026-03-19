@@ -26,6 +26,8 @@ def test_validate_makefile_flags_missing_targets(tmp_path: Path) -> None:
     assert any(issue.message == "Missing target `gh-watch`." for issue in issues)
     assert any(issue.message == "Missing target `gh-failed-logs`." for issue in issues)
     assert any(issue.message == "Missing target `hooks-install`." for issue in issues)
+    assert any(issue.message == "Missing target `pages-build`." for issue in issues)
+    assert any(issue.message == "Missing target `pages-sync`." for issue in issues)
     assert any(issue.message == "Missing target `retrieval-eval`." for issue in issues)
     assert any(issue.message == "Missing target `todo-sync`." for issue in issues)
     assert any(issue.message == "Missing target `paper-build`." for issue in issues)

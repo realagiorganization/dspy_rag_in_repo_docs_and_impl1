@@ -17,3 +17,4 @@ artifacts/
 coverage.xml
 htmlcov/
 node_modules/
+site/
