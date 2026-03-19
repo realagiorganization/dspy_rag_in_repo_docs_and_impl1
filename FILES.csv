@@ -155,6 +155,7 @@ samples/logs/20260318T094120Z-gh-runs-dspy-live-proof-and-rust-wrapper-repair.md
 samples/logs/20260318T094347Z-gh-runs-hushwheel-hardening-followup.md,samples,markdown,72,2739,GitHub Runs Log
 samples/logs/20260318T101229Z-gh-runs-hushwheel-audit-refresh.md,samples,markdown,37,1707,GitHub Actions Summary
 samples/logs/20260318T101939Z-gh-runs-land-each-unlanded.md,samples,markdown,28,1556,GitHub Actions Run Log
+samples/logs/20260318T123402Z-gh-runs-fix-file-summary-test-churn-for-1.md,samples,markdown,29,1061,GitHub Actions Run Log
 samples/logs/20260318T124437Z-gh-runs-reconcile-stale-dspy-backlog-for-1.md,samples,markdown,21,1060,GitHub Actions Log
 samples/logs/20260318T125547Z-gh-runs-wire-lookup-first-ask-for-1.md,samples,markdown,22,1058,GitHub Actions Log
 samples/logs/20260318T125829Z-gh-runs-restore-retrieval-gate-after-rebase.md,samples,markdown,36,1585,GitHub Actions Run Log
