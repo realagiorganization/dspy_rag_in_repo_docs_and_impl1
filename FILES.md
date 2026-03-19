@@ -80,6 +80,7 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-03-18-zzzzzzzzzzzzz-land-remaining-unlanded-work.md` | docs | markdown | 78 | 2908 | Repository audit note for 2026 03 18 zzzzzzzzzzzzz land remaining unlanded work |
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzz-node24-actions-refresh.md` | docs | markdown | 91 | 2989 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzz node24 actions refresh |
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzz-rebase-hushwheel-quality-over-master.md` | docs | markdown | 47 | 1889 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzz rebase hushwheel quality over master |
+| `docs/audit/2026-03-18-zzzzzzzzzzzzzzzz-dspy-backlog-reconciliation.md` | docs | markdown | 75 | 2956 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzz dspy backlog reconciliation |
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzzzz-file-summary-test-churn-fix.md` | docs | markdown | 85 | 2929 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzz file summary test churn fix |
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzzzz-publication-cache-node24-followup.md` | docs | markdown | 89 | 2900 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzz publication cache node24 followup |
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzzzz-retrieval-gate-restored-after-rebase.md` | docs | markdown | 94 | 3788 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzz retrieval gate restored after rebase |
