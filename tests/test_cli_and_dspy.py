@@ -234,6 +234,13 @@ def test_cli_main_other_commands(
             f'exploratorium_translation.pdf", "root": "{root}"}}'
         )
 
+    def fake_github_pr_gate_sync(root: Path, **_: object) -> str:
+        return (
+            '{"repo": "realagiorganization/dspy_rag_in_repo_docs_and_impl1", '
+            '"branch": "master", "mode": "apply", '
+            f'"root": "{root}"}}'
+        )
+
     def fake_retrieval_evaluation(root: Path, **_: object) -> str:
         return (
             '{"training_path": "samples/training/repository_training_examples.yaml", '
@@ -252,6 +259,7 @@ def test_cli_main_other_commands(
     monkeypatch.setattr(cli, "run_file_summary_sync", fake_file_summary_sync)
     monkeypatch.setattr(cli, "run_notebook_report", fake_notebook_report)
     monkeypatch.setattr(cli, "run_exploratorium_translation_sync", fake_exploratorium_sync)
+    monkeypatch.setattr(cli, "run_github_pr_gate_sync", fake_github_pr_gate_sync)
     monkeypatch.setattr(cli, "run_retrieval_evaluation", fake_retrieval_evaluation)
     monkeypatch.setattr(cli, "run_dspy_artifacts", fake_dspy_artifacts)
     monkeypatch.setattr(cli, "run_todo_backlog_sync", fake_todo_sync)
@@ -288,6 +296,17 @@ def test_cli_main_other_commands(
         )(),
         type("Args", (), {"command": "sync-todo-backlog", "root": str(tmp_path)})(),
         type("Args", (), {"command": "sync-exploratorium-translation", "root": str(tmp_path)})(),
+        type(
+            "Args",
+            (),
+            {
+                "command": "sync-github-pr-gates",
+                "root": str(tmp_path),
+                "branch": "master",
+                "repo": "realagiorganization/dspy_rag_in_repo_docs_and_impl1",
+                "apply": True,
+            },
+        )(),
         type("Args", (), {"command": "smoke-test", "root": str(tmp_path)})(),
         type(
             "Args",
@@ -336,6 +355,7 @@ def test_cli_main_other_commands(
     assert "INFERENCE_OK" in output
     assert "FILES.md" in output
     assert '"latest_run_name": "sample"' in output
+    assert '"mode": "apply"' in output
     assert '"default_top_k": 4' in output
     assert "todo-backlog.yaml" in output
     assert "exploratorium_translation.pdf" in output

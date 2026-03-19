@@ -18,19 +18,6 @@ on:
       - "uv.lock"
       - "README.md"
   pull_request:
-    paths:
-      - ".github/workflows/publication-pdf.yml"
-      - "publication/**"
-      - "todo-backlog.yaml"
-      - "src/repo_rag_lab/exploratorium_translation.py"
-      - "src/repo_rag_lab/todo_backlog.py"
-      - "src/repo_rag_lab/cli.py"
-      - "src/repo_rag_lab/utilities.py"
-      - "AGENTS.md"
-      - "Makefile"
-      - "pyproject.toml"
-      - "uv.lock"
-      - "README.md"
   workflow_dispatch:
 
 jobs:
@@ -38,15 +25,37 @@ jobs:
     name: Build Publication PDF
     runs-on: ubuntu-latest
     steps:
+      - name: Detect publication gate scope
+        id: scope
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            relevant:
+              - ".github/workflows/publication-pdf.yml"
+              - "publication/**"
+              - "todo-backlog.yaml"
+              - "src/repo_rag_lab/exploratorium_translation.py"
+              - "src/repo_rag_lab/todo_backlog.py"
+              - "src/repo_rag_lab/cli.py"
+              - "src/repo_rag_lab/utilities.py"
+              - "AGENTS.md"
+              - "Makefile"
+              - "pyproject.toml"
+              - "uv.lock"
+              - "README.md"
+
       - name: Checkout
+        if: steps.scope.outputs.relevant == 'true'
         uses: actions/checkout@v6
 
       - name: Set up Python
+        if: steps.scope.outputs.relevant == 'true'
         uses: actions/setup-python@v6
         with:
           python-version-file: .python-version
 
       - name: Set up uv
+        if: steps.scope.outputs.relevant == 'true'
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
@@ -56,12 +65,14 @@ jobs:
             uv.lock
 
       - name: Sync publication inventories
+        if: steps.scope.outputs.relevant == 'true'
         run: |
           uv sync --extra azure
           uv run repo-rag sync-todo-backlog --root .
           uv run repo-rag sync-exploratorium-translation --root .
 
       - name: Restore LaTeX auxiliary cache
+        if: steps.scope.outputs.relevant == 'true'
         uses: actions/cache@v5
         with:
           path: |
@@ -80,6 +91,7 @@ jobs:
             latex-aux-${{ runner.os }}-
 
       - name: Compile article PDF
+        if: steps.scope.outputs.relevant == 'true'
         uses: xu-cheng/latex-action@v4
         with:
           root_file: repository-rag-lab-article.tex
@@ -87,6 +99,7 @@ jobs:
           args: -pdf -file-line-error -halt-on-error -interaction=nonstopmode
 
       - name: Compile exploratorium translation PDF
+        if: steps.scope.outputs.relevant == 'true'
         uses: xu-cheng/latex-action@v4
         with:
           root_file: exploratorium_translation.tex
@@ -95,6 +108,7 @@ jobs:
           args: -pdf -file-line-error -halt-on-error -interaction=nonstopmode
 
       - name: Upload publication PDFs
+        if: steps.scope.outputs.relevant == 'true'
         id: upload_publication_pdf
         uses: actions/upload-artifact@v6
         with:
@@ -103,6 +117,10 @@ jobs:
             publication/repository-rag-lab-article.pdf
             publication/exploratorium_translation/exploratorium_translation.pdf
           if-no-files-found: error
+
+      - name: Skip publication gate when no relevant files changed
+        if: steps.scope.outputs.relevant != 'true'
+        run: echo "No publication-sensitive paths changed; marking the PR gate as satisfied."
 
       - name: Notify Discord about publication PDF
         if: success() && github.event_name != 'pull_request' && env.DISCORD_WEBHOOK != ''

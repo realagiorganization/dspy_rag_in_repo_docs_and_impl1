@@ -31,13 +31,15 @@ RETRIEVAL_MIN_SOURCE_RECALL ?= 1.0
 PYTEST_COV_ARGS ?= --cov=src/repo_rag_lab --cov-report=term-missing --cov-report=xml
 GH_RUN_LIMIT ?= 10
 RUN_ID ?=
+GITHUB_PR_GATES_BRANCH ?= master
+GITHUB_PR_GATES_REPO ?=
 NOTEBOOK_TIMEOUT ?= 600
 REPO_TMPDIR ?= $(HOME)/.cache/repo-rag-lab-tmp
 PYTEST_CACHE_DIR ?= $(HOME)/.cache/repo-rag-lab-pytest
 COVERAGE_DIR ?= $(HOME)/.cache/repo-rag-lab-coverage
 COVERAGE_FILE_PATH ?= $(COVERAGE_DIR)/.coverage
 
-.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask ask-dspy ask-live dspy-train dspy-artifacts retrieval-eval discover-mcp utility-summary files-sync todo-sync exploratorium-sync exploratorium-build smoke-test azure-openai-probe azure-inference-probe verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook notebook-report bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run rust-lookup-index rust-lookup azure-manifest fmt build publish
+.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask ask-dspy ask-live dspy-train dspy-artifacts retrieval-eval discover-mcp utility-summary files-sync todo-sync exploratorium-sync exploratorium-build github-pr-gates smoke-test azure-openai-probe azure-inference-probe verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook notebook-report bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run rust-lookup-index rust-lookup azure-manifest fmt build publish
 
 setup:
 	$(UV) sync --extra azure
@@ -118,6 +120,10 @@ exploratorium-sync: sync
 
 exploratorium-build: exploratorium-sync
 	$(MAKE) -C publication/exploratorium_translation build
+
+github-pr-gates: sync
+	$(UV) run repo-rag sync-github-pr-gates --root . --branch "$(GITHUB_PR_GATES_BRANCH)" --apply \
+		$(if $(strip $(GITHUB_PR_GATES_REPO)),--repo "$(GITHUB_PR_GATES_REPO)",)
 
 smoke-test: sync
 	$(UV) run repo-rag smoke-test

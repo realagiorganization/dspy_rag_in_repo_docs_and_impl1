@@ -85,6 +85,7 @@ the Rust wrapper.
 | GitHub run list | `make gh-runs` | List recent GitHub Actions runs through `gh`. |
 | GitHub run watch | `make gh-watch` | Watch the latest or selected GitHub Actions run until completion. |
 | GitHub failed logs | `make gh-failed-logs` | Print failed job logs for the latest or selected run when CI breaks. |
+| PR gate sync | `make github-pr-gates` | Apply the required GitHub status checks for `master` pull request merges through `gh`. |
 | Publication PDF | `make paper-build` | Build the LaTeX article PDF and clipped banner image. |
 | Exploratorium PDF | `make exploratorium-build` | Build the bilingual exploratorium translation PDF. |
 | Notebook research | `make notebook` | Open the main notebook playbook in JupyterLab. |

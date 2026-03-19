@@ -11,6 +11,7 @@ from repo_rag_lab.utilities import (
     run_dspy_artifacts,
     run_exploratorium_translation_sync,
     run_file_summary_sync,
+    run_github_pr_gate_sync,
     run_notebook_report,
     run_retrieval_evaluation,
     run_smoke_test,
@@ -36,6 +37,7 @@ def test_utility_summary_mentions_core_surfaces() -> None:
     assert "rust-lookup-index" in summary
     assert "rust-lookup" in summary
     assert "exploratorium-sync" in summary
+    assert "github-pr-gates" in summary
     assert "retrieval-eval" in summary
     assert "todo-sync" in summary
     assert "smoke-test" in summary
@@ -173,6 +175,49 @@ def test_run_exploratorium_translation_sync_reports_expected_fields() -> None:
         payload["pdf_path"] == "publication/exploratorium_translation/exploratorium_translation.pdf"
     )
     assert payload["summarized_file_count"] >= 10
+
+
+def test_run_github_pr_gate_sync_returns_machine_readable_summary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_sync_github_pr_gates(
+        root: Path,
+        *,
+        branch: str = "master",
+        repo: str | None = None,
+        apply: bool = False,
+    ) -> dict[str, object]:
+        return {
+            "repo": repo or "realagiorganization/dspy_rag_in_repo_docs_and_impl1",
+            "branch": branch,
+            "mode": "apply" if apply else "dry-run",
+            "required_checks": [
+                "Python Quality, Tests, And Build",
+                "Rust Wrapper",
+                "Build Publication PDF",
+                "Hushwheel Fixture Quality",
+            ],
+            "root": str(root),
+        }
+
+    monkeypatch.setattr("repo_rag_lab.utilities.sync_github_pr_gates", fake_sync_github_pr_gates)
+    payload = json.loads(
+        run_github_pr_gate_sync(
+            REPO_ROOT,
+            branch="master",
+            repo="realagiorganization/dspy_rag_in_repo_docs_and_impl1",
+            apply=True,
+        )
+    )
+    assert payload["repo"] == "realagiorganization/dspy_rag_in_repo_docs_and_impl1"
+    assert payload["branch"] == "master"
+    assert payload["mode"] == "apply"
+    assert payload["required_checks"] == [
+        "Python Quality, Tests, And Build",
+        "Rust Wrapper",
+        "Build Publication PDF",
+        "Hushwheel Fixture Quality",
+    ]
 
 
 def test_run_notebook_report_returns_machine_readable_summary(

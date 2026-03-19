@@ -27,6 +27,7 @@ REQUIRED_MAKE_TARGETS = {
     "todo-sync",
     "exploratorium-sync",
     "exploratorium-build",
+    "github-pr-gates",
     "smoke-test",
     "azure-openai-probe",
     "azure-inference-probe",

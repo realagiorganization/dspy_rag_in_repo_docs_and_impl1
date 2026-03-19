@@ -25,6 +25,7 @@ from .utilities import (
     run_dspy_artifacts,
     run_exploratorium_translation_sync,
     run_file_summary_sync,
+    run_github_pr_gate_sync,
     run_notebook_report,
     run_retrieval_evaluation,
     run_smoke_test,
@@ -115,6 +116,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     exploratorium_parser = subparsers.add_parser("sync-exploratorium-translation")
     exploratorium_parser.add_argument("--root", default=".")
+
+    github_pr_gates_parser = subparsers.add_parser("sync-github-pr-gates")
+    github_pr_gates_parser.add_argument("--root", default=".")
+    github_pr_gates_parser.add_argument("--branch", default="master")
+    github_pr_gates_parser.add_argument("--repo")
+    github_pr_gates_parser.add_argument("--apply", action="store_true")
 
     smoke_parser = subparsers.add_parser("smoke-test")
     smoke_parser.add_argument("--root", default=".")
@@ -231,6 +238,17 @@ def main() -> int:
 
     if args.command == "sync-exploratorium-translation":
         print(run_exploratorium_translation_sync(root))
+        return 0
+
+    if args.command == "sync-github-pr-gates":
+        print(
+            run_github_pr_gate_sync(
+                root,
+                branch=args.branch,
+                repo=args.repo,
+                apply=args.apply,
+            )
+        )
         return 0
 
     if args.command == "smoke-test":

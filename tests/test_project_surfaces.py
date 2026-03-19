@@ -133,6 +133,7 @@ def test_publication_surface_files_exist_and_are_linked() -> None:
     assert "make todo-sync" in readme
     assert "make exploratorium-sync" in readme
     assert "make dspy-artifacts" in readme
+    assert "make github-pr-gates" in readme
 
     todo_text = (REPO_ROOT / "TODO.MD").read_text(encoding="utf-8")
     assert "| 🎯 | 🧭 Area | 📌 TODO | 🔗 Primary Surfaces | ✅ Done When |" in todo_text
@@ -157,16 +158,21 @@ def test_publication_workflow_builds_and_uploads_pdf() -> None:
     assert "todo-backlog.yaml" in workflow_on["push"]["paths"]
     assert "src/repo_rag_lab/todo_backlog.py" in workflow_on["push"]["paths"]
     assert "src/repo_rag_lab/exploratorium_translation.py" in workflow_on["push"]["paths"]
+    assert workflow_on["pull_request"] is None
 
     assert workflow["name"] == "Publication PDF"
     job = workflow["jobs"]["publication-pdf"]
     steps = job["steps"]
 
+    assert steps[0]["uses"] == "dorny/paths-filter@v3"
+    assert steps[0]["id"] == "scope"
+    assert "publication/**" in steps[0]["with"]["filters"]
     assert any(step.get("uses") == "actions/checkout@v6" for step in steps)
     assert any(step.get("uses") == "actions/setup-python@v6" for step in steps)
     assert any(step.get("uses") == "astral-sh/setup-uv@v7" for step in steps)
     assert any(
         step.get("name") == "Sync publication inventories"
+        and step.get("if") == "steps.scope.outputs.relevant == 'true'"
         and "repo-rag sync-todo-backlog" in step.get("run", "")
         and "repo-rag sync-exploratorium-translation" in step.get("run", "")
         for step in steps
@@ -203,6 +209,11 @@ def test_publication_workflow_builds_and_uploads_pdf() -> None:
         and "publication/repository-rag-lab-article.pdf" in step.get("with", {}).get("url", "")
         for step in steps
     )
+    assert any(
+        step.get("name") == "Skip publication gate when no relevant files changed"
+        and step.get("if") == "steps.scope.outputs.relevant != 'true'"
+        for step in steps
+    )
 
 
 def test_retrieval_regression_gate_is_wired_into_quality_pre_push_and_ci() -> None:
@@ -237,22 +248,25 @@ def test_retrieval_regression_gate_is_wired_into_quality_pre_push_and_ci() -> No
     )
 
 
-def test_hushwheel_quality_workflow_is_path_filtered_and_uploads_reports() -> None:
+def test_hushwheel_quality_workflow_always_emits_pr_check_and_uploads_reports() -> None:
     workflow_path = REPO_ROOT / ".github" / "workflows" / "hushwheel-quality.yml"
     workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
     workflow_on = workflow.get("on", workflow.get(True))
     assert workflow_on is not None
-    for event_name in ("push", "pull_request"):
-        assert ".github/workflows/hushwheel-quality.yml" in workflow_on[event_name]["paths"]
-        assert "tests/fixtures/hushwheel_lexiconarium/**" in workflow_on[event_name]["paths"]
-        assert "tests/test_hushwheel_program_surface.py" in workflow_on[event_name]["paths"]
-        assert "tests/test_hushwheel_fixture.py" in workflow_on[event_name]["paths"]
-        assert "tests/test_project_surfaces.py" in workflow_on[event_name]["paths"]
+    assert workflow_on["pull_request"] is None
+    assert ".github/workflows/hushwheel-quality.yml" in workflow_on["push"]["paths"]
+    assert "tests/fixtures/hushwheel_lexiconarium/**" in workflow_on["push"]["paths"]
+    assert "tests/test_hushwheel_program_surface.py" in workflow_on["push"]["paths"]
+    assert "tests/test_hushwheel_fixture.py" in workflow_on["push"]["paths"]
+    assert "tests/test_project_surfaces.py" in workflow_on["push"]["paths"]
 
     assert workflow["name"] == "Hushwheel Quality"
     job = workflow["jobs"]["hushwheel-quality"]
     steps = job["steps"]
 
+    assert steps[0]["uses"] == "dorny/paths-filter@v3"
+    assert steps[0]["id"] == "scope"
+    assert "tests/fixtures/hushwheel_lexiconarium/**" in steps[0]["with"]["filters"]
     assert any(step.get("uses") == "actions/checkout@v6" for step in steps)
     assert any(
         step.get("uses") == "actions/setup-python@v6"
@@ -267,22 +281,26 @@ def test_hushwheel_quality_workflow_is_path_filtered_and_uploads_reports() -> No
     )
     assert any(
         step.get("name") == "Install native analyzers"
+        and step.get("if") == "steps.scope.outputs.relevant == 'true'"
         and "apt-get install -y cppcheck binutils" in step.get("run", "")
         for step in steps
     )
     assert any(
         step.get("name") == "Run hushwheel fixture quality suite"
+        and step.get("if") == "steps.scope.outputs.relevant == 'true'"
         and "make -C tests/fixtures/hushwheel_lexiconarium quality" in step.get("run", "")
         for step in steps
     )
     assert any(
         step.get("name") == "Snapshot hushwheel quality reports"
+        and step.get("if") == "steps.scope.outputs.relevant == 'true'"
         and "artifacts/hushwheel-quality-reports" in step.get("run", "")
         and "build/reports" in step.get("run", "")
         for step in steps
     )
     assert any(
         step.get("name") == "Run hushwheel repository surface tests"
+        and step.get("if") == "steps.scope.outputs.relevant == 'true'"
         and "tests/test_hushwheel_fixture.py" in step.get("run", "")
         and "tests/test_project_surfaces.py" in step.get("run", "")
         and "test_hushwheel_fixture_check_target_passes" in step.get("run", "")
@@ -290,9 +308,15 @@ def test_hushwheel_quality_workflow_is_path_filtered_and_uploads_reports() -> No
     )
     assert any(
         step.get("name") == "Upload hushwheel quality reports"
+        and step.get("if") == "always() && steps.scope.outputs.relevant == 'true'"
         and step.get("uses") == "actions/upload-artifact@v6"
         and step.get("with", {}).get("name") == "hushwheel-quality-reports"
         and "artifacts/hushwheel-quality-reports" in step.get("with", {}).get("path", "")
+        for step in steps
+    )
+    assert any(
+        step.get("name") == "Skip hushwheel gate when no relevant files changed"
+        and step.get("if") == "steps.scope.outputs.relevant != 'true'"
         for step in steps
     )
 
