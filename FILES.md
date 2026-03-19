@@ -156,6 +156,7 @@ This inventory is generated from the current Git index.
 | `samples/logs/20260318T083955Z-gh-runs-benchmark-broadening-2.md` | samples | markdown | 34 | 1217 | GitHub Actions Run Log |
 | `samples/logs/20260318T090625Z-gh-runs-hushwheel-quality-instrumentation.md` | samples | markdown | 29 | 1312 | GitHub Actions Run Log |
 | `samples/logs/20260318T091252Z-gh-runs-add-rust-lookup-and-retrieval-tag-summaries-for-.md` | samples | markdown | 53 | 2223 | GitHub Actions Run Log |
+| `samples/logs/20260318T093632Z-gh-runs-retrieval-regression-gate-great-carry-on.md` | samples | markdown | 34 | 1325 | GitHub Actions Run Log |
 | `samples/logs/20260318T094120Z-gh-runs-dspy-live-proof-and-rust-wrapper-repair.md` | samples | markdown | 45 | 1469 | GitHub Actions Summary |
 | `samples/logs/20260318T094347Z-gh-runs-hushwheel-hardening-followup.md` | samples | markdown | 72 | 2739 | GitHub Runs Log |
 | `samples/logs/20260318T101229Z-gh-runs-hushwheel-audit-refresh.md` | samples | markdown | 37 | 1707 | GitHub Actions Summary |
