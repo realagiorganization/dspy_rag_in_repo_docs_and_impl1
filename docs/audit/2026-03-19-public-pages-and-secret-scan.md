@@ -19,6 +19,8 @@ test coverage that keeps the related quality gates green.
   repository-wide `make quality` gate remains above the enforced `85%` threshold on the current tip
 - repaired the `Publication PDF` workflow after the first post-push run exposed that
   `dorny/paths-filter` was executing before checkout on push events
+- repaired the `Hushwheel Quality` workflow for the same push-event checkout ordering defect after
+  the second post-push run exposed it
 - refreshed the public-facing README to link the live Pages site explicitly
 
 ## Executed Commands
@@ -105,4 +107,6 @@ Absent or not exercised in this turn:
 - The first push in this turn showed a real remote defect in `Publication PDF`; the repair is to
   checkout the repository before running `dorny/paths-filter`, which preserves the skip-path logic
   while making push-event execution valid again.
+- The second push in this turn exposed the identical defect in `Hushwheel Quality`, so the final
+  state aligns both skip-gated workflows around the same checkout-before-filter pattern.
 - Post-push GitHub Actions evidence belongs in `samples/logs/` after the branch update completes.

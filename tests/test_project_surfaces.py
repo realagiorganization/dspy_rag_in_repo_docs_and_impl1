@@ -269,9 +269,10 @@ def test_hushwheel_quality_workflow_always_emits_pr_check_and_uploads_reports() 
     job = workflow["jobs"]["hushwheel-quality"]
     steps = job["steps"]
 
-    assert steps[0]["uses"] == "dorny/paths-filter@v3"
-    assert steps[0]["id"] == "scope"
-    assert "tests/fixtures/hushwheel_lexiconarium/**" in steps[0]["with"]["filters"]
+    assert steps[0]["uses"] == "actions/checkout@v6"
+    assert steps[1]["uses"] == "dorny/paths-filter@v3"
+    assert steps[1]["id"] == "scope"
+    assert "tests/fixtures/hushwheel_lexiconarium/**" in steps[1]["with"]["filters"]
     assert any(step.get("uses") == "actions/checkout@v6" for step in steps)
     assert any(
         step.get("uses") == "actions/setup-python@v6"

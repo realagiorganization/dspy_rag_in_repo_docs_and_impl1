@@ -18,6 +18,9 @@ jobs:
     name: Hushwheel Fixture Quality
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: Detect hushwheel gate scope
         id: scope
         uses: dorny/paths-filter@v3
@@ -29,10 +32,6 @@ jobs:
               - "tests/test_hushwheel_fixture.py"
               - "tests/test_hushwheel_program_surface.py"
               - "tests/test_project_surfaces.py"
-
-      - name: Checkout
-        if: steps.scope.outputs.relevant == 'true'
-        uses: actions/checkout@v6
 
       - name: Set up Python
         if: steps.scope.outputs.relevant == 'true'
