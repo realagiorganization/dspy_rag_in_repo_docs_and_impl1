@@ -94,5 +94,9 @@ Absent or not exercised in this turn:
   `publication/exploratorium_translation/generated/exploratorium-content.tex`.
 - The repository now escapes `#` in `_escape_url_for_latex`, and the regression test fixture
   includes a GitHub line-anchor URL so future guide links keep the publication build green.
-- Post-push GitHub Actions evidence for the repair push belongs in `samples/logs/` after that
-  follow-up commit is pushed.
+- The repair push for commit `6ec911d` completed with all relevant remote workflows green:
+  - `CI` run `23293282224`: passed
+  - `Publication PDF` run `23293282051`: passed
+  - `GitHub Pages` run `23293282050`: passed
+- The corresponding run log is
+  `samples/logs/20260319T114913Z-gh-runs-fix-publication-verification-for-whats-next-step.md`.
