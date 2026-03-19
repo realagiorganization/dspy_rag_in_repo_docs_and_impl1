@@ -177,6 +177,7 @@ This inventory is generated from the current Git index.
 | `samples/logs/20260318T144102Z-gh-runs-merge-into-master.md` | samples | markdown | 69 | 2285 | GitHub Actions Run Log |
 | `samples/logs/20260318T145935Z-gh-runs-consolidate-all-unconsoldiated-changes.md` | samples | markdown | 71 | 2401 | GitHub Actions Run Log |
 | `samples/logs/20260319T035301Z-gh-runs-public-pages-and-workflow-repairs.md` | samples | markdown | 37 | 1578 | GitHub Actions Log |
+| `samples/logs/20260319T071544Z-gh-runs-doncsoldiate-consolidation.md` | samples | markdown | 27 | 1137 | GitHub Actions Log |
 | `samples/logs/README.md` | samples | markdown | 11 | 331 | GitHub Run Logs |
 | `samples/population/hushwheel_fixture_population_candidates.yaml` | samples | yaml | 22 | 955 | - source: README.md |
 | `samples/population/repository_population_candidates.yaml` | samples | yaml | 16 | 684 | - source: README.md |
