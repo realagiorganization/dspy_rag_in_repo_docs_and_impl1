@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-03-19-node24-actions-opt-in.md`
+- `2026-03-19-simple-end-to-end-verification-guide.md`
 
 ## Usage
 

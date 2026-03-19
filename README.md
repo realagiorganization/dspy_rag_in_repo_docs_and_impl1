@@ -55,6 +55,7 @@ the Rust wrapper.
 - Browse the live Pages catalog: <https://realagiorganization.github.io/dspy_rag_in_repo_docs_and_impl1/>
 - Review the tracked file inventory: [FILES.md](FILES.md)
 - Review the synced TODO table: [TODO.MD](TODO.MD)
+- Follow the short local verification walkthrough: [documentation/simple-end-to-end-verification-guide.md](documentation/simple-end-to-end-verification-guide.md)
 - Browse the Pages-ready Markdown catalog locally: `make pages-build` then open `site/index.html`
 - Refresh the file inventory: `make files-sync`
 - Refresh the backlog tables: `make todo-sync`
@@ -119,7 +120,9 @@ the Rust wrapper.
 The repository treats documentation, notebooks, utilities, and packaging as one workflow. The
 main verification entrypoints are:
 
+- `make ask QUESTION="What does this repository research?"`
 - `make compile`
+- `make smoke-test`
 - `make lint`
 - `make typecheck`
 - `make verify-surfaces`

@@ -136,6 +136,7 @@ def test_publication_surface_files_exist_and_are_linked() -> None:
     assert "make dspy-artifacts" in readme
     assert "make github-pr-gates" in readme
     assert "make pages-build" in readme
+    assert "documentation/simple-end-to-end-verification-guide.md" in readme
 
     todo_text = (REPO_ROOT / "TODO.MD").read_text(encoding="utf-8")
     assert "| 🎯 | 🧭 Area | 📌 TODO | 🔗 Primary Surfaces | ✅ Done When |" in todo_text
