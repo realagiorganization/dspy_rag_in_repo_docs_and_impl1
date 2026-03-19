@@ -177,7 +177,7 @@ def _escape_latex(text: str) -> str:
 def _escape_url_for_latex(url: str) -> str:
     """Escape percent signs while leaving the URL otherwise intact."""
 
-    return url.replace("%", r"\%")
+    return url.replace("%", r"\%").replace("#", r"\#")
 
 
 def _repo_relative(path: Path, root: Path) -> str:

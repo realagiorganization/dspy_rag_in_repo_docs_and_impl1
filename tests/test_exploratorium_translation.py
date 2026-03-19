@@ -18,7 +18,9 @@ def _write_demo_repo(tmp_path: Path) -> None:
     (tmp_path / "src" / "repo_rag_lab").mkdir(parents=True)
 
     (tmp_path / "README.md").write_text(
-        "# Demo Repo\n\nSee https://github.com/example/project and https://astral.sh/.\n",
+        "# Demo Repo\n\nSee https://github.com/example/project, "
+        "https://github.com/example/project/blob/main/README.md#L1-L2, "
+        "and https://astral.sh/.\n",
         encoding="utf-8",
     )
     (tmp_path / "Makefile").write_text(".PHONY: setup\nsetup:\n\t@true\n", encoding="utf-8")
@@ -82,6 +84,7 @@ def test_sync_exploratorium_translation_writes_bilingual_outputs(tmp_path: Path)
     assert "Repository Fetching State / Состояние загрузки источников" in tex
     assert "https://modelcontextprotocol.io/" in tex
     assert "https://learn.microsoft.com/azure/ai-services/" in tex
+    assert "https://github.com/example/project/blob/main/README.md\\#L1-L2" in tex
 
 
 def test_sync_exploratorium_translation_reuses_timestamp_until_inventory_changes(
