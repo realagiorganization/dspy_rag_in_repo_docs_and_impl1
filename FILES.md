@@ -19,9 +19,9 @@ This inventory is generated from the current Git index.
 | `.env.sample` | .env.sample | binary |  | 905 | Binary tracked asset at .env.sample |
 | `.gitattributes` | .gitattributes | text | 4 | 126 | *.png filter=lfs diff=lfs merge=lfs -text |
 | `.github/workflows/ci.yml` | .github | yaml | 129 | 3149 | GitHub Actions workflow for ci |
-| `.github/workflows/hushwheel-quality.yml` | .github | yaml | 101 | 3475 | GitHub Actions workflow for hushwheel quality |
-| `.github/workflows/pages.yml` | .github | yaml | 96 | 2373 | GitHub Actions workflow for pages |
-| `.github/workflows/publication-pdf.yml` | .github | yaml | 141 | 5498 | GitHub Actions workflow for publication pdf |
+| `.github/workflows/hushwheel-quality.yml` | .github | yaml | 104 | 3526 | GitHub Actions workflow for hushwheel quality |
+| `.github/workflows/pages.yml` | .github | yaml | 99 | 2424 | GitHub Actions workflow for pages |
+| `.github/workflows/publication-pdf.yml` | .github | yaml | 144 | 5549 | GitHub Actions workflow for publication pdf |
 | `.github/workflows/publish.yml` | .github | yaml | 43 | 847 | GitHub Actions workflow for publish |
 | `.gitignore` | .gitignore | text | 21 | 222 | .venv/ |
 | `.pre-commit-config.yaml` | .pre-commit-config.yaml | yaml | 53 | 1689 | repos: |
@@ -92,8 +92,9 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzzzzzzz-merge-hushwheel-quality-into-master.md` | docs | markdown | 112 | 4335 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzzzzzzz merge hushwheel quality into master |
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzzzzzzzz-hushwheel-atlas-consolidation.md` | docs | markdown | 109 | 4762 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzzzzzzzz hushwheel atlas consolidation |
 | `docs/audit/2026-03-19-github-pr-gate-sync.md` | docs | markdown | 136 | 6599 | Repository audit note for 2026 03 19 github pr gate sync |
+| `docs/audit/2026-03-19-node24-actions-opt-in.md` | docs | markdown | 59 | 1913 | Repository audit note for 2026 03 19 node24 actions opt in |
 | `docs/audit/2026-03-19-public-pages-and-secret-scan.md` | docs | markdown | 113 | 5804 | Repository audit note for 2026 03 19 public pages and secret scan |
-| `docs/audit/README.md` | docs | markdown | 14 | 413 | Repository audit note for README |
+| `docs/audit/README.md` | docs | markdown | 14 | 406 | Repository audit note for README |
 | `documentation/azure-deployment.md` | documentation | markdown | 63 | 2603 | Azure Deployment Notes |
 | `documentation/hushwheel-fixture-rag-guide.md` | documentation | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
 | `documentation/inspired/dspy-rag-tutorial.md` | documentation | markdown | 35 | 1474 | DSPy Tutorial: Basic RAG |
@@ -259,7 +260,7 @@ This inventory is generated from the current Git index.
 | `tests/test_notebook_runner.py` | tests | python | 84 | 3088 | Python module for test notebook runner |
 | `tests/test_pages_site.py` | tests | python | 217 | 8978 | Python module for test pages site |
 | `tests/test_population_samples.py` | tests | python | 76 | 3136 | Python module for test population samples |
-| `tests/test_project_surfaces.py` | tests | python | 469 | 20748 | Python module for test project surfaces |
+| `tests/test_project_surfaces.py` | tests | python | 472 | 20973 | Python module for test project surfaces |
 | `tests/test_repository_rag_bdd.py` | tests | python | 30 | 879 | Python module for test repository rag bdd |
 | `tests/test_retrieval.py` | tests | python | 131 | 4508 | Python module for test retrieval |
 | `tests/test_todo_backlog.py` | tests | python | 103 | 3442 | Python module for test todo backlog |

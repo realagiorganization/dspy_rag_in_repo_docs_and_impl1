@@ -157,6 +157,7 @@ def test_publication_workflow_builds_and_uploads_pdf() -> None:
     workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
     workflow_on = workflow.get("on", workflow.get(True))
     assert workflow_on is not None
+    assert workflow["env"]["FORCE_JAVASCRIPT_ACTIONS_TO_NODE24"] == "true"
     assert "todo-backlog.yaml" in workflow_on["push"]["paths"]
     assert "src/repo_rag_lab/todo_backlog.py" in workflow_on["push"]["paths"]
     assert "src/repo_rag_lab/exploratorium_translation.py" in workflow_on["push"]["paths"]
@@ -259,6 +260,7 @@ def test_hushwheel_quality_workflow_always_emits_pr_check_and_uploads_reports() 
     workflow_on = workflow.get("on", workflow.get(True))
     assert workflow_on is not None
     assert workflow_on["pull_request"] is None
+    assert workflow["env"]["FORCE_JAVASCRIPT_ACTIONS_TO_NODE24"] == "true"
     assert ".github/workflows/hushwheel-quality.yml" in workflow_on["push"]["paths"]
     assert "tests/fixtures/hushwheel_lexiconarium/**" in workflow_on["push"]["paths"]
     assert "tests/test_hushwheel_program_surface.py" in workflow_on["push"]["paths"]
@@ -346,6 +348,7 @@ def test_pages_workflow_builds_and_deploys_markdown_catalog() -> None:
     workflow_on = workflow.get("on", workflow.get(True))
     assert workflow["name"] == "GitHub Pages"
     assert workflow_on is not None
+    assert workflow["env"]["FORCE_JAVASCRIPT_ACTIONS_TO_NODE24"] == "true"
     assert "**/*.md" in workflow_on["push"]["paths"]
     assert "**/*.MD" in workflow_on["pull_request"]["paths"]
     assert workflow_on["workflow_dispatch"] is None
