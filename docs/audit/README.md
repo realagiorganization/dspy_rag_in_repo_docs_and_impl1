@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-03-18-zzzzzzzzzzzzzzzzzzzzzzzz-hushwheel-atlas-consolidation.md`
+- `2026-03-19-github-pr-gate-sync.md`
 
 ## Usage
 
