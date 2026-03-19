@@ -52,6 +52,7 @@ the Rust wrapper.
 
 - Read the PDF: [publication/repository-rag-lab-article.pdf](publication/repository-rag-lab-article.pdf)
 - Read the bilingual exploratorium: [publication/exploratorium_translation/exploratorium_translation.pdf](publication/exploratorium_translation/exploratorium_translation.pdf)
+- Browse the live Pages catalog: <https://realagiorganization.github.io/dspy_rag_in_repo_docs_and_impl1/>
 - Review the tracked file inventory: [FILES.md](FILES.md)
 - Review the synced TODO table: [TODO.MD](TODO.MD)
 - Browse the Pages-ready Markdown catalog locally: `make pages-build` then open `site/index.html`

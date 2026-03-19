@@ -37,7 +37,7 @@ This inventory is generated from the current Git index.
 | `Makefile` | Makefile | makefile | 262 | 9371 | UV ?= uv |
 | `README.AGENTS.md` | README.AGENTS.md | markdown | 257 | 14925 | Repository research narrative tying code, docs, and verification together |
 | `README.DSPY.MD` | README.DSPY.MD | binary |  | 31622 | DSPy workflow guide for training, runtime use, and compiled programs |
-| `README.md` | README.md | markdown | 175 | 11270 | Top-level repository overview, workflow map, and quality guidance |
+| `README.md` | README.md | markdown | 176 | 11376 | Top-level repository overview, workflow map, and quality guidance |
 | `REPO_COMPLETENESS_CHECKLIST.md` | REPO_COMPLETENESS_CHECKLIST.md | markdown | 238 | 7450 | Repository Completeness Checklist |
 | `TODO.MD` | TODO.MD | binary |  | 5455 | Binary tracked asset at TODO.MD |
 | `data/questions/repository.yaml` | data | yaml | 7 | 279 | - question: What does this repository research? |
@@ -92,7 +92,8 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzzzzzzz-merge-hushwheel-quality-into-master.md` | docs | markdown | 112 | 4335 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzzzzzzz merge hushwheel quality into master |
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzzzzzzzz-hushwheel-atlas-consolidation.md` | docs | markdown | 109 | 4762 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzzzzzzzz hushwheel atlas consolidation |
 | `docs/audit/2026-03-19-github-pr-gate-sync.md` | docs | markdown | 136 | 6599 | Repository audit note for 2026 03 19 github pr gate sync |
-| `docs/audit/README.md` | docs | markdown | 14 | 404 | Repository audit note for README |
+| `docs/audit/2026-03-19-public-pages-and-secret-scan.md` | docs | markdown | 97 | 4782 | Repository audit note for 2026 03 19 public pages and secret scan |
+| `docs/audit/README.md` | docs | markdown | 14 | 413 | Repository audit note for README |
 | `documentation/azure-deployment.md` | documentation | markdown | 63 | 2603 | Azure Deployment Notes |
 | `documentation/hushwheel-fixture-rag-guide.md` | documentation | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
 | `documentation/inspired/dspy-rag-tutorial.md` | documentation | markdown | 35 | 1474 | DSPy Tutorial: Basic RAG |
@@ -249,13 +250,13 @@ This inventory is generated from the current Git index.
 | `tests/test_dspy_training.py` | tests | python | 493 | 17531 | Python module for test dspy training |
 | `tests/test_exploratorium_translation.py` | tests | python | 134 | 5044 | Python module for test exploratorium translation |
 | `tests/test_file_summaries.py` | tests | python | 226 | 8890 | Python module for test file summaries |
-| `tests/test_github_pr_gates.py` | tests | python | 39 | 1259 | Python module for test github pr gates |
+| `tests/test_github_pr_gates.py` | tests | python | 183 | 5678 | Python module for test github pr gates |
 | `tests/test_hushwheel_fixture.py` | tests | python | 101 | 4617 | Python module for test hushwheel fixture |
 | `tests/test_hushwheel_program_surface.py` | tests | python | 125 | 4626 | Python module for test hushwheel program surface |
 | `tests/test_lookup_first.py` | tests | python | 107 | 3500 | Python module for test lookup first |
 | `tests/test_mcp_branches.py` | tests | python | 31 | 1077 | Python module for test mcp branches |
 | `tests/test_notebook_runner.py` | tests | python | 84 | 3088 | Python module for test notebook runner |
-| `tests/test_pages_site.py` | tests | python | 65 | 2459 | Python module for test pages site |
+| `tests/test_pages_site.py` | tests | python | 217 | 8978 | Python module for test pages site |
 | `tests/test_population_samples.py` | tests | python | 76 | 3136 | Python module for test population samples |
 | `tests/test_project_surfaces.py` | tests | python | 467 | 20642 | Python module for test project surfaces |
 | `tests/test_repository_rag_bdd.py` | tests | python | 30 | 879 | Python module for test repository rag bdd |
