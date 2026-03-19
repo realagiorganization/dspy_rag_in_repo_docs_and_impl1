@@ -159,6 +159,7 @@ This inventory is generated from the current Git index.
 | `samples/logs/20260318T093632Z-gh-runs-retrieval-regression-gate-great-carry-on.md` | samples | markdown | 34 | 1325 | GitHub Actions Run Log |
 | `samples/logs/20260318T094120Z-gh-runs-dspy-live-proof-and-rust-wrapper-repair.md` | samples | markdown | 45 | 1469 | GitHub Actions Summary |
 | `samples/logs/20260318T094347Z-gh-runs-hushwheel-hardening-followup.md` | samples | markdown | 72 | 2739 | GitHub Runs Log |
+| `samples/logs/20260318T100336Z-gh-runs-sync-final-rebased-inventories-for-carry-on-comm.md` | samples | markdown | 29 | 1103 | GitHub Actions Run Log |
 | `samples/logs/20260318T101229Z-gh-runs-hushwheel-audit-refresh.md` | samples | markdown | 37 | 1707 | GitHub Actions Summary |
 | `samples/logs/20260318T101939Z-gh-runs-land-each-unlanded.md` | samples | markdown | 28 | 1556 | GitHub Actions Run Log |
 | `samples/logs/20260318T123402Z-gh-runs-fix-file-summary-test-churn-for-1.md` | samples | markdown | 29 | 1061 | GitHub Actions Run Log |
