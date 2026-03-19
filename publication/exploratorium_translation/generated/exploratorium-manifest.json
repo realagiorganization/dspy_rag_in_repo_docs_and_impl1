@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-03-18T15:04:38Z",
-  "tracked_file_count": 253,
-  "summarized_file_count": 250,
+  "generated_at": "2026-03-19T02:35:06Z",
+  "tracked_file_count": 255,
+  "summarized_file_count": 252,
   "excluded_generated_file_count": 3,
   "explicit_link_count": 51,
-  "machine_link_occurrence_count": 2509,
-  "machine_link_unique_count": 2319,
+  "machine_link_occurrence_count": 2511,
+  "machine_link_unique_count": 2321,
   "bibliography_entry_count": 4,
   "local_documentation_count": 6,
   "file_summaries": [
@@ -246,20 +246,20 @@
     {
       "path": "FILES.csv",
       "kind": "generic",
-      "byte_size": 29935,
+      "byte_size": 30239,
       "line_count": null,
       "url_count": 0,
-      "summary_en": "Tracked repository file, 29935 bytes of binary data, 0 explicit URLs. Opening line: No non-empty preview line.",
-      "summary_ru": "\u041e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u0435\u043c\u044b\u0439 \u0444\u0430\u0439\u043b \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u044f, 29935 \u0431\u0430\u0439\u0442 \u0431\u0438\u043d\u0430\u0440\u043d\u044b\u0445 \u0434\u0430\u043d\u043d\u044b\u0445, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041f\u0435\u0440\u0432\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430: No non-empty preview line."
+      "summary_en": "Tracked repository file, 30239 bytes of binary data, 0 explicit URLs. Opening line: No non-empty preview line.",
+      "summary_ru": "\u041e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u0435\u043c\u044b\u0439 \u0444\u0430\u0439\u043b \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u044f, 30239 \u0431\u0430\u0439\u0442 \u0431\u0438\u043d\u0430\u0440\u043d\u044b\u0445 \u0434\u0430\u043d\u043d\u044b\u0445, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041f\u0435\u0440\u0432\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430: No non-empty preview line."
     },
     {
       "path": "FILES.md",
       "kind": "markdown",
-      "byte_size": 34320,
-      "line_count": 264,
+      "byte_size": 34656,
+      "line_count": 266,
       "url_count": 1,
-      "summary_en": "Markdown document, 264 lines, 1 explicit URLs. Lead heading: Repository File Inventory.",
-      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 264 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository File Inventory."
+      "summary_en": "Markdown document, 266 lines, 1 explicit URLs. Lead heading: Repository File Inventory.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 266 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository File Inventory."
     },
     {
       "path": "Makefile",
@@ -683,6 +683,15 @@
       "url_count": 0,
       "summary_en": "Markdown document, 47 lines, 0 explicit URLs. Lead heading: Rebase Hushwheel Quality Over Master.",
       "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 47 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Rebase Hushwheel Quality Over Master."
+    },
+    {
+      "path": "docs/audit/2026-03-18-zzzzzzzzzzzzzzzz-dspy-backlog-reconciliation.md",
+      "kind": "markdown",
+      "byte_size": 2956,
+      "line_count": 75,
+      "url_count": 0,
+      "summary_en": "Markdown document, 75 lines, 0 explicit URLs. Lead heading: DSPy Backlog Reconciliation.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 75 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: DSPy Backlog Reconciliation."
     },
     {
       "path": "docs/audit/2026-03-18-zzzzzzzzzzzzzzzz-file-summary-test-churn-fix.md",
@@ -1331,6 +1340,15 @@
       "url_count": 2,
       "summary_en": "Markdown document, 53 lines, 2 explicit URLs. Lead heading: GitHub Actions Run Log.",
       "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 53 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 2. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Run Log."
+    },
+    {
+      "path": "samples/logs/20260318T093632Z-gh-runs-retrieval-regression-gate-great-carry-on.md",
+      "kind": "markdown",
+      "byte_size": 1325,
+      "line_count": 34,
+      "url_count": 2,
+      "summary_en": "Markdown document, 34 lines, 2 explicit URLs. Lead heading: GitHub Actions Run Log.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 34 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 2. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Run Log."
     },
     {
       "path": "samples/logs/20260318T094120Z-gh-runs-dspy-live-proof-and-rust-wrapper-repair.md",
