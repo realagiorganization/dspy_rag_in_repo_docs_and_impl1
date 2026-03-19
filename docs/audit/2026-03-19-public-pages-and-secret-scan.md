@@ -17,6 +17,8 @@ test coverage that keeps the related quality gates green.
   the repository front page
 - added direct coverage for the Pages catalog helpers and the GitHub PR-gate helpers so the
   repository-wide `make quality` gate remains above the enforced `85%` threshold on the current tip
+- repaired the `Publication PDF` workflow after the first post-push run exposed that
+  `dorny/paths-filter` was executing before checkout on push events
 - refreshed the public-facing README to link the live Pages site explicitly
 
 ## Executed Commands
@@ -33,6 +35,8 @@ Executed successfully in this turn:
 - `uv run pytest tests/test_github_pr_gates.py tests/test_pages_site.py`
 - `cargo build --manifest-path rust-cli/Cargo.toml`
 - `make quality`
+- `uv run pytest tests/test_project_surfaces.py`
+- `make verify-surfaces`
 
 ## Results
 
@@ -62,6 +66,10 @@ Executed successfully in this turn:
   - `Total coverage: 85.73%`
   - `src/repo_rag_lab/github_pr_gates.py`: `100%`
   - `src/repo_rag_lab/pages_site.py`: `94%`
+- targeted publication-workflow surface pytest slice: passed, `20 passed`
+- follow-up `make verify-surfaces`: passed with:
+  - `checked_notebook_count: 5`
+  - `issue_count: 0`
 
 ## Current Verification Status
 
@@ -72,6 +80,7 @@ Configured and exercised in this turn:
 - repository homepage URL update to the live Pages site
 - compile checks
 - focused Pages and PR-gate pytest coverage
+- publication-workflow surface repair verification
 - Rust wrapper build
 - repository-wide quality gate with coverage enforcement
 
@@ -93,4 +102,7 @@ Absent or not exercised in this turn:
 - The added coverage is intentionally focused on the GitHub-facing helpers introduced on the
   current tip, so the repository can keep enforcing `make quality` without relaxing the coverage
   threshold.
+- The first push in this turn showed a real remote defect in `Publication PDF`; the repair is to
+  checkout the repository before running `dorny/paths-filter`, which preserves the skip-path logic
+  while making push-event execution valid again.
 - Post-push GitHub Actions evidence belongs in `samples/logs/` after the branch update completes.

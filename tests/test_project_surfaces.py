@@ -166,9 +166,10 @@ def test_publication_workflow_builds_and_uploads_pdf() -> None:
     job = workflow["jobs"]["publication-pdf"]
     steps = job["steps"]
 
-    assert steps[0]["uses"] == "dorny/paths-filter@v3"
-    assert steps[0]["id"] == "scope"
-    assert "publication/**" in steps[0]["with"]["filters"]
+    assert steps[0]["uses"] == "actions/checkout@v6"
+    assert steps[1]["uses"] == "dorny/paths-filter@v3"
+    assert steps[1]["id"] == "scope"
+    assert "publication/**" in steps[1]["with"]["filters"]
     assert any(step.get("uses") == "actions/checkout@v6" for step in steps)
     assert any(step.get("uses") == "actions/setup-python@v6" for step in steps)
     assert any(step.get("uses") == "astral-sh/setup-uv@v7" for step in steps)

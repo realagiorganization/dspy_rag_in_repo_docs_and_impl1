@@ -25,6 +25,9 @@ jobs:
     name: Build Publication PDF
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: Detect publication gate scope
         id: scope
         uses: dorny/paths-filter@v3
@@ -43,10 +46,6 @@ jobs:
               - "pyproject.toml"
               - "uv.lock"
               - "README.md"
-
-      - name: Checkout
-        if: steps.scope.outputs.relevant == 'true'
-        uses: actions/checkout@v6
 
       - name: Set up Python
         if: steps.scope.outputs.relevant == 'true'
