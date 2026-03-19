@@ -92,7 +92,7 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzzzzzzz-merge-hushwheel-quality-into-master.md` | docs | markdown | 112 | 4335 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzzzzzzz merge hushwheel quality into master |
 | `docs/audit/2026-03-18-zzzzzzzzzzzzzzzzzzzzzzzz-hushwheel-atlas-consolidation.md` | docs | markdown | 109 | 4762 | Repository audit note for 2026 03 18 zzzzzzzzzzzzzzzzzzzzzzzz hushwheel atlas consolidation |
 | `docs/audit/2026-03-19-github-pr-gate-sync.md` | docs | markdown | 136 | 6599 | Repository audit note for 2026 03 19 github pr gate sync |
-| `docs/audit/2026-03-19-node24-actions-opt-in.md` | docs | markdown | 59 | 1913 | Repository audit note for 2026 03 19 node24 actions opt in |
+| `docs/audit/2026-03-19-node24-actions-opt-in.md` | docs | markdown | 80 | 2929 | Repository audit note for 2026 03 19 node24 actions opt in |
 | `docs/audit/2026-03-19-public-pages-and-secret-scan.md` | docs | markdown | 113 | 5804 | Repository audit note for 2026 03 19 public pages and secret scan |
 | `docs/audit/README.md` | docs | markdown | 14 | 406 | Repository audit note for README |
 | `documentation/azure-deployment.md` | documentation | markdown | 63 | 2603 | Azure Deployment Notes |

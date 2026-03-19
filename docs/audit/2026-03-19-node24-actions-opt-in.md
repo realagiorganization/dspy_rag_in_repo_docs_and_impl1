@@ -9,6 +9,9 @@
 This turn addresses the remaining GitHub Actions Node.js 20 deprecation warnings that were still
 visible after the public Pages and workflow-repair push sequence.
 
+- concluded the last previously unmerged branch merge into `master`
+  (`origin/codex/hushwheel-codex-20260318`) while preserving the newer Hushwheel fixture tree that
+  already existed on `master`
 - opted the Pages, publication, and hushwheel workflows into GitHub's Node 24 JavaScript-action
   runtime using `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true`
 - added workflow-surface assertions so the Node 24 opt-in remains part of the committed workflow
@@ -18,15 +21,29 @@ visible after the public Pages and workflow-repair push sequence.
 
 Executed successfully in this turn:
 
+- `uv run python -m compileall src tests`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py`
+- `uv run repo-rag smoke-test`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
 - `uv run pytest tests/test_project_surfaces.py`
 - `make verify-surfaces`
 
 ## Results
 
+- `uv run python -m compileall src tests`: passed
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py`: passed, `17 passed`
+- `uv run repo-rag smoke-test`: passed with:
+  - `answer_contains_repository: true`
+  - `mcp_candidate_count: 1`
+  - `manifest_path: artifacts/azure/repo-rag-smoke.json`
+- `cargo build --manifest-path rust-cli/Cargo.toml`: passed
 - `uv run pytest tests/test_project_surfaces.py`: passed, `20 passed`
 - `make verify-surfaces`: passed with:
   - `checked_notebook_count: 5`
   - `issue_count: 0`
+- branch consolidation:
+  - no local branches remain unmerged into `master`
+  - no remote branches remain unmerged into `master`
 - updated workflow surfaces:
   - `.github/workflows/pages.yml`
   - `.github/workflows/publication-pdf.yml`
@@ -38,6 +55,10 @@ Executed successfully in this turn:
 
 Configured and exercised in this turn:
 
+- compile checks
+- utilities plus repository-RAG BDD pytest coverage
+- repository smoke-test
+- Rust wrapper build
 - workflow-surface pytest coverage
 - repository surface verification
 - Node 24 opt-in for the workflows that previously emitted Node.js 20 deprecation warnings
