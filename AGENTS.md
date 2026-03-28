@@ -27,6 +27,7 @@ When the user asks for commits or pushes, agents should prefer narrow, increment
 7. If a permission-gated action is interrupted or blocked, explicitly offer the user the option to make the permission permanent in Codex settings for their user or for this repository before retrying.
 8. Training and sample-population notebook logic should live in modular Python helpers under `src/` and be covered by doctests or normal pytest tests.
 9. Use the repository-managed `pre-commit` hooks; lightweight checks belong on `pre-commit`, while heavier checks belong on `pre-push`.
+10. When creating or adopting a new local Git repository, initialize its GitHub remote in `realagiorganization` by default with `gh repo create`, set `origin`, and push after local verification passes.
 
 ## Validation Expectations
 
