@@ -1,0 +1,13 @@
+config:
+  default: true
+  line-length: false
+  no-bare-urls: false
+  no-inline-html: false
+globs:
+  - "README.md"
+  - "AGENTS.md"
+  - "AGENTS.md.d/**/*.md"
+  - "docs/**/*.md"
+  - "documentation/**/*.md"
+  - "samples/**/*.md"
+  - "utilities/**/*.md"

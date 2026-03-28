@@ -1,0 +1,41 @@
+{
+  "file-name": [
+    "on",
+    {
+      "style": "TitleCase"
+    }
+  ],
+  "name-length": [
+    "on",
+    {
+      "Feature": 70,
+      "Scenario": 70,
+      "Step": 90
+    }
+  ],
+  "no-background-only-scenario": "on",
+  "no-dupe-feature-names": "on",
+  "no-dupe-scenario-names": "on",
+  "no-empty-file": "on",
+  "no-files-without-scenarios": "on",
+  "no-homogenous-tags": "on",
+  "no-partially-commented-tag-lines": "on",
+  "no-restricted-tags": [
+    "on",
+    []
+  ],
+  "no-superfluous-tags": "on",
+  "no-trailing-spaces": "on",
+  "no-unnamed-features": "on",
+  "no-unnamed-scenarios": "on",
+  "one-space-between-tags": "on",
+  "scenario-size": [
+    "on",
+    {
+      "steps-length": {
+        "Background": 12,
+        "Scenario": 12
+      }
+    }
+  ]
+}
