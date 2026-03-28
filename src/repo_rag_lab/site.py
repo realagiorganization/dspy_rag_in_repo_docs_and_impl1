@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
+from typing import TypedDict
 
 
 @dataclass(frozen=True)
@@ -10,6 +11,17 @@ class SitePage:
     filename: str
     title: str
     source: Path
+
+
+class SiteVerificationIssue(TypedDict):
+    path: str
+    message: str
+
+
+class SiteVerificationPayload(TypedDict):
+    checked_page_count: int
+    issue_count: int
+    issues: list[SiteVerificationIssue]
 
 
 SITE_PAGES = [
@@ -45,8 +57,8 @@ def build_docs_site(root: Path, output_dir: Path | None = None) -> Path:
     return destination
 
 
-def verify_docs_site_sources(root: Path) -> dict[str, object]:
-    issues: list[dict[str, str]] = []
+def verify_docs_site_sources(root: Path) -> SiteVerificationPayload:
+    issues: list[SiteVerificationIssue] = []
     test_plan = root / "docs" / "test-plan.md"
     if not test_plan.exists():
         issues.append({"path": str(test_plan), "message": "Missing feature-focused test plan."})
