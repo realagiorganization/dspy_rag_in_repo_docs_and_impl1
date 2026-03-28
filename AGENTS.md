@@ -4,6 +4,10 @@ Agents working in this repository should prefer repository-local utilities over 
 
 Additional standing instructions live in `AGENTS.md.d/*.md`. Agents should read those files before running or reporting verification work, and use the latest `docs/audit/*.md` files to anchor follow-up checks.
 
+The repository todo list lives in `TODO.md`. Agents should review it at the start of each request, clear items that were completed by the current work, and add narrowly scoped follow-up items when work exposes unfinished cleanup.
+
+When the user asks for commits or pushes, agents should prefer narrow, incremental commits with commit messages that state both what changed and why it changed.
+
 ## Primary Utilities
 
 - `make ask QUESTION="..."`: ask a repository-grounded RAG question through the Python workflow.
