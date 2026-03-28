@@ -65,6 +65,14 @@ def test_cli_main_other_commands(
         del root
         return '{"issue_count": 0, "issues": []}'
 
+    def fake_docs_site(root: Path) -> str:
+        del root
+        return str(tmp_path / "site")
+
+    def fake_docs_site_verification(root: Path) -> str:
+        del root
+        return '{"issue_count": 0, "issues": []}'
+
     def fake_serve_ui(
         *,
         root: Path,
@@ -77,6 +85,8 @@ def test_cli_main_other_commands(
         return 0
 
     monkeypatch.setattr(cli, "run_surface_verification", fake_surface_verification)
+    monkeypatch.setattr(cli, "run_docs_site", fake_docs_site)
+    monkeypatch.setattr(cli, "run_docs_site_verification", fake_docs_site_verification)
     monkeypatch.setattr(cli, "serve_ui", fake_serve_ui)
     commands = [
         type("Args", (), {"command": "discover-mcp", "root": str(tmp_path)})(),
@@ -92,6 +102,8 @@ def test_cli_main_other_commands(
             },
         )(),
         type("Args", (), {"command": "utility-summary", "root": str(tmp_path)})(),
+        type("Args", (), {"command": "docs-site", "root": str(tmp_path)})(),
+        type("Args", (), {"command": "verify-docs-site", "root": str(tmp_path)})(),
         type(
             "Args",
             (),

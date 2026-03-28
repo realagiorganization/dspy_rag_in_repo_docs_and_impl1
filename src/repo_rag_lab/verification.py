@@ -6,6 +6,8 @@ from pathlib import Path
 import nbformat
 from nbformat.validator import validate as validate_notebook_document
 
+from .site import verify_docs_site_sources
+
 REQUIRED_MAKE_TARGETS = {
     "setup",
     "sync",
@@ -14,6 +16,8 @@ REQUIRED_MAKE_TARGETS = {
     "ask",
     "discover-mcp",
     "utility-summary",
+    "docs-site",
+    "verify-docs-site",
     "render-ui",
     "serve-ui",
     "smoke-test",
@@ -105,10 +109,13 @@ def verify_repository_surfaces(root: Path) -> dict[str, object]:
     notebooks = sorted((root / "notebooks").glob("*.ipynb"))
     for notebook_path in notebooks:
         issues.extend(validate_notebook(notebook_path))
+    docs_payload = verify_docs_site_sources(root)
+    issues.extend(VerificationIssue(**issue) for issue in docs_payload["issues"])
 
     return {
         "checked_makefile": "Makefile",
         "checked_notebook_count": len(notebooks),
+        "checked_docs_page_count": docs_payload["checked_page_count"],
         "issue_count": len(issues),
         "issues": [issue.__dict__ for issue in issues],
     }

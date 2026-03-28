@@ -4,6 +4,7 @@ from pathlib import Path
 
 import nbformat
 
+from repo_rag_lab.site import verify_docs_site_sources
 from repo_rag_lab.verification import validate_makefile, validate_notebook
 
 
@@ -44,4 +45,17 @@ def test_validate_notebook_rejects_missing_heading(tmp_path: Path) -> None:
     assert any(
         issue.message == "Notebook must include at least one Markdown heading cell."
         for issue in issues
+    )
+
+
+def test_verify_docs_site_sources_rejects_missing_test_plan(tmp_path: Path) -> None:
+    docs_dir = tmp_path / "docs" / "audit"
+    docs_dir.mkdir(parents=True)
+    (docs_dir / "2026-03-27-ui-and-integration.md").write_text("# Audit\n", encoding="utf-8")
+
+    payload = verify_docs_site_sources(tmp_path)
+
+    assert payload["issue_count"] >= 1
+    assert any(
+        issue["message"] == "Missing feature-focused test plan." for issue in payload["issues"]
     )

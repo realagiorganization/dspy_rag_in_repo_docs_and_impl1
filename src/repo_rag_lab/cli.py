@@ -8,7 +8,13 @@ from .azure import write_deployment_manifest
 from .dspy_workflow import RepositoryRAG
 from .mcp import discover_mcp_servers, dump_candidates
 from .server import serve_ui
-from .utilities import run_smoke_test, run_surface_verification, utility_summary
+from .utilities import (
+    run_docs_site,
+    run_docs_site_verification,
+    run_smoke_test,
+    run_surface_verification,
+    utility_summary,
+)
 from .workflow import ask_repository
 
 
@@ -32,6 +38,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     utility_parser = subparsers.add_parser("utility-summary")
     utility_parser.add_argument("--root", default=".")
+
+    docs_site_parser = subparsers.add_parser("docs-site")
+    docs_site_parser.add_argument("--root", default=".")
+
+    verify_docs_parser = subparsers.add_parser("verify-docs-site")
+    verify_docs_parser.add_argument("--root", default=".")
 
     render_ui_parser = subparsers.add_parser("render-ui")
     render_ui_parser.add_argument("--question", required=True)
@@ -85,6 +97,15 @@ def main() -> int:
     if args.command == "utility-summary":
         print(utility_summary(root))
         return 0
+
+    if args.command == "docs-site":
+        print(run_docs_site(root))
+        return 0
+
+    if args.command == "verify-docs-site":
+        payload = run_docs_site_verification(root)
+        print(payload)
+        return 0 if '"issue_count": 0' in payload else 1
 
     if args.command == "render-ui":
         html = RepositoryApp().render_question_page(args.question, root)
