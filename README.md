@@ -1,6 +1,7 @@
 # DSPy RAG In-Repo Research Lab
 
 [![CI](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/ci.yml/badge.svg)](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/ci.yml)
+[![GitHub Pages](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/pages.yml/badge.svg)](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/pages.yml)
 [![Publish](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/publish.yml/badge.svg)](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/publish.yml)
 [![Coverage](https://img.shields.io/badge/coverage-94.12%25-brightgreen)](https://github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1/actions/workflows/ci.yml)
 
@@ -45,12 +46,16 @@ make ask QUESTION="What does this repository research?"
 - Python CLI: `uv run repo-rag ask --question "..."`
 - Python CLI with DSPy: `uv run repo-rag ask --question "..." --use-dspy`
 - Utility summary: `uv run repo-rag utility-summary`
+- Generated docs site: `uv run repo-rag docs-site`
+- Docs-site source verification: `uv run repo-rag verify-docs-site`
 - Static UI render: `uv run repo-rag render-ui --question "..."`
 - Serve UI over HTTP: `uv run repo-rag serve-ui --question "..."`
 - Smoke test: `uv run repo-rag smoke-test`
 - Surface verification: `uv run repo-rag verify-surfaces`
 - Make: `make ask QUESTION="..."`
 - Make utility summary: `make utility-summary`
+- Make docs site: `make docs-site`
+- Make docs-site verification: `make verify-docs-site`
 - Make UI render: `make render-ui QUESTION="..."`
 - Make UI server: `make serve-ui QUESTION="..."`
 - Make smoke test: `make smoke-test`
@@ -59,6 +64,15 @@ make ask QUESTION="What does this repository research?"
 - Notebook: `notebooks/01_repo_rag_research.ipynb`
 - Training notebook: `notebooks/03_dspy_training_lab.ipynb`
 - Sample population notebook: `notebooks/04_sample_population_lab.ipynb`
+
+## Test Plan
+
+The feature-focused test plan is now a first-class docs-site entrypoint and is intended to stay
+prominent on the published GitHub Pages site:
+
+- Source: `docs/test-plan.md`
+- Generated page: `artifacts/site/test-plan.html`
+- Docs index: `artifacts/site/index.html`
 
 ## Agent Guidance
 
