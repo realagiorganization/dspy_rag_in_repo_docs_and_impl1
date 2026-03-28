@@ -99,9 +99,12 @@ def test_serve_ui_announces_address_and_handles_one_request(
         def server_close(self) -> None:
             events.append("closed")
 
+    def fake_build_ui_server(**_: object) -> FakeServer:
+        return FakeServer()
+
     monkeypatch.setattr(
         "repo_rag_lab.server.build_ui_server",
-        lambda **kwargs: FakeServer(),
+        fake_build_ui_server,
     )
 
     exit_code = serve_ui(
