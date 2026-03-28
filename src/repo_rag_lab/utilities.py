@@ -15,6 +15,8 @@ def utility_summary(root: Path) -> str:
         "- ask: answer repository-grounded questions",
         "- discover-mcp: inspect repo-local MCP candidates",
         "- azure-manifest: write Azure deployment metadata",
+        "- render-ui: render a static HTML answer page for a repository question",
+        "- serve-ui: serve the rendered repository answer page over HTTP",
         "- smoke-test: validate the core workflow surfaces",
         "- verify-surfaces: validate notebooks and Makefile verification surfaces",
         f"- root: {root}",

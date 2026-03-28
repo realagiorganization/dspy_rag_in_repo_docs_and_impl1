@@ -45,10 +45,14 @@ make ask QUESTION="What does this repository research?"
 - Python CLI: `uv run repo-rag ask --question "..."`
 - Python CLI with DSPy: `uv run repo-rag ask --question "..." --use-dspy`
 - Utility summary: `uv run repo-rag utility-summary`
+- Static UI render: `uv run repo-rag render-ui --question "..."`
+- Serve UI over HTTP: `uv run repo-rag serve-ui --question "..."`
 - Smoke test: `uv run repo-rag smoke-test`
 - Surface verification: `uv run repo-rag verify-surfaces`
 - Make: `make ask QUESTION="..."`
 - Make utility summary: `make utility-summary`
+- Make UI render: `make render-ui QUESTION="..."`
+- Make UI server: `make serve-ui QUESTION="..."`
 - Make smoke test: `make smoke-test`
 - Make surface verification: `make verify-surfaces`
 - Rust CLI: `uv run cargo run --manifest-path rust-cli/Cargo.toml -- ask --question "..."`

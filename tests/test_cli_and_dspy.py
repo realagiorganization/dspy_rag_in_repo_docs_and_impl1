@@ -65,7 +65,19 @@ def test_cli_main_other_commands(
         del root
         return '{"issue_count": 0, "issues": []}'
 
+    def fake_serve_ui(
+        *,
+        root: Path,
+        question: str,
+        host: str,
+        port: int,
+        once: bool,
+    ) -> int:
+        del root, question, host, port, once
+        return 0
+
     monkeypatch.setattr(cli, "run_surface_verification", fake_surface_verification)
+    monkeypatch.setattr(cli, "serve_ui", fake_serve_ui)
     commands = [
         type("Args", (), {"command": "discover-mcp", "root": str(tmp_path)})(),
         type(
@@ -80,6 +92,28 @@ def test_cli_main_other_commands(
             },
         )(),
         type("Args", (), {"command": "utility-summary", "root": str(tmp_path)})(),
+        type(
+            "Args",
+            (),
+            {
+                "command": "render-ui",
+                "question": "sample question",
+                "root": str(tmp_path),
+                "output": None,
+            },
+        )(),
+        type(
+            "Args",
+            (),
+            {
+                "command": "serve-ui",
+                "question": "sample question",
+                "root": str(tmp_path),
+                "host": "127.0.0.1",
+                "port": 8000,
+                "once": True,
+            },
+        )(),
         type("Args", (), {"command": "smoke-test", "root": str(tmp_path)})(),
         type("Args", (), {"command": "verify-surfaces", "root": str(tmp_path)})(),
     ]
@@ -95,3 +129,38 @@ def test_cli_main_other_commands(
 
     output = capsys.readouterr().out
     assert "Repository utility surfaces:" in output
+
+
+def test_cli_render_ui_writes_output(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    output_path = tmp_path / "answer.html"
+
+    def fake_render_question_page(question: str, root: Path) -> str:
+        del question, root
+        return "<!doctype html><html><body>ui</body></html>"
+
+    def fake_parse_args(self: object) -> object:
+        del self
+        return type(
+            "Args",
+            (),
+            {
+                "command": "render-ui",
+                "question": "sample question",
+                "root": str(tmp_path),
+                "output": str(output_path),
+            },
+        )()
+
+    fake_app = type(
+        "FakeApp",
+        (),
+        {"render_question_page": staticmethod(fake_render_question_page)},
+    )()
+    monkeypatch.setattr(cli, "RepositoryApp", lambda: fake_app)
+    monkeypatch.setattr(cli.argparse.ArgumentParser, "parse_args", fake_parse_args)
+
+    assert cli.main() == 0
+    assert output_path.read_text(encoding="utf-8") == "<!doctype html><html><body>ui</body></html>"
+    assert str(output_path) in capsys.readouterr().out

@@ -12,6 +12,8 @@ def test_utility_summary_mentions_core_surfaces() -> None:
     summary = utility_summary(REPO_ROOT)
     assert "ask" in summary
     assert "discover-mcp" in summary
+    assert "render-ui" in summary
+    assert "serve-ui" in summary
     assert "smoke-test" in summary
     assert "verify-surfaces" in summary
 

@@ -4,7 +4,7 @@ MODEL_ID ?= sample-ft-model
 DEPLOYMENT_NAME ?= repo-rag-ft
 AZURE_ENDPOINT ?= https://example.services.ai.azure.com/models
 
-.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask discover-mcp utility-summary smoke-test verify-surfaces notebook bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run azure-manifest fmt build publish
+.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask discover-mcp utility-summary render-ui serve-ui smoke-test verify-surfaces notebook bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run azure-manifest fmt build publish
 
 setup:
 	$(UV) sync --extra azure
@@ -32,6 +32,12 @@ discover-mcp: sync
 
 utility-summary: sync
 	$(UV) run repo-rag utility-summary
+
+render-ui: sync
+	$(UV) run repo-rag render-ui --question "$(QUESTION)"
+
+serve-ui: sync
+	$(UV) run repo-rag serve-ui --question "$(QUESTION)"
 
 smoke-test: sync
 	$(UV) run repo-rag smoke-test

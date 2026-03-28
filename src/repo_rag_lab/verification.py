@@ -14,6 +14,8 @@ REQUIRED_MAKE_TARGETS = {
     "ask",
     "discover-mcp",
     "utility-summary",
+    "render-ui",
+    "serve-ui",
     "smoke-test",
     "verify-surfaces",
     "compile",

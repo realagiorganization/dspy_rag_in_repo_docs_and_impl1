@@ -9,3 +9,7 @@ Feature: Repository RAG
     When I inspect MCP server candidates
     Then the MCP discovery result is valid JSON
 
+  Scenario: Render the repository answer UI
+    Given a mocked repository answer
+    When I render the repository answer page
+    Then the UI includes the question, answer, and evidence
