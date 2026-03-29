@@ -165,3 +165,54 @@ jobs:
         run: >-
           cargo run --manifest-path rust-cli/Cargo.toml -- ask --question
           "What does this repository research?"
+
+  browser-ui:
+    name: Browser UI Smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.10"
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.11
+
+      - name: Sync environment
+        run: uv sync --frozen --extra azure
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Playwright browser
+        run: npx --yes playwright@1.55.0 install --with-deps chromium
+
+      - name: Start served UI
+        run: >-
+          uv run repo-rag serve-ui --question "What does this repository research?"
+          --host 127.0.0.1 --port 4173 > /tmp/repo-rag-ui.log 2>&1 &
+
+      - name: Wait for served UI
+        run: npx --yes wait-on@8.0.3 http://127.0.0.1:4173
+
+      - name: Run Playwright smoke test
+        env:
+          REPO_RAG_UI_URL: http://127.0.0.1:4173
+        run: >-
+          npx --yes playwright@1.55.0 test tests/browser/ui-smoke.spec.mjs
+          --config tests/browser/playwright.config.mjs
+
+      - name: Upload browser artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-ui-artifacts
+          path: |
+            test-results
+            /tmp/repo-rag-ui.log

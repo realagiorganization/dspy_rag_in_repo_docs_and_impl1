@@ -45,7 +45,7 @@ This test plan turns the repository feature set into explicit verification targe
 
 ### CI And Publication Checks
 
-- `CI` workflow blocks on Python, content/metadata, and Rust wrapper checks
+- `CI` workflow blocks on Python, content/metadata, Rust wrapper, and browser smoke checks
 - `GitHub Pages` builds the documentation site from repository sources
 - `Publish` pushes package artifacts on version tags
 
@@ -61,7 +61,7 @@ UV_CACHE_DIR=.uv-cache uv run repo-rag docs-site
 
 ## Current Gaps
 
-- Browser-driven UI automation is still absent in the local sandboxed workflow
+- Browser-driven UI automation is added in CI, but the local sandbox still cannot run the served browser flow
 - No live Azure endpoint validation exists yet
 - No separately named external integration suite exists yet
 
