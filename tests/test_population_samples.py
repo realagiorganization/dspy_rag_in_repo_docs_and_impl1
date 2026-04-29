@@ -46,8 +46,8 @@ def test_extend_population_candidates_adds_scaffold_docs() -> None:
         REPO_ROOT / "samples" / "population" / "repository_population_candidates.yaml"
     )
     extended = extend_population_candidates(REPO_ROOT, candidates)
-    assert any(candidate.source == "documentation/package-api.md" for candidate in extended)
-    assert any(candidate.source == "documentation/mcp-discovery.md" for candidate in extended)
+    assert any(candidate.source == "docs/architecture/package-api.md" for candidate in extended)
+    assert any(candidate.source == "docs/architecture/mcp-discovery.md" for candidate in extended)
 
 
 def test_validate_population_candidates_accepts_extended_repository_samples() -> None:

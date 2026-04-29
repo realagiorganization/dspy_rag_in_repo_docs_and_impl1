@@ -4,10 +4,10 @@
 - source: AGENTS.md
   rationale: Agent execution rules are part of the intended repository contract.
   priority: 2
-- source: documentation/inspired/dspy-rag-tutorial.md
+- source: docs/architecture/inspired/dspy-rag-tutorial.md
   rationale: Inspired implementation notes provide design guidance for future retrieval work.
   priority: 3
-- source: documentation/azure-deployment.md
+- source: docs/operations/azure-deployment.md
   rationale: Deployment-specific questions need Azure-oriented source material.
   priority: 4
 - source: utilities/README.md

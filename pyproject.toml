@@ -47,6 +47,7 @@ default-groups = ["dev"]
 
 [tool.pytest.ini_options]
 addopts    = "--doctest-modules"
+markers    = ["live_azure: tests that call real Azure-backed runtime surfaces when env is configured"]
 pythonpath = ["src"]
 testpaths  = ["tests"]
 

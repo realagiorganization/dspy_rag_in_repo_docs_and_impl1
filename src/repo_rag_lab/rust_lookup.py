@@ -60,9 +60,20 @@ class LookupHit:
 
 
 def supports_native_lookup(root: Path) -> bool:
-    """Return ``True`` when ``root`` matches the repository root with the Rust wrapper."""
+    """Return ``True`` when ``root`` is a git repository root and the Rust wrapper exists."""
 
-    return root.resolve() == _REPO_ROOT and _RUST_MANIFEST_PATH.exists()
+    if not _RUST_MANIFEST_PATH.exists():
+        return False
+
+    try:
+        resolved_root = root.resolve()
+    except OSError:
+        return False
+    if not resolved_root.exists() or not resolved_root.is_dir():
+        return False
+
+    repository_root = _resolve_git_repository_root(resolved_root)
+    return repository_root == resolved_root
 
 
 def lookup_candidate_paths(
@@ -136,6 +147,13 @@ def lookup_repository(
 
 class LookupUnavailableError(RuntimeError):
     """Raised when the native lookup index cannot be used safely."""
+
+
+def _resolve_git_repository_root(root: Path) -> Path | None:
+    try:
+        return Path(_git_stdout(root, "rev-parse", "--show-toplevel").strip()).resolve()
+    except (LookupUnavailableError, OSError):
+        return None
 
 
 def _ensure_index_is_fresh(root: Path, db_path: Path) -> None:
@@ -212,13 +230,16 @@ def _run_rust_indexer(root: Path, db_path: Path) -> None:
         "--max-bytes",
         str(DEFAULT_MAX_TEXT_BYTES),
     ]
-    result = subprocess.run(
-        command,
-        cwd=_REPO_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            command,
+            cwd=_REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError as error:
+        raise LookupUnavailableError(f"failed to run cargo: {error}") from error
     if result.returncode != 0:
         stderr = result.stderr.strip()
         stdout = result.stdout.strip()
@@ -232,13 +253,16 @@ def _list_tracked_files(root: Path) -> list[Path]:
 
 
 def _git_stdout(root: Path, *args: str) -> str:
-    result = subprocess.run(
-        ["git", *args],
-        cwd=root,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError as error:
+        raise LookupUnavailableError(f"failed to run git: {error}") from error
     if result.returncode != 0:
         raise LookupUnavailableError(result.stderr.strip() or f"git {' '.join(args)} failed")
     return result.stdout

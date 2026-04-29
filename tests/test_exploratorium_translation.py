@@ -123,11 +123,12 @@ def test_sync_exploratorium_translation_reuses_timestamp_until_inventory_changes
     assert second_manifest["generated_at"] == "2026-03-18T10:35:42Z"
     assert second_tex == first_tex
 
-    (tmp_path / "documentation" / "fresh-note.md").write_text(
+    (tmp_path / "docs").mkdir(exist_ok=True)
+    (tmp_path / "docs" / "fresh-note.md").write_text(
         "# Fresh Note\n\nAdds new inventory surface.\n",
         encoding="utf-8",
     )
-    _git_add(tmp_path, "documentation/fresh-note.md")
+    _git_add(tmp_path, "docs/fresh-note.md")
     sync_exploratorium_translation(tmp_path)
     third_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     third_tex = tex_path.read_text(encoding="utf-8")

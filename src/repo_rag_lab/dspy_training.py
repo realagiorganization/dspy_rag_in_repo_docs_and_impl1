@@ -14,7 +14,9 @@ from typing import Protocol, cast
 from urllib.parse import urlparse
 
 from .corpus import load_documents
-from .retrieval import chunk_documents, retrieve
+from .retrieval import RetrievalMode, chunk_documents, resolve_retrieval_mode, retrieve
+from .retrieval_profile import load_retrieval_profile
+from .runtime_artifacts import write_bundle_manifest
 from .training_samples import TrainingExample, load_training_examples, validate_training_examples
 
 try:
@@ -135,6 +137,7 @@ class DSPyTrainingConfig:
     run_name: str = DEFAULT_DSPY_RUN_NAME
     optimizer: str = "bootstrapfewshot"
     top_k: int = 4
+    retrieval_mode: RetrievalMode | None = None
     max_bootstrapped_demos: int = 2
     max_labeled_demos: int = 2
     mipro_auto: str = "light"
@@ -164,11 +167,29 @@ class DSPyTrainingResult:
     training_example_count: int
     benchmark_summary: dict[str, object]
     lm_model: str
+    bundle_path: str | None = None
+    bundle_version: str | None = None
+
+    def to_payload(self) -> dict[str, object]:
+        """Return the training result as a machine-readable payload."""
+
+        payload = asdict(self)
+        payload["artifact_metadata"] = {
+            "input_paths": [self.training_path],
+            "generated_paths": [
+                self.artifact_dir,
+                self.program_path,
+                self.metadata_path,
+                *([self.bundle_path] if self.bundle_path else []),
+            ],
+            "related_paths": ["samples/training/repository_training_examples.yaml"],
+        }
+        return payload
 
     def to_json(self) -> str:
         """Return the training result as indented JSON."""
 
-        return json.dumps(asdict(self), indent=2)
+        return json.dumps(self.to_payload(), indent=2)
 
 
 @dataclass(frozen=True)
@@ -392,6 +413,7 @@ def list_dspy_artifacts(root: Path) -> list[dict[str, object]]:
     runs: list[dict[str, object]] = []
     for metadata_path in artifact_root.glob(f"*/{METADATA_FILENAME}"):
         metadata = load_dspy_artifact_metadata(metadata_path)
+        bundle_summary = write_bundle_manifest(resolved_root, metadata_path)
         program_path_value = metadata.get("program_path")
         if isinstance(program_path_value, str) and program_path_value.strip():
             resolved_program_path = Path(program_path_value)
@@ -426,6 +448,11 @@ def list_dspy_artifacts(root: Path) -> list[dict[str, object]]:
                     compiled_program_summary if isinstance(compiled_program_summary, dict) else None
                 ),
                 "lm": metadata.get("lm") if isinstance(metadata.get("lm"), dict) else None,
+                "bundle_path": bundle_summary.get("bundle_path"),
+                "bundle_version": bundle_summary.get("bundle_version"),
+                "bundle_status": bundle_summary.get("bundle_status"),
+                "bundle_benchmark_status": bundle_summary.get("benchmark_status"),
+                "bundle_summary": bundle_summary,
             }
         )
 
@@ -491,20 +518,35 @@ def describe_dspy_artifacts(root: Path) -> dict[str, object]:
         "latest_run_name": latest_run.get("run_name") if latest_run is not None else None,
         "latest_metadata_path": latest_run.get("metadata_path") if latest_run is not None else None,
         "latest_program_path": latest_run.get("program_path") if latest_run is not None else None,
+        "latest_bundle_path": latest_run.get("bundle_path") if latest_run is not None else None,
+        "latest_bundle_version": latest_run.get("bundle_version")
+        if latest_run is not None
+        else None,
         "runs": runs,
     }
 
 
 def retrieve_repository_context(
-    root: Path, question: str, *, top_k: int = 4
+    root: Path,
+    question: str,
+    *,
+    top_k: int = 4,
+    retrieval_mode: RetrievalMode | None = None,
 ) -> tuple[list[str], list[str]]:
     """Return retrieved repository snippets plus their relative source paths."""
 
     documents = load_documents(root)
     chunks = chunk_documents(documents)
-    retrieved_chunks = retrieve(question, chunks, top_k=top_k)
+    profile = load_retrieval_profile(root)
+    retrieved_chunks = retrieve(
+        question,
+        chunks,
+        top_k=top_k,
+        profile=profile,
+        retrieval_mode=retrieval_mode,
+    )
     context = [chunk.text for chunk in retrieved_chunks]
-    context_sources = [str(chunk.source.relative_to(root)) for chunk in retrieved_chunks]
+    context_sources = [str(chunk.source) for chunk in retrieved_chunks]
     return context, context_sources
 
 
@@ -540,17 +582,30 @@ if _dspy is not None:
     class RepositoryRAGProgram(_dspy.Module):
         """Repository-grounded DSPy module that performs retrieval before generation."""
 
-        def __init__(self, root: Path, top_k: int = 4) -> None:
+        def __init__(
+            self,
+            root: Path,
+            top_k: int = 4,
+            *,
+            retrieval_mode: RetrievalMode | None = None,
+        ) -> None:
             super().__init__()
             self.root = root.resolve()
             self.top_k = top_k
+            self.retrieval_mode: RetrievalMode = resolve_retrieval_mode(
+                load_retrieval_profile(self.root),
+                retrieval_mode,
+            )
             dspy_module = _dspy
             assert dspy_module is not None
             self.respond = dspy_module.ChainOfThought(RepositoryAnswerSignature)
 
         def forward(self, question: str) -> object:
             context, context_sources = retrieve_repository_context(
-                self.root, question, top_k=self.top_k
+                self.root,
+                question,
+                top_k=self.top_k,
+                retrieval_mode=self.retrieval_mode,
             )
             dspy_module = _dspy
             assert dspy_module is not None
@@ -569,6 +624,7 @@ def build_repository_rag_program(
     top_k: int = 4,
     program_path: Path | None = None,
     lm_config: DSPyLMConfig | None = None,
+    retrieval_mode: RetrievalMode | None = None,
     require_configured_lm: bool = True,
 ) -> RepositoryProgram:
     """Instantiate a repository DSPy program, optionally loading a saved artifact."""
@@ -581,6 +637,7 @@ def build_repository_rag_program(
             root=resolved_root,
             top_k=top_k,
             lm_config=lm_config,
+            retrieval_mode=retrieval_mode,
         )
     if lm_config is None and require_configured_lm:
         raise RuntimeError(
@@ -589,7 +646,10 @@ def build_repository_rag_program(
         )
     if lm_config is not None:
         configure_dspy_lm(lm_config)
-    return cast(RepositoryProgram, RepositoryRAGProgram(resolved_root, top_k=top_k))
+    return cast(
+        RepositoryProgram,
+        RepositoryRAGProgram(resolved_root, top_k=top_k, retrieval_mode=retrieval_mode),
+    )
 
 
 def load_compiled_repository_rag(
@@ -598,6 +658,7 @@ def load_compiled_repository_rag(
     root: Path,
     top_k: int = 4,
     lm_config: DSPyLMConfig | None = None,
+    retrieval_mode: RetrievalMode | None = None,
 ) -> RepositoryProgram:
     """Load a previously compiled repository DSPy program from disk."""
 
@@ -607,7 +668,7 @@ def load_compiled_repository_rag(
         raise FileNotFoundError(f"Compiled DSPy program does not exist: {resolved_program_path}")
     if lm_config is not None:
         configure_dspy_lm(lm_config)
-    program = RepositoryRAGProgram(root.resolve(), top_k=top_k)
+    program = RepositoryRAGProgram(root.resolve(), top_k=top_k, retrieval_mode=retrieval_mode)
     program.load(str(resolved_program_path), allow_pickle=False)
     return cast(RepositoryProgram, program)
 
@@ -712,7 +773,11 @@ def train_repository_program(
     trainset = build_dspy_trainset(examples)
     artifact_paths = resolve_dspy_artifact_paths(resolved_root, training_config.run_name)
     artifact_paths.artifact_dir.mkdir(parents=True, exist_ok=True)
-    program = RepositoryRAGProgram(resolved_root, top_k=training_config.top_k)
+    program = RepositoryRAGProgram(
+        resolved_root,
+        top_k=training_config.top_k,
+        retrieval_mode=training_config.retrieval_mode,
+    )
     optimizer = _build_optimizer(training_config)
     if training_config.optimizer.casefold() == "miprov2":
         compiled_program = optimizer.compile(
@@ -740,6 +805,7 @@ def train_repository_program(
         "training_example_count": len(examples),
         "optimizer": training_config.optimizer,
         "top_k": training_config.top_k,
+        "retrieval_mode": training_config.retrieval_mode,
         "lm": lm_config.as_metadata(),
         "benchmark_summary": benchmark_summary,
         "compiled_program_summary": {
@@ -752,6 +818,7 @@ def train_repository_program(
         f"{json.dumps(metadata, indent=2)}\n",
         encoding="utf-8",
     )
+    bundle_manifest = write_bundle_manifest(resolved_root, artifact_paths.metadata_path)
     return DSPyTrainingResult(
         run_name=_sanitize_run_name(training_config.run_name),
         artifact_dir=str(artifact_paths.artifact_dir.relative_to(resolved_root)),
@@ -762,4 +829,6 @@ def train_repository_program(
         training_example_count=len(examples),
         benchmark_summary=benchmark_summary,
         lm_model=lm_config.model,
+        bundle_path=str(bundle_manifest.get("bundle_path") or ""),
+        bundle_version=str(bundle_manifest.get("bundle_version") or ""),
     )

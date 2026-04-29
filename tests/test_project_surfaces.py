@@ -136,7 +136,7 @@ def test_publication_surface_files_exist_and_are_linked() -> None:
     assert "make dspy-artifacts" in readme
     assert "make github-pr-gates" in readme
     assert "make pages-build" in readme
-    assert "documentation/simple-end-to-end-verification-guide.md" in readme
+    assert "docs/operations/simple-end-to-end-verification-guide.md" in readme
 
     todo_text = (REPO_ROOT / "TODO.MD").read_text(encoding="utf-8")
     assert "| 🎯 | 🧭 Area | 📌 TODO | 🔗 Primary Surfaces | ✅ Done When |" in todo_text
@@ -146,7 +146,9 @@ def test_publication_surface_files_exist_and_are_linked() -> None:
 
 
 def test_rust_wrapper_surface_keeps_committed_lockfile_policy() -> None:
-    checklist = (REPO_ROOT / "REPO_COMPLETENESS_CHECKLIST.md").read_text(encoding="utf-8")
+    checklist = (REPO_ROOT / "docs/archive/repo-completeness-checklist.md").read_text(
+        encoding="utf-8"
+    )
 
     assert (REPO_ROOT / "rust-cli" / "Cargo.lock").exists()
     assert "rust-cli/Cargo.lock" in checklist

@@ -24,6 +24,7 @@ from repo_rag_lab.dspy_training import (
     resolve_dspy_program_path,
     train_repository_program,
 )
+from repo_rag_lab.runtime_artifacts import load_bundle_manifest
 from repo_rag_lab.training_samples import TrainingExample
 
 
@@ -191,6 +192,11 @@ def test_list_and_describe_dspy_artifacts_report_latest_run(tmp_path: Path) -> N
     assert description["run_count"] == 2
     assert description["latest_run_name"] == "newer-run"
     assert description["latest_program_path"] == "artifacts/dspy/newer-run/program.json"
+    assert description["latest_bundle_path"] == "artifacts/dspy/newer-run/bundle.json"
+    assert description["latest_bundle_version"] == "newer-run"
+    assert artifacts[0]["bundle_version"] == "newer-run"
+    assert artifacts[0]["bundle_path"] == "artifacts/dspy/newer-run/bundle.json"
+    assert artifacts[0]["bundle_benchmark_status"] == "pass"
 
 
 def test_resolve_dspy_program_path_prefers_explicit_over_latest(tmp_path: Path) -> None:
@@ -237,11 +243,11 @@ def test_build_dspy_trainset_marks_question_as_input() -> None:
 
 def test_repository_answer_metric_requires_answer_and_source_match() -> None:
     class Example:
-        answer = "The files are stored under documentation/inspired."
+        answer = "The files are stored under docs/architecture/inspired."
         expected_sources = ("README.md",)
 
     class Prediction:
-        answer = "The files are stored under documentation/inspired."
+        answer = "The files are stored under docs/architecture/inspired."
         context_sources = ("README.md",)
 
     example = Example()
@@ -402,8 +408,13 @@ def test_train_repository_program_writes_artifacts(
         del lm_config
         return object()
 
-    def fake_repository_program(root: Path, top_k: int = 4) -> FakeProgram:
-        del root, top_k
+    def fake_repository_program(
+        root: Path,
+        top_k: int = 4,
+        *,
+        retrieval_mode: str | None = None,
+    ) -> FakeProgram:
+        del root, top_k, retrieval_mode
         return fake_program
 
     def fake_build_optimizer(training_config: object) -> FakeOptimizer:
@@ -434,6 +445,15 @@ def test_train_repository_program_writes_artifacts(
     assert metadata["run_name"] == "sample-run"
     assert metadata["training_example_count"] == 1
     assert metadata["program_path"] == "artifacts/dspy/sample-run/program.json"
+    assert result.bundle_version == "sample-run"
+    assert result.bundle_path == "artifacts/dspy/sample-run/bundle.json"
+    bundle_path = tmp_path / result.bundle_path
+    assert bundle_path.exists()
+    bundle = load_bundle_manifest(bundle_path)
+    assert bundle["bundle_kind"] == "global"
+    assert bundle["bundle_version"] == "sample-run"
+    assert bundle["retrieval_mode"] is None
+    assert bundle["program_path"] == "artifacts/dspy/sample-run/program.json"
 
 
 def test_train_repository_program_raises_for_invalid_training_examples(tmp_path: Path) -> None:

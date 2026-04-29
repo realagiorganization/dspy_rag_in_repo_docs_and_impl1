@@ -1,0 +1,359 @@
+# Repository Research Narrative
+
+This file is the overreaching narrative for the repository. It is meant to answer one question
+that the other docs answer only in pieces: what research program is this repository actually
+running, how do its parts connect, and what evidence currently supports that story?
+
+Read this file as the top-level map. Then drop into the more specific docs:
+
+- [README.md](../../README.md) for operator-facing entrypoints and repo layout.
+- [docs/architecture/dspy-rag-guide.md](dspy-rag-guide.md) for the DSPy-specific implementation and training path.
+- [docs/operations/environment.md](../operations/environment.md) for environment and secret surfaces.
+- [docs/planning/repo-hardening-plan.md](../planning/repo-hardening-plan.md) and
+  [docs/planning/dataset-integration-plan.md](../planning/dataset-integration-plan.md) for the
+  current execution plans that turn the research lab into a reusable runtime plus `dataset`
+  integration target.
+- [publication/README.md](../../publication/README.md) and
+  [publication/repository-rag-lab-article.pdf](../../publication/repository-rag-lab-article.pdf) for
+  the publication-style walkthrough.
+- [docs/audit/README.md](../audit/README.md) and the newest dated audit note for current
+  verification evidence.
+
+## Thesis
+
+The repository treats a software project itself as a research object: a codebase is both the
+corpus and the laboratory. The same checked-in sources support:
+
+1. baseline repository-grounded retrieval,
+2. DSPy runtime answering and compiled-program development,
+3. notebook-based experiment playbooks,
+4. operational verification and CI evidence,
+5. publication-style reporting, and
+6. downstream deployment handoff metadata.
+
+The core claim is not just that repository RAG can be demonstrated. The stronger claim is that the
+entire workflow can be made self-describing and reproducible when notebooks, CLI surfaces, tests,
+audit notes, CI logs, and publication outputs all point at the same package helpers under
+[`src/repo_rag_lab/`](../../src/repo_rag_lab).
+
+## Research Questions
+
+The repository is currently organized around these questions:
+
+- How well can a repository answer questions about itself using only checked-in text and a simple
+  retriever?
+- How far can DSPy push that baseline when the repository also provides structured training
+  examples, retrieval benchmarks, and compiled-program persistence?
+- Can notebook experimentation stay honest if the real logic lives in tested Python modules instead
+  of ad hoc notebook cells?
+- Can verification evidence become part of the research record rather than a side channel?
+- Can publication and deployment-handoff artifacts be generated from the same workflow surfaces
+  instead of from parallel undocumented scripts?
+
+## Narrative Arc
+
+### 1. The Repository Becomes A Corpus
+
+The first move is to treat the repository as a bounded knowledge source rather than an external
+dataset. That story starts in:
+
+- [src/repo_rag_lab/corpus.py](../../src/repo_rag_lab/corpus.py)
+- [src/repo_rag_lab/retrieval.py](../../src/repo_rag_lab/retrieval.py)
+- [src/repo_rag_lab/workflow.py](../../src/repo_rag_lab/workflow.py)
+- [notebooks/01_repo_rag_research.ipynb](../../notebooks/01_repo_rag_research.ipynb)
+
+The repo loads its own text-like files, chunks them into paragraph-aware slices with fixed-width
+fallback, ranks them lexically with profile-aware adjustments plus source diversity, and
+synthesizes a baseline answer. The retriever now also applies light lexical normalization,
+optional `idf-rerank` second-stage scoring, and repository-root-relative source normalization plus
+repo-local profile overrides from `config/retrieval-profile.json` so primary docs beat synthetic
+echoes from tests, training samples, audits, generated inventories, and similar meta surfaces.
+This is the minimum honest system: before
+optimization, before benchmarking, and before deployment, the repo must be able to explain itself
+from its own contents instead of from its own scaffolding.
+
+### 2. The Corpus Is Curated, Not Just Scraped
+
+The second move is to acknowledge that not every file should count equally. Corpus planning is a
+research activity in its own right, not an implementation detail. That story lives in:
+
+- [samples/population/repository_population_candidates.yaml](../../samples/population/repository_population_candidates.yaml)
+- [src/repo_rag_lab/population_samples.py](../../src/repo_rag_lab/population_samples.py)
+- [notebooks/04_sample_population_lab.ipynb](../../notebooks/04_sample_population_lab.ipynb)
+
+This stage turns the repository from a flat directory tree into a prioritized knowledge plan. The
+repo can extend that plan automatically and rerank it from benchmark evidence, which is the first
+step from static documentation toward adaptive system behavior.
+
+### 3. MCP Discovery Broadens The Story
+
+The repository does not only answer content questions. It also inspects its own MCP-adjacent
+surfaces, so the research narrative includes operational structure as part of the corpus:
+
+- [src/repo_rag_lab/mcp.py](../../src/repo_rag_lab/mcp.py)
+- [docs/architecture/mcp-discovery.md](mcp-discovery.md)
+- [notebooks/01_repo_rag_research.ipynb](../../notebooks/01_repo_rag_research.ipynb)
+
+That matters because the repo is not just modeling prose. It is modeling tooling shape,
+integration affordances, and the agent-facing contract of the project.
+
+### 4. Training Examples Turn Narrative Into Measurable Work
+
+The next stage formalizes what “good answers” should look like:
+
+- [samples/training/repository_training_examples.yaml](../../samples/training/repository_training_examples.yaml)
+- [src/repo_rag_lab/training_samples.py](../../src/repo_rag_lab/training_samples.py)
+- [src/repo_rag_lab/benchmarks.py](../../src/repo_rag_lab/benchmarks.py)
+- [notebooks/03_dspy_training_lab.ipynb](../../notebooks/03_dspy_training_lab.ipynb)
+
+Training examples and expected sources convert repository self-description into a measurable
+benchmark surface. This is the point where the project stops being a demo and becomes a research
+instrument. The benchmark layer is now also a user-facing evaluation surface through
+`make retrieval-eval`, which reports top-k sweeps, richer retrieval-quality metrics, and now fails
+when minimum pass-rate or source-recall thresholds regress instead of leaving benchmark inspection
+buried in notebook helpers. The benchmark corpus is also narrower than the live full corpus on
+purpose: it now excludes repo-meta overlays such as `docs/architecture/research-narrative.md`, `FILES.md`, `docs/operations/environment.md`,
+`TODO.MD`, `todo-backlog.yaml`, `AGENTS.md.d/`, and generated exploratorium manifests so the
+quality signal stays anchored to the primary sources the retriever is supposed to surface.
+
+### 5. DSPy Moves The Repo From Prompted Runtime To Compiled Program
+
+The repo now has two DSPy layers:
+
+- a runtime answer path through [src/repo_rag_lab/dspy_workflow.py](../../src/repo_rag_lab/dspy_workflow.py)
+- a compile-save-reload path through [src/repo_rag_lab/dspy_training.py](../../src/repo_rag_lab/dspy_training.py)
+
+These are exposed through:
+
+- [src/repo_rag_lab/cli.py](../../src/repo_rag_lab/cli.py)
+- [rust-cli/](../../rust-cli/)
+- [Makefile](../../Makefile)
+- [docs/architecture/dspy-rag-guide.md](dspy-rag-guide.md)
+
+This is the current center of gravity of the repository. The project no longer stops at “use DSPy
+at runtime if available.” It can now compile a repository-grounded program, persist it under
+`artifacts/dspy/`, inspect saved runs as a first-class surface, and reuse the latest compiled
+program automatically for later questions.
+
+Before that DSPy layer runs, the Rust wrapper now exposes a repo-local SQLite FTS index and lookup
+path over tracked UTF-8 files. The default `ask` flow now narrows retrieval through those native
+lookup hits first and only falls back to the full corpus when the local hit set is weak. Agents are
+still expected to escalate to DSPy only when they need synthesis across hits instead of direct file
+evidence.
+
+### 6. Notebooks Become Playbooks, Not Logic Dumps
+
+The notebooks are part of the research narrative because they show how humans are expected to
+interrogate the system. But they are intentionally thin:
+
+- [src/repo_rag_lab/notebook_support.py](../../src/repo_rag_lab/notebook_support.py)
+- [src/repo_rag_lab/notebook_scaffolding.py](../../src/repo_rag_lab/notebook_scaffolding.py)
+- [src/repo_rag_lab/notebook_runner.py](../../src/repo_rag_lab/notebook_runner.py)
+- [notebooks/](../../notebooks/)
+
+Their role is to expose the experiment flow, not to hide untested logic in cells. The monitored
+notebook runner and notebook logs under `artifacts/notebook_runs/` and
+`artifacts/notebook_logs/` make notebook execution itself part of the observable research record.
+
+### 7. Verification Evidence Is Part Of The Research Output
+
+The repository treats verification as first-class evidence, not just build hygiene. That story is
+captured in:
+
+- [docs/audit/](../audit/)
+- [samples/logs/](../../samples/logs/)
+- [src/repo_rag_lab/verification.py](../../src/repo_rag_lab/verification.py)
+- [tests/](../../tests/)
+
+Audit notes capture local verification runs. GitHub Actions logs capture post-push CI status. The
+combination creates a chain of evidence from local claims to remote execution.
+
+### 8. Publication And Deployment Are Explicit Downstream Consumers
+
+The repository does not blur experimentation with deployment. Instead it keeps the handoffs
+explicit:
+
+- [publication/](../../publication/)
+- [src/repo_rag_lab/azure.py](../../src/repo_rag_lab/azure.py)
+- [docs/operations/azure-deployment.md](../operations/azure-deployment.md)
+- [docs/operations/trainer-deployment.md](../operations/trainer-deployment.md)
+
+The publication surface turns the technical work into a readable article. The Azure manifest and
+tuning metadata surfaces turn experimental outputs into deployment-oriented metadata without
+pretending that deployment itself happens inside this repo.
+
+The publication bundle now also includes a bilingual exploratorium subdocument that inventories the
+state of referenced papers and documentation, summarizes all tracked files, and summarizes every
+authored explicit URL in English and Russian. That turns repository self-inventory into a
+publication surface rather than leaving it as hidden maintenance glue.
+
+## Current State
+
+At the time of this document:
+
+- baseline repository-grounded RAG is implemented and exposed through `make ask`, which now
+  performs Rust SQLite lookup-first narrowing before falling back to broader retrieval
+- live Azure-backed repository answering is implemented and exposed through `make ask-live`
+- the baseline ask path, DSPy ask path, and live ask path now also expose an explicit
+  machine-readable `--output json` contract for worker-side consumption
+- Azure runtime contract probes are implemented and exposed through
+  `make azure-openai-probe` and `make azure-inference-probe`
+- env-gated live Azure integration coverage now exists in CI for the Azure OpenAI probe, live ask,
+  and LM-configured DSPy runtime path when the repository secrets and variables are present
+- bounded local Azure OpenAI validation is now also confirmed against a real `gpt-5.4`
+  deployment: `make azure-openai-probe` succeeds, `make ask-live` returns a live repository answer,
+  `tests/test_live_azure_integration.py` passes when the Azure runtime contract is present, and
+  `make trainer-recompile` now produces a real live-compiled bundle under `artifacts/dspy/`
+- the same live Azure validation now also proves the trainer-side bundle gate works as intended:
+  `make trainer-cycle` can run a real live recompilation and still block publish/promotion when the
+  resulting bundle benchmark pass rate does not meet the configured threshold
+- tracked-file inventory sync is implemented and exposed through `make files-sync`
+- retrieval-quality evaluation is implemented and exposed through `make retrieval-eval`
+- utility JSON surfaces now emit a normalized command envelope with `command`, `command_status`,
+  `warnings`, and `artifact_metadata` instead of making downstream callers infer command identity
+  or artifact paths out of free-form output
+- retrieval regressions now fail `make quality`, the pre-push hook, and CI through the same
+  threshold-aware `make retrieval-eval` gate
+- full-corpus retrieval now has explicit regression coverage against test/training/audit/meta-file
+  leakage for the tracked repository questions
+- local SQLite lookup over tracked files is implemented and exposed through `make rust-lookup-index`
+  plus `make rust-lookup`, and the same native narrowing path now works against arbitrary git
+  repository roots when worker-style `--root` execution is used
+- the broader retrieval layer now also supports a profile-selected `idf-rerank` mode and keeps
+  corpus source paths relative to whichever repository root is selected, including nested fixture
+  repos and worker-local temporary clones
+- the downstream `../dataset` integration now has `repo_rag_cli` in both places that matter:
+  the local `PromptExecutor` and the container worker path under
+  `docker/prompt-executor/`; both can call `repo-rag ask --output json`, persist the returned JSON
+  envelope and runtime trace inside prompt artifacts, route the `dspy` flag through a real
+  repo-RAG path instead of a stub, and keep compatibility `codex_response.txt` artifacts for
+  existing worker-side publishers
+- the container worker path now also auto-initializes a local overlay through
+  `repo-rag overlay-init` when no explicit overlay is supplied and exports a normalized worker
+  trace through `repo-rag trace-export`; both downstream paths now also persist worker outcome
+  manifests and can stage them into a trainer-side queue through `repo-rag trace-enqueue`, so the
+  remaining `dataset` work is about the background trainer/publisher service and promotion policy
+  rather than about basic runtime wiring
+- both downstream runtime paths can now also resolve a stable bundle version from a trainer
+  repository through `repo-rag bundle-inspect --channel stable` and can either import the
+  exported trace back into a trainer repository through `repo-rag trace-import` or stage it for
+  asynchronous drain through `repo-rag trace-enqueue`; those imported or queued records can now
+  also include accepted/candidate outcome metadata, leaving trainer scheduling and global
+  publication as the next integration layer
+- both downstream runtime paths can now also auto-detect repo-RAG-capable target repositories when
+  the caller would otherwise stay on the default `codex` path, so prepared clones of this
+  repository and similar native repos no longer require a manual backend override to use the
+  repo-RAG runtime
+- DSPy runtime answering is implemented and exposed through `make ask-dspy` after the same
+  lookup-first narrowing pass
+- DSPy compile-save-reload is implemented and exposed through `make dspy-train`
+- DSPy artifact inspection is implemented and exposed through `make dspy-artifacts`
+- versioned DSPy bundle manifests are now implemented and exposed through `make bundle-inspect`
+- worker-local overlay manifests are now implemented and exposed through `make overlay-init`
+- ask-family JSON outputs now carry a stable runtime trace schema so a later asynchronous trainer
+  loop can persist retrieval evidence without reverse-engineering free-form output
+- trace export and trace import are now implemented and exposed through `make trace-export` and
+  `make trace-import`, so local workers and a future global trainer can exchange normalized trace
+  records plus optional worker outcome metadata instead of raw command logs
+- queued trainer-side trace handoff is now implemented and exposed through `make trace-enqueue`
+  and `make trace-drain`, so worker hot paths can stage optimization data without waiting for
+  synchronous trainer-side import
+- a single-pass background trainer entrypoint is now implemented and exposed through
+  `make trainer-cycle`, so queue drain, retrieval gating, and optional bundle promotion can run as
+  a cron/Kubernetes job before a longer-lived trainer service exists
+- a long-lived background trainer loop is now implemented and exposed through
+  `make trainer-service`, so the same queue drain, gating, publish, and promotion workflow can
+  run continuously while recording trainer-side state/history artifacts under `artifacts/trainer/`
+- trainer-side queue drain is now also summarized into first-pass ingestion counters for accepted
+  vs. rejected outcomes, execution status, retrieval mode, bundle version, and empty
+  source/context cases, so imported traces are no longer only stored but also surfaced as
+  operational signals
+- imported traces can now also be materialized into cumulative YAML candidate examples under
+  `artifacts/trainer/training-candidates.yaml`, which gives the future global trainer a concrete
+  bridge from worker traces to DSPy review/compile inputs
+- those cumulative candidates can now also be merged back into
+  `artifacts/trainer/generated-training.yaml` and compiled into a fresh DSPy run through
+  `make trainer-recompile`, so the trainer path now has an explicit bridge from worker traces to
+  generated compile inputs instead of stopping at raw candidate accumulation
+- the background trainer path now also enforces a trainer-side DSPy benchmark gate before
+  publish/promotion, so an automatically recompiled bundle cannot advance purely because the
+  retrieval gate passed
+- the repository now also materializes Kubernetes Deployment and CronJob manifests for those
+  trainer-side roles through `make trainer-k8s-manifests`, so the current deployment story is no
+  longer only “you could wrap this in AKS later” but “here is the generated service/CronJob
+  surface that uses one shared image family plus PVC-backed artifacts”
+- the repository now also ships its own runtime image definition in the root `Dockerfile`, keeping
+  an editable checkout under `/workspace/repo-rag` so `repo-rag` can be preinstalled into worker
+  and trainer containers without breaking path-sensitive runtime features such as the Rust lookup
+  wrapper
+- the downstream `../dataset` deployment story now assumes a real repo-RAG runtime image named
+  `repo-rag-runtime`, built from this repository through `../dataset/build_and_push_images.sh`,
+  with `prompt-executor` using that runtime image as its base layer instead of treating repo-RAG
+  as an optional side checkout
+- `../dataset` now also carries explicit submodule metadata for this repository and
+  `dataset_website`, so the orchestration repository can show those relationships directly and use
+  the repo-RAG submodule as the preferred build context when it is initialized
+- the central inference story is now explicit instead of implied: workers and trainer-side live
+  recompilation currently target an external Azure/OpenAI inference layer first, while any shared
+  internal model-serving tier remains a later cost/compliance optimization rather than a hidden
+  prerequisite of the current runtime
+- the repository now also exposes a bounded stdio MCP server through `make serve-mcp`, but only
+  for short calls such as lightweight baseline ask, bundle status, DSPy artifact listing, and
+  queued trace publish; heavy trainer and evaluation workflows intentionally remain on direct CLI
+  surfaces
+- published bundle records and explicit `stable` / `canary` promotion state are now implemented
+  through `make bundle-publish`, `make bundle-promote`, and `make bundle-rollback`, so worker
+  startup no longer has to guess “latest run” when a promoted runtime is required
+- notebook batch execution and reporting are implemented and exposed through
+  `make notebook-report`
+- TODO and publication backlog synchronization are implemented and exposed through
+  `make todo-sync`
+- bilingual file, link, and fetch-state publication sync is implemented and exposed through
+  `make exploratorium-sync`
+- verification and CI logging are part of the repository contract, not optional cleanup
+
+The main bottlenecks are now quality and coverage of retrieval, training examples, and benchmark
+signal, not the lack of a DSPy or notebook execution surface.
+
+## Evidence Surfaces
+
+Use these files when you need to defend the current repository story quickly:
+
+| Question | Best starting point | Supporting surfaces |
+| --- | --- | --- |
+| What is the repo for? | [README.md](../../README.md) | [publication/repository-rag-lab-article.pdf](../../publication/repository-rag-lab-article.pdf) |
+| How is retrieval quality measured? | [docs/architecture/dspy-rag-guide.md](dspy-rag-guide.md) | [src/repo_rag_lab/benchmarks.py](../../src/repo_rag_lab/benchmarks.py), [docs/audit/2026-03-18-zzzzzzzzzzzz-retrieval-regression-gate.md](../audit/2026-03-18-zzzzzzzzzzzz-retrieval-regression-gate.md) |
+| How are live Azure runtime calls validated? | [docs/operations/azure-deployment.md](../operations/azure-deployment.md) | [src/repo_rag_lab/azure_runtime.py](../../src/repo_rag_lab/azure_runtime.py), [docs/audit/2026-03-18-azure-runtime-surfaces.md](../audit/2026-03-18-azure-runtime-surfaces.md) |
+| How does DSPy work here? | [docs/architecture/dspy-rag-guide.md](dspy-rag-guide.md) | [src/repo_rag_lab/dspy_training.py](../../src/repo_rag_lab/dspy_training.py), [src/repo_rag_lab/dspy_workflow.py](../../src/repo_rag_lab/dspy_workflow.py) |
+| How do agents do cheap file lookup before DSPy? | [AGENTS.md](../../AGENTS.md) | [AGENTS.md.d/RUST_LOOKUP.md](../../AGENTS.md.d/RUST_LOOKUP.md), [rust-cli/src/main.rs](../../rust-cli/src/main.rs), [Makefile](../../Makefile) |
+| How do notebooks fit in? | [notebooks/](../../notebooks/) | [src/repo_rag_lab/notebook_scaffolding.py](../../src/repo_rag_lab/notebook_scaffolding.py), [src/repo_rag_lab/notebook_runner.py](../../src/repo_rag_lab/notebook_runner.py) |
+| How is the repository inventory summarized? | [FILES.md](../../FILES.md) | [FILES.csv](../../FILES.csv), [src/repo_rag_lab/file_summaries.py](../../src/repo_rag_lab/file_summaries.py), [AGENTS.md.d/FILES.md](../../AGENTS.md.d/FILES.md) |
+| What currently passes? | [docs/audit/README.md](../audit/README.md) | newest dated note in [docs/audit/](../audit/), plus [samples/logs/](../../samples/logs/) |
+| What environment is required? | [docs/operations/environment.md](../operations/environment.md) | [docs/operations/azure-deployment.md](../operations/azure-deployment.md) |
+| How does the publication relate? | [publication/README.md](../../publication/README.md) | [publication/repository-rag-lab-article.pdf](../../publication/repository-rag-lab-article.pdf), [publication/exploratorium_translation/exploratorium_translation.pdf](../../publication/exploratorium_translation/exploratorium_translation.pdf) |
+
+## Tensions And Open Work
+
+The narrative is coherent, but not complete. The main open tensions are:
+
+- retrieval is still relatively simple compared with the sophistication of the DSPy training path
+- notebook execution is well observed, but notebook conclusions still depend on the quality of the
+  underlying corpus and benchmarks
+- deployment handoff is documented, but live remote deployment is intentionally outside repo scope
+- verification evidence is strong, but the index docs must be kept synchronized so the narrative
+  does not drift behind the latest audit and CI state
+
+## Maintenance Contract
+
+This file is supposed to move as the repository moves. Update it whenever a turn materially
+changes any of these:
+
+- the central research question or thesis
+- the narrative stages of the workflow
+- the repo-native surfaces in `README.md` or `Makefile`
+- DSPy training/runtime capabilities
+- notebook responsibilities or observability
+- verification evidence expectations
+- publication or deployment-handoff scope
+
+If a turn changes one of those and does not update this file, the repository narrative is drifting.

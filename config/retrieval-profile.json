@@ -1,0 +1,65 @@
+{
+  "name": "repository-rag-lab",
+  "retrieval_mode": "idf-rerank",
+  "rerank_candidate_pool_size": 24,
+  "source_adjustments_by_name": {
+    "README.md": 1.4,
+    "AGENTS.md": 1.2,
+    "FILES.csv": -4.0,
+    "FILES.md": -4.0,
+    "dspy-rag-guide.md": -4.0,
+    "research-narrative.md": -5.0,
+    "repo-completeness-checklist.md": -3.0,
+    "environment.md": -4.0,
+    "TODO.MD": -4.0,
+    "hushwheel-fixture-rag-guide.md": -3.0,
+    "workflow.py": -1.0,
+    "todo-backlog.yaml": -4.0
+  },
+  "source_adjustments_by_part": {
+    "documentation": 0.9,
+    "docs": 0.9,
+    "include": 0.8,
+    "publication": 0.5,
+    "utilities": 0.9,
+    "src": 0.6,
+    ".codex": -2.5,
+    ".github": -1.5,
+    "data": -6.0,
+    "generated": -2.0,
+    "tests": -5.0
+  },
+  "subpath_adjustments": [
+    { "path": ["AGENTS.md.d"], "value": -2.5 },
+    { "path": ["docs", "audit"], "value": -5.0 },
+    { "path": ["docs", "planning"], "value": -5.0 },
+    { "path": ["publication", "exploratorium_translation", "generated"], "value": -4.0 },
+    { "path": ["samples", "logs"], "value": -5.0 },
+    { "path": ["samples", "population"], "value": -6.0 },
+    { "path": ["samples", "training"], "value": -6.0 }
+  ],
+  "contextual_rules": [
+    {
+      "path_name": "utilities.py",
+      "subpath": ["src", "repo_rag_lab"],
+      "required_terms": ["repository", "research"],
+      "value": 1.7
+    },
+    {
+      "path_name": "rust_lookup.py",
+      "subpath": ["src", "repo_rag_lab"],
+      "required_terms": ["repository", "research"],
+      "value": -1.6
+    },
+    {
+      "subpath": ["utilities", "README.md"],
+      "required_term_prefix": "utilit",
+      "value": 0.7
+    },
+    {
+      "subpath": ["docs", "architecture", "inspired"],
+      "required_terms": ["inspired"],
+      "value": 2.0
+    }
+  ]
+}

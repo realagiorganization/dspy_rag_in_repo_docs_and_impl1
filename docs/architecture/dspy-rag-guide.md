@@ -28,31 +28,41 @@ program path.
 
 Present now:
 
-- [pyproject.toml](pyproject.toml) installs `dspy-ai` as part of the main Python package.
-- [src/repo_rag_lab/dspy_training.py](src/repo_rag_lab/dspy_training.py) resolves LM
+- [pyproject.toml](../../pyproject.toml) installs `dspy-ai` as part of the main Python package.
+- [src/repo_rag_lab/dspy_training.py](../../src/repo_rag_lab/dspy_training.py) resolves LM
   configuration from CLI flags or environment variables, defines the repository-grounded
   `RepositoryRAGProgram`, runs `BootstrapFewShot` or `MIPROv2`, persists artifacts under
   `artifacts/dspy/`, and summarizes saved runs for later reuse.
-- [src/repo_rag_lab/dspy_workflow.py](src/repo_rag_lab/dspy_workflow.py),
-  [src/repo_rag_lab/cli.py](src/repo_rag_lab/cli.py), and [Makefile](Makefile) expose both
+- [src/repo_rag_lab/dspy_workflow.py](../../src/repo_rag_lab/dspy_workflow.py),
+  [src/repo_rag_lab/cli.py](../../src/repo_rag_lab/cli.py), and [Makefile](../../Makefile) expose both
   runtime answering and compiled-program reuse through `ask --use-dspy`, `dspy-train`,
   `dspy-artifacts`, `make ask-dspy`, `make dspy-train`, and `make dspy-artifacts`.
-- [src/repo_rag_lab/training_samples.py](src/repo_rag_lab/training_samples.py),
-  [src/repo_rag_lab/benchmarks.py](src/repo_rag_lab/benchmarks.py), and
-  [src/repo_rag_lab/notebook_scaffolding.py](src/repo_rag_lab/notebook_scaffolding.py) provide
+- [src/repo_rag_lab/training_samples.py](../../src/repo_rag_lab/training_samples.py),
+  [src/repo_rag_lab/benchmarks.py](../../src/repo_rag_lab/benchmarks.py), and
+  [src/repo_rag_lab/notebook_scaffolding.py](../../src/repo_rag_lab/notebook_scaffolding.py) provide
   the data-preparation, evaluation, and artifact-discovery scaffolding used by the training lab.
-- [notebooks/03_dspy_training_lab.ipynb](notebooks/03_dspy_training_lab.ipynb) and
-  [notebooks/04_sample_population_lab.ipynb](notebooks/04_sample_population_lab.ipynb) document
+- [notebooks/03_dspy_training_lab.ipynb](../../notebooks/03_dspy_training_lab.ipynb) and
+  [notebooks/04_sample_population_lab.ipynb](../../notebooks/04_sample_population_lab.ipynb) document
   the sample-preparation and corpus-planning flow around that runtime.
 
 Not implemented yet:
 
-- Retrieval below DSPy is still the repository's lexical baseline from
-  [src/repo_rag_lab/retrieval.py](src/repo_rag_lab/retrieval.py), so compiled-program quality is
-  still bottlenecked by retrieved context quality.
+- Retrieval below DSPy is no longer lexical-only, but it is still lightweight: the repository now
+  supports a profile-driven lexical baseline plus an optional `idf-rerank` second stage from
+  [src/repo_rag_lab/retrieval.py](../../src/repo_rag_lab/retrieval.py) and
+  [config/retrieval-profile.json](../../config/retrieval-profile.json), so compiled-program quality
+  is still bottlenecked by retrieved context quality rather than by missing DSPy compile surfaces.
 - The repository persists final program artifacts and metadata, not richer optimizer histories,
   checkpoints, or run comparisons.
 - There is still no in-repo model fine-tuning or live deployment step.
+
+Boundary summary:
+
+- DSPy optimization in this repository means compiling and reusing a repository-grounded DSPy
+  program plus its bundle metadata.
+- Retrieval work in this repository means improving which repository evidence reaches that program.
+- Model-level weight tuning remains out of scope here; Azure/OpenAI or a future trainer service may
+  consume bundle outputs later, but the repository itself does not mutate base-model weights.
 
 The practical consequence is: this repo already supports corpus planning, training-sample curation,
 retrieval benchmarking, optional DSPy runtime answering, compiled-program persistence, saved-program
@@ -74,6 +84,9 @@ make dspy-train DSPY_RUN_NAME=smoke \
   DSPY_MODEL=openai/gpt-4o-mini \
   DSPY_API_KEY="$OPENAI_API_KEY"
 make dspy-artifacts
+uv run repo-rag ask --question "What does this repository research?" --output json
+uv run repo-rag ask --question "What does this repository research?" --use-dspy --output json \
+  --dspy-model openai/gpt-4o-mini --dspy-api-key "$OPENAI_API_KEY"
 make smoke-test
 make verify-surfaces
 ```
@@ -96,15 +109,91 @@ make ask-dspy QUESTION="What does this repository research?" \
   DSPY_API_KEY="$OPENAI_API_KEY"
 ```
 
+For downstream worker integration, the key new surface is the shared machine-readable envelope:
+
+- `uv run repo-rag ask --question "..." --output json`
+- `uv run repo-rag ask --question "..." --use-dspy --output json ...`
+- `uv run repo-rag ask-live --question "..." --output json`
+- `uv run repo-rag retrieval-eval --output json`
+- `uv run repo-rag dspy-artifacts --output json`
+- `uv run repo-rag bundle-inspect --channel stable --output json`
+- `uv run repo-rag bundle-publish --run-name <bundle-run> --output json`
+- `uv run repo-rag bundle-promote --channel stable --run-name <bundle-run> --output json`
+- `uv run repo-rag bundle-rollback --channel stable --output json`
+- `uv run repo-rag overlay-init --output json`
+- `uv run repo-rag trace-export --payload-path <ask-output.json> --output json`
+- `uv run repo-rag trace-import --trace-path <trace-record.json> --outcome-path <outcome.json> --output json`
+- `uv run repo-rag trace-enqueue --trace-path <trace-record.json> --queue-name dataset --outcome-path <outcome.json> --output json`
+- `uv run repo-rag trace-drain --queue-name dataset --output json`
+- `uv run repo-rag trainer-candidates --output json`
+- `uv run repo-rag trainer-recompile --run-name trainer-auto --output json`
+- `uv run repo-rag trainer-cycle --queue-name dataset --promote-channel canary --run-name <bundle-run> --output json`
+- `uv run repo-rag trainer-service --queue-name dataset --poll-interval-seconds 30 --max-idle-cycles 1 --output json`
+- `uv run repo-rag trainer-k8s-manifests --image ghcr.io/realagiorganization/repo-rag-lab:latest --output json`
+
+Those JSON surfaces now carry a shared envelope:
+
+- `command`
+- `command_status` with `success`, `fail`, or `error`
+- `warnings`
+- `artifact_metadata` with `input_paths`, `generated_paths`, and `related_paths`
+
+That gives downstream workers a stable contract instead of forcing them to parse the human-readable
+`Question:` / `Answer:` / `Evidence:` rendering. Command-specific payload fields still sit beside
+that shared envelope. The ask-family payloads now also carry:
+
+- `bundle_version` and `overlay_path` as reserved worker-facing fields
+- `trace`, a stable runtime-trace object that can be persisted directly by a future trainer loop
+- explicit bundle publish/promote/rollback commands so a future trainer loop can separate
+  “compiled bundle exists” from “bundle is promoted for worker use”
+- explicit `trace-export` / `trace-import` commands so the trainer loop can persist and ingest
+  those records, plus optional accepted/candidate outcome metadata, without re-parsing
+  human-readable output
+- explicit `trace-enqueue` / `trace-drain` commands so downstream workers can hand off trace and
+  outcome payloads asynchronously instead of blocking on synchronous trainer-side import
+- a `trainer-candidates` command that turns imported traces into cumulative YAML question/answer
+  candidates for later DSPy review or compilation
+- a `trainer-recompile` command that merges the base training set with those cumulative
+  candidate examples, writes `artifacts/trainer/generated-training.yaml`, and compiles a fresh
+  DSPy run from the merged corpus
+- a `trainer-cycle` command that can be wrapped by cron, systemd, or a Kubernetes Job before a
+  longer-lived trainer/publisher service exists, while optionally invoking that same
+  candidate-to-recompile bridge when LM config is available and enforcing a trainer-side DSPy
+  benchmark gate before publish/promotion
+- a `trainer-service` command that turns that same lifecycle into a long-running poller with
+  persisted state/history artifacts, so the repo now has a concrete asynchronous trainer surface
+  before a more specialized deployment package exists; the service aggregate now also counts
+  trainer cycles blocked by bundle benchmark gates
+- a `trainer-k8s-manifests` command that turns those repo-native trainer surfaces into concrete
+  Kubernetes Deployment and CronJob manifests without introducing Docker-in-Docker or a second
+  runtime contract
+- first-pass trainer-side ingestion summaries on both surfaces, so imported traces now contribute
+  acceptance-status, execution-status, retrieval-mode, bundle-version, and empty source/context
+  counts instead of being only opaque files on disk
+
+The bounded local validation path now works end-to-end once the full LM contract is present, not
+only an API key. On `2026-04-29` the repository validated all of the following against a real
+Azure OpenAI `gpt-5.4` deployment:
+
+- `uv run repo-rag azure-openai-probe`
+- `uv run repo-rag ask-live --question "What does this repository research?" --provider azure-openai --output json`
+- `uv run pytest tests/test_live_azure_integration.py`
+- `uv run repo-rag trainer-recompile --run-name trainer-live-check --output json`
+
+`trainer-cycle --recompile-run-name ... --output json` also now performs a live recompilation under
+the same Azure config and then blocks publish when the trainer-side DSPy bundle benchmark gate is
+not met. A local shell that lacks endpoint/deployment metadata will still skip or fail these live
+surfaces even though queue drain and candidate materialization remain available.
+
 Use the notebooks when you want the research-playbook view.
 
-- [notebooks/01_repo_rag_research.ipynb](notebooks/01_repo_rag_research.ipynb): baseline
+- [notebooks/01_repo_rag_research.ipynb](../../notebooks/01_repo_rag_research.ipynb): baseline
   repository RAG, MCP discovery, smoke test.
-- [notebooks/02_agent_workflow_checklist.ipynb](notebooks/02_agent_workflow_checklist.ipynb):
+- [notebooks/02_agent_workflow_checklist.ipynb](../../notebooks/02_agent_workflow_checklist.ipynb):
   operational checklist for agents.
-- [notebooks/03_dspy_training_lab.ipynb](notebooks/03_dspy_training_lab.ipynb): training-sample
+- [notebooks/03_dspy_training_lab.ipynb](../../notebooks/03_dspy_training_lab.ipynb): training-sample
   inspection plus latest compiled-program inspection and reuse.
-- [notebooks/04_sample_population_lab.ipynb](notebooks/04_sample_population_lab.ipynb): corpus
+- [notebooks/04_sample_population_lab.ipynb](../../notebooks/04_sample_population_lab.ipynb): corpus
   population planning.
 
 ## End-To-End Map
@@ -142,11 +231,11 @@ optimizer is involved?
 
 Primary files:
 
-- [samples/population/repository_population_candidates.yaml](samples/population/repository_population_candidates.yaml)
-- [src/repo_rag_lab/population_samples.py](src/repo_rag_lab/population_samples.py)
-- [documentation/package-api.md](documentation/package-api.md)
-- [documentation/mcp-discovery.md](documentation/mcp-discovery.md)
-- [notebooks/04_sample_population_lab.ipynb](notebooks/04_sample_population_lab.ipynb)
+- [samples/population/repository_population_candidates.yaml](../../samples/population/repository_population_candidates.yaml)
+- [src/repo_rag_lab/population_samples.py](../../src/repo_rag_lab/population_samples.py)
+- [docs/architecture/package-api.md](package-api.md)
+- [docs/architecture/mcp-discovery.md](mcp-discovery.md)
+- [notebooks/04_sample_population_lab.ipynb](../../notebooks/04_sample_population_lab.ipynb)
 
 The seed data is a small, ordered YAML list:
 
@@ -168,8 +257,8 @@ The preparation flow is:
    non-positive priorities, absolute paths, and missing files.
 4. `extend_population_candidates(root, candidates)` automatically adds stable documentation surfaces
    that matter for notebook and DSPy work, currently
-   [documentation/package-api.md](documentation/package-api.md),
-   [documentation/mcp-discovery.md](documentation/mcp-discovery.md), and discovered submodule docs.
+   [docs/architecture/package-api.md](package-api.md),
+   [docs/architecture/mcp-discovery.md](mcp-discovery.md), and discovered submodule docs.
 5. `rerank_population_candidates(candidates, source_hits)` can reorder the plan from empirical
    benchmark evidence.
 
@@ -192,9 +281,9 @@ print(payload["reranked_sources"])
 Important cross-reference:
 
 - The output of this stage affects the quality of the file set later loaded by
-  [src/repo_rag_lab/corpus.py](src/repo_rag_lab/corpus.py).
+  [src/repo_rag_lab/corpus.py](../../src/repo_rag_lab/corpus.py).
 - The empirical re-ranking input comes from
-  [src/repo_rag_lab/benchmarks.py](src/repo_rag_lab/benchmarks.py).
+  [src/repo_rag_lab/benchmarks.py](../../src/repo_rag_lab/benchmarks.py).
 
 ## Stage 2. Repository Loading And Retrieval Baseline
 
@@ -203,11 +292,11 @@ consume.
 
 Primary files:
 
-- [src/repo_rag_lab/corpus.py](src/repo_rag_lab/corpus.py)
-- [src/repo_rag_lab/retrieval.py](src/repo_rag_lab/retrieval.py)
-- [src/repo_rag_lab/workflow.py](src/repo_rag_lab/workflow.py)
-- [src/repo_rag_lab/mcp.py](src/repo_rag_lab/mcp.py)
-- [notebooks/01_repo_rag_research.ipynb](notebooks/01_repo_rag_research.ipynb)
+- [src/repo_rag_lab/corpus.py](../../src/repo_rag_lab/corpus.py)
+- [src/repo_rag_lab/retrieval.py](../../src/repo_rag_lab/retrieval.py)
+- [src/repo_rag_lab/workflow.py](../../src/repo_rag_lab/workflow.py)
+- [src/repo_rag_lab/mcp.py](../../src/repo_rag_lab/mcp.py)
+- [notebooks/01_repo_rag_research.ipynb](../../notebooks/01_repo_rag_research.ipynb)
 
 The flow is intentionally simple:
 
@@ -216,9 +305,12 @@ The flow is intentionally simple:
    `.json`, `.feature`.
 3. Generated and noisy directories are skipped, including `.git`, `.venv`, `artifacts`, `dist`,
    `build`, and cache folders.
-4. `load_documents(root)` reads each file into a `RepoDocument`.
+4. `load_documents(root)` reads each file into a `RepoDocument` and keeps source paths relative
+   to the selected repository root.
 5. `chunk_documents(documents, chunk_size=1200)` splits documents into fixed-size text chunks.
-6. `retrieve(question, chunks, top_k=4)` uses lexical overlap plus light density weighting.
+6. `retrieve(question, chunks, top_k=4)` uses lexical overlap, path-aware weighting, and an
+   optional `idf-rerank` second stage selected through the active retrieval profile or an
+   explicit CLI override.
 7. `ask_repository(question, root)` renders a deterministic baseline answer with explicit
    `Question:`, `Answer:`, and `Evidence:` sections, citing the most answer-rich retrieved chunks
    plus any MCP candidates.
@@ -234,17 +326,20 @@ answer = synthesize_answer(question=question, context=context, mcp_servers=mcp_s
 
 Why this matters for DSPy:
 
-- [src/repo_rag_lab/dspy_workflow.py](src/repo_rag_lab/dspy_workflow.py) reuses this exact corpus
+- [src/repo_rag_lab/dspy_workflow.py](../../src/repo_rag_lab/dspy_workflow.py) reuses this exact corpus
   and retrieval machinery.
 - Any improvement to corpus cleaning or ranking here improves both the baseline and DSPy paths.
 - The notebook and benchmark layers assume this load-chunk-rank contract.
 
 MCP discovery is adjacent to retrieval, not a separate product:
 
-- [src/repo_rag_lab/mcp.py](src/repo_rag_lab/mcp.py) scans for `mcp.json`, `.mcp.json`,
+- [src/repo_rag_lab/mcp.py](../../src/repo_rag_lab/mcp.py) scans for `mcp.json`, `.mcp.json`,
   `pyproject.toml`, `Cargo.toml`, and `package.json`.
 - The resulting hints are surfaced in baseline answers and workflow notebooks.
 - The population stage uses MCP documentation as a source-planning input.
+- When a real MCP transport is needed, [src/repo_rag_lab/mcp_server.py](../../src/repo_rag_lab/mcp_server.py)
+  now exposes only bounded tools such as lightweight ask, bundle status, artifact listing, and
+  queued trace publish; heavy DSPy compilation and retrieval evaluation stay on the direct CLI path.
 
 ## Stage 3. Training Sample Preparation
 
@@ -254,10 +349,10 @@ Azure runtime guidance, MCP notes, notebook execution, and publication build gui
 
 Primary files:
 
-- [samples/training/repository_training_examples.yaml](samples/training/repository_training_examples.yaml)
-- [src/repo_rag_lab/training_samples.py](src/repo_rag_lab/training_samples.py)
-- [notebooks/03_dspy_training_lab.ipynb](notebooks/03_dspy_training_lab.ipynb)
-- [tests/test_training_samples.py](tests/test_training_samples.py)
+- [samples/training/repository_training_examples.yaml](../../samples/training/repository_training_examples.yaml)
+- [src/repo_rag_lab/training_samples.py](../../src/repo_rag_lab/training_samples.py)
+- [notebooks/03_dspy_training_lab.ipynb](../../notebooks/03_dspy_training_lab.ipynb)
+- [tests/test_training_samples.py](../../tests/test_training_samples.py)
 
 The current checked-in sample file uses question, expected answer, and tags:
 
@@ -320,9 +415,9 @@ print(batch_training_examples(examples, batch_size=2))
 
 Important cross-reference:
 
-- These same examples feed [src/repo_rag_lab/benchmarks.py](src/repo_rag_lab/benchmarks.py).
+- These same examples feed [src/repo_rag_lab/benchmarks.py](../../src/repo_rag_lab/benchmarks.py).
 - The notebook scaffolds in
-  [src/repo_rag_lab/notebook_scaffolding.py](src/repo_rag_lab/notebook_scaffolding.py) load and
+  [src/repo_rag_lab/notebook_scaffolding.py](../../src/repo_rag_lab/notebook_scaffolding.py) load and
   validate them automatically.
 
 ## Stage 4. Benchmark-Driven Development
@@ -333,11 +428,11 @@ retrieval evidence.
 
 Primary files:
 
-- [src/repo_rag_lab/benchmarks.py](src/repo_rag_lab/benchmarks.py)
-- [src/repo_rag_lab/notebook_support.py](src/repo_rag_lab/notebook_support.py)
-- [src/repo_rag_lab/notebook_scaffolding.py](src/repo_rag_lab/notebook_scaffolding.py)
-- [notebooks/03_dspy_training_lab.ipynb](notebooks/03_dspy_training_lab.ipynb)
-- [notebooks/04_sample_population_lab.ipynb](notebooks/04_sample_population_lab.ipynb)
+- [src/repo_rag_lab/benchmarks.py](../../src/repo_rag_lab/benchmarks.py)
+- [src/repo_rag_lab/notebook_support.py](../../src/repo_rag_lab/notebook_support.py)
+- [src/repo_rag_lab/notebook_scaffolding.py](../../src/repo_rag_lab/notebook_scaffolding.py)
+- [notebooks/03_dspy_training_lab.ipynb](../../notebooks/03_dspy_training_lab.ipynb)
+- [notebooks/04_sample_population_lab.ipynb](../../notebooks/04_sample_population_lab.ipynb)
 
 The benchmark loop is:
 
@@ -347,7 +442,7 @@ The benchmark loop is:
    corpus, while `evaluate_retrieval_quality_suite(...)` sweeps multiple `top_k` values over the
    same benchmark set.
 3. The benchmark corpus explicitly excludes noisy or leaking paths such as `.codex`, `.github`,
-   `tests`, `data`, `samples/training`, `samples/logs`, `README.AGENTS.md`, `FILES.md`, `env.md`,
+   `tests`, `data`, `samples/training`, `samples/logs`, `docs/architecture/research-narrative.md`, `FILES.md`, `docs/operations/environment.md`,
    `TODO.MD`, `todo-backlog.yaml`, `AGENTS.md.d/`, and generated exploratorium manifests.
 4. Each result records `retrieved_sources`, `matched_sources`, missed sources, first relevant rank,
    reciprocal rank, source recall, source precision, and tags.
@@ -356,15 +451,17 @@ The benchmark loop is:
    rollups so notebook and CLI users can see which retrieval slices regress.
 6. `assert_minimum_pass_rate(summary, minimum_pass_rate=2 / 3)` can fail a notebook run when the
    retrieval surface regresses, while the shared threshold helpers in
-   [src/repo_rag_lab/benchmarks.py](src/repo_rag_lab/benchmarks.py) now power the CLI and CI gate
+   [src/repo_rag_lab/benchmarks.py](../../src/repo_rag_lab/benchmarks.py) now power the CLI and CI gate
    too.
 7. The source-hit summary can feed
    `rerank_population_candidates(...)` in
-   [src/repo_rag_lab/population_samples.py](src/repo_rag_lab/population_samples.py).
+   [src/repo_rag_lab/population_samples.py](../../src/repo_rag_lab/population_samples.py).
 8. `make retrieval-eval` and `uv run repo-rag retrieval-eval` expose the same evaluation suite as a
    user-facing utility surface, and the repo defaults now enforce `minimum_pass_rate=1.0` plus
    `minimum_source_recall=1.0` so regressions fail in `make quality`, pre-push, and CI.
-9. The live full-corpus retriever in [src/repo_rag_lab/retrieval.py](src/repo_rag_lab/retrieval.py)
+   The same utility now emits shared command metadata in its JSON payload so downstream callers
+   can treat it as a stable machine-readable contract instead of an ad hoc blob.
+9. The live full-corpus retriever in [src/repo_rag_lab/retrieval.py](../../src/repo_rag_lab/retrieval.py)
    now also guards against a different class of regressions: test files, training samples, audit
    notes, generated inventories, and summary overlays should not outrank primary docs when the user
    is asking which file to read or where a concept is documented.
@@ -396,7 +493,7 @@ Why this is the key development stage:
 - It produces measurable evidence before any DSPy optimizer work begins.
 - It can automatically tell you which repository files are actually helping retrieval.
 - It generates the benchmark summary later written into tuning metadata by
-  [src/repo_rag_lab/azure.py](src/repo_rag_lab/azure.py).
+  [src/repo_rag_lab/azure.py](../../src/repo_rag_lab/azure.py).
 
 ## Stage 5. Optional DSPy Execution Path
 
@@ -404,14 +501,14 @@ This stage now covers both the direct DSPy runtime path and the compile-save-rel
 
 Primary files:
 
-- [src/repo_rag_lab/dspy_training.py](src/repo_rag_lab/dspy_training.py)
-- [src/repo_rag_lab/dspy_workflow.py](src/repo_rag_lab/dspy_workflow.py)
-- [src/repo_rag_lab/cli.py](src/repo_rag_lab/cli.py)
-- [Makefile](Makefile)
-- [tests/test_dspy_training.py](tests/test_dspy_training.py)
-- [tests/test_cli_and_dspy.py](tests/test_cli_and_dspy.py)
-- [documentation/inspired/dspy-rag-tutorial.md](documentation/inspired/dspy-rag-tutorial.md)
-- [documentation/inspired/implementing-rag-with-dspy-technical-guide.md](documentation/inspired/implementing-rag-with-dspy-technical-guide.md)
+- [src/repo_rag_lab/dspy_training.py](../../src/repo_rag_lab/dspy_training.py)
+- [src/repo_rag_lab/dspy_workflow.py](../../src/repo_rag_lab/dspy_workflow.py)
+- [src/repo_rag_lab/cli.py](../../src/repo_rag_lab/cli.py)
+- [Makefile](../../Makefile)
+- [tests/test_dspy_training.py](../../tests/test_dspy_training.py)
+- [tests/test_cli_and_dspy.py](../../tests/test_cli_and_dspy.py)
+- [docs/architecture/inspired/dspy-rag-tutorial.md](inspired/dspy-rag-tutorial.md)
+- [docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md](inspired/implementing-rag-with-dspy-technical-guide.md)
 
 The runtime flow is now:
 
@@ -428,19 +525,20 @@ result = runtime("What does this repository research?")
 print(result.answer)
 ```
 
-1. [src/repo_rag_lab/cli.py](src/repo_rag_lab/cli.py) parses either `repo-rag ask --use-dspy`
+1. [src/repo_rag_lab/cli.py](../../src/repo_rag_lab/cli.py) parses either `repo-rag ask --use-dspy`
    or `repo-rag dspy-train`.
 2. `resolve_dspy_lm_config(...)` maps explicit flags or environment variables into a typed DSPy LM
    config.
 3. `RepositoryRAG(...)` either builds a fresh runtime program, auto-loads the latest compiled
    program, or loads `--dspy-program-path` from disk.
-4. [src/repo_rag_lab/dspy_training.py](src/repo_rag_lab/dspy_training.py) validates the training
+4. [src/repo_rag_lab/dspy_training.py](../../src/repo_rag_lab/dspy_training.py) validates the training
    examples, builds a DSPy trainset, compiles a `RepositoryRAGProgram`, writes
    `artifacts/dspy/<run-name>/program.json`, and records `metadata.json`.
 5. `RepositoryRAGProgram` still retrieves context through
-   [src/repo_rag_lab/corpus.py](src/repo_rag_lab/corpus.py) and
-   [src/repo_rag_lab/retrieval.py](src/repo_rag_lab/retrieval.py), so DSPy changes the
-   answer-generation and compile layers without replacing the current retriever.
+   [src/repo_rag_lab/corpus.py](../../src/repo_rag_lab/corpus.py) and
+   [src/repo_rag_lab/retrieval.py](../../src/repo_rag_lab/retrieval.py), with repo-local weighting
+   loaded from [config/retrieval-profile.json](../../config/retrieval-profile.json), so DSPy
+   changes the answer-generation and compile layers without replacing the current retriever.
 
 The user-facing commands are:
 
@@ -465,9 +563,13 @@ Important limitation:
 
 - The compile path now exists, but it still sits on the repository's lexical retriever.
 - A saved program still needs an LM configured at runtime before it can answer.
-- The repository persists the final program and metadata, not richer optimizer traces or
-  experiment-comparison dashboards.
-- The inspired notes under [documentation/inspired/](documentation/inspired/) still matter because
+- The repository now persists `program.json`, `metadata.json`, and a versioned `bundle.json`, but
+  it still does not keep richer optimizer histories or experiment-comparison dashboards.
+- The worker-local overlay format exists, but it currently tracks retrieval and trace state rather
+  than local model weights.
+- Trace export/import surfaces now exist, but no global trainer or bundle-promotion workflow uses
+  them yet.
+- The inspired notes under [docs/architecture/inspired/](inspired/) still matter because
   retrieval and evaluation depth remain the next meaningful extension surface.
 
 ## Stage 6. Notebook Automation And Artifacts
@@ -477,12 +579,12 @@ and now also surface the latest compiled DSPy artifact when one exists.
 
 Primary files:
 
-- [src/repo_rag_lab/notebook_support.py](src/repo_rag_lab/notebook_support.py)
-- [src/repo_rag_lab/notebook_scaffolding.py](src/repo_rag_lab/notebook_scaffolding.py)
-- [notebooks/01_repo_rag_research.ipynb](notebooks/01_repo_rag_research.ipynb)
-- [notebooks/02_agent_workflow_checklist.ipynb](notebooks/02_agent_workflow_checklist.ipynb)
-- [notebooks/03_dspy_training_lab.ipynb](notebooks/03_dspy_training_lab.ipynb)
-- [notebooks/04_sample_population_lab.ipynb](notebooks/04_sample_population_lab.ipynb)
+- [src/repo_rag_lab/notebook_support.py](../../src/repo_rag_lab/notebook_support.py)
+- [src/repo_rag_lab/notebook_scaffolding.py](../../src/repo_rag_lab/notebook_scaffolding.py)
+- [notebooks/01_repo_rag_research.ipynb](../../notebooks/01_repo_rag_research.ipynb)
+- [notebooks/02_agent_workflow_checklist.ipynb](../../notebooks/02_agent_workflow_checklist.ipynb)
+- [notebooks/03_dspy_training_lab.ipynb](../../notebooks/03_dspy_training_lab.ipynb)
+- [notebooks/04_sample_population_lab.ipynb](../../notebooks/04_sample_population_lab.ipynb)
 
 Notebook support responsibilities:
 
@@ -517,12 +619,12 @@ print(payload["compiled_program_path"])
 
 That single call crosses these modules in sequence:
 
-1. [src/repo_rag_lab/training_samples.py](src/repo_rag_lab/training_samples.py)
-2. [src/repo_rag_lab/benchmarks.py](src/repo_rag_lab/benchmarks.py)
-3. [src/repo_rag_lab/dspy_training.py](src/repo_rag_lab/dspy_training.py)
-4. [src/repo_rag_lab/azure.py](src/repo_rag_lab/azure.py)
+1. [src/repo_rag_lab/training_samples.py](../../src/repo_rag_lab/training_samples.py)
+2. [src/repo_rag_lab/benchmarks.py](../../src/repo_rag_lab/benchmarks.py)
+3. [src/repo_rag_lab/dspy_training.py](../../src/repo_rag_lab/dspy_training.py)
+4. [src/repo_rag_lab/azure.py](../../src/repo_rag_lab/azure.py)
 
-[notebooks/03_dspy_training_lab.ipynb](notebooks/03_dspy_training_lab.ipynb) keeps the research
+[notebooks/03_dspy_training_lab.ipynb](../../notebooks/03_dspy_training_lab.ipynb) keeps the research
 playbook shape:
 
 1. load training helpers
@@ -541,9 +643,9 @@ deployment itself.
 
 Primary files:
 
-- [src/repo_rag_lab/azure.py](src/repo_rag_lab/azure.py)
-- [documentation/azure-deployment.md](documentation/azure-deployment.md)
-- [artifacts/azure/](artifacts/azure/)
+- [src/repo_rag_lab/azure.py](../../src/repo_rag_lab/azure.py)
+- [docs/operations/azure-deployment.md](../operations/azure-deployment.md)
+- [artifacts/azure/](../../artifacts/azure/)
 
 There are two related artifact writers:
 
@@ -574,22 +676,26 @@ so the verification story is also multi-surface.
 
 Primary tests:
 
-- [tests/test_dspy_training.py](tests/test_dspy_training.py): LM resolution, artifact persistence,
+- [tests/test_dspy_training.py](../../tests/test_dspy_training.py): LM resolution, artifact persistence,
   optimizer errors, and repository-answer metric behavior.
-- [tests/test_cli_and_dspy.py](tests/test_cli_and_dspy.py): optional DSPy wrapper and CLI behavior.
-- [tests/test_training_samples.py](tests/test_training_samples.py): training sample loading,
+- [tests/test_cli_and_dspy.py](../../tests/test_cli_and_dspy.py): optional DSPy wrapper and CLI behavior.
+- [tests/test_training_samples.py](../../tests/test_training_samples.py): training sample loading,
   batching, summary.
-- [tests/test_population_samples.py](tests/test_population_samples.py): corpus planning samples.
-- [tests/test_utilities.py](tests/test_utilities.py): utility summary, smoke test, surface
+- [tests/test_population_samples.py](../../tests/test_population_samples.py): corpus planning samples.
+- [tests/test_utilities.py](../../tests/test_utilities.py): utility summary, smoke test, surface
   verification serialization.
-- [tests/test_repository_rag_bdd.py](tests/test_repository_rag_bdd.py): baseline behavior checks.
-- [tests/test_project_surfaces.py](tests/test_project_surfaces.py): packaging and manifest surfaces.
-- [tests/test_verification.py](tests/test_verification.py): Makefile and notebook contract checks.
+- [tests/test_repository_rag_bdd.py](../../tests/test_repository_rag_bdd.py): baseline behavior checks.
+- [tests/test_project_surfaces.py](../../tests/test_project_surfaces.py): packaging and manifest surfaces.
+- [tests/test_verification.py](../../tests/test_verification.py): Makefile and notebook contract checks.
+- [tests/test_live_azure_integration.py](../../tests/test_live_azure_integration.py): env-gated live
+  Azure OpenAI probe coverage, live `ask_repository_live(...)`, and a real LM-configured DSPy
+  runtime invocation when the Azure runtime contract is present.
 
-Current test gap:
+Current verification boundary:
 
-- [tests/test_cli_and_dspy.py](tests/test_cli_and_dspy.py) verifies retrieval and the fallback path
-  when DSPy is unavailable, but it does not currently cover a real LM-configured DSPy invocation.
+- The live Azure and LM-configured DSPy coverage is now present, but it is intentionally
+  env-gated. Local runs and forks skip it cleanly when the repository does not provide the Azure
+  runtime through GitHub secrets and variables or through an operator shell environment.
 
 Primary commands:
 
@@ -603,10 +709,10 @@ make verify-surfaces
 
 Useful cross-references:
 
-- [Makefile](Makefile) exposes the canonical verification targets.
-- [src/repo_rag_lab/verification.py](src/repo_rag_lab/verification.py) validates notebook and
+- [Makefile](../../Makefile) exposes the canonical verification targets.
+- [src/repo_rag_lab/verification.py](../../src/repo_rag_lab/verification.py) validates notebook and
   Makefile contracts.
-- [docs/audit/2026-03-18-zzzzzzzzzzzz-retrieval-regression-gate.md](docs/audit/2026-03-18-zzzzzzzzzzzz-retrieval-regression-gate.md)
+- [docs/audit/2026-03-18-zzzzzzzzzzzz-retrieval-regression-gate.md](../audit/2026-03-18-zzzzzzzzzzzz-retrieval-regression-gate.md)
   records the current retrieval-quality evaluation evidence.
 
 ## Current Gap And Direct Extension Path
@@ -614,14 +720,14 @@ Useful cross-references:
 Now that the compile path exists, the shortest honest extension path is:
 
 1. Enrich more entries in
-   [samples/training/repository_training_examples.yaml](samples/training/repository_training_examples.yaml)
+   [samples/training/repository_training_examples.yaml](../../samples/training/repository_training_examples.yaml)
    with `expected_sources` so benchmark coverage stays meaningful as the benchmark set grows.
-2. Improve retrieval under DSPy, most likely through embeddings or an MCP-backed retrieval surface,
+2. Improve retrieval under DSPy, most likely through embeddings or a richer bounded retrieval surface,
    because the current lexical retriever is now the clearest quality bottleneck.
 3. Extend the artifact model beyond `program.json` and `metadata.json` so runs can be compared and
    promoted intentionally.
 4. Keep extending
-   [notebooks/03_dspy_training_lab.ipynb](notebooks/03_dspy_training_lab.ipynb) and CI coverage so
+   [notebooks/03_dspy_training_lab.ipynb](../../notebooks/03_dspy_training_lab.ipynb) and CI coverage so
    saved-program reuse is exercised with realistic credentials or a stable mock.
 5. Add tests that verify richer regression metrics, saved-program promotion rules, and downstream
    Azure inference behavior beyond manifest generation.
@@ -630,27 +736,27 @@ The existing scaffolding already gives the right inputs for that work, and the r
 starter set is now broad enough to cover repo overview, utilities, package API, Azure runtime,
 MCP, notebook execution, and publication surfaces:
 
-- corpus planning from [src/repo_rag_lab/population_samples.py](src/repo_rag_lab/population_samples.py)
-- benchmark data from [src/repo_rag_lab/benchmarks.py](src/repo_rag_lab/benchmarks.py)
+- corpus planning from [src/repo_rag_lab/population_samples.py](../../src/repo_rag_lab/population_samples.py)
+- benchmark data from [src/repo_rag_lab/benchmarks.py](../../src/repo_rag_lab/benchmarks.py)
 - notebook orchestration from
-  [src/repo_rag_lab/notebook_scaffolding.py](src/repo_rag_lab/notebook_scaffolding.py)
-- deployment handoff from [src/repo_rag_lab/azure.py](src/repo_rag_lab/azure.py)
+  [src/repo_rag_lab/notebook_scaffolding.py](../../src/repo_rag_lab/notebook_scaffolding.py)
+- deployment handoff from [src/repo_rag_lab/azure.py](../../src/repo_rag_lab/azure.py)
 
 ## Cross-Reference Index
 
 | Question | Start Here | Supporting Files |
 | --- | --- | --- |
-| Where does DSPy enter the repo? | [src/repo_rag_lab/dspy_workflow.py](src/repo_rag_lab/dspy_workflow.py) | [src/repo_rag_lab/cli.py](src/repo_rag_lab/cli.py), [Makefile](Makefile), [tests/test_cli_and_dspy.py](tests/test_cli_and_dspy.py) |
-| How is repository text collected? | [src/repo_rag_lab/corpus.py](src/repo_rag_lab/corpus.py) | [src/repo_rag_lab/retrieval.py](src/repo_rag_lab/retrieval.py), [src/repo_rag_lab/workflow.py](src/repo_rag_lab/workflow.py) |
-| How is the corpus plan curated? | [samples/population/repository_population_candidates.yaml](samples/population/repository_population_candidates.yaml) | [src/repo_rag_lab/population_samples.py](src/repo_rag_lab/population_samples.py), [notebooks/04_sample_population_lab.ipynb](notebooks/04_sample_population_lab.ipynb), [documentation/mcp-discovery.md](documentation/mcp-discovery.md) |
-| Where are DSPy training samples defined? | [samples/training/repository_training_examples.yaml](samples/training/repository_training_examples.yaml) | [src/repo_rag_lab/training_samples.py](src/repo_rag_lab/training_samples.py), [notebooks/03_dspy_training_lab.ipynb](notebooks/03_dspy_training_lab.ipynb), [tests/test_training_samples.py](tests/test_training_samples.py) |
-| How are benchmarks computed? | [src/repo_rag_lab/benchmarks.py](src/repo_rag_lab/benchmarks.py) | [src/repo_rag_lab/notebook_support.py](src/repo_rag_lab/notebook_support.py), [src/repo_rag_lab/notebook_scaffolding.py](src/repo_rag_lab/notebook_scaffolding.py) |
-| Where is notebook automation centralized? | [src/repo_rag_lab/notebook_scaffolding.py](src/repo_rag_lab/notebook_scaffolding.py) | [src/repo_rag_lab/notebook_support.py](src/repo_rag_lab/notebook_support.py), [notebooks/01_repo_rag_research.ipynb](notebooks/01_repo_rag_research.ipynb), [notebooks/02_agent_workflow_checklist.ipynb](notebooks/02_agent_workflow_checklist.ipynb) |
-| How is MCP related to DSPy work? | [src/repo_rag_lab/mcp.py](src/repo_rag_lab/mcp.py) | [documentation/mcp-discovery.md](documentation/mcp-discovery.md), [notebooks/01_repo_rag_research.ipynb](notebooks/01_repo_rag_research.ipynb) |
-| Where do deployment handoff artifacts go? | [src/repo_rag_lab/azure.py](src/repo_rag_lab/azure.py) | [documentation/azure-deployment.md](documentation/azure-deployment.md), [artifacts/azure/](artifacts/azure/) |
-| Which files explain the intended future DSPy direction? | [documentation/inspired/dspy-rag-tutorial.md](documentation/inspired/dspy-rag-tutorial.md) | [documentation/inspired/implementing-rag-with-dspy-technical-guide.md](documentation/inspired/implementing-rag-with-dspy-technical-guide.md) |
+| Where does DSPy enter the repo? | [src/repo_rag_lab/dspy_workflow.py](../../src/repo_rag_lab/dspy_workflow.py) | [src/repo_rag_lab/cli.py](../../src/repo_rag_lab/cli.py), [Makefile](../../Makefile), [tests/test_cli_and_dspy.py](../../tests/test_cli_and_dspy.py) |
+| How is repository text collected? | [src/repo_rag_lab/corpus.py](../../src/repo_rag_lab/corpus.py) | [src/repo_rag_lab/retrieval.py](../../src/repo_rag_lab/retrieval.py), [src/repo_rag_lab/workflow.py](../../src/repo_rag_lab/workflow.py) |
+| How is the corpus plan curated? | [samples/population/repository_population_candidates.yaml](../../samples/population/repository_population_candidates.yaml) | [src/repo_rag_lab/population_samples.py](../../src/repo_rag_lab/population_samples.py), [notebooks/04_sample_population_lab.ipynb](../../notebooks/04_sample_population_lab.ipynb), [docs/architecture/mcp-discovery.md](mcp-discovery.md) |
+| Where are DSPy training samples defined? | [samples/training/repository_training_examples.yaml](../../samples/training/repository_training_examples.yaml) | [src/repo_rag_lab/training_samples.py](../../src/repo_rag_lab/training_samples.py), [notebooks/03_dspy_training_lab.ipynb](../../notebooks/03_dspy_training_lab.ipynb), [tests/test_training_samples.py](../../tests/test_training_samples.py) |
+| How are benchmarks computed? | [src/repo_rag_lab/benchmarks.py](../../src/repo_rag_lab/benchmarks.py) | [src/repo_rag_lab/notebook_support.py](../../src/repo_rag_lab/notebook_support.py), [src/repo_rag_lab/notebook_scaffolding.py](../../src/repo_rag_lab/notebook_scaffolding.py) |
+| Where is notebook automation centralized? | [src/repo_rag_lab/notebook_scaffolding.py](../../src/repo_rag_lab/notebook_scaffolding.py) | [src/repo_rag_lab/notebook_support.py](../../src/repo_rag_lab/notebook_support.py), [notebooks/01_repo_rag_research.ipynb](../../notebooks/01_repo_rag_research.ipynb), [notebooks/02_agent_workflow_checklist.ipynb](../../notebooks/02_agent_workflow_checklist.ipynb) |
+| How is MCP related to DSPy work? | [src/repo_rag_lab/mcp.py](../../src/repo_rag_lab/mcp.py) | [docs/architecture/mcp-discovery.md](mcp-discovery.md), [notebooks/01_repo_rag_research.ipynb](../../notebooks/01_repo_rag_research.ipynb) |
+| Where do deployment handoff artifacts go? | [src/repo_rag_lab/azure.py](../../src/repo_rag_lab/azure.py) | [docs/operations/azure-deployment.md](../operations/azure-deployment.md), [artifacts/azure/](../../artifacts/azure/) |
+| Which files explain the intended future DSPy direction? | [docs/architecture/inspired/dspy-rag-tutorial.md](inspired/dspy-rag-tutorial.md) | [docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md](inspired/implementing-rag-with-dspy-technical-guide.md) |
 
 If you only read three files after this one, read
-[src/repo_rag_lab/dspy_workflow.py](src/repo_rag_lab/dspy_workflow.py),
-[src/repo_rag_lab/training_samples.py](src/repo_rag_lab/training_samples.py), and
-[src/repo_rag_lab/notebook_scaffolding.py](src/repo_rag_lab/notebook_scaffolding.py).
+[src/repo_rag_lab/dspy_workflow.py](../../src/repo_rag_lab/dspy_workflow.py),
+[src/repo_rag_lab/training_samples.py](../../src/repo_rag_lab/training_samples.py), and
+[src/repo_rag_lab/notebook_scaffolding.py](../../src/repo_rag_lab/notebook_scaffolding.py).

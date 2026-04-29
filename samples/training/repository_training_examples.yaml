@@ -9,13 +9,13 @@
     - README.md
     - src/repo_rag_lab/utilities.py
 - question: Where are inspired implementation summaries stored?
-  expected_answer: They are stored under documentation/inspired.
+  expected_answer: They are stored under docs/architecture/inspired.
   tags:
     - docs
     - inspired
   expected_sources:
-    - documentation/inspired/dspy-rag-tutorial.md
-    - documentation/inspired/implementing-rag-with-dspy-technical-guide.md
+    - docs/architecture/inspired/dspy-rag-tutorial.md
+    - docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md
 - question: How should agents start with repository utilities?
   expected_answer: >-
     Start with make utility-summary or uv run repo-rag utility-summary, then
@@ -30,14 +30,14 @@
     - utilities/README.md
 - question: Which file explains the core workflow modules under src/repo_rag_lab?
   expected_answer: >-
-    documentation/package-api.md explains the core workflow modules and their
+    docs/architecture/package-api.md explains the core workflow modules and their
     roles in the repository.
   tags:
     - api
     - package
     - modules
   expected_sources:
-    - documentation/package-api.md
+    - docs/architecture/package-api.md
 - question: What should AZURE_INFERENCE_ENDPOINT contain for the Azure AI Inference SDK?
   expected_answer: >-
     It should be the deployment base endpoint, such as
@@ -48,15 +48,15 @@
     - inference
     - runtime
   expected_sources:
-    - documentation/azure-deployment.md
+    - docs/operations/azure-deployment.md
     - utilities/README.md
 - question: Where can you read MCP discovery notes?
-  expected_answer: They are documented in documentation/mcp-discovery.md.
+  expected_answer: They are documented in docs/architecture/mcp-discovery.md.
   tags:
     - mcp
     - docs
   expected_sources:
-    - documentation/mcp-discovery.md
+    - docs/architecture/mcp-discovery.md
 - question: How do you execute all tracked notebooks with monitored progress and report artifacts?
   expected_answer: >-
     Use make notebook-report or uv run repo-rag run-notebooks to execute all
@@ -67,7 +67,7 @@
     - automation
   expected_sources:
     - utilities/README.md
-    - documentation/package-api.md
+    - docs/architecture/package-api.md
 - question: How do you build the publication PDF locally?
   expected_answer: >-
     Run make paper-build to regenerate the publication inventories and build

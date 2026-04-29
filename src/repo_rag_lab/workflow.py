@@ -9,7 +9,15 @@ from typing import Literal
 from .azure_runtime import call_azure_inference_chat, call_azure_openai_chat
 from .corpus import RepoDocument, load_documents, load_documents_for_paths
 from .mcp import discover_mcp_servers
-from .retrieval import TOKEN_RE, Chunk, chunk_documents, retrieve
+from .retrieval import (
+    TOKEN_RE,
+    Chunk,
+    RetrievalMode,
+    chunk_documents,
+    resolve_retrieval_mode,
+    retrieve,
+)
+from .retrieval_profile import RetrievalProfile, load_retrieval_profile
 from .rust_lookup import lookup_candidate_paths
 
 LiveProvider = Literal["azure-openai", "azure-inference"]
@@ -39,37 +47,114 @@ class RAGAnswer:
     answer: str
     context: list[Chunk]
     mcp_servers: list[dict[str, str]]
+    summary: str
+    retrieval_mode: RetrievalMode
+
+    def to_payload(self, *, root: Path) -> dict[str, object]:
+        """Return a machine-readable payload for CLI and worker integrations."""
+
+        machine_answer = self.summary
+        response_text = self.answer
+        for chunk in self.context:
+            relative_source = _relative_source_path(chunk.source, root=root)
+            machine_answer = machine_answer.replace(chunk.source.as_posix(), relative_source)
+            response_text = response_text.replace(chunk.source.as_posix(), relative_source)
+        return {
+            "question": self.question,
+            "answer": machine_answer,
+            "response_text": response_text,
+            "sources": list(
+                dict.fromkeys(
+                    _relative_source_path(chunk.source, root=root) for chunk in self.context
+                )
+            ),
+            "context": [serialize_chunk(chunk, root=root) for chunk in self.context],
+            "mcp_candidates": list(self.mcp_servers),
+            "retrieval_mode": self.retrieval_mode,
+        }
 
 
 def collect_repository_evidence(
-    question: str, root: Path
-) -> tuple[list[Chunk], list[dict[str, str]]]:
+    question: str,
+    root: Path,
+    *,
+    retrieval_mode: RetrievalMode | None = None,
+) -> tuple[list[Chunk], list[dict[str, str]], RetrievalMode]:
     """Collect retrieved context chunks and MCP hints for ``question``."""
 
-    context = collect_repository_context(question, root)
+    profile, resolved_mode = _resolve_retrieval_profile(root, retrieval_mode=retrieval_mode)
+    context = collect_repository_context(
+        question,
+        root,
+        retrieval_mode=resolved_mode,
+        profile=profile,
+    )
     mcp_servers = [candidate.__dict__ for candidate in discover_mcp_servers(root)]
-    return context, mcp_servers
+    return context, mcp_servers, resolved_mode
 
 
-def collect_repository_context(question: str, root: Path, *, top_k: int = 4) -> list[Chunk]:
+def collect_repository_context(
+    question: str,
+    root: Path,
+    *,
+    top_k: int = 4,
+    retrieval_mode: RetrievalMode | None = None,
+    profile: RetrievalProfile | None = None,
+) -> list[Chunk]:
     """Collect lookup-first repository context for ``question``."""
 
+    resolved_profile, resolved_mode = _resolve_retrieval_profile(
+        root,
+        retrieval_mode=retrieval_mode,
+        profile=profile,
+    )
     lookup_paths = lookup_candidate_paths(question, root)
     if lookup_paths:
         narrowed_documents = load_documents_for_paths(root, lookup_paths)
-        narrowed_context = _retrieve_from_documents(question, narrowed_documents, top_k=top_k)
+        narrowed_context = _retrieve_from_documents(
+            question,
+            narrowed_documents,
+            top_k=top_k,
+            profile=resolved_profile,
+            retrieval_mode=resolved_mode,
+        )
         if narrowed_context:
             return narrowed_context
 
-    return _retrieve_from_documents(question, load_documents(root), top_k=top_k)
+    return _retrieve_from_documents(
+        question,
+        load_documents(root),
+        top_k=top_k,
+        profile=resolved_profile,
+        retrieval_mode=resolved_mode,
+    )
 
 
-def ask_repository(question: str, root: Path) -> RAGAnswer:
+def ask_repository(
+    question: str,
+    root: Path,
+    *,
+    retrieval_mode: RetrievalMode | None = None,
+) -> RAGAnswer:
     """Answer a repository-grounded question using the baseline retrieval pipeline."""
 
-    context, mcp_servers = collect_repository_evidence(question, root)
+    context, mcp_servers, resolved_mode = collect_repository_evidence(
+        question,
+        root,
+        retrieval_mode=retrieval_mode,
+    )
+    summary = (
+        _compose_answer_summary(question, context) if context else _no_evidence_message(question)
+    )
     answer = synthesize_answer(question=question, context=context, mcp_servers=mcp_servers)
-    return RAGAnswer(question=question, answer=answer, context=context, mcp_servers=mcp_servers)
+    return RAGAnswer(
+        question=question,
+        answer=answer,
+        context=context,
+        mcp_servers=mcp_servers,
+        summary=summary,
+        retrieval_mode=resolved_mode,
+    )
 
 
 def ask_repository_live(
@@ -78,13 +163,26 @@ def ask_repository_live(
     *,
     provider: LiveProvider,
     load_env_file: bool = False,
+    retrieval_mode: RetrievalMode | None = None,
 ) -> RAGAnswer:
     """Answer a repository-grounded question with retrieved evidence plus a live Azure model."""
 
-    context, mcp_servers = collect_repository_evidence(question, root)
+    context, mcp_servers, resolved_mode = collect_repository_evidence(
+        question,
+        root,
+        retrieval_mode=retrieval_mode,
+    )
     if not context:
+        summary = _no_evidence_message(question)
         answer = synthesize_answer(question=question, context=context, mcp_servers=mcp_servers)
-        return RAGAnswer(question=question, answer=answer, context=context, mcp_servers=mcp_servers)
+        return RAGAnswer(
+            question=question,
+            answer=answer,
+            context=context,
+            mcp_servers=mcp_servers,
+            summary=summary,
+            retrieval_mode=resolved_mode,
+        )
 
     system_prompt, user_prompt = build_live_answer_messages(
         question=question,
@@ -113,6 +211,8 @@ def ask_repository_live(
         answer=completion.answer.strip(),
         context=context,
         mcp_servers=mcp_servers,
+        summary=completion.answer.strip(),
+        retrieval_mode=resolved_mode,
     )
 
 
@@ -122,10 +222,7 @@ def synthesize_answer(
     """Render a readable answer from retrieved context and MCP discovery hints."""
 
     if not context:
-        return (
-            f"No repository evidence matched the question: {question!r}. "
-            "Add more documentation, code, or examples before evaluating RAG quality."
-        )
+        return _no_evidence_message(question)
 
     lines = [
         f"Question: {question}",
@@ -143,6 +240,34 @@ def synthesize_answer(
         for server in mcp_servers:
             lines.append(f"- {server['path']}: {server['hint']}")
     return "\n".join(lines)
+
+
+def _no_evidence_message(question: str) -> str:
+    """Return the user-facing no-evidence response used by baseline and live paths."""
+
+    return (
+        f"No repository evidence matched the question: {question!r}. "
+        "Add more documentation, code, or examples before evaluating RAG quality."
+    )
+
+
+def _relative_source_path(path: Path, *, root: Path) -> str:
+    """Return ``path`` relative to ``root`` when possible."""
+
+    try:
+        return path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def serialize_chunk(chunk: Chunk, *, root: Path) -> dict[str, str]:
+    """Serialize a retrieved chunk for machine-readable CLI and worker output."""
+
+    return {
+        "source": _relative_source_path(chunk.source, root=root),
+        "preview": _chunk_preview(chunk),
+        "text": chunk.text,
+    }
 
 
 def _chunk_preview(chunk: Chunk) -> str:
@@ -264,9 +389,11 @@ def _compose_answer_summary(question: str, context: list[Chunk]) -> str:
             f" {_answer_preview(support)!r}."
         )
 
-    remaining_sources = [
-        f"`{chunk.source.as_posix()}`" for chunk in context if chunk not in set(highlights)
-    ]
+    remaining_sources = list(
+        dict.fromkeys(
+            f"`{chunk.source.as_posix()}`" for chunk in context if chunk not in set(highlights)
+        )
+    )
     if remaining_sources:
         summary_parts.append(
             f"Additional retrieved context appears in {', '.join(remaining_sources)}."
@@ -280,11 +407,29 @@ def _retrieve_from_documents(
     documents: list[RepoDocument],
     *,
     top_k: int,
+    profile: RetrievalProfile,
+    retrieval_mode: RetrievalMode,
 ) -> list[Chunk]:
     """Chunk ``documents`` and retrieve the most relevant context."""
 
     chunks = chunk_documents(documents)
-    return retrieve(question, chunks, top_k=top_k)
+    return retrieve(
+        question,
+        chunks,
+        top_k=top_k,
+        profile=profile,
+        retrieval_mode=retrieval_mode,
+    )
+
+
+def _resolve_retrieval_profile(
+    root: Path,
+    *,
+    retrieval_mode: RetrievalMode | None = None,
+    profile: RetrievalProfile | None = None,
+) -> tuple[RetrievalProfile, RetrievalMode]:
+    resolved_profile = profile if profile is not None else load_retrieval_profile(root)
+    return resolved_profile, resolve_retrieval_mode(resolved_profile, retrieval_mode)
 
 
 def build_live_answer_messages(

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from repo_rag_lab.corpus import load_documents
-from repo_rag_lab.retrieval import Chunk, chunk_documents, retrieve, score
+from repo_rag_lab.retrieval import Chunk, chunk_documents, resolve_retrieval_mode, retrieve, score
+from repo_rag_lab.retrieval_profile import RetrievalProfile, load_retrieval_profile
 from repo_rag_lab.training_samples import load_training_examples
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_PROFILE = load_retrieval_profile(REPO_ROOT)
 
 
 def test_retrieve_diversifies_sources_before_returning_duplicates() -> None:
@@ -27,11 +30,14 @@ def test_retrieve_diversifies_sources_before_returning_duplicates() -> None:
 def test_retrieve_prioritizes_repo_summary_docs_over_question_echo_files() -> None:
     chunks = chunk_documents(load_documents(REPO_ROOT))
 
-    retrieved = retrieve("What does this repository research?", chunks, top_k=4)
-    sources = [str(chunk.source.relative_to(REPO_ROOT)) for chunk in retrieved]
+    retrieved = retrieve(
+        "What does this repository research?", chunks, top_k=4, profile=REPO_PROFILE
+    )
+    sources = [str(chunk.source) for chunk in retrieved]
 
     assert sources[0] == "README.md"
     assert "README.md" in sources
+    assert "src/repo_rag_lab/utilities.py" in sources
     assert all(
         not source.startswith(("data/", "tests/", "samples/training/")) for source in sources
     )
@@ -40,12 +46,17 @@ def test_retrieve_prioritizes_repo_summary_docs_over_question_echo_files() -> No
 def test_retrieve_surfaces_inspired_docs_for_inspired_summary_question() -> None:
     chunks = chunk_documents(load_documents(REPO_ROOT))
 
-    retrieved = retrieve("Where are inspired implementation summaries stored?", chunks, top_k=4)
-    sources = [str(chunk.source.relative_to(REPO_ROOT)) for chunk in retrieved]
+    retrieved = retrieve(
+        "Where are inspired implementation summaries stored?",
+        chunks,
+        top_k=4,
+        profile=REPO_PROFILE,
+    )
+    sources = [str(chunk.source) for chunk in retrieved]
 
     assert sources[:2] == [
-        "documentation/inspired/implementing-rag-with-dspy-technical-guide.md",
-        "documentation/inspired/dspy-rag-tutorial.md",
+        "docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md",
+        "docs/architecture/inspired/dspy-rag-tutorial.md",
     ]
 
 
@@ -56,10 +67,11 @@ def test_retrieve_doc_seeking_question_prefers_package_api_doc_over_tests() -> N
         "Which file explains the core workflow modules under src/repo_rag_lab?",
         chunks,
         top_k=4,
+        profile=REPO_PROFILE,
     )
-    sources = [str(chunk.source.relative_to(REPO_ROOT)) for chunk in retrieved]
+    sources = [str(chunk.source) for chunk in retrieved]
 
-    assert sources[0] == "documentation/package-api.md"
+    assert sources[0] == "docs/architecture/package-api.md"
     assert all(not source.startswith(("tests/", "samples/training/")) for source in sources)
 
 
@@ -79,16 +91,18 @@ def test_retrieve_training_questions_avoid_meta_and_synthetic_sources_in_top4() 
     )
     blocked_paths = {
         "FILES.md",
-        "README.AGENTS.md",
+        "docs/architecture/research-narrative.md",
         "TODO.MD",
-        "env.md",
+        "docs/operations/environment.md",
         "todo-backlog.yaml",
     }
 
     for example in examples:
         sources = [
             str(chunk.source.relative_to(REPO_ROOT))
-            for chunk in retrieve(example.question, chunks, top_k=4)
+            if chunk.source.is_absolute()
+            else str(chunk.source)
+            for chunk in retrieve(example.question, chunks, top_k=4, profile=REPO_PROFILE)
         ]
         assert all(
             source not in blocked_paths and not source.startswith(blocked_prefixes)
@@ -128,3 +142,75 @@ def test_score_penalizes_question_echo_test_paths_relative_to_readme() -> None:
     )
 
     assert readme_score > noisy_score
+
+
+def test_load_retrieval_profile_reads_repo_local_overrides(tmp_path: Path) -> None:
+    config_dir = tmp_path / "config"
+    config_dir.mkdir(parents=True)
+    (config_dir / "retrieval-profile.json").write_text(
+        json.dumps(
+            {
+                "name": "demo-profile",
+                "retrieval_mode": "idf-rerank",
+                "rerank_candidate_pool_size": 12,
+                "source_adjustments_by_name": {"README.md": 3.5},
+                "excluded_subpaths": [["generated"]],
+                "contextual_rules": [
+                    {
+                        "path_name": "README.md",
+                        "required_terms": ["demo"],
+                        "value": 1.25,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    profile = load_retrieval_profile(tmp_path)
+
+    assert profile.name == "demo-profile"
+    assert profile.retrieval_mode == "idf-rerank"
+    assert profile.rerank_candidate_pool_size == 12
+    assert profile.source_adjustments_by_name["README.md"] == 3.5
+    assert profile.excluded_subpaths == (("generated",),)
+    assert profile.contextual_rules[0].path_name == "README.md"
+
+
+def test_retrieve_profile_can_exclude_sources() -> None:
+    chunks = [
+        Chunk(source=Path("tests/example.md"), text="demo retrieval target"),
+        Chunk(source=Path("docs/guide.md"), text="demo retrieval target"),
+    ]
+    profile = RetrievalProfile(
+        source_adjustments_by_part={"docs": 1.0},
+        excluded_parts=frozenset({"tests"}),
+    )
+
+    retrieved = retrieve(
+        "Where is the demo retrieval target documented?", chunks, top_k=1, profile=profile
+    )
+
+    assert [chunk.source for chunk in retrieved] == [Path("docs/guide.md")]
+
+
+def test_retrieve_idf_rerank_prefers_phrase_coherent_chunk() -> None:
+    question = "Where are inspired implementation summaries stored?"
+    chunks = [
+        Chunk(
+            source=Path("docs/scrambled.md"),
+            text="Stored summaries inspired implementation under docs architecture notes.",
+        ),
+        Chunk(
+            source=Path("docs/ordered.md"),
+            text="Inspired implementation summaries are stored under docs architecture notes.",
+        ),
+    ]
+
+    reranked = retrieve(question, chunks, top_k=1, retrieval_mode="idf-rerank")
+
+    assert reranked[0].source == Path("docs/ordered.md")
+
+
+def test_resolve_retrieval_mode_uses_profile_default() -> None:
+    assert resolve_retrieval_mode(REPO_PROFILE) == "idf-rerank"

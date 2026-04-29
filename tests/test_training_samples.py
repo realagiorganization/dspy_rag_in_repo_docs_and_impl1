@@ -5,6 +5,8 @@ from pathlib import Path
 from repo_rag_lab.training_samples import (
     batch_training_examples,
     load_training_examples,
+    materialize_combined_training_examples,
+    materialize_training_candidates,
     summarize_training_examples,
     validate_training_examples,
 )
@@ -62,3 +64,71 @@ def test_validate_training_examples_accepts_hushwheel_fixture_samples() -> None:
     )
     assert len(examples) == 6
     assert validate_training_examples(examples, root=HUSHWHEEL_FIXTURE_ROOT) == []
+
+
+def test_materialize_training_candidates_and_combined_training_examples(tmp_path: Path) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "README.md").write_text("# Demo\n", encoding="utf-8")
+    candidate_trace_path = imported_dir / "accepted.json"
+    candidate_trace_path.write_text(
+        """{
+  "trace_record_kind": "repo-rag-trace-record",
+  "trace_record_path": "artifacts/traces/imported/accepted.json",
+  "question": "What does this repository research?",
+  "answer": "It researches repository-grounded RAG.",
+  "sources": ["README.md"],
+  "trace": {
+    "schema_version": 1,
+    "trace_kind": "repo-rag-runtime",
+    "recorded_at": "2026-04-29T00:00:00+00:00",
+    "question": "What does this repository research?",
+    "mode": "baseline",
+    "retrieval_mode": "idf-rerank",
+    "sources": ["README.md"],
+    "source_count": 1,
+    "context_count": 1,
+    "context_field": "context",
+    "mcp_candidate_count": 0,
+    "answer_length": 20
+  },
+  "outcome": {
+    "acceptance_status": "accepted",
+    "accepted": true,
+    "execution_status": "success",
+    "method": "repo_rag_cli",
+    "backend": "repo_rag_cli"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    candidates_summary = materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+    )
+    assert candidates_summary["candidate_count"] == 1
+
+    base_training_path = tmp_path / "samples" / "training" / "base.yaml"
+    base_training_path.parent.mkdir(parents=True, exist_ok=True)
+    base_training_path.write_text(
+        (
+            '- question: "Where are logs stored?"\n'
+            '  expected_answer: "samples/logs"\n'
+            '  tags: ["logs"]\n'
+        ),
+        encoding="utf-8",
+    )
+
+    combined_summary = materialize_combined_training_examples(
+        tmp_path,
+        base_training_path=Path("samples/training/base.yaml"),
+        candidates_path=Path("artifacts/trainer/training-candidates.yaml"),
+        output_path=Path("artifacts/trainer/generated-training.yaml"),
+        summary_path=Path("artifacts/trainer/generated-training-summary.json"),
+    )
+    assert combined_summary["base_example_count"] == 1
+    assert combined_summary["candidate_example_count"] == 1
+    assert combined_summary["combined_example_count"] == 2

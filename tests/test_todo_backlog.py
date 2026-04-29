@@ -34,7 +34,7 @@ def test_render_markdown_backlog_contains_links_and_emoji() -> None:
     _, items = load_todo_backlog(REPO_ROOT)
     rendered = render_markdown_backlog(items)
     assert "| 🎯 | 🧭 Area | 📌 TODO | 🔗 Primary Surfaces | ✅ Done When |" in rendered
-    assert "[README.DSPY.MD](README.DSPY.MD)" in rendered
+    assert "[docs/architecture/dspy-rag-guide.md](docs/architecture/dspy-rag-guide.md)" in rendered
     assert "🔎" in rendered
     assert "Build the missing automated DSPy training path" not in rendered
 
@@ -44,7 +44,7 @@ def test_render_latex_backlog_contains_longtable_and_links() -> None:
     rendered = render_latex_backlog(repository_web_base, items)
     assert r"\begin{longtable}" in rendered
     assert r"\href{" in rendered
-    assert "README.DSPY.MD" in rendered
+    assert "docs/architecture/dspy-rag-guide.md" in rendered
 
 
 def test_sync_todo_backlog_writes_generated_outputs(tmp_path: Path) -> None:

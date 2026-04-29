@@ -4,11 +4,19 @@ from __future__ import annotations
 
 import math
 import re
+from collections import Counter
 from dataclasses import dataclass
 from functools import cache
+from itertools import pairwise
 from pathlib import Path
+from typing import Literal, cast
 
 from .corpus import RepoDocument
+from .retrieval_profile import (
+    DEFAULT_RETRIEVAL_PROFILE,
+    SUPPORTED_RETRIEVAL_MODES,
+    RetrievalProfile,
+)
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9_]{2,}")
 PARAGRAPH_SPLIT_RE = re.compile(r"\n\s*\n+")
@@ -50,51 +58,41 @@ QUESTION_CODE_SEEKING_TERMS = {
     "reports",
     "struct",
 }
-QUESTION_ECHO_PENALTY = 4.2
-DEFINITION_PATTERN_BONUS = 2.0
-DOCUMENT_SEEKING_MARKDOWN_BONUS = 0.8
-DOCUMENT_SEEKING_DOCUMENTATION_BONUS = 0.9
-DOCUMENT_SEEKING_README_BONUS = 0.4
-CODE_SEEKING_SOURCE_BONUS = 1.4
-SOURCE_BONUS_BY_NAME = {
-    "README.md": 1.4,
-    "AGENTS.md": 1.2,
+QUESTION_TEST_SEEKING_TERMS = {
+    "bdd",
+    "coverage",
+    "integration",
+    "pytest",
+    "test",
+    "tests",
+    "unit",
 }
-SOURCE_BONUS_BY_PART = {
-    "documentation": 0.9,
-    "docs": 0.9,
-    "include": 0.8,
-    "publication": 0.5,
-    "utilities": 0.9,
-    "src": 0.6,
+QUESTION_TRAINING_SEEKING_TERMS = {
+    "dataset",
+    "datasets",
+    "example",
+    "examples",
+    "fewshot",
+    "sample",
+    "samples",
+    "train",
+    "training",
 }
-SOURCE_PENALTY_BY_NAME = {
-    "FILES.csv": 4.0,
-    "FILES.md": 4.0,
-    "README.DSPY.MD": 4.0,
-    "README.AGENTS.md": 3.0,
-    "REPO_COMPLETENESS_CHECKLIST.md": 3.0,
-    "TODO.MD": 4.0,
-    "hushwheel-fixture-rag-guide.md": 3.0,
-    "workflow.py": 1.0,
-    "todo-backlog.yaml": 4.0,
+QUESTION_AUDIT_SEEKING_TERMS = {
+    "audit",
+    "audits",
+    "ci",
+    "evidence",
+    "health",
+    "log",
+    "logs",
+    "probe",
+    "probes",
+    "status",
+    "verification",
+    "verify",
 }
-SOURCE_PENALTY_BY_PART = {
-    ".codex": 2.5,
-    ".github": 1.5,
-    "data": 6.0,
-    "generated": 2.0,
-    "tests": 5.0,
-}
-SOURCE_PENALTY_BY_SUBPATH = {
-    ("AGENTS.md.d",): 2.5,
-    ("docs", "audit"): 5.0,
-    ("publication", "exploratorium_translation", "generated"): 4.0,
-    ("samples", "logs"): 5.0,
-    ("samples", "population"): 6.0,
-    ("samples", "training"): 6.0,
-}
-PATH_TERM_OVERLAP_BONUS = 0.45
+RetrievalMode = Literal["lexical", "idf-rerank"]
 
 
 @dataclass(frozen=True)
@@ -118,15 +116,37 @@ def chunk_documents(documents: list[RepoDocument], chunk_size: int = 1200) -> li
     return chunks
 
 
-def retrieve(question: str, chunks: list[Chunk], top_k: int = 4) -> list[Chunk]:
+def retrieve(
+    question: str,
+    chunks: list[Chunk],
+    top_k: int = 4,
+    *,
+    profile: RetrievalProfile = DEFAULT_RETRIEVAL_PROFILE,
+    retrieval_mode: RetrievalMode | None = None,
+) -> list[Chunk]:
     """Return the highest-scoring chunks for ``question``."""
 
-    scored = [(score(question, chunk.text, source=chunk.source), chunk) for chunk in chunks]
-    ranked = [
-        chunk
-        for value, chunk in sorted(scored, key=lambda item: item[0], reverse=True)
-        if value > 0
-    ]
+    resolved_mode = resolve_retrieval_mode(profile, retrieval_mode)
+    scored = sorted(
+        [
+            (score(question, chunk.text, source=chunk.source, profile=profile), chunk)
+            for chunk in chunks
+            if not profile.excludes(chunk.source)
+        ],
+        key=lambda item: item[0],
+        reverse=True,
+    )
+    ranked = (
+        _rerank_chunks(
+            question,
+            scored,
+            top_k=top_k,
+            candidate_pool_size=profile.rerank_candidate_pool_size,
+            profile=profile,
+        )
+        if resolved_mode == "idf-rerank"
+        else [chunk for value, chunk in scored if value > 0]
+    )
 
     selected: list[Chunk] = []
     seen_sources: set[Path] = set()
@@ -147,6 +167,120 @@ def retrieve(question: str, chunks: list[Chunk], top_k: int = 4) -> list[Chunk]:
             break
 
     return selected
+
+
+def resolve_retrieval_mode(
+    profile: RetrievalProfile,
+    retrieval_mode: RetrievalMode | None = None,
+) -> RetrievalMode:
+    """Return the active retrieval mode, preferring explicit overrides over profile defaults."""
+
+    selected_mode = retrieval_mode if retrieval_mode is not None else profile.retrieval_mode
+    if selected_mode not in SUPPORTED_RETRIEVAL_MODES:
+        supported = ", ".join(sorted(SUPPORTED_RETRIEVAL_MODES))
+        raise ValueError(
+            f"Unsupported retrieval mode `{selected_mode}`. Expected one of: {supported}"
+        )
+    return cast(RetrievalMode, selected_mode)
+
+
+def _rerank_chunks(
+    question: str,
+    scored_chunks: list[tuple[float, Chunk]],
+    *,
+    top_k: int,
+    candidate_pool_size: int,
+    profile: RetrievalProfile = DEFAULT_RETRIEVAL_PROFILE,
+) -> list[Chunk]:
+    """Return an IDF-aware reranking across the strongest lexical candidates."""
+
+    positive_candidates = [(value, chunk) for value, chunk in scored_chunks if value > 0]
+    if not positive_candidates:
+        return []
+
+    question_terms = _query_content_terms(_normalized_terms(question))
+    if not question_terms:
+        return [chunk for _, chunk in positive_candidates]
+
+    pool_size = min(len(positive_candidates), max(top_k, candidate_pool_size))
+    candidate_pool = positive_candidates[:pool_size]
+    idf_by_term = _candidate_idf(candidate_pool)
+    reranked_pool = sorted(
+        candidate_pool,
+        key=lambda item: _rerank_score(question_terms, item, idf_by_term, profile=profile),
+        reverse=True,
+    )
+    return [
+        *[chunk for _, chunk in reranked_pool],
+        *[chunk for _, chunk in positive_candidates[pool_size:]],
+    ]
+
+
+def _candidate_idf(candidate_pool: list[tuple[float, Chunk]]) -> dict[str, float]:
+    """Return lightweight IDF weights over the current rerank candidate pool."""
+
+    candidate_count = len(candidate_pool)
+    document_frequencies: Counter[str] = Counter()
+    for _, chunk in candidate_pool:
+        document_terms = set(_normalized_terms(chunk.text))
+        document_terms.update(_normalized_terms(_scoring_source_path(chunk.source).as_posix()))
+        for term in document_terms:
+            document_frequencies[term] += 1
+    return {
+        term: math.log(1.0 + ((candidate_count + 1.0) / (frequency + 1.0))) + 1.0
+        for term, frequency in document_frequencies.items()
+    }
+
+
+def _rerank_score(
+    question_terms: list[str],
+    candidate: tuple[float, Chunk],
+    idf_by_term: dict[str, float],
+    *,
+    profile: RetrievalProfile,
+) -> float:
+    """Return a second-stage reranking score on top of the lexical baseline."""
+
+    base_score, chunk = candidate
+    text_terms = _normalized_terms(chunk.text)
+    if not text_terms:
+        return 0.0
+    scoring_source = _scoring_source_path(chunk.source)
+    path_terms = _normalized_terms(scoring_source.as_posix())
+    unique_question_terms = list(dict.fromkeys(question_terms))
+    if not unique_question_terms:
+        return 0.0
+
+    matched_terms = set(unique_question_terms).intersection(text_terms)
+    path_matches = set(unique_question_terms).intersection(path_terms)
+    mean_idf_overlap = (
+        sum(idf_by_term.get(term, 1.0) for term in matched_terms) / len(matched_terms)
+        if matched_terms
+        else 0.0
+    )
+    mean_path_idf_overlap = (
+        sum(idf_by_term.get(term, 1.0) for term in path_matches) / len(path_matches)
+        if path_matches
+        else 0.0
+    )
+    coverage = len(matched_terms) / len(set(unique_question_terms))
+    question_bigrams = _ordered_bigrams(unique_question_terms)
+    text_bigram_matches = len(question_bigrams.intersection(_ordered_bigrams(text_terms)))
+    path_bigram_matches = len(question_bigrams.intersection(_ordered_bigrams(path_terms)))
+    phrase_bonus = 0.8 if _contains_term_sequence(text_terms, unique_question_terms) else 0.0
+    path_phrase_bonus = 0.25 if _contains_term_sequence(path_terms, unique_question_terms) else 0.0
+    leading_term_bonus = 0.15 if unique_question_terms[0] in text_terms[:24] else 0.0
+    return (
+        base_score
+        + (mean_idf_overlap * 0.35)
+        + (mean_path_idf_overlap * 0.1)
+        + (coverage * 0.9)
+        + (text_bigram_matches * 0.8)
+        + (path_bigram_matches * 0.2)
+        + phrase_bonus
+        + path_phrase_bonus
+        + leading_term_bonus
+    )
 
 
 def _contains_path_parts(path: Path, needle: tuple[str, ...]) -> bool:
@@ -184,6 +318,31 @@ def _normalized_terms(text: str) -> list[str]:
     """Return normalized lexical terms from ``text``."""
 
     return [_normalize_term(term) for term in TOKEN_RE.findall(text.lower())]
+
+
+def _query_content_terms(question_terms: list[str]) -> list[str]:
+    """Return content-bearing question terms, falling back to all terms when needed."""
+
+    content_terms = [term for term in question_terms if term not in QUESTION_FILLER_TERMS]
+    return content_terms if content_terms else question_terms
+
+
+def _ordered_bigrams(terms: list[str]) -> set[tuple[str, str]]:
+    """Return unique adjacent bigrams from ``terms``."""
+
+    return set(pairwise(terms))
+
+
+def _contains_term_sequence(haystack: list[str], needle: list[str]) -> bool:
+    """Return ``True`` when ``needle`` appears contiguously inside ``haystack``."""
+
+    if not needle or len(needle) > len(haystack):
+        return False
+    needle_length = len(needle)
+    for index in range(len(haystack) - needle_length + 1):
+        if haystack[index : index + needle_length] == needle:
+            return True
+    return False
 
 
 def _normalized_token_string(text: str) -> str:
@@ -258,6 +417,34 @@ def _is_markdown_source(source: Path) -> bool:
     return source.suffix.lower() == ".md"
 
 
+@cache
+def _scoring_source_path(source: Path) -> Path:
+    """Return a repository-relative path for scoring heuristics when possible."""
+
+    if not source.is_absolute():
+        return source
+    for candidate in (source.parent, *source.parents):
+        if _looks_like_scoring_repository_root(candidate):
+            try:
+                return source.relative_to(candidate)
+            except ValueError:
+                continue
+    return source
+
+
+@cache
+def _looks_like_scoring_repository_root(path: Path) -> bool:
+    """Return ``True`` when ``path`` looks like the selected repository root for scoring."""
+
+    if _looks_like_repository_root(path):
+        return True
+    return (
+        path.joinpath("README.md").is_file()
+        and path.joinpath("src").is_dir()
+        and (path.joinpath("docs").is_dir() or path.joinpath("include").is_dir())
+    )
+
+
 def _question_is_document_seeking(question_terms: list[str]) -> bool:
     """Return ``True`` when question terms imply "where/how do I read this?" intent."""
 
@@ -270,7 +457,25 @@ def _question_is_code_seeking(question_terms: list[str]) -> bool:
     return bool(set(question_terms).intersection(QUESTION_CODE_SEEKING_TERMS))
 
 
-def _definition_bonus(question: str, text: str) -> float:
+def _question_is_audit_seeking(question_terms: list[str]) -> bool:
+    """Return ``True`` when question terms explicitly seek audit or verification evidence."""
+
+    return bool(set(question_terms).intersection(QUESTION_AUDIT_SEEKING_TERMS))
+
+
+def _question_is_test_seeking(question_terms: list[str]) -> bool:
+    """Return ``True`` when question terms explicitly seek tests or pytest surfaces."""
+
+    return bool(set(question_terms).intersection(QUESTION_TEST_SEEKING_TERMS))
+
+
+def _question_is_training_seeking(question_terms: list[str]) -> bool:
+    """Return ``True`` when question terms explicitly seek training examples or sample data."""
+
+    return bool(set(question_terms).intersection(QUESTION_TRAINING_SEEKING_TERMS))
+
+
+def _definition_bonus(question: str, text: str, *, profile: RetrievalProfile) -> float:
     """Return a bonus when a ``what is ...`` question matches a definitional chunk."""
 
     normalized_question = _normalized_token_string(question)
@@ -285,79 +490,113 @@ def _definition_bonus(question: str, text: str) -> float:
 
     normalized_text = _normalized_token_string(text)
     phrase = " ".join(phrase_terms)
-    return DEFINITION_PATTERN_BONUS if f"{phrase} is" in normalized_text else 0.0
+    return profile.definition_pattern_bonus if f"{phrase} is" in normalized_text else 0.0
 
 
-def _question_echo_penalty(question: str, text: str) -> float:
+def _question_echo_penalty(question: str, text: str, *, profile: RetrievalProfile) -> float:
     """Return a penalty when a chunk mostly repeats the question instead of answering it."""
 
     normalized_question = _normalized_token_string(question)
     if not normalized_question:
         return 0.0
     normalized_text = _normalized_token_string(text)
-    return QUESTION_ECHO_PENALTY if normalized_question in normalized_text else 0.0
+    return profile.question_echo_penalty if normalized_question in normalized_text else 0.0
 
 
-def source_score_adjustment(source: Path, question_terms: list[str]) -> float:
+def source_score_adjustment(
+    source: Path,
+    question_terms: list[str],
+    *,
+    profile: RetrievalProfile = DEFAULT_RETRIEVAL_PROFILE,
+) -> float:
     """Return a path-aware score adjustment for ``source`` and ``question_terms``."""
 
-    adjustment = SOURCE_BONUS_BY_NAME.get(source.name, 0.0)
-    adjustment -= SOURCE_PENALTY_BY_NAME.get(source.name, 0.0)
+    scoring_source = _scoring_source_path(source)
+    adjustment = profile.source_adjustments_by_name.get(scoring_source.name, 0.0)
+    for part in scoring_source.parts:
+        adjustment += profile.source_adjustments_by_part.get(part, 0.0)
 
-    for part in source.parts:
-        adjustment += SOURCE_BONUS_BY_PART.get(part, 0.0)
-        adjustment -= SOURCE_PENALTY_BY_PART.get(part, 0.0)
+    for subpath_rule in profile.subpath_adjustments:
+        if _contains_path_parts(scoring_source, subpath_rule.path):
+            adjustment += subpath_rule.value
 
-    for subpath, penalty in SOURCE_PENALTY_BY_SUBPATH.items():
-        if _contains_path_parts(source, subpath):
-            adjustment -= penalty
+    path_terms = {
+        _normalize_term(term) for term in TOKEN_RE.findall(scoring_source.as_posix().lower())
+    }
+    adjustment += profile.path_term_overlap_bonus * len(
+        set(question_terms).intersection(path_terms)
+    )
 
-    path_terms = {_normalize_term(term) for term in TOKEN_RE.findall(source.as_posix().lower())}
-    adjustment += PATH_TERM_OVERLAP_BONUS * len(set(question_terms).intersection(path_terms))
-
-    if _is_root_readme(source) and {"repository", "research"}.issubset(question_terms):
-        adjustment += 1.0
-    if source.name == "utilities.py" and {"repository", "research"}.issubset(question_terms):
-        adjustment += 1.2
-    if source.name == "AGENTS.md" and _has_term_prefix(question_terms, "agent"):
-        adjustment += 0.6
-    if _contains_path_parts(source, ("utilities", "README.md")) and _has_term_prefix(
-        question_terms, "utilit"
+    if {"repository", "research"}.issubset(question_terms):
+        if _is_root_readme(scoring_source):
+            adjustment += 2.5
+        elif _contains_path_parts(scoring_source, ("src", "repo_rag_lab")):
+            if scoring_source.name == "utilities.py":
+                adjustment += 0.8
+        elif _contains_path_parts(scoring_source, ("docs", "operations")) or _contains_path_parts(
+            scoring_source,
+            ("docs", "architecture", "inspired"),
+        ):
+            adjustment -= 1.5
+        elif scoring_source.suffix.lower() in {".py", ".rs"} and not _question_is_code_seeking(
+            question_terms
+        ):
+            adjustment -= 1.0
+    if scoring_source.name == "AGENTS.md":
+        if _has_term_prefix(question_terms, "agent"):
+            adjustment += 0.6
+        else:
+            adjustment -= 1.4
+    if _contains_path_parts(scoring_source, ("docs", "audit")) and not _question_is_audit_seeking(
+        question_terms
     ):
-        adjustment += 0.7
-    if _contains_path_parts(source, ("documentation", "inspired")) and "inspired" in question_terms:
-        adjustment += 2.0
-    if (
-        source.name == "utilities.py"
-        and _contains_path_parts(source, ("src", "repo_rag_lab"))
-        and {"repository", "research"}.issubset(question_terms)
-    ):
-        adjustment += 0.5
-    if (
-        source.name == "rust_lookup.py"
-        and _contains_path_parts(source, ("src", "repo_rag_lab"))
-        and {"repository", "research"}.issubset(question_terms)
-    ):
-        adjustment -= 1.6
+        adjustment -= 3.0
+    if "tests" in scoring_source.parts and not _question_is_test_seeking(question_terms):
+        adjustment -= 5.0
+    if _contains_path_parts(
+        scoring_source,
+        ("samples", "training"),
+    ) and not _question_is_training_seeking(question_terms):
+        adjustment -= 3.0
+
+    for rule in profile.contextual_rules:
+        if rule.path_name is not None and scoring_source.name != rule.path_name:
+            continue
+        if rule.subpath is not None and not _contains_path_parts(scoring_source, rule.subpath):
+            continue
+        if rule.required_terms and not rule.required_terms.issubset(question_terms):
+            continue
+        if rule.required_term_prefix is not None and not _has_term_prefix(
+            question_terms, rule.required_term_prefix
+        ):
+            continue
+        adjustment += rule.value
+
     if _question_is_document_seeking(question_terms):
-        if _is_markdown_source(source):
-            adjustment += DOCUMENT_SEEKING_MARKDOWN_BONUS
-        if "documentation" in source.parts:
-            adjustment += DOCUMENT_SEEKING_DOCUMENTATION_BONUS
-        if source.name == "README.md":
-            adjustment += DOCUMENT_SEEKING_README_BONUS
-    if _question_is_code_seeking(question_terms) and source.suffix.lower() in {
+        if _is_markdown_source(scoring_source):
+            adjustment += profile.document_seeking_markdown_bonus
+        if "docs" in scoring_source.parts:
+            adjustment += profile.document_seeking_documentation_bonus
+        if scoring_source.name == "README.md":
+            adjustment += profile.document_seeking_readme_bonus
+    if _question_is_code_seeking(question_terms) and scoring_source.suffix.lower() in {
         ".c",
         ".h",
         ".py",
         ".rs",
     }:
-        adjustment += CODE_SEEKING_SOURCE_BONUS
+        adjustment += profile.code_seeking_source_bonus
 
     return adjustment
 
 
-def score(question: str, text: str, *, source: Path | None = None) -> float:
+def score(
+    question: str,
+    text: str,
+    *,
+    source: Path | None = None,
+    profile: RetrievalProfile = DEFAULT_RETRIEVAL_PROFILE,
+) -> float:
     """Score a text chunk by lexical overlap and light term-density weighting."""
 
     q_terms = _normalized_terms(question)
@@ -369,9 +608,11 @@ def score(question: str, text: str, *, source: Path | None = None) -> float:
     overlap = sum(1 for term in q_terms if term in t_terms)
     unique_overlap = len(set(q_terms).intersection(t_terms))
     density = overlap / math.sqrt(len(t_terms))
-    path_adjustment = source_score_adjustment(source, q_terms) if source is not None else 0.0
-    definition_bonus = _definition_bonus(question, text)
-    question_echo_penalty = _question_echo_penalty(question, text)
+    path_adjustment = (
+        source_score_adjustment(source, q_terms, profile=profile) if source is not None else 0.0
+    )
+    definition_bonus = _definition_bonus(question, text, profile=profile)
+    question_echo_penalty = _question_echo_penalty(question, text, profile=profile)
     return (
         overlap
         + (unique_overlap * 0.4)

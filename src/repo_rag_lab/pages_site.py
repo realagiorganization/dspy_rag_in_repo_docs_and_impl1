@@ -284,8 +284,8 @@ def sync_pages_site(
     ]
     if PurePosixPath("docs/audit/README.md") in page_map:
         index_lines.append("- [Audit index](repo/docs/audit/README.md)")
-    if PurePosixPath("README.DSPY.MD") in page_map:
-        index_lines.append("- [DSPy guide](repo/README.DSPY.md)")
+    if PurePosixPath("docs/architecture/dspy-rag-guide.md") in page_map:
+        index_lines.append("- [DSPy guide](repo/docs/architecture/dspy-rag-guide.md)")
     index_lines.extend(["", "## Sections", ""])
     for top_level, section_pages in section_items:
         index_lines.append(

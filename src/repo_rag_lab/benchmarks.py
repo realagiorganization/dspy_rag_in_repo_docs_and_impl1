@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from .corpus import RepoDocument, load_documents
-from .retrieval import chunk_documents, retrieve
+from .retrieval import RetrievalMode, chunk_documents, resolve_retrieval_mode, retrieve
+from .retrieval_profile import load_retrieval_profile
 from .training_samples import TrainingExample
 
 BENCHMARK_EXCLUDED_PARTS = {
@@ -31,17 +32,18 @@ BENCHMARK_EXCLUDED_PARTS = {
 }
 BENCHMARK_EXCLUDED_PATHS = {
     Path("FILES.md"),
-    Path("README.AGENTS.md"),
-    Path("README.DSPY.MD"),
-    Path("REPO_COMPLETENESS_CHECKLIST.md"),
+    Path("docs/architecture/research-narrative.md"),
+    Path("docs/architecture/dspy-rag-guide.md"),
+    Path("docs/archive/repo-completeness-checklist.md"),
     Path("TODO.MD"),
-    Path("documentation/hushwheel-fixture-rag-guide.md"),
-    Path("env.md"),
+    Path("docs/guides/hushwheel-fixture-rag-guide.md"),
+    Path("docs/operations/environment.md"),
     Path("todo-backlog.yaml"),
 }
 BENCHMARK_EXCLUDED_PATH_PREFIXES = (
     Path("AGENTS.md.d"),
     Path("docs/audit"),
+    Path("docs/planning"),
     Path("publication/exploratorium_translation/generated"),
     Path("samples/logs"),
     Path("samples/population"),
@@ -183,8 +185,7 @@ def _select_benchmark_documents(root: Path) -> list[RepoDocument]:
 
     documents: list[RepoDocument] = []
     for document in load_documents(root):
-        relative_path = document.path.relative_to(root)
-        if not is_benchmark_document_path(relative_path):
+        if not is_benchmark_document_path(document.path):
             continue
         documents.append(document)
     return documents
@@ -338,17 +339,27 @@ def _summarize_benchmark_tags(results: list[RetrievalBenchmarkResult]) -> dict[s
 
 
 def evaluate_retrieval_benchmarks(
-    root: Path, benchmarks: list[RetrievalBenchmark], top_k: int = 4
+    root: Path,
+    benchmarks: list[RetrievalBenchmark],
+    top_k: int = 4,
+    *,
+    retrieval_mode: RetrievalMode | None = None,
 ) -> list[RetrievalBenchmarkResult]:
     """Evaluate retrieval assertions against a fairness-filtered benchmark corpus."""
 
     chunks = chunk_documents(_select_benchmark_documents(root))
+    profile = load_retrieval_profile(root)
+    resolved_mode = resolve_retrieval_mode(profile, retrieval_mode)
     results: list[RetrievalBenchmarkResult] = []
     for benchmark in benchmarks:
-        retrieved = retrieve(benchmark.question, chunks, top_k=top_k)
-        retrieved_sources = _unique_in_order(
-            [str(chunk.source.relative_to(root)) for chunk in retrieved]
+        retrieved = retrieve(
+            benchmark.question,
+            chunks,
+            top_k=top_k,
+            profile=profile,
+            retrieval_mode=resolved_mode,
         )
+        retrieved_sources = _unique_in_order([str(chunk.source) for chunk in retrieved])
         results.append(
             _build_retrieval_benchmark_result(benchmark, retrieved_sources=retrieved_sources)
         )
@@ -361,21 +372,28 @@ def evaluate_retrieval_quality_suite(
     *,
     top_k: int = DEFAULT_RETRIEVAL_EVAL_TOP_K,
     top_k_values: Sequence[int] | None = None,
+    retrieval_mode: RetrievalMode | None = None,
 ) -> dict[str, Any]:
     """Evaluate retrieval quality across the default top-k and a small top-k sweep."""
 
     normalized_top_k_values = normalize_retrieval_top_k_values(top_k_values, default_top_k=top_k)
     chunks = chunk_documents(_select_benchmark_documents(root))
+    profile = load_retrieval_profile(root)
+    resolved_mode = resolve_retrieval_mode(profile, retrieval_mode)
     max_top_k = max(normalized_top_k_values, default=top_k)
     results_by_top_k: dict[int, list[RetrievalBenchmarkResult]] = {
         value: [] for value in normalized_top_k_values
     }
 
     for benchmark in benchmarks:
-        retrieved = retrieve(benchmark.question, chunks, top_k=max_top_k)
-        retrieved_sources = _unique_in_order(
-            [str(chunk.source.relative_to(root)) for chunk in retrieved]
+        retrieved = retrieve(
+            benchmark.question,
+            chunks,
+            top_k=max_top_k,
+            profile=profile,
+            retrieval_mode=resolved_mode,
         )
+        retrieved_sources = _unique_in_order([str(chunk.source) for chunk in retrieved])
         for sweep_top_k in normalized_top_k_values:
             results_by_top_k[sweep_top_k].append(
                 _build_retrieval_benchmark_result(
@@ -400,6 +418,7 @@ def evaluate_retrieval_quality_suite(
     )
     return {
         "case_count": len(benchmarks),
+        "retrieval_mode": resolved_mode,
         "default_top_k": top_k,
         "top_k_values": list(normalized_top_k_values),
         "default_summary": default_summary,

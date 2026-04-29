@@ -43,8 +43,8 @@ def _init_git_repo(root: Path, *paths: str) -> None:
 def test_sync_file_summaries_writes_expected_outputs_for_tracked_repo(tmp_path: Path) -> None:
     _write_text(tmp_path, "README.md", "# Demo Repo\n")
     _write_text(tmp_path, "AGENTS.md", "# Agents\n")
-    _write_text(tmp_path, "README.AGENTS.md", "# Narrative\n")
-    _write_text(tmp_path, "README.DSPY.MD", "# DSPy\n")
+    _write_text(tmp_path, "docs/architecture/research-narrative.md", "# Narrative\n")
+    _write_text(tmp_path, "docs/architecture/dspy-rag-guide.md", "# DSPy\n")
     _write_text(tmp_path, "Makefile", ".PHONY: sync\nsync:\n\t@true\n")
     _write_text(tmp_path, ".github/workflows/ci.yml", "name: CI\n")
     _write_text(tmp_path, "docs/audit/README.md", "# Audit Index\n")
@@ -57,8 +57,8 @@ def test_sync_file_summaries_writes_expected_outputs_for_tracked_repo(tmp_path: 
         tmp_path,
         "README.md",
         "AGENTS.md",
-        "README.AGENTS.md",
-        "README.DSPY.MD",
+        "docs/architecture/research-narrative.md",
+        "docs/architecture/dspy-rag-guide.md",
         "Makefile",
         ".github/workflows/ci.yml",
         "docs/audit/README.md",
@@ -150,8 +150,8 @@ def test_build_rows_cover_additional_kinds_and_public_fallbacks(tmp_path: Path) 
 
 def test_summarize_path_covers_special_cases_and_fallbacks(tmp_path: Path) -> None:
     _write_text(tmp_path, "AGENTS.md", "# Agents\n")
-    _write_text(tmp_path, "README.AGENTS.md", "# Narrative\n")
-    _write_text(tmp_path, "README.DSPY.MD", "# DSPy\n")
+    _write_text(tmp_path, "docs/architecture/research-narrative.md", "# Narrative\n")
+    _write_text(tmp_path, "docs/architecture/dspy-rag-guide.md", "# DSPy\n")
     _write_text(tmp_path, "docs/audit/demo.md", "# Audit\n")
     _write_text(tmp_path, "docs/config.yaml", "name: demo\n")
     _write_text(tmp_path, "data/broken.json", "{oops\n")
@@ -164,11 +164,15 @@ def test_summarize_path_covers_special_cases_and_fallbacks(tmp_path: Path) -> No
         == "Repository-wide agent workflow, utility, and verification instructions"
     )
     assert (
-        file_summary_module.summarize_path(tmp_path, Path("README.AGENTS.md"), "markdown")
+        file_summary_module.summarize_path(
+            tmp_path, Path("docs/architecture/research-narrative.md"), "markdown"
+        )
         == "Repository research narrative tying code, docs, and verification together"
     )
     assert (
-        file_summary_module.summarize_path(tmp_path, Path("README.DSPY.MD"), "markdown")
+        file_summary_module.summarize_path(
+            tmp_path, Path("docs/architecture/dspy-rag-guide.md"), "markdown"
+        )
         == "DSPy workflow guide for training, runtime use, and compiled programs"
     )
     assert (
