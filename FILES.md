@@ -117,6 +117,7 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-04-29-dataset-repo-rag-auto-detection.md` | docs | markdown | 124 | 6051 | Repository audit note for 2026 04 29 dataset repo rag auto detection |
 | `docs/audit/2026-04-29-dataset-trace-queue-handoff.md` | docs | markdown | 141 | 6656 | Repository audit note for 2026 04 29 dataset trace queue handoff |
 | `docs/audit/2026-04-29-dataset-worker-repo-rag-cli-backend.md` | docs | markdown | 128 | 6630 | Repository audit note for 2026 04 29 dataset worker repo rag cli backend |
+| `docs/audit/2026-04-29-global-blob-queue-trainer-migration.md` | docs | markdown | 91 | 4807 | Repository audit note for 2026 04 29 global blob queue trainer migration |
 | `docs/audit/2026-04-29-live-azure-gpt54-validation.md` | docs | markdown | 145 | 8279 | Repository audit note for 2026 04 29 live azure gpt54 validation |
 | `docs/audit/2026-04-29-retrieval-rerank-and-relative-root-normalization.md` | docs | markdown | 71 | 3070 | Repository audit note for 2026 04 29 retrieval rerank and relative root normalization |
 | `docs/audit/2026-04-29-runtime-image-and-dataset-build-deploy-wiring.md` | docs | markdown | 140 | 5729 | Repository audit note for 2026 04 29 runtime image and dataset build deploy wiring |
@@ -219,6 +220,7 @@ This inventory is generated from the current Git index.
 | `samples/training/repository_training_examples.yaml` | samples | yaml | 82 | 2641 | - question: What does this repository research? |
 | `src/repo_rag_lab/__init__.py` | src | python | 6 | 178 | Public package surface for the repository-grounded RAG lab. |
 | `src/repo_rag_lab/azure.py` | src | python | 76 | 2592 | Azure deployment manifest helpers for downstream release workflows. |
+| `src/repo_rag_lab/azure_artifacts.py` | src | python | 378 | 14666 | Azure Blob + Queue helpers for trainer-side traces and global bundle storage. |
 | `src/repo_rag_lab/azure_runtime.py` | src | python | 477 | 16407 | Azure runtime normalization, live probes, and cloud-completion helpers. |
 | `src/repo_rag_lab/benchmarks.py` | src | python | 478 | 16315 | Retrieval benchmark helpers for notebook assertions and logging. |
 | `src/repo_rag_lab/cli.py` | src | python | 1245 | 54095 | Command-line entrypoints for the shared repository RAG workflows. |
@@ -304,6 +306,7 @@ This inventory is generated from the current Git index.
 | `tests/test_project_surfaces.py` | tests | python | 475 | 21079 | Python module for test project surfaces |
 | `tests/test_repository_rag_bdd.py` | tests | python | 30 | 879 | Python module for test repository rag bdd |
 | `tests/test_retrieval.py` | tests | python | 217 | 7461 | Python module for test retrieval |
+| `tests/test_runtime_artifacts_azure.py` | tests | python | 610 | 22177 | Python module for test runtime artifacts azure |
 | `tests/test_rust_lookup.py` | tests | python | 95 | 3099 | Python module for test rust lookup |
 | `tests/test_todo_backlog.py` | tests | python | 103 | 3505 | Python module for test todo backlog |
 | `tests/test_training_samples.py` | tests | python | 135 | 5084 | Python module for test training samples |

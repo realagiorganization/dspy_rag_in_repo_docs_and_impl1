@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-04-29T19:58:19Z",
-  "tracked_file_count": 309,
-  "summarized_file_count": 306,
+  "generated_at": "2026-04-29T20:05:14Z",
+  "tracked_file_count": 312,
+  "summarized_file_count": 309,
   "excluded_generated_file_count": 3,
-  "explicit_link_count": 80,
+  "explicit_link_count": 83,
   "machine_link_occurrence_count": 2632,
   "machine_link_unique_count": 2427,
   "bibliography_entry_count": 4,
@@ -273,20 +273,20 @@
     {
       "path": "FILES.csv",
       "kind": "generic",
-      "byte_size": 37130,
+      "byte_size": 37529,
       "line_count": null,
       "url_count": 0,
-      "summary_en": "Tracked repository file, 37130 bytes of binary data, 0 explicit URLs. Opening line: No non-empty preview line.",
-      "summary_ru": "\u041e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u0435\u043c\u044b\u0439 \u0444\u0430\u0439\u043b \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u044f, 37130 \u0431\u0430\u0439\u0442 \u0431\u0438\u043d\u0430\u0440\u043d\u044b\u0445 \u0434\u0430\u043d\u043d\u044b\u0445, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041f\u0435\u0440\u0432\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430: No non-empty preview line."
+      "summary_en": "Tracked repository file, 37529 bytes of binary data, 0 explicit URLs. Opening line: No non-empty preview line.",
+      "summary_ru": "\u041e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u0435\u043c\u044b\u0439 \u0444\u0430\u0439\u043b \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u044f, 37529 \u0431\u0430\u0439\u0442 \u0431\u0438\u043d\u0430\u0440\u043d\u044b\u0445 \u0434\u0430\u043d\u043d\u044b\u0445, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041f\u0435\u0440\u0432\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430: No non-empty preview line."
     },
     {
       "path": "FILES.md",
       "kind": "markdown",
-      "byte_size": 42405,
-      "line_count": 320,
+      "byte_size": 42852,
+      "line_count": 323,
       "url_count": 1,
-      "summary_en": "Markdown document, 320 lines, 1 explicit URLs. Lead heading: Repository File Inventory.",
-      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 320 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository File Inventory."
+      "summary_en": "Markdown document, 323 lines, 1 explicit URLs. Lead heading: Repository File Inventory.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 323 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository File Inventory."
     },
     {
       "path": "Makefile",
@@ -1016,6 +1016,15 @@
       "url_count": 0,
       "summary_en": "Markdown document, 128 lines, 0 explicit URLs. Lead heading: 2026-04-29 Dataset Worker `repo_rag_cli` Backend.",
       "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 128 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-04-29 Dataset Worker `repo_rag_cli` Backend."
+    },
+    {
+      "path": "docs/audit/2026-04-29-global-blob-queue-trainer-migration.md",
+      "kind": "markdown",
+      "byte_size": 4807,
+      "line_count": 91,
+      "url_count": 0,
+      "summary_en": "Markdown document, 91 lines, 0 explicit URLs. Lead heading: 2026-04-29 Global Blob And Queue Trainer Migration.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 91 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-04-29 Global Blob And Queue Trainer Migration."
     },
     {
       "path": "docs/audit/2026-04-29-live-azure-gpt54-validation.md",
@@ -1909,6 +1918,15 @@
       "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 76 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Azure deployment manifest helpers for downstream release workflows."
     },
     {
+      "path": "src/repo_rag_lab/azure_artifacts.py",
+      "kind": "python",
+      "byte_size": 14666,
+      "line_count": 378,
+      "url_count": 0,
+      "summary_en": "Python module, 378 lines, 0 explicit URLs. Module intent: Azure Blob + Queue helpers for trainer-side traces and global bundle storage.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 378 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Azure Blob + Queue helpers for trainer-side traces and global bundle storage."
+    },
+    {
       "path": "src/repo_rag_lab/azure_runtime.py",
       "kind": "python",
       "byte_size": 16407,
@@ -2674,6 +2692,15 @@
       "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 217 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
     },
     {
+      "path": "tests/test_runtime_artifacts_azure.py",
+      "kind": "python",
+      "byte_size": 22177,
+      "line_count": 610,
+      "url_count": 4,
+      "summary_en": "Python module, 610 lines, 4 explicit URLs. Module intent: No module docstring detected.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 610 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 4. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
+    },
+    {
       "path": "tests/test_rust_lookup.py",
       "kind": "python",
       "byte_size": 3099,
@@ -2910,6 +2937,16 @@
         "tests/test_project_surfaces.py"
       ],
       "occurrence_count": 6,
+      "fetch_state_en": "Referenced by URL only. No repository-local mirror is currently tracked.",
+      "fetch_state_ru": "\u0421\u0441\u044b\u043b\u043a\u0430 \u0445\u0440\u0430\u043d\u0438\u0442\u0441\u044f \u0442\u043e\u043b\u044c\u043a\u043e \u043a\u0430\u043a URL. \u041b\u043e\u043a\u0430\u043b\u044c\u043d\u043e\u0435 \u0437\u0435\u0440\u043a\u0430\u043b\u043e \u0432 \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u0438 \u0441\u0435\u0439\u0447\u0430\u0441 \u043d\u0435 \u043e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u0435\u0442\u0441\u044f."
+    },
+    {
+      "url": "https://from-connection-string",
+      "host": "from-connection-string",
+      "source_paths": [
+        "tests/test_runtime_artifacts_azure.py"
+      ],
+      "occurrence_count": 2,
       "fetch_state_en": "Referenced by URL only. No repository-local mirror is currently tracked.",
       "fetch_state_ru": "\u0421\u0441\u044b\u043b\u043a\u0430 \u0445\u0440\u0430\u043d\u0438\u0442\u0441\u044f \u0442\u043e\u043b\u044c\u043a\u043e \u043a\u0430\u043a URL. \u041b\u043e\u043a\u0430\u043b\u044c\u043d\u043e\u0435 \u0437\u0435\u0440\u043a\u0430\u043b\u043e \u0432 \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u0438 \u0441\u0435\u0439\u0447\u0430\u0441 \u043d\u0435 \u043e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u0435\u0442\u0441\u044f."
     },
@@ -3582,6 +3619,26 @@
       "host": "realagiorganization.github.io",
       "source_paths": [
         "docs/audit/2026-03-19-public-pages-and-secret-scan.md"
+      ],
+      "occurrence_count": 1,
+      "fetch_state_en": "Referenced by URL only. No repository-local mirror is currently tracked.",
+      "fetch_state_ru": "\u0421\u0441\u044b\u043b\u043a\u0430 \u0445\u0440\u0430\u043d\u0438\u0442\u0441\u044f \u0442\u043e\u043b\u044c\u043a\u043e \u043a\u0430\u043a URL. \u041b\u043e\u043a\u0430\u043b\u044c\u043d\u043e\u0435 \u0437\u0435\u0440\u043a\u0430\u043b\u043e \u0432 \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u0438 \u0441\u0435\u0439\u0447\u0430\u0441 \u043d\u0435 \u043e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u0435\u0442\u0441\u044f."
+    },
+    {
+      "url": "https://realagistorage.blob.core.windows.net",
+      "host": "realagistorage.blob.core.windows.net",
+      "source_paths": [
+        "tests/test_runtime_artifacts_azure.py"
+      ],
+      "occurrence_count": 1,
+      "fetch_state_en": "Referenced by URL only. No repository-local mirror is currently tracked.",
+      "fetch_state_ru": "\u0421\u0441\u044b\u043b\u043a\u0430 \u0445\u0440\u0430\u043d\u0438\u0442\u0441\u044f \u0442\u043e\u043b\u044c\u043a\u043e \u043a\u0430\u043a URL. \u041b\u043e\u043a\u0430\u043b\u044c\u043d\u043e\u0435 \u0437\u0435\u0440\u043a\u0430\u043b\u043e \u0432 \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u0438 \u0441\u0435\u0439\u0447\u0430\u0441 \u043d\u0435 \u043e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u0435\u0442\u0441\u044f."
+    },
+    {
+      "url": "https://realagistorage.queue.core.windows.net",
+      "host": "realagistorage.queue.core.windows.net",
+      "source_paths": [
+        "tests/test_runtime_artifacts_azure.py"
       ],
       "occurrence_count": 1,
       "fetch_state_en": "Referenced by URL only. No repository-local mirror is currently tracked.",
