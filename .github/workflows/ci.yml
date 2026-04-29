@@ -65,6 +65,16 @@ jobs:
       - name: Run smoke test
         run: uv run repo-rag smoke-test
 
+      - name: Run optional Azure OpenAI live integration
+        env:
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ vars.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_CHAT_COMPLETIONS_URI: ${{ vars.AZURE_OPENAI_CHAT_COMPLETIONS_URI }}
+          AZURE_OPENAI_DEPLOYMENT_NAME: ${{ vars.AZURE_OPENAI_DEPLOYMENT_NAME }}
+          AZURE_OPENAI_API_VERSION: ${{ vars.AZURE_OPENAI_API_VERSION }}
+          AZURE_OPENAI_MODEL_NAME: ${{ vars.AZURE_OPENAI_MODEL_NAME }}
+        run: uv run pytest tests/test_live_azure_integration.py -q
+
       - name: Build wheel and source distribution
         run: uv build
 

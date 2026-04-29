@@ -36,17 +36,17 @@ def test_sync_pages_site_builds_catalog_and_mirrors_tracked_markdown(tmp_path: P
     _run_git(root, "config", "user.name", "Test User")
     _run_git(root, "config", "user.email", "test@example.com")
     (root / "README.md").write_text(
-        "# Demo\n\nSee [Guide](documentation/guide.md).\n",
+        "# Demo\n\nSee [Guide](docs/guide.md).\n",
         encoding="utf-8",
     )
-    docs_dir = root / "documentation"
+    docs_dir = root / "docs"
     docs_dir.mkdir()
     (docs_dir / "guide.md").write_text(
         "# Guide\n\nRead the [todo](../TODO.MD).\n",
         encoding="utf-8",
     )
     (root / "TODO.MD").write_text("# TODO\n\nBacklog items.\n", encoding="utf-8")
-    _run_git(root, "add", "README.md", "documentation/guide.md", "TODO.MD")
+    _run_git(root, "add", "README.md", "docs/guide.md", "TODO.MD")
     _run_git(root, "commit", "-m", "seed markdown fixtures")
 
     payload = sync_pages_site(
@@ -62,14 +62,14 @@ def test_sync_pages_site_builds_catalog_and_mirrors_tracked_markdown(tmp_path: P
     assert (output_dir / "index.md").exists()
     assert (output_dir / "catalog.md").exists()
     assert (output_dir / "sections" / "root.md").exists()
-    assert (output_dir / "sections" / "documentation.md").exists()
+    assert (output_dir / "sections" / "docs.md").exists()
     assert (output_dir / "repo" / "README.md").exists()
-    assert (output_dir / "repo" / "documentation" / "guide.md").exists()
+    assert (output_dir / "repo" / "docs" / "guide.md").exists()
     assert (output_dir / "repo" / "TODO.md").exists()
 
     readme_copy = (output_dir / "repo" / "README.md").read_text(encoding="utf-8")
-    guide_copy = (output_dir / "repo" / "documentation" / "guide.md").read_text(encoding="utf-8")
-    assert "documentation/guide.md" in readme_copy
+    guide_copy = (output_dir / "repo" / "docs" / "guide.md").read_text(encoding="utf-8")
+    assert "docs/guide.md" in readme_copy
     assert "../TODO.md" in guide_copy
 
     manifest = json.loads((output_dir / "site-manifest.json").read_text(encoding="utf-8"))
@@ -78,7 +78,7 @@ def test_sync_pages_site_builds_catalog_and_mirrors_tracked_markdown(tmp_path: P
     assert {page["site_path"] for page in manifest["pages"]} == {
         "repo/README.md",
         "repo/TODO.md",
-        "repo/documentation/guide.md",
+        "repo/docs/guide.md",
     }
 
 
@@ -107,10 +107,10 @@ def test_pages_site_helper_functions_cover_path_and_link_edge_cases() -> None:
     ) == PurePosixPath("assets/logo.png")
     assert _resolve_repo_target(PurePosixPath("docs/guide.md"), "../../outside/logo.png") is None
     assert _top_level_name(PurePosixPath("README.md")) == "root"
-    assert _top_level_name(PurePosixPath("documentation/guide.md")) == "documentation"
+    assert _top_level_name(PurePosixPath("docs/guide.md")) == "docs"
     assert _section_slug(".codex") == "codex"
     assert _section_title("root") == "Root Markdown"
-    assert _section_title("documentation") == "documentation Markdown"
+    assert _section_title("docs") == "docs Markdown"
     assert _source_link(None, "master", PurePosixPath("README.md")) == "README.md"
     assert _source_link("https://github.com/example/demo", "main", PurePosixPath("README.md")) == (
         "https://github.com/example/demo/blob/main/README.md"
@@ -172,12 +172,20 @@ def test_sync_pages_site_resolves_repo_url_and_rebuilds_existing_absolute_output
     (root / "README.md").write_text(
         "# Demo\n\nSee [audit](docs/audit/README.md).\n", encoding="utf-8"
     )
-    (root / "README.DSPY.MD").write_text("# DSPy\n\n", encoding="utf-8")
+    (root / "docs" / "architecture").mkdir(parents=True)
+    (root / "docs/architecture/dspy-rag-guide.md").write_text("# DSPy\n\n", encoding="utf-8")
     (root / "docs" / "audit").mkdir(parents=True)
     (root / "docs" / "audit" / "README.md").write_text("# Audit\n\n", encoding="utf-8")
     (root / ".codex").mkdir()
     (root / ".codex" / "notes.MD").write_text("no heading\n", encoding="utf-8")
-    _run_git(root, "add", "README.md", "README.DSPY.MD", "docs/audit/README.md", ".codex/notes.MD")
+    _run_git(
+        root,
+        "add",
+        "README.md",
+        "docs/architecture/dspy-rag-guide.md",
+        "docs/audit/README.md",
+        ".codex/notes.MD",
+    )
     _run_git(root, "commit", "-m", "seed markdown fixtures")
 
     output_dir = tmp_path / "published-site"
@@ -194,7 +202,7 @@ def test_sync_pages_site_resolves_repo_url_and_rebuilds_existing_absolute_output
 
     index_text = (output_dir / "index.md").read_text(encoding="utf-8")
     assert "[Audit index](repo/docs/audit/README.md)" in index_text
-    assert "[DSPy guide](repo/README.DSPY.md)" in index_text
+    assert "[DSPy guide](repo/docs/architecture/dspy-rag-guide.md)" in index_text
 
     manifest = json.loads((output_dir / "site-manifest.json").read_text(encoding="utf-8"))
     titles = {page["source_path"]: page["title"] for page in manifest["pages"]}

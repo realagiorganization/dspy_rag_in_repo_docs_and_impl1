@@ -1,6 +1,6 @@
 - question: What does this repository research?
   answer_contains: repository
 - question: Where are inspired implementation summaries stored?
-  answer_contains: documentation/inspired
+  answer_contains: docs/architecture/inspired
 - question: How should agents inspect repository utilities?
   answer_contains: utility-summary

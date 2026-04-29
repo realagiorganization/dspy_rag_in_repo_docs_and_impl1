@@ -309,21 +309,36 @@ def _complete_with_azure_openai(
     user_prompt: str,
     max_tokens: int,
 ) -> ChatCompletionResult:
+    def _is_unsupported_parameter_error(exc: Exception, parameter_name: str) -> bool:
+        message = str(exc)
+        return "Unsupported parameter" in message and f"'{parameter_name}'" in message
+
     azure_openai_client = _require_openai_client()
     client = azure_openai_client(
         azure_endpoint=config.endpoint,
         api_key=config.api_key,
         api_version=config.api_version,
     )
-    response = client.chat.completions.create(
-        model=config.deployment_name,
-        messages=[
+    request_kwargs: dict[str, Any] = {
+        "model": config.deployment_name,
+        "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        temperature=0,
-        max_tokens=max_tokens,
-    )
+        "temperature": 0,
+    }
+    try:
+        response = client.chat.completions.create(
+            **request_kwargs,
+            max_completion_tokens=max_tokens,
+        )
+    except Exception as exc:
+        if not _is_unsupported_parameter_error(exc, "max_completion_tokens"):
+            raise
+        response = client.chat.completions.create(
+            **request_kwargs,
+            max_tokens=max_tokens,
+        )
     choice = response.choices[0]
     return ChatCompletionResult(
         provider="azure-openai",

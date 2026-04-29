@@ -33,11 +33,11 @@ def _copy_scaffold_inputs(tmp_path: Path) -> Path:
         Path("AGENTS.md"),
         Path("README.md"),
         Path("utilities/README.md"),
-        Path("documentation/azure-deployment.md"),
-        Path("documentation/package-api.md"),
-        Path("documentation/mcp-discovery.md"),
-        Path("documentation/inspired/dspy-rag-tutorial.md"),
-        Path("documentation/inspired/implementing-rag-with-dspy-technical-guide.md"),
+        Path("docs/operations/azure-deployment.md"),
+        Path("docs/architecture/package-api.md"),
+        Path("docs/architecture/mcp-discovery.md"),
+        Path("docs/architecture/inspired/dspy-rag-tutorial.md"),
+        Path("docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md"),
         Path("publication/README.md"),
         Path("samples/training/repository_training_examples.yaml"),
         Path("samples/population/repository_population_candidates.yaml"),
@@ -77,7 +77,7 @@ def test_summarize_benchmark_results_reports_quality_metrics() -> None:
             ),
             RetrievalBenchmarkResult(
                 question="Q2",
-                expected_sources=("documentation/package-api.md",),
+                expected_sources=("docs/architecture/package-api.md",),
                 retrieved_sources=("README.md",),
                 matched_sources=(),
                 tags=("docs",),
@@ -93,7 +93,7 @@ def test_summarize_benchmark_results_reports_quality_metrics() -> None:
     assert summary["average_source_recall"] == pytest.approx(0.5)
     assert summary["average_source_precision"] == pytest.approx(1 / 3)
     assert summary["average_reciprocal_rank"] == pytest.approx(0.25)
-    assert summary["missed_source_hits"]["documentation/package-api.md"] == 1
+    assert summary["missed_source_hits"]["docs/architecture/package-api.md"] == 1
     assert summary["results"][0]["first_relevant_rank"] == 2
     assert summary["tag_summaries"]["repo"]["case_count"] == 1
     assert summary["tag_summaries"]["repo"]["pass_rate"] == pytest.approx(1.0)
@@ -109,6 +109,7 @@ def test_evaluate_retrieval_quality_suite_reports_top_k_summaries() -> None:
     suite = evaluate_retrieval_quality_suite(REPO_ROOT, benchmarks, top_k=4, top_k_values=(1, 4))
 
     assert suite["case_count"] == len(benchmarks)
+    assert suite["retrieval_mode"] == "idf-rerank"
     assert suite["default_top_k"] == 4
     assert suite["top_k_values"] == [1, 4]
     assert suite["default_summary"]["top_k"] == 4
@@ -142,9 +143,9 @@ def test_retrieval_quality_threshold_helpers_report_regressions() -> None:
 def test_is_benchmark_document_path_excludes_operational_repo_surfaces() -> None:
     assert is_benchmark_document_path(Path("README.md")) is True
     assert is_benchmark_document_path(Path("publication/README.md")) is True
-    assert is_benchmark_document_path(Path("README.AGENTS.md")) is False
+    assert is_benchmark_document_path(Path("docs/architecture/research-narrative.md")) is False
     assert is_benchmark_document_path(Path("FILES.md")) is False
-    assert is_benchmark_document_path(Path("env.md")) is False
+    assert is_benchmark_document_path(Path("docs/operations/environment.md")) is False
     assert is_benchmark_document_path(Path("TODO.MD")) is False
     assert is_benchmark_document_path(Path("todo-backlog.yaml")) is False
     assert is_benchmark_document_path(Path("AGENTS.md.d/FILES.md")) is False
@@ -172,7 +173,7 @@ def test_is_benchmark_document_path_excludes_operational_repo_surfaces() -> None
     )
     assert is_benchmark_document_path(Path("artifacts/notebook_logs/run.json")) is False
     assert is_benchmark_document_path(Path("tests/test_utilities.py")) is False
-    assert is_benchmark_document_path(Path("README.DSPY.MD")) is False
+    assert is_benchmark_document_path(Path("docs/architecture/dspy-rag-guide.md")) is False
 
 
 def test_build_training_lab_context_writes_metadata_and_reports_clean_validation(
@@ -217,7 +218,7 @@ def test_build_population_lab_context_extends_and_reranks_candidates(tmp_path: P
     assert payload["validation_issues"] == []
     assert payload["benchmark_summary"]["tag_summaries"]
     assert len(payload["benchmark_top_k_summaries"]) >= 1
-    assert "documentation/package-api.md" in payload["reranked_sources"]
+    assert "docs/architecture/package-api.md" in payload["reranked_sources"]
 
 
 def test_build_agent_workflow_context_reports_validation_and_benchmarks() -> None:

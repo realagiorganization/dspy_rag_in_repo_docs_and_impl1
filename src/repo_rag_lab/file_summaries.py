@@ -148,10 +148,14 @@ def summarize_path(root: Path, path: Path, kind: str) -> str:
         return "Repository-wide agent workflow, utility, and verification instructions"
     if relative == "README.md":
         return "Top-level repository overview, workflow map, and quality guidance"
-    if relative == "README.AGENTS.md":
+    if relative == "docs/architecture/research-narrative.md":
         return "Repository research narrative tying code, docs, and verification together"
-    if relative == "README.DSPY.MD":
+    if relative == "docs/architecture/dspy-rag-guide.md":
         return "DSPy workflow guide for training, runtime use, and compiled programs"
+    if relative == "docs/operations/environment.md":
+        return "Environment and secret reference for local runtime and deployment workflows"
+    if relative == "docs/archive/repo-completeness-checklist.md":
+        return "Archived completeness snapshot kept for workflow and lockfile policy context"
     if relative == GUIDE_PATH.as_posix():
         return "Agent instructions for maintaining FILES.md and FILES.csv"
     if path.parts[:2] == (".github", "workflows"):

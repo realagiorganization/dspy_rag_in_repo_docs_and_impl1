@@ -26,12 +26,16 @@ def test_ask_repository_live_uses_openai_completion(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     def fake_collect_repository_evidence(
-        question: str, root: Path
-    ) -> tuple[list[Chunk], list[dict[str, str]]]:
-        del question, root
+        question: str,
+        root: Path,
+        *,
+        retrieval_mode: str | None = None,
+    ) -> tuple[list[Chunk], list[dict[str, str]], str]:
+        del question, root, retrieval_mode
         return (
             [Chunk(source=Path("README.md"), text="Repository RAG research and utilities.")],
             [{"path": "mcp.json", "hint": "Candidate MCP server"}],
+            "lexical",
         )
 
     def fake_call_azure_openai_chat(
@@ -73,10 +77,13 @@ def test_ask_repository_live_falls_back_without_context(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     def fake_collect_repository_evidence(
-        question: str, root: Path
-    ) -> tuple[list[Chunk], list[dict[str, str]]]:
-        del question, root
-        return [], []
+        question: str,
+        root: Path,
+        *,
+        retrieval_mode: str | None = None,
+    ) -> tuple[list[Chunk], list[dict[str, str]], str]:
+        del question, root, retrieval_mode
+        return [], [], "lexical"
 
     def fail_openai_call(*args: object, **kwargs: object) -> ChatCompletionResult:
         del args, kwargs

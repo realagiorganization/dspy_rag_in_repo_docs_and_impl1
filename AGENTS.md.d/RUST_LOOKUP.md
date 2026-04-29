@@ -7,6 +7,9 @@ passages inside the tracked repository tree.
 
 - `make ask QUESTION="..."` and `uv run repo-rag ask --question "..."` now perform this Rust
   lookup-first narrowing automatically before the broader repository retriever runs.
+- The same lookup-first path is now expected to work against arbitrary git repository roots when
+  `uv run repo-rag ask --root <repo_path> --question "..."` is used from a worker or temporary
+  clone.
 - Refresh the local SQLite index with `make rust-lookup-index` after tracked-file changes, or let
   `make rust-lookup QUERY="..."` refresh it automatically when stale.
 - Start with short noun-phrase queries such as `dspy training`, `azure runtime`, or
@@ -28,5 +31,5 @@ passages inside the tracked repository tree.
 
 - Keep this guide aligned with `rust-cli/src/main.rs`, the `Makefile`, and `README.md` whenever the
   lookup workflow changes.
-- When this workflow changes materially, update `README.AGENTS.md` and the relevant audit note in
+- When this workflow changes materially, update `docs/architecture/research-narrative.md` and the relevant audit note in
   `docs/audit/`.

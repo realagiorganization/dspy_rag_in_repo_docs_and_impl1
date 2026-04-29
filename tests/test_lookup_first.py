@@ -87,8 +87,9 @@ def test_repository_retriever_uses_lookup_first_context(
         root: Path,
         *,
         top_k: int = 4,
+        retrieval_mode: str | None = None,
     ) -> list[Chunk]:
-        del root, top_k
+        del root, top_k, retrieval_mode
         return [
             Chunk(
                 source=REPO_ROOT / "README.md",

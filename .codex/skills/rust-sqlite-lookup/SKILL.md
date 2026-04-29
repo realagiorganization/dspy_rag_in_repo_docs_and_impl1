@@ -23,7 +23,7 @@ DSPy synthesis step.
 - `rust-cli/Cargo.toml`
 - `Makefile`
 - `README.md`
-- `README.AGENTS.md`
+- `docs/architecture/research-narrative.md`
 - `AGENTS.md`
 - `AGENTS.md.d/RUST_LOOKUP.md`
 

@@ -58,18 +58,18 @@ items:
     area: "Notebook And Documentation Surfaces"
     task: "Keep the DSPy and utility documentation current."
     surfaces:
-      - path: "README.DSPY.MD"
+      - path: "docs/architecture/dspy-rag-guide.md"
       - path: "utilities/README.md"
       - path: "README.md"
     done_when:
-      - "README.DSPY.MD is refreshed whenever training or benchmark workflows change."
+      - "docs/architecture/dspy-rag-guide.md is refreshed whenever training or benchmark workflows change."
       - "README.md, utilities/README.md, and notebook guidance match the actual CLI and Make targets."
   - emoji: "🚦"
     area: "Verification, CI, And Deployment"
     task: "Expand verification beyond the current smoke and BDD emphasis."
     surfaces:
       - path: "tests/test_repository_rag_bdd.py"
-      - path: "documentation/azure-deployment.md"
+      - path: "docs/operations/azure-deployment.md"
       - path: "tests/fixtures/hushwheel_lexiconarium/"
     done_when:
       - "A live or mocked Azure inference integration test exists."
@@ -99,7 +99,7 @@ items:
     task: "Keep the committed rust-cli/Cargo.lock policy intentional."
     surfaces:
       - path: "rust-cli/Cargo.lock"
-      - path: "REPO_COMPLETENESS_CHECKLIST.md"
+      - path: "docs/archive/repo-completeness-checklist.md"
       - path: "rust-cli/Cargo.toml"
     done_when:
       - "The lockfile is refreshed only when Rust dependencies change."
@@ -114,3 +114,14 @@ items:
     done_when:
       - "Audit notes are updated whenever verification status changes materially."
       - "The backlog is refreshed when roadmap items are completed, replaced, or reprioritized."
+  - emoji: "🛠"
+    area: "Repo Hygiene And Workflow Policy"
+    task: "Execute the repo hardening and dataset integration plans against the new doc tree."
+    surfaces:
+      - path: "docs/planning/repo-hardening-plan.md"
+      - path: "docs/planning/dataset-integration-plan.md"
+      - path: "README.md"
+    done_when:
+      - "The planning docs stay current as work lands."
+      - "Completed tasks are marked in the checklist files instead of being tracked only in chat."
+      - "The repo structure and downstream integration work converge on the same documented plan."

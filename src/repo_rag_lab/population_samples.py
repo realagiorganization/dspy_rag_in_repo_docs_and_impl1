@@ -25,7 +25,7 @@ def normalize_population_candidates(records: list[dict[str, Any]]) -> list[Popul
     >>> candidates = normalize_population_candidates([
     ...     {"source": "README.md", "rationale": "Core overview", "priority": 1},
     ...     {
-    ...         "source": "documentation/inspired",
+    ...         "source": "docs/architecture/inspired",
     ...         "rationale": "Reference material",
     ...         "priority": "2",
     ...     },
@@ -175,12 +175,12 @@ def extend_population_candidates(
     next_priority = max((candidate.priority for candidate in candidates), default=0) + 1
     additions = [
         PopulationCandidate(
-            source="documentation/package-api.md",
+            source="docs/architecture/package-api.md",
             rationale="Package API notes support notebook validation and utility questions.",
             priority=next_priority,
         ),
         PopulationCandidate(
-            source="documentation/mcp-discovery.md",
+            source="docs/architecture/mcp-discovery.md",
             rationale="MCP discovery notes ground follow-up notebook corpus work.",
             priority=next_priority + 1,
         ),

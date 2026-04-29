@@ -227,9 +227,7 @@ def build_hushwheel_fixture_lab_context(root: Path) -> dict[str, Any]:
             {
                 "question": question,
                 "answer": answer.answer,
-                "context_sources": [
-                    str(chunk.source.relative_to(fixture_root)) for chunk in answer.context
-                ],
+                "context_sources": [str(chunk.source) for chunk in answer.context],
             }
         )
 

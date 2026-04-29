@@ -88,20 +88,20 @@ LATEX_ESCAPE_TABLE = str.maketrans(
 )
 REFERENCE_COMPANION_PATHS = {
     "lewis2020rag": (
-        "README.DSPY.MD",
-        "documentation/inspired/implementing-rag-with-dspy-technical-guide.md",
+        "docs/architecture/dspy-rag-guide.md",
+        "docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md",
     ),
     "khattab2024dspy": (
-        "README.DSPY.MD",
-        "documentation/inspired/dspy-rag-tutorial.md",
-        "documentation/hushwheel-fixture-rag-guide.md",
+        "docs/architecture/dspy-rag-guide.md",
+        "docs/architecture/inspired/dspy-rag-tutorial.md",
+        "docs/guides/hushwheel-fixture-rag-guide.md",
     ),
-    "mcp2024": ("documentation/mcp-discovery.md",),
-    "azureinference2025": ("documentation/azure-deployment.md",),
+    "mcp2024": ("docs/architecture/mcp-discovery.md",),
+    "azureinference2025": ("docs/operations/azure-deployment.md",),
 }
 URL_COMPANION_PATHS = {
-    "learn.microsoft.com": ("documentation/azure-deployment.md",),
-    "modelcontextprotocol.io": ("documentation/mcp-discovery.md",),
+    "learn.microsoft.com": ("docs/operations/azure-deployment.md",),
+    "modelcontextprotocol.io": ("docs/architecture/mcp-discovery.md",),
     "astral.sh": ("README.md",),
 }
 REPO_REMOTE = "github.com/realagiorganization/dspy_rag_in_repo_docs_and_impl1"

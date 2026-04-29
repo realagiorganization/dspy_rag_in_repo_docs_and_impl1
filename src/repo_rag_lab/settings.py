@@ -21,7 +21,7 @@ class RepoSettings:
 
         return cls(
             root=root,
-            docs_dir=root / "documentation",
+            docs_dir=root / "docs",
             notebooks_dir=root / "notebooks",
             artifacts_dir=root / "artifacts",
         )

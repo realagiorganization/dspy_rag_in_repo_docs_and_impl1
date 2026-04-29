@@ -9,7 +9,7 @@ deployment steps that need Azure OpenAI or GitHub CLI credentials.
 
 - `.env.sample`: tracked, safe template with placeholders only.
 - `.env`: local only, gitignored, may contain real secrets.
-- `env.md`: tracked documentation for the variables the repo already references or expects around
+- `environment.md`: tracked documentation for the variables the repo already references or expects around
   usage, deployment, and CI operations.
 
 ## Azure OpenAI And Deployment Variables
@@ -21,21 +21,27 @@ These are the variables most relevant to real usage and downstream deployment.
 | `AZURE_OPENAI_CHAT_COMPLETIONS_URI` | Direct Azure OpenAI chat completions calls | Local notebooks, ad hoc scripts, future DSPy/Azure integrations | Full REST target URI including deployment path and `api-version`. |
 | `AZURE_OPENAI_ENDPOINT` | SDK-style Azure OpenAI clients | Local notebooks, ad hoc scripts, future code | Base endpoint only, without the `/openai/deployments/...` suffix. |
 | `AZURE_OPENAI_API_KEY` | Azure OpenAI authentication | Local notebooks, ad hoc scripts, future DSPy/Azure integrations | Secret. Do not commit. |
-| `AZURE_OPENAI_DEPLOYMENT_NAME` | Selecting the Azure deployment | Local notebooks, ad hoc scripts, future DSPy/Azure integrations | In this repo's current local setup, this is `gpt-4o`. |
+| `AZURE_OPENAI_DEPLOYMENT_NAME` | Selecting the Azure deployment | Local notebooks, ad hoc scripts, future DSPy/Azure integrations | Validated locally on `2026-04-29` with `gpt-5.4`. |
 | `AZURE_OPENAI_MODEL_NAME` | Human-readable model label | Local docs and downstream tooling | Optional but useful when deployment name and model name differ. |
-| `AZURE_OPENAI_API_VERSION` | Azure OpenAI request compatibility | Deployment docs and downstream tooling | The current local value is `2025-01-01-preview`. |
-| `AZURE_INFERENCE_ENDPOINT` | Deployment/runtime environment contract | `src/repo_rag_lab/azure.py`, `documentation/azure-deployment.md` | This repo stores it in generated deployment manifests. |
-| `AZURE_INFERENCE_CREDENTIAL` | Deployment/runtime environment contract | `src/repo_rag_lab/azure.py`, `documentation/azure-deployment.md` | Usually the same secret as `AZURE_OPENAI_API_KEY` when key auth is used. |
+| `AZURE_OPENAI_API_VERSION` | Azure OpenAI request compatibility | Deployment docs and downstream tooling | Validated locally on `2026-04-29` with `2024-12-01-preview`. |
+| `AZURE_INFERENCE_ENDPOINT` | Deployment/runtime environment contract | `src/repo_rag_lab/azure.py`, `azure-deployment.md` | This repo stores it in generated deployment manifests. |
+| `AZURE_INFERENCE_CREDENTIAL` | Deployment/runtime environment contract | `src/repo_rag_lab/azure.py`, `azure-deployment.md` | Usually the same secret as `AZURE_OPENAI_API_KEY` when key auth is used. |
 
 ## GitHub And CI Operator Variables
 
-The checked-in GitHub Actions workflows do not reference any custom repository secrets today for
-the normal CI path. They only run build and test commands. These variables still matter for local
-CI inspection and operator workflows.
+The normal CI path still stays mostly build-and-test oriented, but it now also includes an
+optional live Azure integration slice. That slice only becomes active when the repository or
+organization provides the Azure runtime configuration through GitHub secrets and variables.
 
 | Variable | Required for | Current repo surface | Notes |
 | --- | --- | --- | --- |
 | `GH_TOKEN` | Non-interactive `gh` CLI usage | `make gh-runs`, `make gh-watch`, `make gh-failed-logs`, post-push log capture | Optional if `gh auth login` is already configured locally. |
+| `AZURE_OPENAI_API_KEY` | Optional live Azure OpenAI CI integration | `.github/workflows/ci.yml`, `tests/test_live_azure_integration.py` | Store as a GitHub secret. |
+| `AZURE_OPENAI_ENDPOINT` | Optional live Azure OpenAI CI integration | `.github/workflows/ci.yml`, `tests/test_live_azure_integration.py` | Prefer a GitHub Actions variable because it is not itself secret. |
+| `AZURE_OPENAI_CHAT_COMPLETIONS_URI` | Optional live Azure OpenAI CI integration fallback | `.github/workflows/ci.yml`, `tests/test_live_azure_integration.py` | Optional alternative to `AZURE_OPENAI_ENDPOINT`. |
+| `AZURE_OPENAI_DEPLOYMENT_NAME` | Optional live Azure OpenAI CI integration | `.github/workflows/ci.yml`, `tests/test_live_azure_integration.py` | Prefer a GitHub Actions variable. |
+| `AZURE_OPENAI_API_VERSION` | Optional live Azure OpenAI CI integration | `.github/workflows/ci.yml`, `tests/test_live_azure_integration.py` | Prefer a GitHub Actions variable. |
+| `AZURE_OPENAI_MODEL_NAME` | Optional live Azure OpenAI CI labeling | `.github/workflows/ci.yml` | Optional, non-secret. |
 
 ## Make And Shell Override Variables
 
@@ -63,12 +69,20 @@ Current checked-in operational tooling explicitly relies on:
 
 - `GH_TOKEN` or an existing authenticated `gh` session for GitHub Actions inspection commands
 
+Current checked-in optional live CI integration additionally reads:
+
+- `AZURE_OPENAI_API_KEY`
+- `AZURE_OPENAI_ENDPOINT` or `AZURE_OPENAI_CHAT_COMPLETIONS_URI`
+- `AZURE_OPENAI_DEPLOYMENT_NAME`
+- `AZURE_OPENAI_API_VERSION`
+
 Current local Azure OpenAI usage guidance in this repo should also carry:
 
 - `AZURE_OPENAI_CHAT_COMPLETIONS_URI`
 - `AZURE_OPENAI_ENDPOINT`
 - `AZURE_OPENAI_API_KEY`
 - `AZURE_OPENAI_DEPLOYMENT_NAME`
+- `AZURE_OPENAI_API_VERSION`
 - `AZURE_OPENAI_MODEL_NAME`
 
 ## Recommended Local Workflow
@@ -101,7 +115,7 @@ make gh-watch
 ## Cross-References
 
 - `src/repo_rag_lab/azure.py`
-- `documentation/azure-deployment.md`
+- `azure-deployment.md`
 - `Makefile`
 - `.github/workflows/ci.yml`
 - `.github/workflows/publish.yml`

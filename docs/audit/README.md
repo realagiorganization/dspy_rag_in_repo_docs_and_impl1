@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-03-19-simple-end-to-end-verification-guide.md`
+- `2026-04-29-runtime-image-and-dataset-build-deploy-wiring.md`
 
 ## Usage
 

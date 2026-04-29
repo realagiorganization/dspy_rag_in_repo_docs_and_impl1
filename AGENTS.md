@@ -28,6 +28,13 @@ verification results, and anchor status statements to the newest file in `docs/a
 - `make exploratorium-sync`
 - `make ask QUESTION="..."`
 - `make ask-live QUESTION="..."`
+- `make bundle-inspect`
+- `make bundle-publish`
+- `make bundle-promote`
+- `make bundle-rollback`
+- `make overlay-init`
+- `make trace-export`
+- `make trace-import`
 - `make retrieval-eval`
 - `make discover-mcp`
 - `make azure-openai-probe`
@@ -43,6 +50,13 @@ verification results, and anchor status statements to the newest file in `docs/a
 - `cargo run --manifest-path rust-cli/Cargo.toml -- index`
 - `cargo run --manifest-path rust-cli/Cargo.toml -- lookup "dspy training"`
 - `uv run repo-rag ask-live --question "..." --provider azure-openai`
+- `uv run repo-rag bundle-inspect --root . --output json`
+- `uv run repo-rag bundle-publish --root . --run-name ... --output json`
+- `uv run repo-rag bundle-promote --root . --channel stable --run-name ... --output json`
+- `uv run repo-rag bundle-rollback --root . --channel stable --output json`
+- `uv run repo-rag overlay-init --root . --output json`
+- `uv run repo-rag trace-export --root . --payload-path ... --output json`
+- `uv run repo-rag trace-import --root . --trace-path ... --output json`
 - `uv run repo-rag retrieval-eval --top-k-sweep "1,2,4,8"`
 - `uv run repo-rag ask --question "..." --use-dspy`
 
@@ -58,12 +72,12 @@ verification results, and anchor status statements to the newest file in `docs/a
 8. If a permission-gated action is blocked, explicitly offer the user the option to make that permission permanent in Codex settings before retrying.
 9. Keep reusable notebook logic in `src/` with doctests or normal pytest coverage instead of embedding it in notebook cells.
 10. Keep the repository fully `uv`-managed unless `uv` no longer covers a required workflow.
-11. Treat `README.AGENTS.md` as the overreaching research narrative for the repository; when a turn materially changes workflow stages, DSPy capabilities, notebooks, verification posture, publication scope, or deployment handoff, update `README.AGENTS.md` in the same turn.
+11. Treat `docs/architecture/research-narrative.md` as the overreaching research narrative for the repository; when a turn materially changes workflow stages, DSPy capabilities, notebooks, verification posture, publication scope, or deployment handoff, update `docs/architecture/research-narrative.md` in the same turn.
 12. When tracked files, publication inventories, or bibliography-linked fetch summaries change, refresh `FILES.md`, `FILES.csv`, and the exploratorium outputs in the same turn.
 
 ## Research Narrative
 
-- `README.AGENTS.md` is the top-level narrative that explains how the repository's research story fits together across code, notebooks, DSPy, audits, CI logs, publication outputs, and deployment metadata.
+- `docs/architecture/research-narrative.md` is the top-level narrative that explains how the repository's research story fits together across code, notebooks, DSPy, audits, CI logs, publication outputs, and deployment metadata.
 - Keep it current continuously, not as occasional cleanup. If the repo story changes, the narrative doc should change with it.
 
 ## Validation Expectations

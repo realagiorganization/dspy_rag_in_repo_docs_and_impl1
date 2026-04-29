@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -61,8 +62,9 @@ def load_documents(root: Path) -> list[RepoDocument]:
     """Load the repository corpus into in-memory text documents."""
 
     docs: list[RepoDocument] = []
-    for path in iter_text_files(root):
-        docs.append(_read_document(path))
+    resolved_root = root.resolve()
+    for path in iter_text_files(resolved_root):
+        docs.append(_read_document(path, root=resolved_root))
     return docs
 
 
@@ -86,16 +88,19 @@ def load_documents_for_paths(root: Path, paths: Iterable[Path]) -> list[RepoDocu
             continue
         if any(part in EXCLUDED_PARTS for part in relative_path.parts):
             continue
-        docs.append(_read_document(path))
+        docs.append(_read_document(path, root=resolved_root))
         seen_paths.add(path)
     return docs
 
 
-def _read_document(path: Path) -> RepoDocument:
+def _read_document(path: Path, *, root: Path | None = None) -> RepoDocument:
     """Read a single text document with UTF-8 fallback behavior."""
 
     try:
         text = path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         text = path.read_text(encoding="utf-8", errors="ignore")
+    if root is not None:
+        with suppress(ValueError):
+            path = path.relative_to(root)
     return RepoDocument(path=path, text=text)
