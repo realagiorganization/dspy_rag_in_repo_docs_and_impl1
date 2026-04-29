@@ -8,10 +8,12 @@ from pathlib import Path
 import pytest
 import yaml
 
+from repo_rag_lab.azure_artifacts import AzureArtifactConfig
 from repo_rag_lab.dspy_training import DSPyLMConfig
 from repo_rag_lab.utilities import (
     run_azure_inference_probe,
     run_azure_openai_probe,
+    run_bundle_fetch,
     run_bundle_inspection,
     run_bundle_promote,
     run_bundle_publish,
@@ -136,6 +138,7 @@ def test_utility_summary_mentions_core_surfaces() -> None:
     assert "bundle-publish" in summary
     assert "bundle-promote" in summary
     assert "bundle-rollback" in summary
+    assert "bundle-fetch" in summary
     assert "overlay-init" in summary
     assert "trace-export" in summary
     assert "trace-import" in summary
@@ -187,18 +190,27 @@ def test_run_trainer_k8s_manifest_generation_writes_expected_manifests(tmp_path:
     assert payload["image"] == "ghcr.io/example/repo-rag:latest"
     assert payload["manifest_dir"] == "artifacts/kubernetes"
     assert payload["image_pull_secret_name"] == "acr-secret"
-    assert len(payload["manifest_paths"]) == 5
+    assert payload["pvc_storage_class_name"] == "azurefile-csi"
+    assert payload["pvc_size"] == "10Gi"
+    assert payload["pvc_access_modes"] == ["ReadWriteMany"]
+    assert len(payload["manifest_paths"]) == 6
 
+    pvc_path = tmp_path / "artifacts" / "kubernetes" / "trainer-artifacts.pvc.yaml"
     deployment_path = tmp_path / "artifacts" / "kubernetes" / "trainer-service.deployment.yaml"
     cronjob_path = tmp_path / "artifacts" / "kubernetes" / "trainer-cycle.cronjob.yaml"
     config_map_path = tmp_path / "artifacts" / "kubernetes" / "trainer-configmap.yaml"
     secret_example_path = tmp_path / "artifacts" / "kubernetes" / "trainer-secret.example.yaml"
 
+    pvc = yaml.safe_load(pvc_path.read_text(encoding="utf-8"))
     deployment = yaml.safe_load(deployment_path.read_text(encoding="utf-8"))
     cronjob = yaml.safe_load(cronjob_path.read_text(encoding="utf-8"))
     config_map = yaml.safe_load(config_map_path.read_text(encoding="utf-8"))
     secret_example = yaml.safe_load(secret_example_path.read_text(encoding="utf-8"))
 
+    assert pvc["kind"] == "PersistentVolumeClaim"
+    assert pvc["spec"]["storageClassName"] == "azurefile-csi"
+    assert pvc["spec"]["accessModes"] == ["ReadWriteMany"]
+    assert pvc["spec"]["resources"]["requests"]["storage"] == "10Gi"
     assert deployment["kind"] == "Deployment"
     deployment_spec = deployment["spec"]["template"]["spec"]
     assert deployment_spec["imagePullSecrets"] == [{"name": "acr-secret"}]
@@ -318,6 +330,29 @@ def test_run_bundle_inspection_reads_promoted_channel_state(tmp_path: Path) -> N
     assert payload["current_bundle_version"] == "stable-run"
 
 
+def test_run_bundle_inspection_prefers_remote_channel_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.inspect_remote_bundle_channel",
+        lambda channel: {
+            "channel_found": True,
+            "channel_name": channel,
+            "current_bundle_version": "remote-stable",
+            "storage_backend": "azure-blob",
+            "bundle_container": "repo-rag-bundles",
+        },
+    )
+
+    payload = json.loads(run_bundle_inspection(tmp_path, channel="stable"))
+
+    assert payload["command"] == "bundle-inspect"
+    assert payload["channel_found"] is True
+    assert payload["storage_backend"] == "azure-blob"
+    assert payload["current_bundle_version"] == "remote-stable"
+
+
 def test_run_bundle_promote_and_rollback_manage_channel_history(tmp_path: Path) -> None:
     _write_bundle_manifest(tmp_path, "older-run", created_at="2026-04-29T00:00:00+00:00")
     _write_bundle_manifest(tmp_path, "newer-run", created_at="2026-04-29T01:00:00+00:00")
@@ -335,6 +370,95 @@ def test_run_bundle_promote_and_rollback_manage_channel_history(tmp_path: Path) 
     assert rolled_back["channel_action"] == "rollback"
     assert rolled_back["current_bundle_version"] == "older-run"
     assert rolled_back["history"][-1]["action"] == "rollback"
+
+
+def test_run_bundle_publish_promote_and_rollback_mirror_to_remote_blob_store(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    remote_blobs: dict[tuple[str, str], str] = {}
+    config = AzureArtifactConfig(
+        account_name="acct",
+        account_key="key",
+        connection_string=None,
+        trace_container="repo-rag-training-traces",
+        bundle_container="repo-rag-bundles",
+        queue_name="repo-rag-training",
+    )
+
+    class FakeAzureArtifactStore:
+        def __init__(self, cfg: AzureArtifactConfig) -> None:
+            assert cfg == config
+
+        def upload_json(
+            self,
+            container_name: str,
+            blob_name: str,
+            payload: dict[str, object],
+        ) -> None:
+            remote_blobs[(container_name, blob_name)] = json.dumps(payload)
+
+        def upload_text(self, container_name: str, blob_name: str, text: str) -> None:
+            remote_blobs[(container_name, blob_name)] = text
+
+    monkeypatch.setattr("repo_rag_lab.utilities.resolve_azure_artifact_config", lambda: config)
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
+        FakeAzureArtifactStore,
+    )
+
+    _write_bundle_manifest(tmp_path, "older-run", created_at="2026-04-29T00:00:00+00:00")
+    _write_bundle_manifest(tmp_path, "newer-run", created_at="2026-04-29T01:00:00+00:00")
+
+    published = json.loads(run_bundle_publish(tmp_path, run_name="older-run"))
+    first_promote = json.loads(run_bundle_promote(tmp_path, channel="stable", run_name="older-run"))
+    promoted = json.loads(run_bundle_promote(tmp_path, channel="stable", run_name="newer-run"))
+    rolled_back = json.loads(run_bundle_rollback(tmp_path, channel="stable"))
+
+    assert published["remote_publish"]["storage_backend"] == "azure-blob"
+    assert first_promote["remote_channel"]["remote_channel_blob"] == "channels/stable.json"
+    assert promoted["remote_publish"]["storage_backend"] == "azure-blob"
+    assert promoted["remote_channel"]["remote_channel_blob"] == "channels/stable.json"
+    assert rolled_back["remote_channel"]["remote_channel_blob"] == "channels/stable.json"
+
+    assert ("repo-rag-bundles", "versions/older-run/bundle.json") in remote_blobs
+    assert ("repo-rag-bundles", "versions/older-run/program.json") in remote_blobs
+    assert ("repo-rag-bundles", "versions/older-run/metadata.json") in remote_blobs
+    assert ("repo-rag-bundles", "versions/older-run/published.json") in remote_blobs
+    assert ("repo-rag-bundles", "versions/newer-run/bundle.json") in remote_blobs
+    assert ("repo-rag-bundles", "versions/newer-run/program.json") in remote_blobs
+    assert ("repo-rag-bundles", "versions/newer-run/metadata.json") in remote_blobs
+    assert ("repo-rag-bundles", "versions/newer-run/published.json") in remote_blobs
+    stable_channel = json.loads(remote_blobs[("repo-rag-bundles", "channels/stable.json")])
+    assert stable_channel["current_bundle_version"] == "older-run"
+
+
+def test_run_bundle_fetch_reports_remote_download(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.fetch_remote_bundle",
+        lambda root, bundle_version=None, channel=None: {
+            "bundle_found": True,
+            "bundle_version": bundle_version or "stable-run",
+            "requested_channel": channel,
+            "storage_backend": "azure-blob",
+            "cache_dir": "artifacts/dspy/remote/stable-run",
+            "bundle_path": "artifacts/dspy/remote/stable-run/bundle.json",
+            "metadata_path": "artifacts/dspy/remote/stable-run/metadata.json",
+            "program_path": "artifacts/dspy/remote/stable-run/program.json",
+            "published_bundle_path": "artifacts/dspy/remote/stable-run/published.json",
+        },
+    )
+
+    payload = json.loads(run_bundle_fetch(tmp_path, channel="stable"))
+
+    assert payload["command"] == "bundle-fetch"
+    assert payload["command_status"] == "success"
+    assert payload["storage_backend"] == "azure-blob"
+    assert payload["bundle_found"] is True
+    assert payload["requested_channel"] == "stable"
 
 
 def test_run_overlay_init_writes_machine_readable_manifest(tmp_path: Path) -> None:

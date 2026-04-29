@@ -117,6 +117,7 @@ For downstream worker integration, the key new surface is the shared machine-rea
 - `uv run repo-rag retrieval-eval --output json`
 - `uv run repo-rag dspy-artifacts --output json`
 - `uv run repo-rag bundle-inspect --channel stable --output json`
+- `uv run repo-rag bundle-fetch --channel stable --output json`
 - `uv run repo-rag bundle-publish --run-name <bundle-run> --output json`
 - `uv run repo-rag bundle-promote --channel stable --run-name <bundle-run> --output json`
 - `uv run repo-rag bundle-rollback --channel stable --output json`
@@ -146,11 +147,15 @@ that shared envelope. The ask-family payloads now also carry:
 - `trace`, a stable runtime-trace object that can be persisted directly by a future trainer loop
 - explicit bundle publish/promote/rollback commands so a future trainer loop can separate
   “compiled bundle exists” from “bundle is promoted for worker use”
+- an explicit `bundle-fetch` command so workers can pull the currently promoted DSPy program from
+  the global Azure Blob bundle store into a local cache before invoking `ask --use-dspy`
 - explicit `trace-export` / `trace-import` commands so the trainer loop can persist and ingest
   those records, plus optional accepted/candidate outcome metadata, without re-parsing
   human-readable output
 - explicit `trace-enqueue` / `trace-drain` commands so downstream workers can hand off trace and
-  outcome payloads asynchronously instead of blocking on synchronous trainer-side import
+  outcome payloads asynchronously through Azure Blob + Queue instead of blocking on synchronous
+  trainer-side import; the same commands still fall back to the local filesystem queue for
+  single-repository development when global storage is absent
 - a `trainer-candidates` command that turns imported traces into cumulative YAML question/answer
   candidates for later DSPy review or compilation
 - a `trainer-recompile` command that merges the base training set with those cumulative

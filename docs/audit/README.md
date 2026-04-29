@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-04-29-runtime-image-and-dataset-build-deploy-wiring.md`
+- `2026-04-29-global-blob-queue-trainer-migration.md`
 
 ## Usage
 

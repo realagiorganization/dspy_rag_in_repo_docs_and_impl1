@@ -15,6 +15,9 @@ DEFAULT_TRAINER_K8S_SERVICE_ACCOUNT_NAME = "repo-rag-trainer"
 DEFAULT_TRAINER_K8S_CONFIG_MAP_NAME = "repo-rag-trainer-config"
 DEFAULT_TRAINER_K8S_SECRET_NAME = "repo-rag-trainer-secrets"
 DEFAULT_TRAINER_K8S_PVC_NAME = "repo-rag-trainer-artifacts"
+DEFAULT_TRAINER_K8S_PVC_STORAGE_CLASS = "azurefile-csi"
+DEFAULT_TRAINER_K8S_PVC_SIZE = "10Gi"
+DEFAULT_TRAINER_K8S_PVC_ACCESS_MODES = ("ReadWriteMany",)
 DEFAULT_TRAINER_K8S_SERVICE_NAME = "repo-rag-trainer-service"
 DEFAULT_TRAINER_K8S_CYCLE_NAME = "repo-rag-trainer-cycle"
 DEFAULT_TRAINER_K8S_ARTIFACT_MOUNT_PATH = "/workspace/repo-rag/artifacts"
@@ -57,6 +60,9 @@ class TrainerK8sConfig:
     config_map_name: str = DEFAULT_TRAINER_K8S_CONFIG_MAP_NAME
     secret_name: str = DEFAULT_TRAINER_K8S_SECRET_NAME
     pvc_name: str = DEFAULT_TRAINER_K8S_PVC_NAME
+    pvc_storage_class_name: str | None = DEFAULT_TRAINER_K8S_PVC_STORAGE_CLASS
+    pvc_size: str = DEFAULT_TRAINER_K8S_PVC_SIZE
+    pvc_access_modes: tuple[str, ...] = DEFAULT_TRAINER_K8S_PVC_ACCESS_MODES
     deployment_name: str = DEFAULT_TRAINER_K8S_SERVICE_NAME
     cronjob_name: str = DEFAULT_TRAINER_K8S_CYCLE_NAME
     output_dir: Path = DEFAULT_TRAINER_K8S_OUTPUT_DIR
@@ -152,6 +158,12 @@ def _secret_example_payload(config: TrainerK8sConfig) -> dict[str, object]:
             "AZURE_OPENAI_ENDPOINT": "https://<resource>.openai.azure.com",
             "AZURE_OPENAI_DEPLOYMENT_NAME": "<deployment-name>",
             "AZURE_OPENAI_API_VERSION": "<api-version>",
+            "AZURE_OPENAI_MODEL_NAME": "<model-name>",
+            "AZURE_STORAGE_ACCOUNT": "<storage-account>",
+            "AZURE_STORAGE_KEY": "<storage-key>",
+            "DATASET_REPO_RAG_TRACE_CONTAINER": "repo-rag-training-traces",
+            "DATASET_REPO_RAG_BUNDLE_CONTAINER": "repo-rag-bundles",
+            "DATASET_REPO_RAG_TRACE_QUEUE_NAME": config.queue_name,
         },
     }
 
@@ -166,6 +178,26 @@ def _service_account_payload(config: TrainerK8sConfig) -> dict[str, object]:
             "labels": _labels(config, "service-account"),
         },
     }
+
+
+def _pvc_payload(config: TrainerK8sConfig) -> dict[str, object]:
+    spec: dict[str, object] = {
+        "accessModes": list(config.pvc_access_modes),
+        "resources": {"requests": {"storage": config.pvc_size}},
+    }
+    pvc_spec: dict[str, object] = {
+        "apiVersion": "v1",
+        "kind": "PersistentVolumeClaim",
+        "metadata": {
+            "name": config.pvc_name,
+            "namespace": config.namespace,
+            "labels": _labels(config, "artifacts"),
+        },
+        "spec": spec,
+    }
+    if config.pvc_storage_class_name:
+        spec["storageClassName"] = config.pvc_storage_class_name
+    return pvc_spec
 
 
 def _trainer_command(config: TrainerK8sConfig, *, role: str) -> list[str]:
@@ -335,12 +367,14 @@ def write_trainer_k8s_manifests(root: Path, *, config: TrainerK8sConfig) -> dict
     service_account_path = output_dir / "trainer-serviceaccount.yaml"
     config_map_path = output_dir / "trainer-configmap.yaml"
     secret_example_path = output_dir / "trainer-secret.example.yaml"
+    pvc_path = output_dir / "trainer-artifacts.pvc.yaml"
     deployment_path = output_dir / "trainer-service.deployment.yaml"
     cronjob_path = output_dir / "trainer-cycle.cronjob.yaml"
 
     _write_yaml_document(service_account_path, _service_account_payload(config))
     _write_yaml_document(config_map_path, _config_map_payload(config))
     _write_yaml_document(secret_example_path, _secret_example_payload(config))
+    _write_yaml_document(pvc_path, _pvc_payload(config))
     _write_yaml_document(deployment_path, _deployment_payload(config))
     _write_yaml_document(cronjob_path, _cronjob_payload(config))
 
@@ -351,6 +385,9 @@ def write_trainer_k8s_manifests(root: Path, *, config: TrainerK8sConfig) -> dict
         "config_map_name": config.config_map_name,
         "secret_name": config.secret_name,
         "pvc_name": config.pvc_name,
+        "pvc_storage_class_name": config.pvc_storage_class_name,
+        "pvc_size": config.pvc_size,
+        "pvc_access_modes": list(config.pvc_access_modes),
         "image_pull_secret_name": config.image_pull_secret_name,
         "artifact_mount_path": config.artifact_mount_path,
         "repo_root": config.repo_root,
@@ -363,6 +400,7 @@ def write_trainer_k8s_manifests(root: Path, *, config: TrainerK8sConfig) -> dict
             _relative_path_text(resolved_root, service_account_path),
             _relative_path_text(resolved_root, config_map_path),
             _relative_path_text(resolved_root, secret_example_path),
+            _relative_path_text(resolved_root, pvc_path),
             _relative_path_text(resolved_root, deployment_path),
             _relative_path_text(resolved_root, cronjob_path),
         ],

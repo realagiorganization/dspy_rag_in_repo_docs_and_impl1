@@ -231,15 +231,13 @@ At the time of this document:
 - the container worker path now also auto-initializes a local overlay through
   `repo-rag overlay-init` when no explicit overlay is supplied and exports a normalized worker
   trace through `repo-rag trace-export`; both downstream paths now also persist worker outcome
-  manifests and can stage them into a trainer-side queue through `repo-rag trace-enqueue`, so the
-  remaining `dataset` work is about the background trainer/publisher service and promotion policy
-  rather than about basic runtime wiring
-- both downstream runtime paths can now also resolve a stable bundle version from a trainer
-  repository through `repo-rag bundle-inspect --channel stable` and can either import the
-  exported trace back into a trainer repository through `repo-rag trace-import` or stage it for
-  asynchronous drain through `repo-rag trace-enqueue`; those imported or queued records can now
-  also include accepted/candidate outcome metadata, leaving trainer scheduling and global
-  publication as the next integration layer
+  manifests and can stage them into a trainer-side queue through `repo-rag trace-enqueue`, with
+  Azure Blob + Queue now acting as the primary global transport instead of a namespace-local PVC
+- both downstream runtime paths can now also resolve a stable bundle version from a global bundle
+  store through `repo-rag bundle-inspect --channel stable`, fetch the actual program through
+  `repo-rag bundle-fetch`, and stage exported traces through `repo-rag trace-enqueue`; those
+  records can include accepted/candidate outcome metadata, giving the global trainer a
+  cross-namespace source of DSPy recompilation inputs
 - both downstream runtime paths can now also auto-detect repo-RAG-capable target repositories when
   the caller would otherwise stay on the default `codex` path, so prepared clones of this
   repository and similar native repos no longer require a manual backend override to use the
@@ -281,7 +279,10 @@ At the time of this document:
 - the repository now also materializes Kubernetes Deployment and CronJob manifests for those
   trainer-side roles through `make trainer-k8s-manifests`, so the current deployment story is no
   longer only “you could wrap this in AKS later” but “here is the generated service/CronJob
-  surface that uses one shared image family plus PVC-backed artifacts”
+  surface that uses one shared image family, Azure Blob + Queue for global transport, and a
+  trainer-local PVC for cache/state/history”
+- that trainer manifest surface still emits a first-class PVC manifest, but it is now a
+  trainer-local artifact cache and history store rather than the primary cross-namespace bus
 - the repository now also ships its own runtime image definition in the root `Dockerfile`, keeping
   an editable checkout under `/workspace/repo-rag` so `repo-rag` can be preinstalled into worker
   and trainer containers without breaking path-sensitive runtime features such as the Rust lookup
@@ -304,6 +305,9 @@ At the time of this document:
 - published bundle records and explicit `stable` / `canary` promotion state are now implemented
   through `make bundle-publish`, `make bundle-promote`, and `make bundle-rollback`, so worker
   startup no longer has to guess “latest run” when a promoted runtime is required
+- bundle inspection/fetch/publish/promotion and queued trace handoff now speak a global Azure
+  Blob + Queue contract when storage credentials are present, while retaining the older local
+  filesystem registry/queue only as a single-repository fallback
 - notebook batch execution and reporting are implemented and exposed through
   `make notebook-report`
 - TODO and publication backlog synchronization are implemented and exposed through

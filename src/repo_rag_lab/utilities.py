@@ -45,14 +45,21 @@ from .runtime_artifacts import (
     TRAINER_SERVICE_CYCLE_KIND,
     TRAINER_SERVICE_STATE_KIND,
     drain_trace_queue,
+    fetch_remote_bundle,
     initialize_local_overlay,
     inspect_bundle_channel,
+    inspect_remote_bundle_channel,
+    inspect_remote_bundle_version,
     load_json_object,
     promote_bundle,
     publish_bundle,
+    published_bundle_record_from_state,
     queue_trace_record,
+    resolve_azure_artifact_config,
     resolve_bundle_manifest,
     rollback_bundle,
+    upload_remote_bundle,
+    upload_remote_bundle_channel,
     write_trace_record,
 )
 from .todo_backlog import sync_todo_backlog
@@ -63,7 +70,10 @@ from .trainer_deployment import (
     DEFAULT_TRAINER_K8S_NAMESPACE,
     DEFAULT_TRAINER_K8S_OUTPUT_DIR,
     DEFAULT_TRAINER_K8S_PROMOTE_CHANNEL,
+    DEFAULT_TRAINER_K8S_PVC_ACCESS_MODES,
     DEFAULT_TRAINER_K8S_PVC_NAME,
+    DEFAULT_TRAINER_K8S_PVC_SIZE,
+    DEFAULT_TRAINER_K8S_PVC_STORAGE_CLASS,
     DEFAULT_TRAINER_K8S_QUEUE_NAME,
     DEFAULT_TRAINER_K8S_SERVICE_MAX_IDLE_CYCLES,
     DEFAULT_TRAINER_K8S_SERVICE_POLL_INTERVAL_SECONDS,
@@ -270,6 +280,11 @@ def utility_summary(root: Path) -> str:
             "channel back to an earlier published bundle version"
         ),
         (
+            "- make bundle-fetch / uv run repo-rag bundle-fetch: download one remote bundle "
+            "version or channel-selected bundle into the local worker cache when Azure bundle "
+            "storage is configured"
+        ),
+        (
             "- make overlay-init / uv run repo-rag overlay-init: initialize a worker-local "
             "overlay manifest that records retrieval mode, lookup-index location, and trace dir"
         ),
@@ -410,6 +425,9 @@ def run_trainer_k8s_manifest_generation(
     config_map_name: str = "repo-rag-trainer-config",
     secret_name: str = "repo-rag-trainer-secrets",
     pvc_name: str = DEFAULT_TRAINER_K8S_PVC_NAME,
+    pvc_storage_class_name: str | None = DEFAULT_TRAINER_K8S_PVC_STORAGE_CLASS,
+    pvc_size: str = DEFAULT_TRAINER_K8S_PVC_SIZE,
+    pvc_access_modes: tuple[str, ...] = DEFAULT_TRAINER_K8S_PVC_ACCESS_MODES,
     image_pull_secret_name: str | None = DEFAULT_TRAINER_K8S_IMAGE_PULL_SECRET_NAME,
     output_dir: Path = DEFAULT_TRAINER_K8S_OUTPUT_DIR,
     queue_name: str = DEFAULT_TRAINER_K8S_QUEUE_NAME,
@@ -438,6 +456,9 @@ def run_trainer_k8s_manifest_generation(
             config_map_name=config_map_name,
             secret_name=secret_name,
             pvc_name=pvc_name,
+            pvc_storage_class_name=pvc_storage_class_name,
+            pvc_size=pvc_size,
+            pvc_access_modes=pvc_access_modes,
             image_pull_secret_name=image_pull_secret_name,
             output_dir=output_dir,
             queue_name=queue_name,
@@ -592,12 +613,16 @@ def run_bundle_inspection(
     root: Path,
     *,
     run_name: str | None = None,
+    bundle_version: str | None = None,
     channel: str | None = None,
 ) -> str:
     """Serialize the latest, named, or promoted-channel DSPy bundle state as JSON."""
 
     if channel is not None:
-        channel_state = inspect_bundle_channel(root, channel=channel)
+        channel_state = inspect_remote_bundle_channel(channel) or inspect_bundle_channel(
+            root,
+            channel=channel,
+        )
         if not channel_state.get("channel_found", False):
             warnings = [f"Bundle channel `{channel}` is not initialized yet."]
             return _json_command_payload(
@@ -633,13 +658,27 @@ def run_bundle_inspection(
         )
 
     try:
-        _, selected_bundle = resolve_bundle_manifest(root, run_name=run_name)
+        selected_bundle: dict[str, object] | None = None
+        if bundle_version is not None:
+            selected_bundle = inspect_remote_bundle_version(bundle_version)
+        if selected_bundle is None:
+            _, selected_bundle = resolve_bundle_manifest(
+                root,
+                run_name=run_name,
+                bundle_version=bundle_version,
+            )
     except ValueError:
         payload = describe_dspy_artifacts(root)
         warnings = [
-            f"No DSPy bundle named `{run_name}` is available yet."
-            if run_name
-            else "No saved DSPy bundles are available yet."
+            (
+                f"No DSPy bundle named `{run_name}` is available yet."
+                if run_name
+                else (
+                    f"No DSPy bundle version `{bundle_version}` is available yet."
+                    if bundle_version
+                    else "No saved DSPy bundles are available yet."
+                )
+            )
         ]
         return _json_command_payload(
             "bundle-inspect",
@@ -647,6 +686,7 @@ def run_bundle_inspection(
             payload={
                 "bundle_found": False,
                 "requested_run_name": run_name,
+                "requested_bundle_version": bundle_version,
             },
             warnings=warnings,
             artifact_metadata=_artifact_metadata(
@@ -681,10 +721,17 @@ def run_bundle_publish(
     """Publish one compiled bundle into the local published-bundle registry."""
 
     record = publish_bundle(root, run_name=run_name, bundle_version=bundle_version, note=note)
+    remote_publish = None
+    config = resolve_azure_artifact_config()
+    if config is not None and config.bundles_enabled:
+        remote_publish = upload_remote_bundle(root, published_record=record, config=config)
     return _json_command_payload(
         "bundle-publish",
         root=root,
-        payload=record,
+        payload={
+            **record,
+            "remote_publish": remote_publish,
+        },
         artifact_metadata=_artifact_metadata(
             generated_paths=[str(record.get("published_bundle_path") or "")],
             related_paths=[
@@ -713,10 +760,28 @@ def run_bundle_promote(
         bundle_version=bundle_version,
         note=note,
     )
+    remote_publish = None
+    config = resolve_azure_artifact_config()
+    if config is not None and config.bundles_enabled:
+        published_record = published_bundle_record_from_state(state, root=root)
+        remote_publish = upload_remote_bundle(
+            root, published_record=published_record, config=config
+        )
+        remote_channel = upload_remote_bundle_channel(
+            state,
+            channel=channel,
+            config=config,
+        )
+    else:
+        remote_channel = None
     return _json_command_payload(
         "bundle-promote",
         root=root,
-        payload=state,
+        payload={
+            **state,
+            "remote_publish": remote_publish,
+            "remote_channel": remote_channel,
+        },
         artifact_metadata=_artifact_metadata(
             generated_paths=[
                 str(state.get("channel_path") or ""),
@@ -741,10 +806,27 @@ def run_bundle_rollback(
     """Rollback one persisted bundle channel."""
 
     state = rollback_bundle(root, channel=channel, bundle_version=bundle_version, note=note)
+    config = resolve_azure_artifact_config()
+    remote_publish = None
+    remote_channel = None
+    if config is not None and config.bundles_enabled:
+        published_record = published_bundle_record_from_state(state, root=root)
+        remote_publish = upload_remote_bundle(
+            root, published_record=published_record, config=config
+        )
+        remote_channel = upload_remote_bundle_channel(
+            state,
+            channel=channel,
+            config=config,
+        )
     return _json_command_payload(
         "bundle-rollback",
         root=root,
-        payload=state,
+        payload={
+            **state,
+            "remote_publish": remote_publish,
+            "remote_channel": remote_channel,
+        },
         artifact_metadata=_artifact_metadata(
             generated_paths=[
                 str(state.get("channel_path") or ""),
@@ -754,6 +836,43 @@ def run_bundle_rollback(
                 str(state.get("current_bundle_path") or ""),
                 str(state.get("current_metadata_path") or ""),
                 str(state.get("current_program_path") or ""),
+            ],
+        ),
+    )
+
+
+def run_bundle_fetch(
+    root: Path,
+    *,
+    bundle_version: str | None = None,
+    channel: str | None = None,
+) -> str:
+    """Download one Azure-hosted bundle version into the local worker cache."""
+
+    payload = fetch_remote_bundle(root, bundle_version=bundle_version, channel=channel)
+    if payload is None:
+        warnings = ["Azure bundle storage is not configured or the requested bundle was not found."]
+        return _json_command_payload(
+            "bundle-fetch",
+            root=root,
+            payload={
+                "bundle_found": False,
+                "requested_bundle_version": bundle_version,
+                "requested_channel": channel,
+            },
+            warnings=warnings,
+        )
+    return _json_command_payload(
+        "bundle-fetch",
+        root=root,
+        payload=payload,
+        artifact_metadata=_artifact_metadata(
+            generated_paths=[
+                str(payload.get("cache_dir") or ""),
+                str(payload.get("bundle_path") or ""),
+                str(payload.get("metadata_path") or ""),
+                str(payload.get("program_path") or ""),
+                str(payload.get("published_bundle_path") or ""),
             ],
         ),
     )

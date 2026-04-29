@@ -30,6 +30,8 @@ from .runtime_artifacts import (
     DEFAULT_TRAINER_TRAINING_CANDIDATES_SUMMARY_PATH,
     RuntimeTraceContext,
     build_runtime_trace,
+    fetch_remote_bundle,
+    resolve_bundle_manifest,
     resolve_bundle_version_for_program,
 )
 from .trainer_deployment import (
@@ -39,6 +41,10 @@ from .trainer_deployment import (
     DEFAULT_TRAINER_K8S_NAMESPACE,
     DEFAULT_TRAINER_K8S_OUTPUT_DIR,
     DEFAULT_TRAINER_K8S_PROMOTE_CHANNEL,
+    DEFAULT_TRAINER_K8S_PVC_ACCESS_MODES,
+    DEFAULT_TRAINER_K8S_PVC_NAME,
+    DEFAULT_TRAINER_K8S_PVC_SIZE,
+    DEFAULT_TRAINER_K8S_PVC_STORAGE_CLASS,
     DEFAULT_TRAINER_K8S_QUEUE_NAME,
     DEFAULT_TRAINER_K8S_SERVICE_MAX_IDLE_CYCLES,
     DEFAULT_TRAINER_K8S_SERVICE_POLL_INTERVAL_SECONDS,
@@ -46,6 +52,7 @@ from .trainer_deployment import (
 from .utilities import (
     run_azure_inference_probe,
     run_azure_openai_probe,
+    run_bundle_fetch,
     run_bundle_inspection,
     run_bundle_promote,
     run_bundle_publish,
@@ -358,8 +365,15 @@ def build_parser() -> argparse.ArgumentParser:
     bundle_inspect_parser = subparsers.add_parser("bundle-inspect")
     bundle_inspect_parser.add_argument("--root", default=".")
     bundle_inspect_parser.add_argument("--run-name")
+    bundle_inspect_parser.add_argument("--bundle-version")
     bundle_inspect_parser.add_argument("--channel", choices=["stable", "canary"])
     add_output_argument(bundle_inspect_parser, default="json")
+
+    bundle_fetch_parser = subparsers.add_parser("bundle-fetch")
+    bundle_fetch_parser.add_argument("--root", default=".")
+    bundle_fetch_parser.add_argument("--bundle-version")
+    bundle_fetch_parser.add_argument("--channel", choices=["stable", "canary"])
+    add_output_argument(bundle_fetch_parser, default="json")
 
     bundle_publish_parser = subparsers.add_parser("bundle-publish")
     bundle_publish_parser.add_argument("--root", default=".")
@@ -469,8 +483,18 @@ def build_parser() -> argparse.ArgumentParser:
     trainer_k8s_parser.add_argument("--service-account-name", default="repo-rag-trainer")
     trainer_k8s_parser.add_argument("--config-map-name", default="repo-rag-trainer-config")
     trainer_k8s_parser.add_argument("--secret-name", default="repo-rag-trainer-secrets")
-    trainer_k8s_parser.add_argument("--pvc-name", default="repo-rag-trainer-artifacts")
-    trainer_k8s_parser.add_argument("--image-pull-secret", default="acr-secret")
+    trainer_k8s_parser.add_argument("--pvc-name", default=DEFAULT_TRAINER_K8S_PVC_NAME)
+    trainer_k8s_parser.add_argument(
+        "--pvc-storage-class", default=DEFAULT_TRAINER_K8S_PVC_STORAGE_CLASS
+    )
+    trainer_k8s_parser.add_argument("--pvc-size", default=DEFAULT_TRAINER_K8S_PVC_SIZE)
+    trainer_k8s_parser.add_argument(
+        "--pvc-access-modes",
+        default=",".join(DEFAULT_TRAINER_K8S_PVC_ACCESS_MODES),
+    )
+    trainer_k8s_parser.add_argument(
+        "--image-pull-secret", default=DEFAULT_TRAINER_K8S_IMAGE_PULL_SECRET_NAME
+    )
     trainer_k8s_parser.add_argument("--output-dir", default=str(DEFAULT_TRAINER_K8S_OUTPUT_DIR))
     trainer_k8s_parser.add_argument("--queue-name", default=DEFAULT_TRAINER_K8S_QUEUE_NAME)
     trainer_k8s_parser.add_argument("--cycle-schedule", default=DEFAULT_TRAINER_K8S_CYCLE_SCHEDULE)
@@ -551,10 +575,51 @@ def main() -> int:
         output_mode = getattr(args, "output", "text")
         try:
             if args.use_dspy:
+                resolved_program_path = (
+                    Path(args.dspy_program_path) if args.dspy_program_path else None
+                )
+                bundle_version = args.bundle_version if hasattr(args, "bundle_version") else None
+                if resolved_program_path is None and bundle_version is not None:
+                    requested_bundle_version = str(bundle_version)
+                    remote_bundle = fetch_remote_bundle(
+                        root,
+                        bundle_version=requested_bundle_version,
+                    )
+                    remote_program_path = (
+                        remote_bundle.get("program_path")
+                        if isinstance(remote_bundle, dict)
+                        else None
+                    )
+                    if isinstance(remote_program_path, str) and remote_program_path.strip():
+                        resolved_program_path = (root / remote_program_path).resolve()
+                    else:
+                        try:
+                            _, local_bundle = resolve_bundle_manifest(
+                                root,
+                                bundle_version=requested_bundle_version,
+                            )
+                        except ValueError:
+                            local_bundle = None
+                        local_program_path = (
+                            local_bundle.get("program_path")
+                            if isinstance(local_bundle, dict)
+                            else None
+                        )
+                        if isinstance(local_program_path, str) and local_program_path.strip():
+                            local_program_path_obj = Path(local_program_path)
+                            if not local_program_path_obj.is_absolute():
+                                local_program_path_obj = (root / local_program_path_obj).resolve()
+                            resolved_program_path = local_program_path_obj
+                        else:
+                            raise FileNotFoundError(
+                                "Requested DSPy bundle version "
+                                f"`{requested_bundle_version}` could not be resolved locally or "
+                                "through the configured Azure bundle store."
+                            )
                 runner = RepositoryRAG(
                     root=root,
                     top_k=args.dspy_top_k,
-                    program_path=Path(args.dspy_program_path) if args.dspy_program_path else None,
+                    program_path=resolved_program_path,
                     lm_config=resolve_dspy_lm_config_from_args(args),
                     require_configured_lm=True,
                     retrieval_mode=getattr(args, "retrieval_mode", None),
@@ -856,6 +921,18 @@ def main() -> int:
             producer=lambda: run_bundle_inspection(
                 root,
                 run_name=args.run_name,
+                bundle_version=args.bundle_version,
+                channel=args.channel,
+            ),
+        )
+
+    if args.command == "bundle-fetch":
+        return _run_json_command(
+            "bundle-fetch",
+            root=root,
+            producer=lambda: run_bundle_fetch(
+                root,
+                bundle_version=args.bundle_version,
                 channel=args.channel,
             ),
         )
@@ -1068,6 +1145,13 @@ def main() -> int:
                 config_map_name=args.config_map_name,
                 secret_name=args.secret_name,
                 pvc_name=args.pvc_name,
+                pvc_storage_class_name=args.pvc_storage_class,
+                pvc_size=args.pvc_size,
+                pvc_access_modes=tuple(
+                    mode.strip()
+                    for mode in str(args.pvc_access_modes or "").split(",")
+                    if mode.strip()
+                ),
                 image_pull_secret_name=args.image_pull_secret,
                 output_dir=Path(args.output_dir),
                 queue_name=args.queue_name,

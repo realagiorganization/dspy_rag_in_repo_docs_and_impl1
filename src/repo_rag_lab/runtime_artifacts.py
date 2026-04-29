@@ -10,6 +10,19 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
+from .azure_artifacts import (
+    AzureArtifactConfig,
+    AzureArtifactStore,
+    bundle_blob_names,
+    bundle_channel_blob_name,
+    decode_queue_message,
+    failed_trace_blob_name,
+    processed_trace_blob_name,
+    queued_trace_blob_name,
+    repo_rag_bundle_container,
+    repo_rag_trace_container,
+    repo_rag_trace_queue_name,
+)
 from .retrieval import RetrievalMode, resolve_retrieval_mode
 from .retrieval_profile import DEFAULT_RETRIEVAL_PROFILE_PATH, load_retrieval_profile
 from .rust_lookup import DEFAULT_DB_PATH
@@ -292,6 +305,222 @@ def _validate_bundle_channel(channel: str) -> BundleChannelName:
         expected = ", ".join(BUNDLE_CHANNEL_NAMES)
         raise ValueError(f"Bundle channel must be one of: {expected}.")
     return cleaned  # type: ignore[return-value]
+
+
+def resolve_azure_artifact_config(*, queue_name: str | None = None) -> AzureArtifactConfig | None:
+    """Resolve Azure Blob + Queue configuration from the current environment."""
+
+    config = AzureArtifactConfig.from_env(queue_name=queue_name)
+    if not config.configured:
+        return None
+    return config
+
+
+def published_bundle_record_from_state(
+    state: Mapping[str, object],
+    *,
+    root: Path,
+) -> dict[str, object]:
+    """Reconstruct one published-bundle-like payload from a channel state."""
+
+    bundle_summary = _mapping_or_none(state.get("current_bundle")) or {}
+    return {
+        "schema_version": PUBLISHED_BUNDLE_SCHEMA_VERSION,
+        "published_bundle_kind": "published",
+        "publish_status": _string_or_none(state.get("current_publish_status")) or "published",
+        "published_at": _string_or_none(state.get("updated_at")),
+        "published_bundle_path": _string_or_none(state.get("current_published_bundle_path")),
+        "bundle_version": _string_or_none(state.get("current_bundle_version")),
+        "run_name": _string_or_none(state.get("current_run_name")),
+        "bundle_path": _string_or_none(state.get("current_bundle_path")),
+        "artifact_dir": _string_or_none(bundle_summary.get("artifact_dir")),
+        "program_path": _string_or_none(state.get("current_program_path")),
+        "metadata_path": _string_or_none(state.get("current_metadata_path")),
+        "bundle_status": _string_or_none(state.get("current_bundle_status")),
+        "benchmark_status": _string_or_none(state.get("current_benchmark_status")),
+        "retrieval_mode": _string_or_none(bundle_summary.get("retrieval_mode")),
+        "top_k": _int_or_none(bundle_summary.get("top_k")),
+        "note": None,
+        "bundle_summary": bundle_summary,
+        "remote_root": str(root),
+    }
+
+
+def upload_remote_bundle(
+    root: Path,
+    *,
+    published_record: Mapping[str, object],
+    config: AzureArtifactConfig,
+) -> dict[str, object]:
+    """Publish one bundle version plus metadata/program assets into Azure Blob storage."""
+
+    resolved_root = root.resolve()
+    store = AzureArtifactStore(config)
+    container = repo_rag_bundle_container(config)
+    bundle_version = _string_or_none(published_record.get("bundle_version"))
+    bundle_path_text = _string_or_none(published_record.get("bundle_path"))
+    metadata_path_text = _string_or_none(published_record.get("metadata_path"))
+    program_path_text = _string_or_none(published_record.get("program_path"))
+    if bundle_version is None or bundle_path_text is None or metadata_path_text is None:
+        raise ValueError("Published bundle record is missing one or more required bundle paths.")
+
+    bundle_blob_map = bundle_blob_names(bundle_version)
+    bundle_path = resolved_root / bundle_path_text
+    metadata_path = resolved_root / metadata_path_text
+    program_path = resolved_root / program_path_text if program_path_text is not None else None
+
+    store.upload_text(container, bundle_blob_map["bundle"], bundle_path.read_text(encoding="utf-8"))
+    store.upload_text(
+        container,
+        bundle_blob_map["metadata"],
+        metadata_path.read_text(encoding="utf-8"),
+    )
+    if program_path is not None and program_path.is_file():
+        store.upload_text(
+            container,
+            bundle_blob_map["program"],
+            program_path.read_text(encoding="utf-8"),
+        )
+    store.upload_json(container, bundle_blob_map["published"], published_record)
+    return {
+        "storage_backend": "azure-blob",
+        "bundle_container": container,
+        "remote_bundle_blobs": bundle_blob_map,
+    }
+
+
+def upload_remote_bundle_channel(
+    channel_state: Mapping[str, object],
+    *,
+    channel: str,
+    config: AzureArtifactConfig,
+) -> dict[str, object]:
+    """Upload one bundle-channel state into Azure Blob storage."""
+
+    store = AzureArtifactStore(config)
+    container = repo_rag_bundle_container(config)
+    blob_name = bundle_channel_blob_name(channel)
+    store.upload_json(container, blob_name, channel_state)
+    return {
+        "storage_backend": "azure-blob",
+        "bundle_container": container,
+        "remote_channel_blob": blob_name,
+    }
+
+
+def inspect_remote_bundle_channel(channel: str) -> dict[str, object] | None:
+    """Inspect one remote bundle channel when Azure bundle storage is configured."""
+
+    config = resolve_azure_artifact_config()
+    if config is None or not config.bundles_enabled:
+        return None
+    normalized_channel = _validate_bundle_channel(channel)
+    store = AzureArtifactStore(config)
+    container = repo_rag_bundle_container(config)
+    blob_name = bundle_channel_blob_name(normalized_channel)
+    if not store.blob_exists(container, blob_name):
+        return {
+            "channel_found": False,
+            "requested_channel": normalized_channel,
+            "channel_path": blob_name,
+            "storage_backend": "azure-blob",
+            "bundle_container": container,
+        }
+    payload = store.download_json(container, blob_name)
+    return {
+        "channel_found": True,
+        "requested_channel": normalized_channel,
+        "storage_backend": "azure-blob",
+        "bundle_container": container,
+        **payload,
+    }
+
+
+def inspect_remote_bundle_version(bundle_version: str) -> dict[str, object] | None:
+    """Inspect one remote bundle version when Azure bundle storage is configured."""
+
+    config = resolve_azure_artifact_config()
+    if config is None or not config.bundles_enabled:
+        return None
+    store = AzureArtifactStore(config)
+    container = repo_rag_bundle_container(config)
+    blob_map = bundle_blob_names(bundle_version)
+    if not store.blob_exists(container, blob_map["bundle"]):
+        return None
+    bundle_payload = store.download_json(container, blob_map["bundle"])
+    bundle_payload["storage_backend"] = "azure-blob"
+    bundle_payload["bundle_container"] = container
+    bundle_payload["remote_bundle_blobs"] = blob_map
+    return bundle_payload
+
+
+def fetch_remote_bundle(
+    root: Path,
+    *,
+    bundle_version: str | None = None,
+    channel: str | None = None,
+) -> dict[str, object] | None:
+    """Download one remote bundle version into the local worker cache."""
+
+    resolved_root = root.resolve()
+    config = resolve_azure_artifact_config()
+    if config is None or not config.bundles_enabled:
+        return None
+    requested_channel: str | None = None
+    resolved_bundle_version = bundle_version
+    if resolved_bundle_version is None:
+        requested_channel = channel or "stable"
+        channel_state = inspect_remote_bundle_channel(requested_channel)
+        if channel_state is None or not channel_state.get("channel_found"):
+            return None
+        resolved_bundle_version = _string_or_none(channel_state.get("current_bundle_version"))
+        if resolved_bundle_version is None:
+            return None
+
+    store = AzureArtifactStore(config)
+    container = repo_rag_bundle_container(config)
+    blob_map = bundle_blob_names(resolved_bundle_version)
+    cache_dir = resolved_root / "artifacts" / "dspy" / "remote" / resolved_bundle_version
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    local_paths = {
+        "bundle_path": cache_dir / BUNDLE_FILENAME,
+        "metadata_path": cache_dir / "metadata.json",
+        "program_path": cache_dir / "program.json",
+        "published_bundle_path": cache_dir / "published.json",
+    }
+    for key, local_path in local_paths.items():
+        blob_key = {
+            "bundle_path": "bundle",
+            "metadata_path": "metadata",
+            "program_path": "program",
+            "published_bundle_path": "published",
+        }[key]
+        local_path.write_text(
+            store.download_text(container, blob_map[blob_key]),
+            encoding="utf-8",
+        )
+    bundle_payload = load_bundle_manifest(local_paths["bundle_path"])
+    published_payload = load_json_object(local_paths["published_bundle_path"])
+    return {
+        "bundle_found": True,
+        "storage_backend": "azure-blob",
+        "bundle_container": container,
+        "bundle_version": resolved_bundle_version,
+        "requested_channel": requested_channel,
+        "remote_bundle_blobs": blob_map,
+        "cache_dir": _relative_to_root(cache_dir, resolved_root),
+        "bundle_path": _relative_to_root(local_paths["bundle_path"], resolved_root),
+        "metadata_path": _relative_to_root(local_paths["metadata_path"], resolved_root),
+        "program_path": _relative_to_root(local_paths["program_path"], resolved_root),
+        "published_bundle_path": _relative_to_root(
+            local_paths["published_bundle_path"],
+            resolved_root,
+        ),
+        "bundle_status": _string_or_none(bundle_payload.get("bundle_status")),
+        "benchmark_status": _string_or_none(bundle_payload.get("benchmark_status")),
+        "run_name": _string_or_none(bundle_payload.get("run_name")),
+        "publish_status": _string_or_none(published_payload.get("publish_status")),
+    }
 
 
 def published_bundle_record_path(root: Path, bundle_version: str) -> Path:
@@ -990,8 +1219,39 @@ def queue_trace_record(
         "trace_payload": payload,
         "outcome": normalized_outcome,
     }
+    config = resolve_azure_artifact_config(queue_name=queue_name)
+    if config is not None and config.queue_enabled:
+        store = AzureArtifactStore(config)
+        container = repo_rag_trace_container(config)
+        normalized_queue_name = repo_rag_trace_queue_name(config, fallback=normalized_queue_name)
+        file_name = queue_item_path.name
+        blob_name = queued_trace_blob_name(normalized_queue_name, file_name)
+        store.upload_json(container, blob_name, queue_item)
+        queue_message = {
+            "schema_version": TRACE_QUEUE_ITEM_SCHEMA_VERSION,
+            "queue_item_kind": TRACE_QUEUE_ITEM_KIND,
+            "queue_name": normalized_queue_name,
+            "bundle_version": queue_item.get("bundle_version"),
+            "queued_at": queued_at,
+            "blob_name": blob_name,
+            "trace_container": container,
+            "trace_name": safe_trace_name,
+        }
+        message_info = store.send_queue_message(normalized_queue_name, queue_message)
+        return {
+            **queue_item,
+            "storage_backend": "azure-blob-queue",
+            "queue_name": normalized_queue_name,
+            "trace_container": container,
+            "queue_item_path": blob_name,
+            "queue_message": message_info,
+        }
+
     queue_item_path.write_text(f"{json.dumps(queue_item, indent=2)}\n", encoding="utf-8")
-    return queue_item
+    return {
+        **queue_item,
+        "storage_backend": "filesystem",
+    }
 
 
 def _load_trace_queue_item(path: Path) -> dict[str, object]:
@@ -1011,12 +1271,116 @@ def drain_trace_queue(
     """Import queued trace items into the trainer-side imported-trace store."""
 
     resolved_root = root.resolve()
+    config = resolve_azure_artifact_config(queue_name=queue_name)
+    normalized_queue_name = _sanitize_name(queue_name, default="default")
+    if config is not None and config.queue_enabled:
+        store = AzureArtifactStore(config)
+        container = repo_rag_trace_container(config)
+        queue_name_remote = repo_rag_trace_queue_name(config, fallback=normalized_queue_name)
+        received_messages = store.receive_queue_messages(queue_name_remote, limit=limit)
+        imported_items: list[dict[str, object]] = []
+        failures: list[dict[str, object]] = []
+        for message in received_messages:
+            try:
+                message_payload = decode_queue_message(message.content)
+                blob_name = _string_or_none(message_payload.get("blob_name"))
+                if blob_name is None:
+                    raise ValueError("Azure queue message is missing `blob_name`.")
+                queued_item = store.download_json(container, blob_name)
+                if _string_or_none(queued_item.get("queue_item_kind")) != TRACE_QUEUE_ITEM_KIND:
+                    raise ValueError("Queued trace blob is missing `queue_item_kind`.")
+                trace_payload = _mapping_or_none(queued_item.get("trace_payload"))
+                if trace_payload is None:
+                    raise ValueError("Queued trace item is missing `trace_payload`.")
+                trace_name = _string_or_none(queued_item.get("trace_name"))
+                outcome = _mapping_or_none(queued_item.get("outcome"))
+                imported_record = write_trace_record(
+                    resolved_root,
+                    trace_payload,
+                    trace_name=trace_name,
+                    imported=True,
+                    outcome=outcome,
+                )
+                file_name = Path(blob_name).name
+                processed_blob = processed_trace_blob_name(queue_name_remote, file_name)
+                processed_item = {
+                    **queued_item,
+                    "queue_status": "imported",
+                    "drained_at": _utc_now_isoformat(),
+                    "imported_trace_record_path": imported_record.get("trace_record_path"),
+                    "processed_queue_item_path": processed_blob,
+                }
+                store.upload_json(container, processed_blob, processed_item)
+                if not keep_queued:
+                    store.delete_blob(container, blob_name)
+                store.delete_queue_message(queue_name_remote, message)
+                imported_items.append(
+                    {
+                        "queue_item_path": blob_name,
+                        "processed_queue_item_path": processed_blob,
+                        "trace_name": trace_name,
+                        "question": processed_item.get("question"),
+                        "imported_trace_record_path": imported_record.get("trace_record_path"),
+                        "acceptance_status": (
+                            outcome.get("acceptance_status") if outcome is not None else None
+                        ),
+                    }
+                )
+            except Exception as exc:
+                failure_blob = None
+                try:
+                    payload = decode_queue_message(message.content)
+                    blob_name = _string_or_none(payload.get("blob_name"))
+                    if blob_name is not None:
+                        failure_blob = failed_trace_blob_name(
+                            queue_name_remote, Path(blob_name).name
+                        )
+                        store.upload_json(
+                            container,
+                            failure_blob,
+                            {
+                                "message_id": message.message_id,
+                                "dequeue_count": message.dequeue_count,
+                                "failed_at": _utc_now_isoformat(),
+                                "error_type": type(exc).__name__,
+                                "error_message": str(exc),
+                                "queue_message": payload,
+                            },
+                        )
+                except Exception:
+                    failure_blob = failure_blob
+                failures.append(
+                    {
+                        "queue_item_path": failure_blob or "azure-queue-message",
+                        "error_type": type(exc).__name__,
+                        "error_message": str(exc),
+                    }
+                )
+
+        return {
+            "queue_name": queue_name_remote,
+            "queue_dir": f"azure://{container}/queued/{queue_name_remote}",
+            "processed_queue_dir": f"azure://{container}/processed/{queue_name_remote}",
+            "queue_found": True,
+            "queued_count_before": len(received_messages),
+            "selected_count": len(received_messages),
+            "drained_count": len(imported_items),
+            "failed_count": len(failures),
+            "remaining_count": None,
+            "keep_queued": keep_queued,
+            "status": "success" if not failures else "partial",
+            "storage_backend": "azure-blob-queue",
+            "trace_container": container,
+            "items": imported_items,
+            "failures": failures,
+        }
+
     queue_dir = _trace_queue_dir(resolved_root, queue_name, processed=False)
     processed_dir = _trace_queue_dir(resolved_root, queue_name, processed=True)
     queued_paths = sorted(queue_dir.glob("*.json")) if queue_dir.is_dir() else []
     selected_paths = queued_paths[:limit] if isinstance(limit, int) and limit > 0 else queued_paths
-    imported_items: list[dict[str, object]] = []
-    failures: list[dict[str, object]] = []
+    local_imported_items: list[dict[str, object]] = []
+    local_failures: list[dict[str, object]] = []
 
     for queued_path in selected_paths:
         try:
@@ -1048,7 +1412,7 @@ def drain_trace_queue(
             )
             if not keep_queued and queued_path.exists():
                 queued_path.unlink()
-            imported_items.append(
+            local_imported_items.append(
                 {
                     "queue_item_path": _relative_to_root(queued_path, resolved_root),
                     "processed_queue_item_path": _relative_to_root(processed_path, resolved_root),
@@ -1061,7 +1425,7 @@ def drain_trace_queue(
                 }
             )
         except Exception as exc:
-            failures.append(
+            local_failures.append(
                 {
                     "queue_item_path": _relative_to_root(queued_path, resolved_root),
                     "error_type": type(exc).__name__,
@@ -1071,17 +1435,18 @@ def drain_trace_queue(
 
     queued_count_after = len(list(queue_dir.glob("*.json"))) if queue_dir.is_dir() else 0
     return {
-        "queue_name": _sanitize_name(queue_name, default="default"),
+        "queue_name": normalized_queue_name,
         "queue_dir": _relative_to_root(queue_dir, resolved_root),
         "processed_queue_dir": _relative_to_root(processed_dir, resolved_root),
         "queue_found": queue_dir.is_dir(),
         "queued_count_before": len(queued_paths),
         "selected_count": len(selected_paths),
-        "drained_count": len(imported_items),
-        "failed_count": len(failures),
+        "drained_count": len(local_imported_items),
+        "failed_count": len(local_failures),
         "remaining_count": queued_count_after,
         "keep_queued": keep_queued,
-        "status": "success" if not failures else "partial",
-        "items": imported_items,
-        "failures": failures,
+        "status": "success" if not local_failures else "partial",
+        "storage_backend": "filesystem",
+        "items": local_imported_items,
+        "failures": local_failures,
     }

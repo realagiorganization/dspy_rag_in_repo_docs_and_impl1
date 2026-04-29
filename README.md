@@ -85,20 +85,21 @@ the Rust wrapper.
 | Live Azure ask | `make ask-live QUESTION="..."` | Retrieve repository evidence locally, then synthesize a live answer through Azure OpenAI or Azure AI Inference. Use `uv run repo-rag ask-live --question "..." --output json` for machine-readable output with the same runtime trace schema. |
 | DSPy compile | `make dspy-train DSPY_RUN_NAME=...` | Compile and save a repository-grounded DSPy program under `artifacts/dspy/`. |
 | DSPy artifact inspect | `make dspy-artifacts` | List saved DSPy runs, the latest compiled program, the latest bundle manifest, and recorded benchmark metadata. The underlying CLI emits JSON with shared command metadata for worker-side consumption. |
-| Bundle inspect | `make bundle-inspect` | Inspect the latest or named versioned DSPy bundle manifest, or inspect a promoted channel explicitly through `BUNDLE_INSPECT_CHANNEL=stable|canary`. |
-| Bundle publish | `make bundle-publish BUNDLE_RUN_NAME=...` | Publish a compiled DSPy bundle into the local bundle registry under `artifacts/dspy/published/` without changing the `stable` or `canary` pointers yet. |
-| Bundle promote | `make bundle-promote BUNDLE_CHANNEL=stable BUNDLE_RUN_NAME=...` | Point the `stable` or `canary` channel at a published DSPy bundle version so workers can resolve a promoted runtime instead of guessing “latest run”. |
-| Bundle rollback | `make bundle-rollback BUNDLE_CHANNEL=stable` | Roll a promoted channel back to its previous or explicitly selected published bundle version. |
+| Bundle inspect | `make bundle-inspect` | Inspect the latest or named versioned DSPy bundle manifest, or inspect a promoted channel explicitly through `BUNDLE_INSPECT_CHANNEL=stable|canary`. When Azure Blob bundle storage is configured, channel resolution prefers the global bundle store over local files. |
+| Bundle fetch | `make bundle-fetch BUNDLE_INSPECT_CHANNEL=stable` | Download one promoted or explicitly versioned bundle from the global Azure Blob bundle store into `artifacts/dspy/remote/` so workers can run DSPy from a globally published program instead of a local checkout. |
+| Bundle publish | `make bundle-publish BUNDLE_RUN_NAME=...` | Publish a compiled DSPy bundle into the local bundle registry under `artifacts/dspy/published/`, and mirror it to the global Azure Blob bundle container when that store is configured. |
+| Bundle promote | `make bundle-promote BUNDLE_CHANNEL=stable BUNDLE_RUN_NAME=...` | Point the `stable` or `canary` channel at a published DSPy bundle version so workers can resolve a promoted runtime instead of guessing “latest run”; the promoted channel is mirrored to Azure Blob when configured. |
+| Bundle rollback | `make bundle-rollback BUNDLE_CHANNEL=stable` | Roll a promoted channel back to its previous or explicitly selected published bundle version, including the global Azure Blob channel pointer when configured. |
 | Overlay init | `make overlay-init` | Create or refresh a worker-local overlay manifest under `artifacts/overlays/` with retrieval-mode, lookup-index, and trace-directory metadata. |
 | Trace export | `make trace-export TRACE_PAYLOAD_PATH=...` | Persist a normalized runtime trace record under `artifacts/traces/` from an ask-family JSON payload so asynchronous optimization does not need to parse ad hoc output later. |
 | Trace import | `make trace-import TRACE_PATH=...` | Validate and ingest an external runtime trace record, plus optional outcome metadata, under `artifacts/traces/imported/` for later global optimization work. |
-| Trace enqueue | `make trace-enqueue TRACE_PATH=... TRACE_QUEUE_NAME=dataset` | Stage a normalized runtime trace record, plus optional outcome metadata, under `artifacts/traces/queued/` for a later trainer-side drain step instead of synchronous import in the worker hot path. |
-| Trace drain | `make trace-drain TRACE_QUEUE_NAME=dataset` | Drain queued trainer-side trace handoff items into `artifacts/traces/imported/` once a background trainer or operator loop is ready to ingest them. |
+| Trace enqueue | `make trace-enqueue TRACE_PATH=... TRACE_QUEUE_NAME=dataset` | Stage a normalized runtime trace record plus optional outcome metadata for later trainer-side ingestion. When Azure Blob + Queue is configured the record is uploaded to the global trace container and a queue message is emitted; otherwise the same command falls back to the local filesystem queue under `artifacts/traces/queued/`. |
+| Trace drain | `make trace-drain TRACE_QUEUE_NAME=dataset` | Drain trainer-side trace handoff items into `artifacts/traces/imported/`. When Azure Blob + Queue is configured the trainer consumes the global queue first; otherwise it drains the local filesystem queue. |
 | Trainer candidates | `make trainer-candidates` | Materialize trainer-side YAML candidate examples plus a JSON summary from imported trace records under `artifacts/trainer/` for later DSPy review or compilation. |
 | Trainer recompile | `make trainer-recompile TRAINER_RECOMPILE_RUN_NAME=trainer-auto` | Merge the base training set with cumulative trainer-side candidates, write `artifacts/trainer/generated-training.yaml`, and compile a fresh DSPy run from that generated corpus. |
 | Trainer cycle | `make trainer-cycle TRACE_QUEUE_NAME=dataset` | Run one background-compatible trainer pass: drain queued traces, evaluate retrieval gates, optionally recompile from trainer-side candidates, and only publish/promote a candidate bundle when both retrieval and DSPy benchmark gates pass. |
 | Trainer service | `make trainer-service TRACE_QUEUE_NAME=dataset TRAINER_SERVICE_MAX_IDLE_CYCLES=1` | Run a long-lived trainer/publisher loop that repeatedly executes `trainer-cycle`, writes service state under `artifacts/trainer/`, and keeps queue draining plus gated publish/promotion outside the worker hot path. |
-| Trainer manifests | `make trainer-k8s-manifests TRAINER_K8S_IMAGE=... TRACE_QUEUE_NAME=dataset` | Materialize Kubernetes manifests for the `trainer-service` Deployment and `trainer-cycle` CronJob, using one shared runtime image plus PVC-backed `artifacts/` storage. |
+| Trainer manifests | `make trainer-k8s-manifests TRAINER_K8S_IMAGE=... TRACE_QUEUE_NAME=dataset` | Materialize Kubernetes manifests for the `trainer-service` Deployment and `trainer-cycle` CronJob, using one shared runtime image, Azure Blob + Queue for the global bundle/trace bus, and a trainer-local PVC for service state, generated candidates, and cached artifacts. |
 | Retrieval evaluation | `make retrieval-eval` | Measure retrieval quality with pass rate, recall, precision, reciprocal rank, per-tag breakdowns, a top-k sweep, and enforced minimum pass/recall thresholds. The underlying CLI emits JSON with shared command metadata for worker-side consumption. |
 | MCP discovery | `make discover-mcp` | Inspect MCP-related repository artifacts. |
 | MCP server | `make serve-mcp` | Expose a bounded stdio MCP server for short calls only: lightweight baseline ask, bundle status, DSPy artifact listing, and queued trace publish. Heavy DSPy training and full retrieval evaluation intentionally stay on direct CLI surfaces. |
@@ -205,16 +206,20 @@ The probe path now prefers `max_completion_tokens` for newer GPT-5-class chat-co
 deployments and falls back to `max_tokens` only when the model rejects the newer parameter.
 
 - `repo-rag bundle-inspect --channel stable --output json` to resolve the currently promoted bundle
-  for worker startup
+  for worker startup, preferring the global Azure Blob bundle store when configured
+- `repo-rag bundle-fetch --channel stable --output json` to pull that promoted bundle into
+  `artifacts/dspy/remote/` for worker-side DSPy execution
 - `repo-rag bundle-publish` to persist a compiled bundle into the local published-bundle registry
+  and mirror it to the global Azure Blob bundle container when configured
 - `repo-rag bundle-promote` and `repo-rag bundle-rollback` to manage the `stable` and `canary`
   channel pointers
 - `repo-rag trace-export` to persist a normalized trace record from an ask-family JSON payload
 - `repo-rag trace-import` to ingest an external trace record, plus optional outcome metadata, into the local trace store
 - `repo-rag trace-enqueue` to stage that trace and outcome metadata into a trainer-side queue for
-  later asynchronous drain/import
-- `repo-rag trace-drain` to consume queued trainer-side handoff items once a background trainer
-  loop is ready
+  later asynchronous drain/import, preferring Azure Blob + Queue as the global transport and
+  falling back to the local filesystem queue only when global storage is absent
+- `repo-rag trace-drain` to consume those queued handoff items once a background trainer loop is
+  ready
 - `repo-rag trainer-candidates` to turn imported trace records into trainer-side YAML candidate
   examples plus a summary manifest under `artifacts/trainer/`
 - `repo-rag trainer-recompile` to merge the base repository training set with those cumulative
@@ -243,11 +248,15 @@ That command materializes:
 - a ServiceAccount
 - a ConfigMap
 - a Secret example
+- a PVC manifest for trainer-side local artifacts
 - a `trainer-service` Deployment
 - a `trainer-cycle` CronJob
 
 under `artifacts/kubernetes/`. The intent is one shared image family, separate worker vs.
-trainer roles, PVC-backed `artifacts/` storage, and externalized Azure/OpenAI credentials.
+trainer roles, Azure Blob + Queue as the global transport for traces and promoted bundles, a
+trainer-local PVC for cache/state/history, and externalized Azure/OpenAI credentials. The older
+same-namespace shared-PVC queue path remains compatibility-only and is no longer the primary
+deployment story.
 
 The repository also now ships its own runtime image definition in the root [Dockerfile](Dockerfile).
 That image keeps an editable checkout under `/workspace/repo-rag`, exposes `repo-rag` on `PATH`,

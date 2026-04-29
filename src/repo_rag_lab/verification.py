@@ -19,6 +19,7 @@ REQUIRED_MAKE_TARGETS = {
     "dspy-train",
     "dspy-artifacts",
     "bundle-inspect",
+    "bundle-fetch",
     "bundle-publish",
     "bundle-promote",
     "bundle-rollback",
