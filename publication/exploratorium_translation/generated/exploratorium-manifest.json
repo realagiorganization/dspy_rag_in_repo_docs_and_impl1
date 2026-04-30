@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-04-30T17:11:33Z",
-  "tracked_file_count": 317,
-  "summarized_file_count": 314,
+  "generated_at": "2026-04-30T17:25:41Z",
+  "tracked_file_count": 318,
+  "summarized_file_count": 315,
   "excluded_generated_file_count": 3,
   "explicit_link_count": 84,
   "machine_link_occurrence_count": 2632,
@@ -1106,6 +1106,15 @@
       "url_count": 0,
       "summary_en": "Markdown document, 95 lines, 0 explicit URLs. Lead heading: 2026-04-30 Codex Proxy Mediation Layer.",
       "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 95 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-04-30 Codex Proxy Mediation Layer."
+    },
+    {
+      "path": "docs/audit/2026-04-30-codex-proxy-trace-handoff.md",
+      "kind": "markdown",
+      "byte_size": 6543,
+      "line_count": 122,
+      "url_count": 0,
+      "summary_en": "Markdown document, 122 lines, 0 explicit URLs. Lead heading: 2026-04-30 Codex Proxy Trace Handoff.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 122 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-04-30 Codex Proxy Trace Handoff."
     },
     {
       "path": "docs/audit/README.md",

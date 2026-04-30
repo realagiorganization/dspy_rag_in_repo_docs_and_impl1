@@ -121,6 +121,7 @@ docs/audit/2026-04-29-trainer-k8s-deployment-surface.md,docs,markdown,131,6040,R
 docs/audit/2026-04-29-trainer-recompile-from-candidates.md,docs,markdown,135,6238,Repository audit note for 2026 04 29 trainer recompile from candidates
 docs/audit/2026-04-29-trainer-service-loop.md,docs,markdown,133,6185,Repository audit note for 2026 04 29 trainer service loop
 docs/audit/2026-04-30-codex-proxy-mediation-layer.md,docs,markdown,95,5279,Repository audit note for 2026 04 30 codex proxy mediation layer
+docs/audit/2026-04-30-codex-proxy-trace-handoff.md,docs,markdown,122,6543,Repository audit note for 2026 04 30 codex proxy trace handoff
 docs/audit/README.md,docs,markdown,14,410,Repository audit note for README
 docs/guides/hushwheel-fixture-rag-guide.md,docs,markdown,138,5169,RAG Guide For The Hushwheel Fixture
 docs/operations/azure-deployment.md,docs,markdown,111,4901,Azure Deployment Notes
