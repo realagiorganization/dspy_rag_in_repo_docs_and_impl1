@@ -38,6 +38,9 @@ from .trainer_deployment import (
     DEFAULT_TRAINER_K8S_CYCLE_SCHEDULE,
     DEFAULT_TRAINER_K8S_IMAGE,
     DEFAULT_TRAINER_K8S_IMAGE_PULL_SECRET_NAME,
+    DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE,
+    DEFAULT_TRAINER_K8S_MINIMUM_PASS_RATE,
+    DEFAULT_TRAINER_K8S_MINIMUM_SOURCE_RECALL,
     DEFAULT_TRAINER_K8S_NAMESPACE,
     DEFAULT_TRAINER_K8S_OUTPUT_DIR,
     DEFAULT_TRAINER_K8S_PROMOTE_CHANNEL,
@@ -46,6 +49,7 @@ from .trainer_deployment import (
     DEFAULT_TRAINER_K8S_PVC_SIZE,
     DEFAULT_TRAINER_K8S_PVC_STORAGE_CLASS,
     DEFAULT_TRAINER_K8S_QUEUE_NAME,
+    DEFAULT_TRAINER_K8S_RECOMPILE_RUN_NAME,
     DEFAULT_TRAINER_K8S_SERVICE_MAX_IDLE_CYCLES,
     DEFAULT_TRAINER_K8S_SERVICE_POLL_INTERVAL_SECONDS,
 )
@@ -517,10 +521,22 @@ def build_parser() -> argparse.ArgumentParser:
     trainer_k8s_parser.add_argument("--top-k", type=int, default=DEFAULT_RETRIEVAL_EVAL_TOP_K)
     trainer_k8s_parser.add_argument("--top-k-sweep", default="1,2,4,8")
     trainer_k8s_parser.add_argument("--retrieval-mode", choices=["lexical", "idf-rerank"])
-    trainer_k8s_parser.add_argument("--minimum-pass-rate", type=float, default=1.0)
-    trainer_k8s_parser.add_argument("--minimum-source-recall", type=float, default=1.0)
-    trainer_k8s_parser.add_argument("--minimum-bundle-pass-rate", type=float, default=1.0)
-    trainer_k8s_parser.add_argument("--recompile-run-name", default="trainer-auto")
+    trainer_k8s_parser.add_argument(
+        "--minimum-pass-rate", type=float, default=DEFAULT_TRAINER_K8S_MINIMUM_PASS_RATE
+    )
+    trainer_k8s_parser.add_argument(
+        "--minimum-source-recall",
+        type=float,
+        default=DEFAULT_TRAINER_K8S_MINIMUM_SOURCE_RECALL,
+    )
+    trainer_k8s_parser.add_argument(
+        "--minimum-bundle-pass-rate",
+        type=float,
+        default=DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE,
+    )
+    trainer_k8s_parser.add_argument(
+        "--recompile-run-name", default=DEFAULT_TRAINER_K8S_RECOMPILE_RUN_NAME
+    )
     trainer_k8s_parser.add_argument(
         "--recompile-base-training-path", default=str(DEFAULT_TRAINING_PATH)
     )

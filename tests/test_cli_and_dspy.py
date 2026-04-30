@@ -1618,16 +1618,16 @@ def test_cli_main_trainer_k8s_manifests_command(
         queue_name: str,
         cycle_schedule: str,
         poll_interval_seconds: float,
-        service_max_idle_cycles: int,
+        service_max_idle_cycles: int | None,
         promote_channel: str | None,
         retrieval_training_path: Path,
         retrieval_top_k: int,
         retrieval_top_k_sweep: str,
         retrieval_mode: str | None,
-        minimum_pass_rate: float,
-        minimum_source_recall: float,
-        minimum_bundle_pass_rate: float,
-        recompile_run_name: str,
+        minimum_pass_rate: float | None,
+        minimum_source_recall: float | None,
+        minimum_bundle_pass_rate: float | None,
+        recompile_run_name: str | None,
         recompile_base_training_path: Path,
     ) -> str:
         return json.dumps(
@@ -1676,16 +1676,16 @@ def test_cli_main_trainer_k8s_manifests_command(
                 "queue_name": "dataset",
                 "cycle_schedule": "*/15 * * * *",
                 "poll_interval_seconds": 60.0,
-                "service_max_idle_cycles": 1,
-                "promote_channel": "canary",
+                "service_max_idle_cycles": None,
+                "promote_channel": None,
                 "training_path": "samples/training/repository_training_examples.yaml",
                 "top_k": 4,
                 "top_k_sweep": "1,2,4,8",
                 "retrieval_mode": "idf-rerank",
-                "minimum_pass_rate": 1.0,
-                "minimum_source_recall": 1.0,
-                "minimum_bundle_pass_rate": 1.0,
-                "recompile_run_name": "trainer-auto",
+                "minimum_pass_rate": None,
+                "minimum_source_recall": None,
+                "minimum_bundle_pass_rate": None,
+                "recompile_run_name": None,
                 "recompile_base_training_path": (
                     "samples/training/repository_training_examples.yaml"
                 ),
@@ -1702,7 +1702,7 @@ def test_cli_main_trainer_k8s_manifests_command(
     assert '"command": "trainer-k8s-manifests"' in output
     assert '"pvc_storage_class_name": "azurefile-csi"' in output
     assert '"queue_name": "dataset"' in output
-    assert '"minimum_bundle_pass_rate": 1.0' in output
+    assert '"minimum_bundle_pass_rate": null' in output
 
 
 def test_cli_main_trainer_recompile_command(

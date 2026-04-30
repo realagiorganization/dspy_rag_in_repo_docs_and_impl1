@@ -180,7 +180,6 @@ def test_run_trainer_k8s_manifest_generation_writes_expected_manifests(tmp_path:
             tmp_path,
             image="ghcr.io/example/repo-rag:latest",
             namespace="repo-rag",
-            promote_channel="canary",
         )
     )
 
@@ -220,6 +219,11 @@ def test_run_trainer_k8s_manifest_generation_writes_expected_manifests(tmp_path:
         "--root",
         "/workspace/repo-rag",
     ]
+    assert "--max-idle-cycles" not in deployment_spec["containers"][0]["command"]
+    assert "--minimum-pass-rate" not in deployment_spec["containers"][0]["command"]
+    assert "--minimum-source-recall" not in deployment_spec["containers"][0]["command"]
+    assert "--minimum-bundle-pass-rate" not in deployment_spec["containers"][0]["command"]
+    assert "--recompile-run-name" not in deployment_spec["containers"][0]["command"]
     assert cronjob["kind"] == "CronJob"
     assert cronjob["spec"]["schedule"] == "*/15 * * * *"
     cronjob_spec = cronjob["spec"]["jobTemplate"]["spec"]["template"]["spec"]
@@ -231,8 +235,12 @@ def test_run_trainer_k8s_manifest_generation_writes_expected_manifests(tmp_path:
         "/workspace/repo-rag",
     ]
     assert config_map["kind"] == "ConfigMap"
-    assert config_map["data"]["TRAINER_RECOMPILE_RUN_NAME"] == "trainer-auto"
-    assert config_map["data"]["TRAINER_MIN_BUNDLE_PASS_RATE"] == "1.0"
+    assert config_map["data"]["TRAINER_RECOMPILE_RUN_NAME"] == ""
+    assert config_map["data"]["TRAINER_MIN_BUNDLE_PASS_RATE"] == ""
+    assert config_map["data"]["TRAINER_SERVICE_MAX_IDLE_CYCLES"] == ""
+    assert config_map["data"]["RETRIEVAL_MIN_PASS_RATE"] == ""
+    assert config_map["data"]["RETRIEVAL_MIN_SOURCE_RECALL"] == ""
+    assert config_map["data"]["TRAINER_PROMOTE_CHANNEL"] == ""
     assert secret_example["kind"] == "Secret"
     assert "AZURE_OPENAI_API_KEY" in secret_example["stringData"]
 

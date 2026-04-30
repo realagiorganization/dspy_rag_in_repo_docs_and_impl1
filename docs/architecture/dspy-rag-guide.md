@@ -129,7 +129,7 @@ For downstream worker integration, the key new surface is the shared machine-rea
 - `uv run repo-rag trainer-candidates --output json`
 - `uv run repo-rag trainer-recompile --run-name trainer-auto --output json`
 - `uv run repo-rag trainer-cycle --queue-name dataset --promote-channel canary --run-name <bundle-run> --output json`
-- `uv run repo-rag trainer-service --queue-name dataset --poll-interval-seconds 30 --max-idle-cycles 1 --output json`
+- `uv run repo-rag trainer-service --queue-name dataset --poll-interval-seconds 30 --output json`
 - `uv run repo-rag trainer-k8s-manifests --image ghcr.io/realagiorganization/repo-rag-lab:latest --output json`
 
 Those JSON surfaces now carry a shared envelope:

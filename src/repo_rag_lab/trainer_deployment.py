@@ -27,15 +27,15 @@ DEFAULT_TRAINER_K8S_IMAGE_PULL_POLICY = "IfNotPresent"
 DEFAULT_TRAINER_K8S_IMAGE_PULL_SECRET_NAME = "acr-secret"
 DEFAULT_TRAINER_K8S_CYCLE_SCHEDULE = "*/15 * * * *"
 DEFAULT_TRAINER_K8S_QUEUE_NAME = "dataset"
-DEFAULT_TRAINER_K8S_PROMOTE_CHANNEL = "canary"
+DEFAULT_TRAINER_K8S_PROMOTE_CHANNEL: str | None = None
 DEFAULT_TRAINER_K8S_SERVICE_POLL_INTERVAL_SECONDS = 60.0
-DEFAULT_TRAINER_K8S_SERVICE_MAX_IDLE_CYCLES = 1
+DEFAULT_TRAINER_K8S_SERVICE_MAX_IDLE_CYCLES: int | None = None
 DEFAULT_TRAINER_K8S_RETRIEVAL_TOP_K = 4
 DEFAULT_TRAINER_K8S_RETRIEVAL_TOP_K_SWEEP = "1,2,4,8"
-DEFAULT_TRAINER_K8S_MINIMUM_PASS_RATE = 1.0
-DEFAULT_TRAINER_K8S_MINIMUM_SOURCE_RECALL = 1.0
-DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE = 1.0
-DEFAULT_TRAINER_K8S_RECOMPILE_RUN_NAME = "trainer-auto"
+DEFAULT_TRAINER_K8S_MINIMUM_PASS_RATE: float | None = None
+DEFAULT_TRAINER_K8S_MINIMUM_SOURCE_RECALL: float | None = None
+DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE: float | None = None
+DEFAULT_TRAINER_K8S_RECOMPILE_RUN_NAME: str | None = None
 
 
 def _relative_path_text(root: Path, path: Path) -> str:
@@ -73,18 +73,18 @@ class TrainerK8sConfig:
     queue_name: str = DEFAULT_TRAINER_K8S_QUEUE_NAME
     cycle_schedule: str = DEFAULT_TRAINER_K8S_CYCLE_SCHEDULE
     poll_interval_seconds: float = DEFAULT_TRAINER_K8S_SERVICE_POLL_INTERVAL_SECONDS
-    service_max_idle_cycles: int = DEFAULT_TRAINER_K8S_SERVICE_MAX_IDLE_CYCLES
+    service_max_idle_cycles: int | None = DEFAULT_TRAINER_K8S_SERVICE_MAX_IDLE_CYCLES
     promote_channel: str | None = DEFAULT_TRAINER_K8S_PROMOTE_CHANNEL
     retrieval_training_path: str = str(DEFAULT_TRAINING_PATH)
     retrieval_top_k: int = DEFAULT_TRAINER_K8S_RETRIEVAL_TOP_K
     retrieval_top_k_sweep: str = DEFAULT_TRAINER_K8S_RETRIEVAL_TOP_K_SWEEP
     retrieval_mode: str | None = None
-    minimum_pass_rate: float = DEFAULT_TRAINER_K8S_MINIMUM_PASS_RATE
-    minimum_source_recall: float = DEFAULT_TRAINER_K8S_MINIMUM_SOURCE_RECALL
-    minimum_bundle_pass_rate: float = DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE
+    minimum_pass_rate: float | None = DEFAULT_TRAINER_K8S_MINIMUM_PASS_RATE
+    minimum_source_recall: float | None = DEFAULT_TRAINER_K8S_MINIMUM_SOURCE_RECALL
+    minimum_bundle_pass_rate: float | None = DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE
     trace_queue_limit: int | None = None
     trace_keep_queued: bool = False
-    recompile_run_name: str = DEFAULT_TRAINER_K8S_RECOMPILE_RUN_NAME
+    recompile_run_name: str | None = DEFAULT_TRAINER_K8S_RECOMPILE_RUN_NAME
     recompile_base_training_path: str = str(DEFAULT_TRAINING_PATH)
     recompile_optimizer: str = "bootstrapfewshot"
     recompile_top_k: int = 4
@@ -110,15 +110,27 @@ def _config_map_payload(config: TrainerK8sConfig) -> dict[str, object]:
         "TRACE_KEEP_QUEUED": "1" if config.trace_keep_queued else "",
         "TRAINER_PROMOTE_CHANNEL": config.promote_channel or "",
         "TRAINER_SERVICE_POLL_INTERVAL": str(config.poll_interval_seconds),
-        "TRAINER_SERVICE_MAX_IDLE_CYCLES": str(config.service_max_idle_cycles),
+        "TRAINER_SERVICE_MAX_IDLE_CYCLES": (
+            str(config.service_max_idle_cycles) if config.service_max_idle_cycles is not None else ""
+        ),
         "RETRIEVAL_TRAINING_PATH": config.retrieval_training_path,
         "RETRIEVAL_TOP_K": str(config.retrieval_top_k),
         "RETRIEVAL_TOP_K_SWEEP": config.retrieval_top_k_sweep,
         "RETRIEVAL_MODE": config.retrieval_mode or "",
-        "RETRIEVAL_MIN_PASS_RATE": str(config.minimum_pass_rate),
-        "RETRIEVAL_MIN_SOURCE_RECALL": str(config.minimum_source_recall),
-        "TRAINER_MIN_BUNDLE_PASS_RATE": str(config.minimum_bundle_pass_rate),
-        "TRAINER_RECOMPILE_RUN_NAME": config.recompile_run_name,
+        "RETRIEVAL_MIN_PASS_RATE": (
+            str(config.minimum_pass_rate) if config.minimum_pass_rate is not None else ""
+        ),
+        "RETRIEVAL_MIN_SOURCE_RECALL": (
+            str(config.minimum_source_recall)
+            if config.minimum_source_recall is not None
+            else ""
+        ),
+        "TRAINER_MIN_BUNDLE_PASS_RATE": (
+            str(config.minimum_bundle_pass_rate)
+            if config.minimum_bundle_pass_rate is not None
+            else ""
+        ),
+        "TRAINER_RECOMPILE_RUN_NAME": config.recompile_run_name or "",
         "TRAINER_RECOMPILE_BASE_TRAINING_PATH": config.recompile_base_training_path,
         "TRAINER_RECOMPILE_OPTIMIZER": config.recompile_optimizer,
         "TRAINER_RECOMPILE_TOP_K": str(config.recompile_top_k),
@@ -214,14 +226,6 @@ def _trainer_command(config: TrainerK8sConfig, *, role: str) -> list[str]:
         str(config.retrieval_top_k),
         "--top-k-sweep",
         config.retrieval_top_k_sweep,
-        "--minimum-pass-rate",
-        str(config.minimum_pass_rate),
-        "--minimum-source-recall",
-        str(config.minimum_source_recall),
-        "--minimum-bundle-pass-rate",
-        str(config.minimum_bundle_pass_rate),
-        "--recompile-run-name",
-        config.recompile_run_name,
         "--recompile-base-training-path",
         config.recompile_base_training_path,
         "--recompile-optimizer",
@@ -243,6 +247,14 @@ def _trainer_command(config: TrainerK8sConfig, *, role: str) -> list[str]:
         command.extend(["--limit", str(config.trace_queue_limit)])
     if config.trace_keep_queued:
         command.append("--keep-queued")
+    if config.minimum_pass_rate is not None:
+        command.extend(["--minimum-pass-rate", str(config.minimum_pass_rate)])
+    if config.minimum_source_recall is not None:
+        command.extend(["--minimum-source-recall", str(config.minimum_source_recall)])
+    if config.minimum_bundle_pass_rate is not None:
+        command.extend(["--minimum-bundle-pass-rate", str(config.minimum_bundle_pass_rate)])
+    if config.recompile_run_name:
+        command.extend(["--recompile-run-name", config.recompile_run_name])
     if config.promote_channel:
         command.extend(["--promote-channel", config.promote_channel])
     if config.retrieval_mode:
@@ -250,14 +262,9 @@ def _trainer_command(config: TrainerK8sConfig, *, role: str) -> list[str]:
     if config.recompile_mipro_num_trials is not None:
         command.extend(["--recompile-mipro-num-trials", str(config.recompile_mipro_num_trials)])
     if role == "service":
-        command.extend(
-            [
-                "--poll-interval-seconds",
-                str(config.poll_interval_seconds),
-                "--max-idle-cycles",
-                str(config.service_max_idle_cycles),
-            ]
-        )
+        command.extend(["--poll-interval-seconds", str(config.poll_interval_seconds)])
+        if config.service_max_idle_cycles is not None:
+            command.extend(["--max-idle-cycles", str(config.service_max_idle_cycles)])
     return command
 
 

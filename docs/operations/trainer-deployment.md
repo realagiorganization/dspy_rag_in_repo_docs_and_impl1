@@ -32,9 +32,7 @@ The equivalent direct CLI command is:
 uv run repo-rag trainer-k8s-manifests \
   --image ghcr.io/realagiorganization/repo-rag-lab:latest \
   --namespace repo-rag \
-  --queue-name dataset \
-  --promote-channel canary \
-  --minimum-bundle-pass-rate 1.0
+  --queue-name dataset
 ```
 
 That command writes manifests under `artifacts/kubernetes/`:
@@ -73,6 +71,15 @@ Both surfaces still reuse the same repo-native runtime contract as the local Mak
 - `TRAINER_RECOMPILE_RUN_NAME`
 - `TRAINER_RECOMPILE_BASE_TRAINING_PATH`
 - `TRAINER_PROMOTE_CHANNEL`
+
+The generated Deployment now defaults to a non-terminating queue-consumer posture:
+
+- no `--max-idle-cycles` unless it is requested explicitly
+- no retrieval gate thresholds unless they are requested explicitly
+- no bundle benchmark gate unless publish/promote or recompilation are requested explicitly
+- no automatic publish/promote/recompile until those knobs are turned on deliberately
+
+That keeps `trainer-service` alive in AKS even before the first saved DSPy bundle exists.
 
 ## Required Storage And Secrets
 
