@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .azure import write_deployment_manifest
 from .benchmarks import DEFAULT_RETRIEVAL_EVAL_TOP_K
+from .codex_proxy import serve_codex_proxy
 from .dspy_training import (
     DEFAULT_DSPY_RUN_NAME,
     DEFAULT_TRAINING_PATH,
@@ -279,6 +280,24 @@ def build_parser() -> argparse.ArgumentParser:
 
     serve_mcp_parser = subparsers.add_parser("serve-mcp")
     serve_mcp_parser.add_argument("--root", default=".")
+
+    serve_codex_proxy_parser = subparsers.add_parser("serve-codex-proxy")
+    serve_codex_proxy_parser.add_argument("--root", default=".")
+    serve_codex_proxy_parser.add_argument("--bundle-root", default=".")
+    serve_codex_proxy_parser.add_argument("--artifact-dir", required=True)
+    serve_codex_proxy_parser.add_argument("--host", default="127.0.0.1")
+    serve_codex_proxy_parser.add_argument("--port", type=int, default=0)
+    serve_codex_proxy_parser.add_argument("--dspy-top-k", type=int, default=4)
+    serve_codex_proxy_parser.add_argument("--bundle-channel", default="stable")
+    serve_codex_proxy_parser.add_argument("--bundle-version")
+    serve_codex_proxy_parser.add_argument("--token-budget", type=int, default=700)
+    serve_codex_proxy_parser.add_argument("--trivial-token-budget", type=int, default=280)
+    serve_codex_proxy_parser.add_argument("--essentials-count", type=int, default=3)
+    serve_codex_proxy_parser.add_argument("--low-signal-min-sources", type=int, default=1)
+    serve_codex_proxy_parser.add_argument("--cache-dir")
+    serve_codex_proxy_parser.add_argument("--cache-ttl-seconds", type=int, default=3600)
+    serve_codex_proxy_parser.add_argument("--no-dspy", action="store_true")
+    serve_codex_proxy_parser.add_argument("--ready-file")
 
     azure_parser = subparsers.add_parser("azure-manifest")
     azure_parser.add_argument("--root", default=".")
@@ -774,6 +793,32 @@ def main() -> int:
             root,
             input_stream=sys.stdin.buffer,
             output_stream=sys.stdout.buffer,
+        )
+
+    if args.command == "serve-codex-proxy":
+        return serve_codex_proxy(
+            repository_root=root,
+            bundle_root=Path(args.bundle_root).expanduser().resolve(),
+            artifact_dir=Path(args.artifact_dir).expanduser().resolve(),
+            host=args.host,
+            port=args.port,
+            prefer_dspy=not args.no_dspy,
+            dspy_top_k=args.dspy_top_k,
+            bundle_channel=args.bundle_channel,
+            bundle_version=args.bundle_version,
+            token_budget=args.token_budget,
+            trivial_token_budget=args.trivial_token_budget,
+            essentials_count=args.essentials_count,
+            low_signal_min_sources=args.low_signal_min_sources,
+            cache_dir=(
+                Path(args.cache_dir).expanduser().resolve() if args.cache_dir else None
+            ),
+            cache_ttl_seconds=args.cache_ttl_seconds,
+            ready_file=(
+                Path(args.ready_file).expanduser().resolve()
+                if args.ready_file
+                else None
+            ),
         )
 
     if args.command == "azure-manifest":

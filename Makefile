@@ -348,6 +348,11 @@ discover-mcp: sync
 serve-mcp: sync
 	$(UV) run repo-rag serve-mcp --root .
 
+serve-codex-proxy: sync
+	$(UV) run repo-rag serve-codex-proxy --root . --bundle-root . \
+		--artifact-dir artifacts/codex_proxy \
+		--host 127.0.0.1 --port 8088
+
 utility-summary: sync
 	$(UV) run repo-rag utility-summary
 

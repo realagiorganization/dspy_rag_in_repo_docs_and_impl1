@@ -339,6 +339,11 @@ def utility_summary(root: Path) -> str:
             "tool surface for lightweight ask, bundle status, artifact listing, and queued "
             "trace publish"
         ),
+        (
+            "- make serve-codex-proxy / uv run repo-rag serve-codex-proxy: expose a local "
+            "Responses-compatible mediation proxy for downstream Codex workers, attempting "
+            "repo-RAG retrieval plus DSPy shaping before heuristic fallback or pass-through"
+        ),
         "- make azure-manifest / uv run repo-rag azure-manifest: write Azure deployment metadata",
         (
             "- make azure-openai-probe / uv run repo-rag azure-openai-probe: "

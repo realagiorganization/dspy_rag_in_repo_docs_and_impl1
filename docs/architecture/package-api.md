@@ -100,6 +100,12 @@ notebooks stay readable, testable, and aligned with CLI and automation entrypoin
   `bundle_status`, `dspy_artifacts`, and queued `publish_trace` calls only. Trainer-side
   recompilation, notebook execution, and retrieval-eval sweeps intentionally stay off this MCP
   surface.
+- `repo-rag serve-codex-proxy`: expose a local Responses-compatible proxy for downstream Codex
+  CLI runs. The proxy extracts the Codex task, runs repo-RAG retrieval, attempts DSPy-mediated
+  synthesis first, falls back to heuristic mediation when DSPy or retrieval is weak, enforces a
+  bounded developer-block token budget, caches mediation results on disk, suppresses low-signal
+  injections, and only passes requests through unchanged when no useful mediation input is
+  available.
 - `repo-rag smoke-test`: run a compact workflow smoke test.
 - `repo-rag verify-surfaces`: validate the repository utility and notebook contract surfaces.
 - `repo-rag run-notebooks`: execute all tracked notebooks with monitored progress and report artifacts.

@@ -131,6 +131,16 @@ For downstream worker integration, the key new surface is the shared machine-rea
 - `uv run repo-rag trainer-cycle --queue-name dataset --promote-channel canary --run-name <bundle-run> --output json`
 - `uv run repo-rag trainer-service --queue-name dataset --poll-interval-seconds 30 --output json`
 - `uv run repo-rag trainer-k8s-manifests --image ghcr.io/realagiorganization/repo-rag-lab:latest --output json`
+- `uv run repo-rag serve-codex-proxy --root <repo_path> --bundle-root <bundle_root>`
+
+For the containerized `dataset` worker, `codex` now stays the primary executor while
+`repo-rag serve-codex-proxy` acts as a transport-level mediation layer in front of Azure Codex
+Responses traffic. In the normal path that proxy runs `RAG -> DSPy` together, and if either layer
+is weak it degrades only that layer to heuristics before finally falling back to direct pass-through.
+The proxy no longer injects every preview blindly: it now classifies trivial vs deep tasks, keeps a
+strict developer-block token budget, prefers top-k essential file hints over long evidence dumps,
+persists mediation cache entries on disk, and suppresses low-signal injections entirely when repo
+grounding would only add boilerplate.
 
 Those JSON surfaces now carry a shared envelope:
 

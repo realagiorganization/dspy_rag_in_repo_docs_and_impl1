@@ -222,26 +222,30 @@ At the time of this document:
 - the broader retrieval layer now also supports a profile-selected `idf-rerank` mode and keeps
   corpus source paths relative to whichever repository root is selected, including nested fixture
   repos and worker-local temporary clones
-- the downstream `../dataset` integration now has `repo_rag_cli` in both places that matter:
-  the local `PromptExecutor` and the container worker path under
-  `docker/prompt-executor/`; both can call `repo-rag ask --output json`, persist the returned JSON
-  envelope and runtime trace inside prompt artifacts, route the `dspy` flag through a real
-  repo-RAG path instead of a stub, and keep compatibility `codex_response.txt` artifacts for
-  existing worker-side publishers
+- the downstream `../dataset` integration now has two distinct repo-RAG entry modes:
+  the local `PromptExecutor` still offers an explicit `repo_rag_cli` / `dspy` backend family for
+  compatibility, while the container worker path keeps `codex` as the primary executor and routes
+  its Azure Responses traffic through a local `repo-rag serve-codex-proxy` mediation layer
+  instead of replacing Codex with a second backend; that mediation path now classifies trivial vs
+  deep tasks, enforces a bounded developer-block token budget, caches prior mediation results on
+  disk, and suppresses low-signal injections instead of always inflating the Codex prompt
 - the container worker path now also auto-initializes a local overlay through
   `repo-rag overlay-init` when no explicit overlay is supplied and exports a normalized worker
   trace through `repo-rag trace-export`; both downstream paths now also persist worker outcome
   manifests and can stage them into a trainer-side queue through `repo-rag trace-enqueue`, with
   Azure Blob + Queue now acting as the primary global transport instead of a namespace-local PVC
+- that Codex mediation proxy now tries `RAG + DSPy` together first, degrades only the failed layer
+  to heuristics when DSPy or retrieval is weak, and finally falls back to direct pass-through so
+  an untrained bundle cannot block task execution
 - both downstream runtime paths can now also resolve a stable bundle version from a global bundle
   store through `repo-rag bundle-inspect --channel stable`, fetch the actual program through
   `repo-rag bundle-fetch`, and stage exported traces through `repo-rag trace-enqueue`; those
   records can include accepted/candidate outcome metadata, giving the global trainer a
   cross-namespace source of DSPy recompilation inputs
-- both downstream runtime paths can now also auto-detect repo-RAG-capable target repositories when
-  the caller would otherwise stay on the default `codex` path, so prepared clones of this
-  repository and similar native repos no longer require a manual backend override to use the
-  repo-RAG runtime
+- the worker-side codex path now tries that mediation proxy for any repository-like prepared clone
+  by default, so repo-aware augmentation no longer depends on switching execution methods away from
+  `codex`; explicit `repo_rag_cli` remains available when a caller wants repo-RAG answers without
+  Codex edits
 - DSPy runtime answering is implemented and exposed through `make ask-dspy` after the same
   lookup-first narrowing pass
 - DSPy compile-save-reload is implemented and exposed through `make dspy-train`
