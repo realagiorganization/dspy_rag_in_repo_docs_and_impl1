@@ -103,6 +103,7 @@ the Rust wrapper.
 | Retrieval evaluation | `make retrieval-eval` | Measure retrieval quality with pass rate, recall, precision, reciprocal rank, per-tag breakdowns, a top-k sweep, and enforced minimum pass/recall thresholds. The underlying CLI emits JSON with shared command metadata for worker-side consumption. |
 | MCP discovery | `make discover-mcp` | Inspect MCP-related repository artifacts. |
 | MCP server | `make serve-mcp` | Expose a bounded stdio MCP server for short calls only: lightweight baseline ask, bundle status, DSPy artifact listing, and queued trace publish. Heavy DSPy training and full retrieval evaluation intentionally stay on direct CLI surfaces. |
+| Codex proxy | `make serve-codex-proxy` | Expose a local Responses-compatible mediation proxy for downstream Codex CLI workers. The proxy attempts `RAG + DSPy` together first, falls back only on the failed layer, enforces a bounded token budget for the injected developer block, caches mediation results on disk, suppresses low-signal injections, and finally passes requests through unchanged instead of blocking Codex. |
 | Smoke test | `make smoke-test` | Check answer generation, MCP discovery, and Azure manifest output together. |
 | Azure OpenAI probe | `make azure-openai-probe` | Validate the Azure OpenAI env contract and run a minimal live chat-completions round trip. |
 | Azure Inference probe | `make azure-inference-probe` | Validate and normalize the Azure AI Inference endpoint, then run a minimal live round trip. |

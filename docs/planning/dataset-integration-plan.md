@@ -152,6 +152,13 @@ Current implementation note:
   `repo-rag overlay-init` when no explicit overlay is supplied, persists `repo_rag_*.json`
   artifacts plus compatibility `codex_response.txt`, and exports a normalized trace through
   `repo-rag trace-export`.
+- The worker-side default `codex` path now no longer switches execution methods to get repo-RAG
+  help. Instead it launches a local `repo-rag serve-codex-proxy`, rewrites Codex Azure config to
+  target that local Responses-compatible endpoint, and lets the proxy inject `RAG + DSPy`
+  mediation into the live Codex request with fallback to heuristics or direct pass-through when the
+  mediation layers are unavailable. That proxy path is now also token-budgeted, source-pruned,
+  low-signal-aware, and backed by a filesystem cache so the default `codex` loop does not pay for
+  unbounded repeated prompt inflation.
 - Both the local executor and the worker path now also support a first-pass bundle/trace lifecycle:
   they can resolve a stable bundle version from the global bundle store through
   `repo-rag bundle-inspect --channel stable`, fetch the actual DSPy program through
@@ -179,10 +186,10 @@ Current implementation note:
   `trainer-cycle` and `trainer-service` can invoke the same candidate-to-bundle recompilation path
   after queue drain, so imported worker traces now have a concrete route into generated DSPy
   compile inputs under `artifacts/trainer/generated-training.yaml`.
-- Both downstream runtime paths now also auto-detect repo-RAG-capable target repositories when the
-  caller would otherwise fall back to the default `codex` execution method, so prepared clones of
-  this repository and similar native repos no longer need a manual backend override just to use the
-  repo-RAG path.
+- The worker-side `codex` path now attempts that mediation proxy for any repository-like prepared
+  clone by default, so repo-aware augmentation no longer depends on replacing `codex` with an
+  explicit `repo_rag_cli` backend. The local compatibility executor still keeps explicit
+  `repo_rag_cli` auto-detection because it does not run the full worker-side Codex path.
 - Remaining AKS follow-up work is now about the background trainer/publisher service and
   promotion-policy rollout rather than about basic backend availability.
 

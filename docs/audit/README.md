@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-04-29-global-blob-queue-trainer-migration.md`
+- `2026-04-30-codex-proxy-mediation-layer.md`
 
 ## Usage
 

@@ -132,6 +132,7 @@ def test_utility_summary_mentions_core_surfaces() -> None:
     assert "ask-live" in summary
     assert "discover-mcp" in summary
     assert "serve-mcp" in summary
+    assert "serve-codex-proxy" in summary
     assert "dspy-train" in summary
     assert "dspy-artifacts" in summary
     assert "bundle-inspect" in summary
