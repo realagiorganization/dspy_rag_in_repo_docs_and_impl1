@@ -30,13 +30,14 @@ Current first-pass contract:
 - Retrieval regression call: `uv run repo-rag retrieval-eval --root <repo_path> --output json`
 - Artifact inspection call: `uv run repo-rag dspy-artifacts --root <repo_path> --output json`
 - Bundle inspection call: `uv run repo-rag bundle-inspect --root <repo_path> --channel stable --output json`
+- Bundle fetch call: `uv run repo-rag bundle-fetch --root <repo_path> --channel stable --output json`
 - Bundle publish call: `uv run repo-rag bundle-publish --root <trainer_repo> --run-name <bundle_run> --output json`
 - Bundle promote call: `uv run repo-rag bundle-promote --root <trainer_repo> --channel stable --run-name <bundle_run> --output json`
 - Bundle rollback call: `uv run repo-rag bundle-rollback --root <trainer_repo> --channel stable --output json`
 - Local overlay init call: `uv run repo-rag overlay-init --root <repo_path> --output json`
 - Post-run trace export call: `uv run repo-rag trace-export --root <repo_path> --payload-path <ask-output.json> --output json`
 - Trainer-side trace ingest call: `uv run repo-rag trace-import --root <trainer_repo> --trace-path <worker-trace.json> --outcome-path <worker-outcome.json> --output json`
-- Trainer-side trace queue call: `uv run repo-rag trace-enqueue --root <trainer_repo> --trace-path <worker-trace.json> --queue-name dataset --outcome-path <worker-outcome.json> --output json`
+- Trainer-side trace queue call: `uv run repo-rag trace-enqueue --root <runtime_root> --trace-path <worker-trace.json> --queue-name dataset --outcome-path <worker-outcome.json> --output json`
 - Trainer-side queue drain call: `uv run repo-rag trace-drain --root <trainer_repo> --queue-name dataset --output json`
 - Trainer-side candidate-to-bundle recompile call:
   `uv run repo-rag trainer-recompile --root <trainer_repo> --run-name <bundle-run> --output json`
@@ -107,10 +108,13 @@ Current artifact-lifecycle additions:
 - `trace-export` materializes a normalized trace record under `artifacts/traces/`
 - `trace-import` ingests a normalized trace record plus optional worker outcome metadata under
   `artifacts/traces/imported/`
-- `trace-enqueue` stages a normalized trace record plus optional worker outcome metadata under
-  `artifacts/traces/queued/<queue>/`
-- `trace-drain` consumes queued trainer-side handoff items and writes imported records under
-  `artifacts/traces/imported/`
+- `bundle-fetch` downloads one promoted or explicitly versioned bundle into
+  `artifacts/dspy/remote/<bundle_version>/`
+- `trace-enqueue` stages a normalized trace record plus optional worker outcome metadata in the
+  global Azure Blob + Queue transport when storage credentials are configured, and only falls back
+  to `artifacts/traces/queued/<queue>/` in local single-repository mode
+- `trace-drain` consumes queued trainer-side handoff items from Azure Queue or the local fallback
+  queue and writes imported records under `artifacts/traces/imported/`
 
 Current error contract:
 
@@ -149,19 +153,20 @@ Current implementation note:
   artifacts plus compatibility `codex_response.txt`, and exports a normalized trace through
   `repo-rag trace-export`.
 - Both the local executor and the worker path now also support a first-pass bundle/trace lifecycle:
-  they can resolve a stable bundle version from a trainer repository through
-  `repo-rag bundle-inspect --channel stable` and then either stage the exported trace into a
-  trainer-side queue through `repo-rag trace-enqueue` or, when explicitly requested, import it
-  directly through `repo-rag trace-import`, with warnings instead of hard failures when those
-  sidecar steps are unavailable.
+  they can resolve a stable bundle version from the global bundle store through
+  `repo-rag bundle-inspect --channel stable`, fetch the actual DSPy program through
+  `repo-rag bundle-fetch`, and then stage the exported trace into the global Azure Blob + Queue
+  transport through `repo-rag trace-enqueue` or, when explicitly requested, import it directly
+  through `repo-rag trace-import`, with warnings instead of hard failures when those sidecar steps
+  are unavailable.
 - Both downstream runtime paths now also persist `repo_rag_outcome.json` and pass it to
   `repo-rag trace-import --outcome-path ...` or `repo-rag trace-enqueue --outcome-path ...`, so
   trainer-side imported or queued trace records now carry accepted/candidate/rejected execution
   outcome metadata instead of only raw retrieval traces.
 - Both downstream runtime paths now default to `DATASET_REPO_RAG_TRACE_HANDOFF_MODE=queue`
-  semantics when a trainer root is available, persist `repo_rag_trace_enqueue.json` beside the
-  other worker artifacts, and keep direct `trace-import` available as an explicit compatibility
-  mode via `DATASET_REPO_RAG_TRACE_HANDOFF_MODE=import`.
+  semantics when either a trainer root or global Azure Blob + Queue storage is available, persist
+  `repo_rag_trace_enqueue.json` beside the other worker artifacts, and keep direct `trace-import`
+  available as an explicit compatibility mode via `DATASET_REPO_RAG_TRACE_HANDOFF_MODE=import`.
 - The trainer repository now also exposes `repo-rag trainer-cycle`, which wraps queue drain,
   retrieval gating, and optional bundle publish/promotion in one background-compatible pass so the
   next iteration can schedule it as a CronJob/systemd timer before introducing a fuller trainer
@@ -205,7 +210,8 @@ Current implementation note:
 - For the `dataset` path the intended queue example is `TRACE_QUEUE_NAME=dataset`; the runtime
   surface stays generic, but the documented manifests now show that queue explicitly.
 - Those manifests assume one shared repo-RAG runtime image, a PVC-backed `/workspace/repo-rag/artifacts`
-  mount, and separate worker vs. trainer roles rather than Docker-in-Docker.
+  trainer-local cache/state mount, global Azure Blob + Queue storage for traces/bundles, and
+  separate worker vs. trainer roles rather than Docker-in-Docker.
 - The current central inference choice is now explicit: keep inference external first through Azure
   OpenAI or Azure AI Inference, reuse that same provider contract across workers and trainer-side
   recompilation, and defer any shared internal model-serving tier until economics or compliance

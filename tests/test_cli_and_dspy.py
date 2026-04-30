@@ -822,6 +822,7 @@ def test_cli_main_bundle_inspect_command(
         root: Path,
         *,
         run_name: str | None = None,
+        bundle_version: str | None = None,
         channel: str | None = None,
     ) -> str:
         return json.dumps(
@@ -837,7 +838,7 @@ def test_cli_main_bundle_inspect_command(
                 },
                 "bundle_found": True,
                 "channel": channel,
-                "bundle_version": run_name or "latest",
+                "bundle_version": bundle_version or run_name or "latest",
             }
         )
 
@@ -850,6 +851,7 @@ def test_cli_main_bundle_inspect_command(
                 "command": "bundle-inspect",
                 "root": str(tmp_path),
                 "run_name": "sample",
+                "bundle_version": None,
                 "channel": None,
             },
         )()
@@ -861,6 +863,56 @@ def test_cli_main_bundle_inspect_command(
     output = capsys.readouterr().out
     assert '"command": "bundle-inspect"' in output
     assert '"bundle_version": "sample"' in output
+
+
+def test_cli_main_bundle_fetch_command(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    def fake_run_bundle_fetch(
+        root: Path,
+        *,
+        bundle_version: str | None = None,
+        channel: str | None = None,
+    ) -> str:
+        return json.dumps(
+            {
+                "command": "bundle-fetch",
+                "command_status": "success",
+                "root": str(root),
+                "warnings": [],
+                "artifact_metadata": {
+                    "input_paths": [],
+                    "generated_paths": ["artifacts/dspy/remote/stable-run"],
+                    "related_paths": [],
+                },
+                "bundle_found": True,
+                "bundle_version": bundle_version or "stable-run",
+                "requested_channel": channel,
+                "program_path": "artifacts/dspy/remote/stable-run/program.json",
+            }
+        )
+
+    def fake_parse_args(self: object) -> object:
+        del self
+        return type(
+            "Args",
+            (),
+            {
+                "command": "bundle-fetch",
+                "root": str(tmp_path),
+                "bundle_version": None,
+                "channel": "stable",
+            },
+        )()
+
+    monkeypatch.setattr(cli, "run_bundle_fetch", fake_run_bundle_fetch)
+    monkeypatch.setattr(cli.argparse.ArgumentParser, "parse_args", fake_parse_args)
+
+    assert cli.main() == 0
+    output = capsys.readouterr().out
+    assert '"command": "bundle-fetch"' in output
+    assert '"requested_channel": "stable"' in output
+    assert '"program_path": "artifacts/dspy/remote/stable-run/program.json"' in output
 
 
 def test_cli_main_bundle_publish_command(
@@ -1558,21 +1610,24 @@ def test_cli_main_trainer_k8s_manifests_command(
         config_map_name: str,
         secret_name: str,
         pvc_name: str,
+        pvc_storage_class_name: str | None,
+        pvc_size: str,
+        pvc_access_modes: tuple[str, ...],
         image_pull_secret_name: str | None,
         output_dir: Path,
         queue_name: str,
         cycle_schedule: str,
         poll_interval_seconds: float,
-        service_max_idle_cycles: int,
+        service_max_idle_cycles: int | None,
         promote_channel: str | None,
         retrieval_training_path: Path,
         retrieval_top_k: int,
         retrieval_top_k_sweep: str,
         retrieval_mode: str | None,
-        minimum_pass_rate: float,
-        minimum_source_recall: float,
-        minimum_bundle_pass_rate: float,
-        recompile_run_name: str,
+        minimum_pass_rate: float | None,
+        minimum_source_recall: float | None,
+        minimum_bundle_pass_rate: float | None,
+        recompile_run_name: str | None,
         recompile_base_training_path: Path,
     ) -> str:
         return json.dumps(
@@ -1588,6 +1643,9 @@ def test_cli_main_trainer_k8s_manifests_command(
                 },
                 "image": image,
                 "namespace": namespace,
+                "pvc_storage_class_name": pvc_storage_class_name,
+                "pvc_size": pvc_size,
+                "pvc_access_modes": list(pvc_access_modes),
                 "queue_name": queue_name,
                 "cycle_schedule": cycle_schedule,
                 "minimum_bundle_pass_rate": minimum_bundle_pass_rate,
@@ -1610,21 +1668,24 @@ def test_cli_main_trainer_k8s_manifests_command(
                 "config_map_name": "repo-rag-trainer-config",
                 "secret_name": "repo-rag-trainer-secrets",
                 "pvc_name": "repo-rag-trainer-artifacts",
+                "pvc_storage_class": "azurefile-csi",
+                "pvc_size": "10Gi",
+                "pvc_access_modes": "ReadWriteMany",
                 "image_pull_secret": "acr-secret",
                 "output_dir": "artifacts/kubernetes",
                 "queue_name": "dataset",
                 "cycle_schedule": "*/15 * * * *",
                 "poll_interval_seconds": 60.0,
-                "service_max_idle_cycles": 1,
-                "promote_channel": "canary",
+                "service_max_idle_cycles": None,
+                "promote_channel": None,
                 "training_path": "samples/training/repository_training_examples.yaml",
                 "top_k": 4,
                 "top_k_sweep": "1,2,4,8",
                 "retrieval_mode": "idf-rerank",
-                "minimum_pass_rate": 1.0,
-                "minimum_source_recall": 1.0,
-                "minimum_bundle_pass_rate": 1.0,
-                "recompile_run_name": "trainer-auto",
+                "minimum_pass_rate": None,
+                "minimum_source_recall": None,
+                "minimum_bundle_pass_rate": None,
+                "recompile_run_name": None,
                 "recompile_base_training_path": (
                     "samples/training/repository_training_examples.yaml"
                 ),
@@ -1639,8 +1700,9 @@ def test_cli_main_trainer_k8s_manifests_command(
     assert cli.main() == 0
     output = capsys.readouterr().out
     assert '"command": "trainer-k8s-manifests"' in output
+    assert '"pvc_storage_class_name": "azurefile-csi"' in output
     assert '"queue_name": "dataset"' in output
-    assert '"minimum_bundle_pass_rate": 1.0' in output
+    assert '"minimum_bundle_pass_rate": null' in output
 
 
 def test_cli_main_trainer_recompile_command(

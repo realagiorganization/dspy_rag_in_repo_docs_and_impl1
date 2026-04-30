@@ -33,6 +33,9 @@ TRAINER_K8S_SERVICE_ACCOUNT_NAME ?= repo-rag-trainer
 TRAINER_K8S_CONFIG_MAP_NAME ?= repo-rag-trainer-config
 TRAINER_K8S_SECRET_NAME ?= repo-rag-trainer-secrets
 TRAINER_K8S_PVC_NAME ?= repo-rag-trainer-artifacts
+TRAINER_K8S_PVC_STORAGE_CLASS ?= azurefile-csi
+TRAINER_K8S_PVC_SIZE ?= 10Gi
+TRAINER_K8S_PVC_ACCESS_MODES ?= ReadWriteMany
 TRAINER_K8S_OUTPUT_DIR ?= artifacts/kubernetes
 TRAINER_K8S_CYCLE_SCHEDULE ?= */15 * * * *
 TRAINER_CANDIDATES_OUTPUT_PATH ?=
@@ -87,7 +90,7 @@ PYTEST_CACHE_DIR ?= $(HOME)/.cache/repo-rag-lab-pytest
 COVERAGE_DIR ?= $(HOME)/.cache/repo-rag-lab-coverage
 COVERAGE_FILE_PATH ?= $(COVERAGE_DIR)/.coverage
 
-.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask ask-dspy ask-live dspy-train dspy-artifacts bundle-inspect bundle-publish bundle-promote bundle-rollback overlay-init trace-export trace-import trace-enqueue trace-drain trainer-cycle trainer-service trainer-k8s-manifests trainer-candidates trainer-recompile retrieval-eval discover-mcp serve-mcp utility-summary files-sync todo-sync exploratorium-sync exploratorium-build github-pr-gates pages-sync pages-build pages-serve smoke-test azure-openai-probe azure-inference-probe verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook notebook-report bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run rust-lookup-index rust-lookup azure-manifest fmt build publish
+.PHONY: setup sync lock hooks-install hooks-run hooks-run-push ask ask-dspy ask-live dspy-train dspy-artifacts bundle-inspect bundle-fetch bundle-publish bundle-promote bundle-rollback overlay-init trace-export trace-import trace-enqueue trace-drain trainer-cycle trainer-service trainer-k8s-manifests trainer-candidates trainer-recompile retrieval-eval discover-mcp serve-mcp utility-summary files-sync todo-sync exploratorium-sync exploratorium-build github-pr-gates pages-sync pages-build pages-serve smoke-test azure-openai-probe azure-inference-probe verify-surfaces gh-runs gh-watch gh-failed-logs paper-build paper-clean notebook notebook-report bdd compile test coverage coverage-html lint lint-python typecheck complexity quality rust-fmt rust-lint rust-quality rust-cli-build rust-cli-run rust-lookup-index rust-lookup azure-manifest fmt build publish
 
 setup:
 	$(UV) sync --extra azure
@@ -152,6 +155,12 @@ dspy-artifacts: sync
 bundle-inspect: sync
 	$(UV) run repo-rag bundle-inspect --root . \
 		$(if $(strip $(BUNDLE_RUN_NAME)),--run-name "$(BUNDLE_RUN_NAME)",) \
+		$(if $(strip $(BUNDLE_VERSION)),--bundle-version "$(BUNDLE_VERSION)",) \
+		$(if $(strip $(BUNDLE_INSPECT_CHANNEL)),--channel "$(BUNDLE_INSPECT_CHANNEL)",)
+
+bundle-fetch: sync
+	$(UV) run repo-rag bundle-fetch --root . \
+		$(if $(strip $(BUNDLE_VERSION)),--bundle-version "$(BUNDLE_VERSION)",) \
 		$(if $(strip $(BUNDLE_INSPECT_CHANNEL)),--channel "$(BUNDLE_INSPECT_CHANNEL)",)
 
 bundle-publish: sync
@@ -278,6 +287,9 @@ trainer-k8s-manifests: sync
 		--config-map-name "$(TRAINER_K8S_CONFIG_MAP_NAME)" \
 		--secret-name "$(TRAINER_K8S_SECRET_NAME)" \
 		--pvc-name "$(TRAINER_K8S_PVC_NAME)" \
+		--pvc-storage-class "$(TRAINER_K8S_PVC_STORAGE_CLASS)" \
+		--pvc-size "$(TRAINER_K8S_PVC_SIZE)" \
+		--pvc-access-modes "$(TRAINER_K8S_PVC_ACCESS_MODES)" \
 		--output-dir "$(TRAINER_K8S_OUTPUT_DIR)" \
 		--queue-name "$(TRACE_QUEUE_NAME)" \
 		--cycle-schedule "$(TRAINER_K8S_CYCLE_SCHEDULE)" \

@@ -15,6 +15,9 @@ DEFAULT_TRAINER_K8S_SERVICE_ACCOUNT_NAME = "repo-rag-trainer"
 DEFAULT_TRAINER_K8S_CONFIG_MAP_NAME = "repo-rag-trainer-config"
 DEFAULT_TRAINER_K8S_SECRET_NAME = "repo-rag-trainer-secrets"
 DEFAULT_TRAINER_K8S_PVC_NAME = "repo-rag-trainer-artifacts"
+DEFAULT_TRAINER_K8S_PVC_STORAGE_CLASS = "azurefile-csi"
+DEFAULT_TRAINER_K8S_PVC_SIZE = "10Gi"
+DEFAULT_TRAINER_K8S_PVC_ACCESS_MODES = ("ReadWriteMany",)
 DEFAULT_TRAINER_K8S_SERVICE_NAME = "repo-rag-trainer-service"
 DEFAULT_TRAINER_K8S_CYCLE_NAME = "repo-rag-trainer-cycle"
 DEFAULT_TRAINER_K8S_ARTIFACT_MOUNT_PATH = "/workspace/repo-rag/artifacts"
@@ -24,15 +27,15 @@ DEFAULT_TRAINER_K8S_IMAGE_PULL_POLICY = "IfNotPresent"
 DEFAULT_TRAINER_K8S_IMAGE_PULL_SECRET_NAME = "acr-secret"
 DEFAULT_TRAINER_K8S_CYCLE_SCHEDULE = "*/15 * * * *"
 DEFAULT_TRAINER_K8S_QUEUE_NAME = "dataset"
-DEFAULT_TRAINER_K8S_PROMOTE_CHANNEL = "canary"
+DEFAULT_TRAINER_K8S_PROMOTE_CHANNEL: str | None = None
 DEFAULT_TRAINER_K8S_SERVICE_POLL_INTERVAL_SECONDS = 60.0
-DEFAULT_TRAINER_K8S_SERVICE_MAX_IDLE_CYCLES = 1
+DEFAULT_TRAINER_K8S_SERVICE_MAX_IDLE_CYCLES: int | None = None
 DEFAULT_TRAINER_K8S_RETRIEVAL_TOP_K = 4
 DEFAULT_TRAINER_K8S_RETRIEVAL_TOP_K_SWEEP = "1,2,4,8"
-DEFAULT_TRAINER_K8S_MINIMUM_PASS_RATE = 1.0
-DEFAULT_TRAINER_K8S_MINIMUM_SOURCE_RECALL = 1.0
-DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE = 1.0
-DEFAULT_TRAINER_K8S_RECOMPILE_RUN_NAME = "trainer-auto"
+DEFAULT_TRAINER_K8S_MINIMUM_PASS_RATE: float | None = None
+DEFAULT_TRAINER_K8S_MINIMUM_SOURCE_RECALL: float | None = None
+DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE: float | None = None
+DEFAULT_TRAINER_K8S_RECOMPILE_RUN_NAME: str | None = None
 
 
 def _relative_path_text(root: Path, path: Path) -> str:
@@ -57,6 +60,9 @@ class TrainerK8sConfig:
     config_map_name: str = DEFAULT_TRAINER_K8S_CONFIG_MAP_NAME
     secret_name: str = DEFAULT_TRAINER_K8S_SECRET_NAME
     pvc_name: str = DEFAULT_TRAINER_K8S_PVC_NAME
+    pvc_storage_class_name: str | None = DEFAULT_TRAINER_K8S_PVC_STORAGE_CLASS
+    pvc_size: str = DEFAULT_TRAINER_K8S_PVC_SIZE
+    pvc_access_modes: tuple[str, ...] = DEFAULT_TRAINER_K8S_PVC_ACCESS_MODES
     deployment_name: str = DEFAULT_TRAINER_K8S_SERVICE_NAME
     cronjob_name: str = DEFAULT_TRAINER_K8S_CYCLE_NAME
     output_dir: Path = DEFAULT_TRAINER_K8S_OUTPUT_DIR
@@ -67,18 +73,18 @@ class TrainerK8sConfig:
     queue_name: str = DEFAULT_TRAINER_K8S_QUEUE_NAME
     cycle_schedule: str = DEFAULT_TRAINER_K8S_CYCLE_SCHEDULE
     poll_interval_seconds: float = DEFAULT_TRAINER_K8S_SERVICE_POLL_INTERVAL_SECONDS
-    service_max_idle_cycles: int = DEFAULT_TRAINER_K8S_SERVICE_MAX_IDLE_CYCLES
+    service_max_idle_cycles: int | None = DEFAULT_TRAINER_K8S_SERVICE_MAX_IDLE_CYCLES
     promote_channel: str | None = DEFAULT_TRAINER_K8S_PROMOTE_CHANNEL
     retrieval_training_path: str = str(DEFAULT_TRAINING_PATH)
     retrieval_top_k: int = DEFAULT_TRAINER_K8S_RETRIEVAL_TOP_K
     retrieval_top_k_sweep: str = DEFAULT_TRAINER_K8S_RETRIEVAL_TOP_K_SWEEP
     retrieval_mode: str | None = None
-    minimum_pass_rate: float = DEFAULT_TRAINER_K8S_MINIMUM_PASS_RATE
-    minimum_source_recall: float = DEFAULT_TRAINER_K8S_MINIMUM_SOURCE_RECALL
-    minimum_bundle_pass_rate: float = DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE
+    minimum_pass_rate: float | None = DEFAULT_TRAINER_K8S_MINIMUM_PASS_RATE
+    minimum_source_recall: float | None = DEFAULT_TRAINER_K8S_MINIMUM_SOURCE_RECALL
+    minimum_bundle_pass_rate: float | None = DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE
     trace_queue_limit: int | None = None
     trace_keep_queued: bool = False
-    recompile_run_name: str = DEFAULT_TRAINER_K8S_RECOMPILE_RUN_NAME
+    recompile_run_name: str | None = DEFAULT_TRAINER_K8S_RECOMPILE_RUN_NAME
     recompile_base_training_path: str = str(DEFAULT_TRAINING_PATH)
     recompile_optimizer: str = "bootstrapfewshot"
     recompile_top_k: int = 4
@@ -104,15 +110,27 @@ def _config_map_payload(config: TrainerK8sConfig) -> dict[str, object]:
         "TRACE_KEEP_QUEUED": "1" if config.trace_keep_queued else "",
         "TRAINER_PROMOTE_CHANNEL": config.promote_channel or "",
         "TRAINER_SERVICE_POLL_INTERVAL": str(config.poll_interval_seconds),
-        "TRAINER_SERVICE_MAX_IDLE_CYCLES": str(config.service_max_idle_cycles),
+        "TRAINER_SERVICE_MAX_IDLE_CYCLES": (
+            str(config.service_max_idle_cycles) if config.service_max_idle_cycles is not None else ""
+        ),
         "RETRIEVAL_TRAINING_PATH": config.retrieval_training_path,
         "RETRIEVAL_TOP_K": str(config.retrieval_top_k),
         "RETRIEVAL_TOP_K_SWEEP": config.retrieval_top_k_sweep,
         "RETRIEVAL_MODE": config.retrieval_mode or "",
-        "RETRIEVAL_MIN_PASS_RATE": str(config.minimum_pass_rate),
-        "RETRIEVAL_MIN_SOURCE_RECALL": str(config.minimum_source_recall),
-        "TRAINER_MIN_BUNDLE_PASS_RATE": str(config.minimum_bundle_pass_rate),
-        "TRAINER_RECOMPILE_RUN_NAME": config.recompile_run_name,
+        "RETRIEVAL_MIN_PASS_RATE": (
+            str(config.minimum_pass_rate) if config.minimum_pass_rate is not None else ""
+        ),
+        "RETRIEVAL_MIN_SOURCE_RECALL": (
+            str(config.minimum_source_recall)
+            if config.minimum_source_recall is not None
+            else ""
+        ),
+        "TRAINER_MIN_BUNDLE_PASS_RATE": (
+            str(config.minimum_bundle_pass_rate)
+            if config.minimum_bundle_pass_rate is not None
+            else ""
+        ),
+        "TRAINER_RECOMPILE_RUN_NAME": config.recompile_run_name or "",
         "TRAINER_RECOMPILE_BASE_TRAINING_PATH": config.recompile_base_training_path,
         "TRAINER_RECOMPILE_OPTIMIZER": config.recompile_optimizer,
         "TRAINER_RECOMPILE_TOP_K": str(config.recompile_top_k),
@@ -152,6 +170,12 @@ def _secret_example_payload(config: TrainerK8sConfig) -> dict[str, object]:
             "AZURE_OPENAI_ENDPOINT": "https://<resource>.openai.azure.com",
             "AZURE_OPENAI_DEPLOYMENT_NAME": "<deployment-name>",
             "AZURE_OPENAI_API_VERSION": "<api-version>",
+            "AZURE_OPENAI_MODEL_NAME": "<model-name>",
+            "AZURE_STORAGE_ACCOUNT": "<storage-account>",
+            "AZURE_STORAGE_KEY": "<storage-key>",
+            "DATASET_REPO_RAG_TRACE_CONTAINER": "repo-rag-training-traces",
+            "DATASET_REPO_RAG_BUNDLE_CONTAINER": "repo-rag-bundles",
+            "DATASET_REPO_RAG_TRACE_QUEUE_NAME": config.queue_name,
         },
     }
 
@@ -168,6 +192,26 @@ def _service_account_payload(config: TrainerK8sConfig) -> dict[str, object]:
     }
 
 
+def _pvc_payload(config: TrainerK8sConfig) -> dict[str, object]:
+    spec: dict[str, object] = {
+        "accessModes": list(config.pvc_access_modes),
+        "resources": {"requests": {"storage": config.pvc_size}},
+    }
+    pvc_spec: dict[str, object] = {
+        "apiVersion": "v1",
+        "kind": "PersistentVolumeClaim",
+        "metadata": {
+            "name": config.pvc_name,
+            "namespace": config.namespace,
+            "labels": _labels(config, "artifacts"),
+        },
+        "spec": spec,
+    }
+    if config.pvc_storage_class_name:
+        spec["storageClassName"] = config.pvc_storage_class_name
+    return pvc_spec
+
+
 def _trainer_command(config: TrainerK8sConfig, *, role: str) -> list[str]:
     command = [
         "repo-rag",
@@ -182,14 +226,6 @@ def _trainer_command(config: TrainerK8sConfig, *, role: str) -> list[str]:
         str(config.retrieval_top_k),
         "--top-k-sweep",
         config.retrieval_top_k_sweep,
-        "--minimum-pass-rate",
-        str(config.minimum_pass_rate),
-        "--minimum-source-recall",
-        str(config.minimum_source_recall),
-        "--minimum-bundle-pass-rate",
-        str(config.minimum_bundle_pass_rate),
-        "--recompile-run-name",
-        config.recompile_run_name,
         "--recompile-base-training-path",
         config.recompile_base_training_path,
         "--recompile-optimizer",
@@ -211,6 +247,14 @@ def _trainer_command(config: TrainerK8sConfig, *, role: str) -> list[str]:
         command.extend(["--limit", str(config.trace_queue_limit)])
     if config.trace_keep_queued:
         command.append("--keep-queued")
+    if config.minimum_pass_rate is not None:
+        command.extend(["--minimum-pass-rate", str(config.minimum_pass_rate)])
+    if config.minimum_source_recall is not None:
+        command.extend(["--minimum-source-recall", str(config.minimum_source_recall)])
+    if config.minimum_bundle_pass_rate is not None:
+        command.extend(["--minimum-bundle-pass-rate", str(config.minimum_bundle_pass_rate)])
+    if config.recompile_run_name:
+        command.extend(["--recompile-run-name", config.recompile_run_name])
     if config.promote_channel:
         command.extend(["--promote-channel", config.promote_channel])
     if config.retrieval_mode:
@@ -218,14 +262,9 @@ def _trainer_command(config: TrainerK8sConfig, *, role: str) -> list[str]:
     if config.recompile_mipro_num_trials is not None:
         command.extend(["--recompile-mipro-num-trials", str(config.recompile_mipro_num_trials)])
     if role == "service":
-        command.extend(
-            [
-                "--poll-interval-seconds",
-                str(config.poll_interval_seconds),
-                "--max-idle-cycles",
-                str(config.service_max_idle_cycles),
-            ]
-        )
+        command.extend(["--poll-interval-seconds", str(config.poll_interval_seconds)])
+        if config.service_max_idle_cycles is not None:
+            command.extend(["--max-idle-cycles", str(config.service_max_idle_cycles)])
     return command
 
 
@@ -335,12 +374,14 @@ def write_trainer_k8s_manifests(root: Path, *, config: TrainerK8sConfig) -> dict
     service_account_path = output_dir / "trainer-serviceaccount.yaml"
     config_map_path = output_dir / "trainer-configmap.yaml"
     secret_example_path = output_dir / "trainer-secret.example.yaml"
+    pvc_path = output_dir / "trainer-artifacts.pvc.yaml"
     deployment_path = output_dir / "trainer-service.deployment.yaml"
     cronjob_path = output_dir / "trainer-cycle.cronjob.yaml"
 
     _write_yaml_document(service_account_path, _service_account_payload(config))
     _write_yaml_document(config_map_path, _config_map_payload(config))
     _write_yaml_document(secret_example_path, _secret_example_payload(config))
+    _write_yaml_document(pvc_path, _pvc_payload(config))
     _write_yaml_document(deployment_path, _deployment_payload(config))
     _write_yaml_document(cronjob_path, _cronjob_payload(config))
 
@@ -351,6 +392,9 @@ def write_trainer_k8s_manifests(root: Path, *, config: TrainerK8sConfig) -> dict
         "config_map_name": config.config_map_name,
         "secret_name": config.secret_name,
         "pvc_name": config.pvc_name,
+        "pvc_storage_class_name": config.pvc_storage_class_name,
+        "pvc_size": config.pvc_size,
+        "pvc_access_modes": list(config.pvc_access_modes),
         "image_pull_secret_name": config.image_pull_secret_name,
         "artifact_mount_path": config.artifact_mount_path,
         "repo_root": config.repo_root,
@@ -363,6 +407,7 @@ def write_trainer_k8s_manifests(root: Path, *, config: TrainerK8sConfig) -> dict
             _relative_path_text(resolved_root, service_account_path),
             _relative_path_text(resolved_root, config_map_path),
             _relative_path_text(resolved_root, secret_example_path),
+            _relative_path_text(resolved_root, pvc_path),
             _relative_path_text(resolved_root, deployment_path),
             _relative_path_text(resolved_root, cronjob_path),
         ],

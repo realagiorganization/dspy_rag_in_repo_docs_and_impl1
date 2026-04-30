@@ -49,6 +49,9 @@ notebooks stay readable, testable, and aligned with CLI and automation entrypoin
   bundle version and record channel history under `artifacts/dspy/channels/`.
 - `repo-rag bundle-rollback`: move one persisted bundle channel back to an earlier published DSPy
   bundle version without deleting the published record history.
+- `repo-rag bundle-fetch`: download one promoted or explicitly versioned bundle from the global
+  Azure Blob bundle store into `artifacts/dspy/remote/` so workers can run DSPy against a
+  globally published program.
 - `repo-rag overlay-init`: create or refresh a worker-local overlay manifest under
   `artifacts/overlays/` so downstream workers can record retrieval-mode and trace-dir state before
   answering.
@@ -58,11 +61,13 @@ notebooks stay readable, testable, and aligned with CLI and automation entrypoin
   `artifacts/traces/imported/` for later optimization or trainer-side aggregation; optional
   outcome metadata can be attached during import so trainer-side ingestion sees both the trace and
   the worker outcome in one record.
-- `repo-rag trace-enqueue`: stage that same trace record, plus optional outcome metadata, under
-  `artifacts/traces/queued/<queue>/` so a trainer loop can pick it up later without forcing a
+- `repo-rag trace-enqueue`: stage that same trace record, plus optional outcome metadata, either
+  into the global Azure Blob + Queue transport or, when storage is not configured, into
+  `artifacts/traces/queued/<queue>/`, so a trainer loop can pick it up later without forcing a
   synchronous import inside the worker hot path.
-- `repo-rag trace-drain`: consume queued trainer-side handoff items and write the normalized
-  imported trace records under `artifacts/traces/imported/`.
+- `repo-rag trace-drain`: consume queued trainer-side handoff items from Azure Queue or the local
+  filesystem queue and write the normalized imported trace records under
+  `artifacts/traces/imported/`.
 - `repo-rag trainer-candidates`: convert imported trace records into cumulative trainer-side YAML
   candidate examples plus a JSON summary under `artifacts/trainer/`.
 - `repo-rag trainer-recompile`: merge the base YAML training set with those cumulative
@@ -83,7 +88,8 @@ notebooks stay readable, testable, and aligned with CLI and automation entrypoin
   records how many cycles were blocked by trainer-side bundle benchmark gates.
 - `repo-rag trainer-k8s-manifests`: materialize AKS/Kubernetes manifests for the trainer-side
   Deployment and CronJob roles under `artifacts/kubernetes/`, including a shared ConfigMap,
-  ServiceAccount, and example Secret for Azure-backed DSPy recompilation.
+  ServiceAccount, and example Secret for Azure-backed DSPy recompilation plus Blob/Queue-backed
+  global training transport.
 - `repo-rag ask-live --question "..."`: run baseline retrieval locally, then synthesize a live
   answer through Azure OpenAI or Azure AI Inference; `--output json` returns the same shared
   machine-readable envelope shape as `ask`.
