@@ -126,6 +126,7 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-04-29-trainer-k8s-deployment-surface.md` | docs | markdown | 131 | 6040 | Repository audit note for 2026 04 29 trainer k8s deployment surface |
 | `docs/audit/2026-04-29-trainer-recompile-from-candidates.md` | docs | markdown | 135 | 6238 | Repository audit note for 2026 04 29 trainer recompile from candidates |
 | `docs/audit/2026-04-29-trainer-service-loop.md` | docs | markdown | 133 | 6185 | Repository audit note for 2026 04 29 trainer service loop |
+| `docs/audit/2026-04-30-codex-proxy-mediation-layer.md` | docs | markdown | 95 | 5279 | Repository audit note for 2026 04 30 codex proxy mediation layer |
 | `docs/audit/README.md` | docs | markdown | 14 | 412 | Repository audit note for README |
 | `docs/guides/hushwheel-fixture-rag-guide.md` | docs | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
 | `docs/operations/azure-deployment.md` | docs | markdown | 111 | 4901 | Azure Deployment Notes |
@@ -225,6 +226,7 @@ This inventory is generated from the current Git index.
 | `src/repo_rag_lab/azure_runtime.py` | src | python | 477 | 16407 | Azure runtime normalization, live probes, and cloud-completion helpers. |
 | `src/repo_rag_lab/benchmarks.py` | src | python | 478 | 16315 | Retrieval benchmark helpers for notebook assertions and logging. |
 | `src/repo_rag_lab/cli.py` | src | python | 1306 | 56897 | Command-line entrypoints for the shared repository RAG workflows. |
+| `src/repo_rag_lab/codex_proxy.py` | src | python | 928 | 32679 | Local streaming proxy that injects repo-RAG + DSPy mediation for Codex. |
 | `src/repo_rag_lab/corpus.py` | src | python | 107 | 2768 | Repository file loading helpers for the baseline text corpus. |
 | `src/repo_rag_lab/dspy_training.py` | src | python | 835 | 30024 | DSPy training and artifact helpers for repository-grounded RAG. |
 | `src/repo_rag_lab/dspy_workflow.py` | src | python | 163 | 5888 | DSPy-backed runtime wrappers around the repository retrieval workflow. |
@@ -291,6 +293,7 @@ This inventory is generated from the current Git index.
 | `tests/test_azure_runtime.py` | tests | python | 208 | 7540 | Python module for test azure runtime |
 | `tests/test_benchmarks_and_notebook_scaffolding.py` | tests | python | 271 | 11605 | Python module for test benchmarks and notebook scaffolding |
 | `tests/test_cli_and_dspy.py` | tests | python | 1860 | 67680 | Python module for test cli and dspy |
+| `tests/test_codex_proxy.py` | tests | python | 307 | 10715 | Python module for test codex proxy |
 | `tests/test_dspy_training.py` | tests | python | 513 | 18513 | Python module for test dspy training |
 | `tests/test_exploratorium_translation.py` | tests | python | 138 | 5239 | Python module for test exploratorium translation |
 | `tests/test_file_summaries.py` | tests | python | 230 | 9110 | Python module for test file summaries |
