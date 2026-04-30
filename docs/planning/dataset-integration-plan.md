@@ -159,21 +159,27 @@ Current implementation note:
   mediation layers are unavailable. That proxy path is now also token-budgeted, source-pruned,
   low-signal-aware, and backed by a filesystem cache so the default `codex` loop does not pay for
   unbounded repeated prompt inflation.
-- Both the local executor and the worker path now also support a first-pass bundle/trace lifecycle:
-  they can resolve a stable bundle version from the global bundle store through
-  `repo-rag bundle-inspect --channel stable`, fetch the actual DSPy program through
+- The explicit local executor and worker `repo_rag_cli` / `dspy` paths now support a first-pass
+  bundle/trace lifecycle: they can resolve a stable bundle version from the global bundle store
+  through `repo-rag bundle-inspect --channel stable`, fetch the actual DSPy program through
   `repo-rag bundle-fetch`, and then stage the exported trace into the global Azure Blob + Queue
   transport through `repo-rag trace-enqueue` or, when explicitly requested, import it directly
   through `repo-rag trace-import`, with warnings instead of hard failures when those sidecar steps
   are unavailable.
-- Both downstream runtime paths now also persist `repo_rag_outcome.json` and pass it to
-  `repo-rag trace-import --outcome-path ...` or `repo-rag trace-enqueue --outcome-path ...`, so
-  trainer-side imported or queued trace records now carry accepted/candidate/rejected execution
-  outcome metadata instead of only raw retrieval traces.
-- Both downstream runtime paths now default to `DATASET_REPO_RAG_TRACE_HANDOFF_MODE=queue`
-  semantics when either a trainer root or global Azure Blob + Queue storage is available, persist
-  `repo_rag_trace_enqueue.json` beside the other worker artifacts, and keep direct `trace-import`
-  available as an explicit compatibility mode via `DATASET_REPO_RAG_TRACE_HANDOFF_MODE=import`.
+- Those explicit `repo_rag_cli` / `dspy` runtime paths now also persist `repo_rag_outcome.json`
+  and pass it to `repo-rag trace-import --outcome-path ...` or
+  `repo-rag trace-enqueue --outcome-path ...`, so trainer-side imported or queued trace records now
+  carry accepted/candidate/rejected execution outcome metadata instead of only raw retrieval traces.
+- Those explicit `repo_rag_cli` / `dspy` runtime paths now default to
+  `DATASET_REPO_RAG_TRACE_HANDOFF_MODE=queue` semantics when either a trainer root or global Azure
+  Blob + Queue storage is available, persist `repo_rag_trace_enqueue.json` beside the other worker
+  artifacts, and keep direct `trace-import` available as an explicit compatibility mode via
+  `DATASET_REPO_RAG_TRACE_HANDOFF_MODE=import`.
+- The default worker `codex` proxy path now also closes the trainer-handoff gap: it can resolve
+  bundle provenance for mediation, persist `repo_rag_codex_proxy_last.json`, export a normalized
+  repo-rag trace after `codex exec`, and hand that trace off through `trace-enqueue` or
+  `trace-import` with the same outcome metadata contract used by the explicit repo-rag runtime
+  paths.
 - The trainer repository now also exposes `repo-rag trainer-cycle`, which wraps queue drain,
   retrieval gating, and optional bundle publish/promotion in one background-compatible pass so the
   next iteration can schedule it as a CronJob/systemd timer before introducing a fuller trainer

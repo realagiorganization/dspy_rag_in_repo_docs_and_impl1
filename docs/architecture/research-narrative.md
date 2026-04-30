@@ -229,23 +229,25 @@ At the time of this document:
   instead of replacing Codex with a second backend; that mediation path now classifies trivial vs
   deep tasks, enforces a bounded developer-block token budget, caches prior mediation results on
   disk, and suppresses low-signal injections instead of always inflating the Codex prompt
-- the container worker path now also auto-initializes a local overlay through
-  `repo-rag overlay-init` when no explicit overlay is supplied and exports a normalized worker
-  trace through `repo-rag trace-export`; both downstream paths now also persist worker outcome
-  manifests and can stage them into a trainer-side queue through `repo-rag trace-enqueue`, with
-  Azure Blob + Queue now acting as the primary global transport instead of a namespace-local PVC
+- the explicit downstream `repo_rag_cli` / `dspy` worker path now auto-initializes a local overlay
+  through `repo-rag overlay-init` when no explicit overlay is supplied, exports a normalized worker
+  trace through `repo-rag trace-export`, persists worker outcome manifests, and can stage those
+  records into a trainer-side queue through `repo-rag trace-enqueue`, with Azure Blob + Queue now
+  acting as the primary global transport instead of a namespace-local PVC
 - that Codex mediation proxy now tries `RAG + DSPy` together first, degrades only the failed layer
   to heuristics when DSPy or retrieval is weak, and finally falls back to direct pass-through so
   an untrained bundle cannot block task execution
-- both downstream runtime paths can now also resolve a stable bundle version from a global bundle
-  store through `repo-rag bundle-inspect --channel stable`, fetch the actual program through
-  `repo-rag bundle-fetch`, and stage exported traces through `repo-rag trace-enqueue`; those
-  records can include accepted/candidate outcome metadata, giving the global trainer a
-  cross-namespace source of DSPy recompilation inputs
+- the explicit downstream `repo_rag_cli` / `dspy` runtime path can now resolve a stable bundle
+  version from a global bundle store through `repo-rag bundle-inspect --channel stable`, fetch the
+  actual program through `repo-rag bundle-fetch`, and stage exported traces through
+  `repo-rag trace-enqueue`; those records can include accepted/candidate outcome metadata, giving
+  the global trainer a cross-namespace source of DSPy recompilation inputs
 - the worker-side codex path now tries that mediation proxy for any repository-like prepared clone
   by default, so repo-aware augmentation no longer depends on switching execution methods away from
   `codex`; explicit `repo_rag_cli` remains available when a caller wants repo-RAG answers without
-  Codex edits
+  Codex edits, and the current Codex proxy path now reports mediation status plus bundle
+  provenance, exports normalized repo-rag traces, and hands them off with outcome metadata through
+  the same queue/import trainer surfaces used by the explicit repo-rag runtime path
 - DSPy runtime answering is implemented and exposed through `make ask-dspy` after the same
   lookup-first narrowing pass
 - DSPy compile-save-reload is implemented and exposed through `make dspy-train`
