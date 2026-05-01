@@ -126,8 +126,10 @@ docs/audit/2026-04-30-codex-proxy-mediation-layer.md,docs,markdown,95,5279,Repos
 docs/audit/2026-04-30-codex-proxy-trace-handoff.md,docs,markdown,122,6543,Repository audit note for 2026 04 30 codex proxy trace handoff
 docs/audit/2026-05-01-aks-run-25191504814-project-root-resolution-inspection.md,docs,markdown,133,6002,Repository audit note for 2026 05 01 aks run 25191504814 project root resolution inspection
 docs/audit/2026-05-01-aks-run-25209573387-proxy-runtime-env-inspection.md,docs,markdown,129,5738,Repository audit note for 2026 05 01 aks run 25209573387 proxy runtime env inspection
+docs/audit/2026-05-01-aks-run-25212955759-trace-handoff-secret-gap.md,docs,markdown,121,4594,Repository audit note for 2026 05 01 aks run 25212955759 trace handoff secret gap
 docs/audit/2026-05-01-dataset-azure-responses-api-version-default-fix.md,docs,markdown,133,6700,Repository audit note for 2026 05 01 dataset azure responses api version default fix
 docs/audit/2026-05-01-dataset-azure-runtime-env-propagation-fix.md,docs,markdown,81,4200,Repository audit note for 2026 05 01 dataset azure runtime env propagation fix
+docs/audit/2026-05-01-dataset-trusted-trace-handoff-postprocess-fix.md,docs,markdown,81,3880,Repository audit note for 2026 05 01 dataset trusted trace handoff postprocess fix
 docs/audit/README.md,docs,markdown,14,430,Repository audit note for README
 docs/guides/hushwheel-fixture-rag-guide.md,docs,markdown,138,5169,RAG Guide For The Hushwheel Fixture
 docs/operations/azure-deployment.md,docs,markdown,111,4901,Azure Deployment Notes
