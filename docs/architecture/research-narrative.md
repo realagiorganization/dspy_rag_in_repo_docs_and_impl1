@@ -281,9 +281,15 @@ At the time of this document:
   `make trainer-service`, so the same queue drain, gating, publish, and promotion workflow can
   run continuously while recording trainer-side state/history artifacts under `artifacts/trainer/`;
   the current live AKS trainer deployment now drains the Azure queue, uses
-  `TRAINER_RECOMPILE_RUN_NAME=trainer-auto`, and can remote-publish bundle versions into
-  `repo-rag-bundles`, while still leaving `TRAINER_PROMOTE_CHANNEL` empty so automatic channel
-  promotion stays disabled
+  `TRAINER_RECOMPILE_RUN_NAME=trainer-auto` as a run-family label, mints a unique timestamped
+  bundle version for each successful recompile, records imported trace paths plus candidate dedupe
+  counters in bundle lineage metadata, and can remote-publish those immutable bundle versions into
+  `repo-rag-bundles`; `stable` / `canary` promotion and rollback therefore point at concrete
+  published versions instead of a mutable `trainer-auto` artifact, while `TRAINER_PROMOTE_CHANNEL`
+  can still stay empty when automatic promotion should remain disabled; the trainer cycle now also
+  restores a durable local trace ledger from Azure `processed/<queue>/...` blobs before
+  materializing candidates, so losing the trainer PVC no longer implies losing the accumulated
+  example set used to build the next DSPy program
 - trainer-side queue drain is now also summarized into first-pass ingestion counters for accepted
   vs. rejected outcomes, execution status, retrieval mode, bundle version, and empty
   source/context cases, so imported traces are no longer only stored but also surfaced as

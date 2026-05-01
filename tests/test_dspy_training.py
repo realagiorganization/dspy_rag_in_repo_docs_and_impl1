@@ -506,25 +506,37 @@ def test_train_repository_program_writes_artifacts(
         training_config=DSPyTrainingConfig(
             training_path=Path("samples/training/sample-training.yaml"),
             run_name="sample run",
+            bundle_version="sample-version-001",
+            run_family="trainer-auto",
+            lineage_metadata={
+                "imported_trace_record_paths": ["artifacts/traces/imported/demo.json"],
+                "new_candidate_count": 1,
+            },
         ),
         lm_config=DSPyLMConfig(model="openai/test-model"),
     )
 
     assert result.run_name == "sample-run"
+    assert result.run_family == "trainer-auto"
     assert (tmp_path / result.program_path).exists()
     metadata_path = tmp_path / result.metadata_path
     assert metadata_path.exists()
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     assert metadata["run_name"] == "sample-run"
+    assert metadata["bundle_version"] == "sample-version-001"
+    assert metadata["run_family"] == "trainer-auto"
+    assert metadata["lineage"]["new_candidate_count"] == 1
     assert metadata["training_example_count"] == 1
     assert metadata["program_path"] == "artifacts/dspy/sample-run/program.json"
-    assert result.bundle_version == "sample-run"
+    assert result.bundle_version == "sample-version-001"
     assert result.bundle_path == "artifacts/dspy/sample-run/bundle.json"
     bundle_path = tmp_path / result.bundle_path
     assert bundle_path.exists()
     bundle = load_bundle_manifest(bundle_path)
     assert bundle["bundle_kind"] == "global"
-    assert bundle["bundle_version"] == "sample-run"
+    assert bundle["bundle_version"] == "sample-version-001"
+    assert bundle["run_family"] == "trainer-auto"
+    assert bundle["lineage"]["new_candidate_count"] == 1
     assert bundle["retrieval_mode"] is None
     assert bundle["program_path"] == "artifacts/dspy/sample-run/program.json"
 

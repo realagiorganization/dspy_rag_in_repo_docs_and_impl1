@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -704,10 +705,25 @@ def test_run_trace_enqueue_and_drain_round_trip(tmp_path: Path) -> None:
     assert processed_item_path.exists()
 
 
+def test_versioned_training_run_name_uses_family_prefix_and_high_resolution_timestamp() -> None:
+    from repo_rag_lab.utilities import _versioned_training_run_name
+
+    resolved = _versioned_training_run_name(
+        "trainer auto",
+        recorded_at=datetime(2026, 5, 1, 17, 0, 0, 123456, tzinfo=UTC),
+    )
+
+    assert resolved == "trainer-auto-20260501T170000123456Z"
+
+
 def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._versioned_training_run_name",
+        lambda run_family, recorded_at=None: f"{run_family}-20260501T170000Z",
+    )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.drain_trace_queue",
         lambda root, queue_name="default", limit=None, keep_queued=False: {
@@ -726,6 +742,19 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
                 }
             ],
             "failures": [],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.restore_processed_trace_records",
+        lambda root, queue_name="default", output_dir=Path("artifacts/trainer/recovered-imported-traces"): {
+            "storage_backend": "azure-blob-queue",
+            "queue_name": queue_name,
+            "processed_count": 1,
+            "restored_count": 1,
+            "failed_count": 0,
+            "trace_paths": ["artifacts/trainer/recovered-imported-traces/demo.json"],
+            "failures": [],
+            "output_dir": str(output_dir),
         },
     )
     monkeypatch.setattr(
@@ -761,8 +790,11 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
         output_path: Path,
         summary_path: Path,
         include_statuses: tuple[str, ...] = ("accepted", "candidate"),
+        seed_existing_output: bool = True,
     ) -> dict[str, object]:
-        del root, trace_paths, output_path, summary_path, include_statuses
+        del root, output_path, summary_path, include_statuses
+        assert trace_paths == [Path("artifacts/trainer/recovered-imported-traces/demo.json")]
+        assert seed_existing_output is False
         return {
             "candidate_count": 1,
             "new_candidate_count": 1,
@@ -775,14 +807,31 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
         fake_materialize_training_candidates,
     )
     monkeypatch.setattr(
+        "repo_rag_lab.utilities._trainer_recompile_payload",
+        lambda *args, **kwargs: {
+            "recompile_status": "compiled",
+            "generated_training": {
+                "output_path": "artifacts/trainer/generated-training.yaml",
+                "summary_path": "artifacts/trainer/generated-training-summary.json",
+            },
+            "training_result": {
+                "run_name": "trainer-auto-20260501T170000Z",
+                "bundle_version": "trainer-auto-20260501T170000Z",
+                "metadata_path": "artifacts/dspy/trainer-auto-20260501T170000Z/metadata.json",
+                "bundle_path": "artifacts/dspy/trainer-auto-20260501T170000Z/bundle.json",
+                "benchmark_summary": {"pass_rate": 1.0},
+            },
+        },
+    )
+    monkeypatch.setattr(
         "repo_rag_lab.utilities.resolve_bundle_manifest",
         lambda root, run_name=None, bundle_version=None: (
-            root / "artifacts" / "dspy" / "demo-run" / "bundle.json",
+            root / "artifacts" / "dspy" / (run_name or "demo-run") / "bundle.json",
             {
                 "run_name": run_name or "demo-run",
                 "bundle_version": bundle_version or run_name or "demo-run",
-                "bundle_path": "artifacts/dspy/demo-run/bundle.json",
-                "metadata_path": "artifacts/dspy/demo-run/metadata.json",
+                "bundle_path": f"artifacts/dspy/{run_name or 'demo-run'}/bundle.json",
+                "metadata_path": f"artifacts/dspy/{run_name or 'demo-run'}/metadata.json",
                 "benchmark_status": "pass",
                 "benchmark_summary": {"pass_rate": 1.0},
             },
@@ -809,7 +858,7 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
         run_trainer_cycle(
             tmp_path,
             queue_name="dataset",
-            run_name="demo-run",
+            recompile_run_name="trainer-auto",
             promote_channel="stable",
         )
     )
@@ -818,8 +867,11 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
     assert payload["command_status"] == "success"
     assert payload["queue_name"] == "dataset"
     assert payload["queue_drain"]["drained_count"] == 1
+    assert payload["durable_trace_recovery"]["restored_count"] == 1
     assert payload["training_candidates"]["candidate_count"] == 1
     assert payload["gate_passed"] is True
+    assert payload["recompile"]["requested_run_name"] == "trainer-auto"
+    assert payload["recompile"]["resolved_run_name"] == "trainer-auto-20260501T170000Z"
     assert payload["publish"]["publish_status"] == "published"
     assert payload["promotion_status"] == "promoted"
     assert payload["promotion"]["channel_name"] == "stable"
@@ -877,6 +929,19 @@ def test_run_trainer_cycle_blocks_promotion_when_gate_fails(
         },
     )
     monkeypatch.setattr(
+        "repo_rag_lab.utilities.restore_processed_trace_records",
+        lambda root, queue_name="default", output_dir=Path("artifacts/trainer/recovered-imported-traces"): {
+            "storage_backend": "azure-blob-queue",
+            "queue_name": queue_name,
+            "processed_count": 0,
+            "restored_count": 0,
+            "failed_count": 0,
+            "trace_paths": [],
+            "failures": [],
+            "output_dir": str(output_dir),
+        },
+    )
+    monkeypatch.setattr(
         "repo_rag_lab.utilities.load_training_examples",
         lambda path: ["example"],
     )
@@ -911,8 +976,9 @@ def test_run_trainer_cycle_blocks_promotion_when_gate_fails(
         output_path: Path,
         summary_path: Path,
         include_statuses: tuple[str, ...] = ("accepted", "candidate"),
+        seed_existing_output: bool = True,
     ) -> dict[str, object]:
-        del root, trace_paths, output_path, summary_path, include_statuses
+        del root, trace_paths, output_path, summary_path, include_statuses, seed_existing_output
         return {
             "candidate_count": 0,
             "new_candidate_count": 0,
@@ -978,6 +1044,19 @@ def test_run_trainer_cycle_blocks_publish_when_bundle_benchmark_gate_fails(
     monkeypatch.setattr(
         "repo_rag_lab.utilities._summarize_imported_trace_records", lambda root, paths: {}
     )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.restore_processed_trace_records",
+        lambda root, queue_name="default", output_dir=Path("artifacts/trainer/recovered-imported-traces"): {
+            "storage_backend": "azure-blob-queue",
+            "queue_name": queue_name,
+            "processed_count": 1,
+            "restored_count": 1,
+            "failed_count": 0,
+            "trace_paths": ["artifacts/trainer/recovered-imported-traces/one.json"],
+            "failures": [],
+            "output_dir": str(output_dir),
+        },
+    )
     monkeypatch.setattr("repo_rag_lab.utilities.load_training_examples", lambda path: ["example"])
     monkeypatch.setattr(
         "repo_rag_lab.utilities.build_retrieval_benchmarks",
@@ -1008,8 +1087,9 @@ def test_run_trainer_cycle_blocks_publish_when_bundle_benchmark_gate_fails(
         output_path: Path,
         summary_path: Path,
         include_statuses: tuple[str, ...] = ("accepted", "candidate"),
+        seed_existing_output: bool = True,
     ) -> dict[str, object]:
-        del root, trace_paths, output_path, summary_path, include_statuses
+        del root, trace_paths, output_path, summary_path, include_statuses, seed_existing_output
         return {
             "candidate_count": 1,
             "new_candidate_count": 1,
@@ -1076,6 +1156,19 @@ def test_run_trainer_cycle_skips_recompile_and_publish_without_new_candidates(
         },
     )
     monkeypatch.setattr(
+        "repo_rag_lab.utilities.restore_processed_trace_records",
+        lambda root, queue_name="default", output_dir=Path("artifacts/trainer/recovered-imported-traces"): {
+            "storage_backend": "azure-blob-queue",
+            "queue_name": queue_name,
+            "processed_count": 0,
+            "restored_count": 0,
+            "failed_count": 0,
+            "trace_paths": [],
+            "failures": [],
+            "output_dir": str(output_dir),
+        },
+    )
+    monkeypatch.setattr(
         "repo_rag_lab.utilities.load_training_examples",
         lambda path: ["example"],
     )
@@ -1103,7 +1196,7 @@ def test_run_trainer_cycle_skips_recompile_and_publish_without_new_candidates(
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.materialize_training_candidates",
-        lambda root, trace_paths, output_path, summary_path, include_statuses=("accepted", "candidate"): {
+        lambda root, trace_paths, output_path, summary_path, include_statuses=("accepted", "candidate"), seed_existing_output=True: {
             "candidate_count": 1,
             "new_candidate_count": 0,
             "output_path": "artifacts/trainer/training-candidates.yaml",
@@ -1146,6 +1239,10 @@ def test_run_trainer_cycle_uploads_remote_bundle_when_publish_succeeds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
+        "repo_rag_lab.utilities._versioned_training_run_name",
+        lambda run_family, recorded_at=None: f"{run_family}-20260501T170100Z",
+    )
+    monkeypatch.setattr(
         "repo_rag_lab.utilities.drain_trace_queue",
         lambda root, queue_name="default", limit=None, keep_queued=False: {
             "queue_name": queue_name,
@@ -1164,6 +1261,19 @@ def test_run_trainer_cycle_uploads_remote_bundle_when_publish_succeeds(
     monkeypatch.setattr(
         "repo_rag_lab.utilities._summarize_imported_trace_records",
         lambda root, paths: {},
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.restore_processed_trace_records",
+        lambda root, queue_name="default", output_dir=Path("artifacts/trainer/recovered-imported-traces"): {
+            "storage_backend": "azure-blob-queue",
+            "queue_name": queue_name,
+            "processed_count": 1,
+            "restored_count": 1,
+            "failed_count": 0,
+            "trace_paths": ["artifacts/trainer/recovered-imported-traces/one.json"],
+            "failures": [],
+            "output_dir": str(output_dir),
+        },
     )
     monkeypatch.setattr("repo_rag_lab.utilities.load_training_examples", lambda path: ["example"])
     monkeypatch.setattr(
@@ -1190,7 +1300,7 @@ def test_run_trainer_cycle_uploads_remote_bundle_when_publish_succeeds(
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.materialize_training_candidates",
-        lambda root, trace_paths, output_path, summary_path, include_statuses=("accepted", "candidate"): {
+        lambda root, trace_paths, output_path, summary_path, include_statuses=("accepted", "candidate"), seed_existing_output=True: {
             "candidate_count": 1,
             "new_candidate_count": 1,
             "output_path": "artifacts/trainer/training-candidates.yaml",
@@ -1206,10 +1316,10 @@ def test_run_trainer_cycle_uploads_remote_bundle_when_publish_succeeds(
                 "summary_path": "artifacts/trainer/generated-training-summary.json",
             },
             "training_result": {
-                "run_name": "trainer-auto",
-                "bundle_version": "trainer-auto",
-                "metadata_path": "artifacts/dspy/trainer-auto/metadata.json",
-                "bundle_path": "artifacts/dspy/trainer-auto/bundle.json",
+                "run_name": "trainer-auto-20260501T170100Z",
+                "bundle_version": "trainer-auto-20260501T170100Z",
+                "metadata_path": "artifacts/dspy/trainer-auto-20260501T170100Z/metadata.json",
+                "bundle_path": "artifacts/dspy/trainer-auto-20260501T170100Z/bundle.json",
                 "benchmark_summary": {"pass_rate": 1.0},
             },
         },
@@ -1218,12 +1328,12 @@ def test_run_trainer_cycle_uploads_remote_bundle_when_publish_succeeds(
     monkeypatch.setattr(
         "repo_rag_lab.utilities.publish_bundle",
         lambda *args, **kwargs: {
-            "bundle_version": "trainer-auto",
-            "run_name": "trainer-auto",
-            "published_bundle_path": "artifacts/dspy/published/trainer-auto.json",
-            "bundle_path": "artifacts/dspy/trainer-auto/bundle.json",
-            "metadata_path": "artifacts/dspy/trainer-auto/metadata.json",
-            "program_path": "artifacts/dspy/trainer-auto/program.json",
+            "bundle_version": "trainer-auto-20260501T170100Z",
+            "run_name": "trainer-auto-20260501T170100Z",
+            "published_bundle_path": "artifacts/dspy/published/trainer-auto-20260501T170100Z.json",
+            "bundle_path": "artifacts/dspy/trainer-auto-20260501T170100Z/bundle.json",
+            "metadata_path": "artifacts/dspy/trainer-auto-20260501T170100Z/metadata.json",
+            "program_path": "artifacts/dspy/trainer-auto-20260501T170100Z/program.json",
             "publish_status": "published",
         },
     )
@@ -1258,10 +1368,10 @@ def test_run_trainer_cycle_uploads_remote_bundle_when_publish_succeeds(
             "storage_backend": "azure-blob",
             "bundle_container": config.bundle_container,
             "remote_bundle_blobs": {
-                "bundle": "versions/trainer-auto/bundle.json",
-                "metadata": "versions/trainer-auto/metadata.json",
-                "program": "versions/trainer-auto/program.json",
-                "published": "versions/trainer-auto/published.json",
+                "bundle": "versions/trainer-auto-20260501T170100Z/bundle.json",
+                "metadata": "versions/trainer-auto-20260501T170100Z/metadata.json",
+                "program": "versions/trainer-auto-20260501T170100Z/program.json",
+                "published": "versions/trainer-auto-20260501T170100Z/published.json",
             },
         }
 
@@ -1281,12 +1391,15 @@ def test_run_trainer_cycle_uploads_remote_bundle_when_publish_succeeds(
     assert payload["command"] == "trainer-cycle"
     assert payload["command_status"] == "success"
     assert payload["publish_requested"] is True
-    assert payload["publish"]["bundle_version"] == "trainer-auto"
+    assert payload["durable_trace_recovery"]["restored_count"] == 1
+    assert payload["recompile"]["requested_run_name"] == "trainer-auto"
+    assert payload["recompile"]["resolved_run_name"] == "trainer-auto-20260501T170100Z"
+    assert payload["publish"]["bundle_version"] == "trainer-auto-20260501T170100Z"
     assert payload["publish"]["remote_publish"]["storage_backend"] == "azure-blob"
     assert upload_calls == [
         {
             "root": str(tmp_path),
-            "bundle_version": "trainer-auto",
+            "bundle_version": "trainer-auto-20260501T170100Z",
             "bundle_container": "repo-rag-bundles",
         }
     ]

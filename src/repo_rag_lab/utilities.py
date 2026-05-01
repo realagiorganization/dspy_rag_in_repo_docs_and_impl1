@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -38,6 +39,7 @@ from .retrieval import RetrievalMode
 from .runtime_artifacts import (
     DEFAULT_TRAINER_GENERATED_TRAINING_PATH,
     DEFAULT_TRAINER_GENERATED_TRAINING_SUMMARY_PATH,
+    DEFAULT_TRAINER_RECOVERED_TRACES_DIR,
     DEFAULT_TRAINER_SERVICE_HISTORY_DIR,
     DEFAULT_TRAINER_SERVICE_STATE_PATH,
     DEFAULT_TRAINER_TRAINING_CANDIDATES_PATH,
@@ -58,6 +60,7 @@ from .runtime_artifacts import (
     resolve_azure_artifact_config,
     resolve_bundle_manifest,
     rollback_bundle,
+    restore_processed_trace_records,
     upload_remote_bundle,
     upload_remote_bundle_channel,
     write_trace_record,
@@ -154,6 +157,23 @@ def _write_json_artifact(path: Path, payload: Mapping[str, object]) -> None:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"{json.dumps(dict(payload), indent=2)}\n", encoding="utf-8")
+
+
+def _sanitize_training_run_name(name: str, *, default: str = DEFAULT_DSPY_RUN_NAME) -> str:
+    """Normalize one trainer family/run label into the artifact-safe DSPy naming surface."""
+
+    parts = [part for part in re.split(r"[^A-Za-z0-9._-]+", name.strip()) if part]
+    if parts:
+        return "-".join(parts)
+    return default
+
+
+def _versioned_training_run_name(run_family: str, *, recorded_at: datetime | None = None) -> str:
+    """Return one unique compile/publish identifier under a stable trainer family prefix."""
+
+    safe_family = _sanitize_training_run_name(run_family, default=DEFAULT_DSPY_RUN_NAME)
+    timestamp = (recorded_at or datetime.now(UTC)).strftime("%Y%m%dT%H%M%S%fZ")
+    return f"{safe_family}-{timestamp}"
 
 
 def _summarize_imported_trace_records(
@@ -1251,12 +1271,24 @@ def run_trainer_cycle(
         for item in normalized_queue_items
         if isinstance(item, Mapping) and item.get("imported_trace_record_path")
     ]
-    ingestion_summary = _summarize_imported_trace_records(root, imported_trace_paths)
+    durable_trace_recovery = restore_processed_trace_records(
+        root,
+        queue_name=queue_name,
+        output_dir=DEFAULT_TRAINER_RECOVERED_TRACES_DIR,
+    )
+    recovered_trace_paths = [
+        str(path)
+        for path in durable_trace_recovery.get("trace_paths", [])
+        if isinstance(path, str) and path.strip()
+    ]
+    trainer_trace_paths = recovered_trace_paths or imported_trace_paths
+    ingestion_summary = _summarize_imported_trace_records(root, trainer_trace_paths)
     training_candidates = materialize_training_candidates(
         root,
-        trace_paths=[Path(path) for path in imported_trace_paths],
+        trace_paths=[Path(path) for path in trainer_trace_paths],
         output_path=DEFAULT_TRAINER_TRAINING_CANDIDATES_PATH,
         summary_path=DEFAULT_TRAINER_TRAINING_CANDIDATES_SUMMARY_PATH,
+        seed_existing_output=False,
     )
     new_candidate_count_raw = training_candidates.get("new_candidate_count")
     try:
@@ -1314,10 +1346,27 @@ def run_trainer_cycle(
                 "candidates were imported during this cycle."
             )
         else:
+            resolved_recompile_run_name = _versioned_training_run_name(recompile_run_name)
+            recompile_lineage = {
+                "run_family": recompile_run_name,
+                "resolved_run_name": resolved_recompile_run_name,
+                "imported_trace_record_paths": trainer_trace_paths,
+                "imported_trace_count": len(trainer_trace_paths),
+                "durable_trace_recovery": durable_trace_recovery,
+                "training_candidates_path": training_candidates.get("output_path"),
+                "training_candidates_summary_path": training_candidates.get("summary_path"),
+                "candidate_count": training_candidates.get("candidate_count"),
+                "new_candidate_count": new_candidate_count,
+                "duplicate_count": training_candidates.get("duplicate_count"),
+                "replaced_count": training_candidates.get("replaced_count"),
+            }
             try:
                 recompile_payload = _trainer_recompile_payload(
                     root,
-                    run_name=recompile_run_name,
+                    run_name=resolved_recompile_run_name,
+                    bundle_version=resolved_recompile_run_name,
+                    run_family=recompile_run_name,
+                    lineage_metadata=recompile_lineage,
                     base_training_path=recompile_base_training_path,
                     candidates_path=recompile_candidates_path,
                     generated_training_path=recompile_generated_training_path,
@@ -1333,6 +1382,9 @@ def run_trainer_cycle(
                     mipro_num_trials=recompile_mipro_num_trials,
                     skip_without_lm=True,
                 )
+                recompile_payload["requested_run_name"] = recompile_run_name
+                recompile_payload["resolved_run_name"] = resolved_recompile_run_name
+                recompile_payload["lineage_metadata"] = recompile_lineage
                 if recompile_payload.get("recompile_status") != "compiled":
                     cycle_warnings.append(
                         "Trainer-side bundle recompilation was skipped because DSPy LM "
@@ -1462,6 +1514,7 @@ def run_trainer_cycle(
     cycle_payload: dict[str, object] = {
         "queue_name": queue_name,
         "queue_drain": queue_payload,
+        "durable_trace_recovery": durable_trace_recovery,
         "ingestion_summary": ingestion_summary,
         "training_candidates": training_candidates,
         "recompile": recompile_payload,
@@ -1517,7 +1570,7 @@ def run_trainer_cycle(
         artifact_metadata=_artifact_metadata(
             input_paths=[str(retrieval_payload.get("training_path") or "")],
             generated_paths=[
-                *imported_trace_paths,
+                *trainer_trace_paths,
                 str(training_candidates.get("output_path") or ""),
                 str(training_candidates.get("summary_path") or ""),
                 str(generated_training_mapping.get("output_path") or ""),
@@ -1540,6 +1593,7 @@ def run_trainer_cycle(
             related_paths=[
                 "artifacts/traces/queued",
                 "artifacts/traces/imported",
+                "artifacts/trainer/recovered-imported-traces",
                 "artifacts/dspy/published",
                 "artifacts/dspy/channels",
             ],
@@ -1584,6 +1638,9 @@ def _trainer_recompile_payload(
     root: Path,
     *,
     run_name: str,
+    bundle_version: str | None = None,
+    run_family: str | None = None,
+    lineage_metadata: Mapping[str, object] | None = None,
     base_training_path: Path = DEFAULT_TRAINING_PATH,
     candidates_path: Path = DEFAULT_TRAINER_TRAINING_CANDIDATES_PATH,
     generated_training_path: Path = DEFAULT_TRAINER_GENERATED_TRAINING_PATH,
@@ -1626,6 +1683,9 @@ def _trainer_recompile_payload(
         training_config=DSPyTrainingConfig(
             training_path=generated_training_path,
             run_name=run_name,
+            bundle_version=bundle_version,
+            run_family=run_family,
+            lineage_metadata=lineage_metadata,
             optimizer=optimizer,
             top_k=top_k,
             retrieval_mode=retrieval_mode,

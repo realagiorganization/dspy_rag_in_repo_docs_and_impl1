@@ -100,8 +100,10 @@ Current artifact-lifecycle additions:
 
 - `bundle-inspect --channel stable|canary` returns the promoted channel state plus the current
   published bundle version, benchmark status, and related artifact paths
-- `bundle-publish` materializes a published bundle record under `artifacts/dspy/published/`
+- `bundle-publish` materializes a published record for one immutable bundle version under
+  `artifacts/dspy/published/`
 - `bundle-promote` materializes a channel state under `artifacts/dspy/channels/<channel>.json`
+  that points to a specific published bundle version instead of a mutable trainer run alias
 - `bundle-rollback` re-points that channel to a previous or explicit published bundle version
 - `overlay-init` materializes `artifacts/overlays/<name>/overlay.json` and returns retrieval-mode,
   lookup-index, trace-dir, and worker-adaptation-scope metadata
@@ -202,7 +204,15 @@ Current implementation note:
 - The trainer repository now also exposes `repo-rag trainer-recompile`, and both
   `trainer-cycle` and `trainer-service` can invoke the same candidate-to-bundle recompilation path
   after queue drain, so imported worker traces now have a concrete route into generated DSPy
-  compile inputs under `artifacts/trainer/generated-training.yaml`.
+  compile inputs under `artifacts/trainer/generated-training.yaml`; the trainer now treats
+  `TRAINER_RECOMPILE_RUN_NAME` as a run family such as `trainer-auto`, mints a unique immutable
+  `bundle_version` such as `trainer-auto-<timestamp>` for every successful recompile, records the
+  imported trace paths plus candidate dedupe counters in bundle lineage metadata, and leaves
+  `stable` / `canary` channel state plus rollback/promote operations pointed at those concrete
+  versioned bundles instead of overwriting one mutable trainer alias. The trainer cycle now also
+  reconstructs its local compile ledger from Azure `processed/<queue>/...` blobs before candidate
+  materialization, so the DSPy training input can be rebuilt after trainer PVC loss instead of
+  depending on one surviving `training-candidates.yaml` snapshot.
 - The worker-side `codex` path now attempts that mediation proxy for any repository-like prepared
   clone by default, so repo-aware augmentation no longer depends on replacing `codex` with an
   explicit `repo_rag_cli` backend. The local compatibility executor still keeps explicit

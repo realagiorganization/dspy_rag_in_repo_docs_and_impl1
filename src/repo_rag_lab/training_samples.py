@@ -297,6 +297,7 @@ def materialize_training_candidates(
     output_path: Path,
     summary_path: Path,
     include_statuses: Sequence[str] = ("accepted", "candidate"),
+    seed_existing_output: bool = True,
 ) -> dict[str, Any]:
     """Materialize trainer-side DSPy training candidates from imported trace records."""
 
@@ -339,7 +340,7 @@ def materialize_training_candidates(
         loaded_records.append(candidate_record)
 
     existing_records: list[dict[str, Any]] = []
-    if resolved_output_path.is_file():
+    if seed_existing_output and resolved_output_path.is_file():
         existing_payload = yaml.safe_load(resolved_output_path.read_text(encoding="utf-8")) or []
         if isinstance(existing_payload, list):
             existing_records = [
