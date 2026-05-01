@@ -247,7 +247,10 @@ At the time of this document:
   `codex`; explicit `repo_rag_cli` remains available when a caller wants repo-RAG answers without
   Codex edits, and the current Codex proxy path now reports mediation status plus bundle
   provenance, exports normalized repo-rag traces, and hands them off with outcome metadata through
-  the same queue/import trainer surfaces used by the explicit repo-rag runtime path
+  the same queue/import trainer surfaces used by the explicit repo-rag runtime path; that same
+  path now also derives and forwards non-secret `AZURE_OPENAI_*` runtime settings for the local
+  `repo-rag serve-codex-proxy` subprocess so Azure-auth workers no longer depend on the proxy
+  rediscovering those values from a repository-local `.env`
 - DSPy runtime answering is implemented and exposed through `make ask-dspy` after the same
   lookup-first narrowing pass
 - DSPy compile-save-reload is implemented and exposed through `make dspy-train`
