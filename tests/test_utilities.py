@@ -1055,6 +1055,243 @@ def test_run_trainer_cycle_blocks_publish_when_bundle_benchmark_gate_fails(
     assert "benchmark gates" in " ".join(payload["warnings"])
 
 
+def test_run_trainer_cycle_skips_recompile_and_publish_without_new_candidates(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.drain_trace_queue",
+        lambda root, queue_name="default", limit=None, keep_queued=False: {
+            "queue_name": queue_name,
+            "queue_found": True,
+            "queued_count_before": 0,
+            "selected_count": 0,
+            "drained_count": 0,
+            "failed_count": 0,
+            "remaining_count": 0,
+            "keep_queued": keep_queued,
+            "status": "success",
+            "items": [],
+            "failures": [],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.load_training_examples",
+        lambda path: ["example"],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.build_retrieval_benchmarks",
+        lambda examples: [{"question": "demo"}],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.evaluate_retrieval_quality_suite",
+        lambda root, benchmarks, top_k, top_k_values, retrieval_mode=None: {
+            "retrieval_mode": "idf-rerank",
+            "default_top_k": 4,
+            "default_summary": {
+                "top_k": 4,
+                "pass_rate": 1.0,
+                "source_recall": 1.0,
+                "tag_summaries": [],
+            },
+            "top_k_summaries": [{"top_k": 4, "pass_rate": 1.0, "source_recall": 1.0}],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.check_retrieval_quality_thresholds",
+        lambda summary, minimum_pass_rate=None, minimum_source_recall=None: [],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.materialize_training_candidates",
+        lambda root, trace_paths, output_path, summary_path, include_statuses=("accepted", "candidate"): {
+            "candidate_count": 1,
+            "new_candidate_count": 0,
+            "output_path": "artifacts/trainer/training-candidates.yaml",
+            "summary_path": "artifacts/trainer/training-candidates-summary.json",
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._trainer_recompile_payload",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("trainer recompile should not run without new candidates")
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.publish_bundle",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("bundle publish should not run without new candidates")
+        ),
+    )
+
+    payload = json.loads(
+        run_trainer_cycle(
+            tmp_path,
+            queue_name="dataset",
+            recompile_run_name="trainer-auto",
+        )
+    )
+
+    assert payload["command"] == "trainer-cycle"
+    assert payload["command_status"] == "success"
+    assert payload["training_candidates"]["new_candidate_count"] == 0
+    assert payload["recompile"]["recompile_status"] == "skipped-no-new-candidates"
+    assert payload["publish_requested"] is False
+    assert payload["publish"] is None
+    assert payload["bundle_gate"]["status"] == "not-requested"
+    assert any("no new training candidates" in warning for warning in payload["warnings"])
+
+
+def test_run_trainer_cycle_uploads_remote_bundle_when_publish_succeeds(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.drain_trace_queue",
+        lambda root, queue_name="default", limit=None, keep_queued=False: {
+            "queue_name": queue_name,
+            "queue_found": True,
+            "queued_count_before": 1,
+            "selected_count": 1,
+            "drained_count": 1,
+            "failed_count": 0,
+            "remaining_count": 0,
+            "keep_queued": keep_queued,
+            "status": "success",
+            "items": [{"imported_trace_record_path": "artifacts/traces/imported/one.json"}],
+            "failures": [],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._summarize_imported_trace_records",
+        lambda root, paths: {},
+    )
+    monkeypatch.setattr("repo_rag_lab.utilities.load_training_examples", lambda path: ["example"])
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.build_retrieval_benchmarks",
+        lambda examples: [{"question": "demo"}],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.evaluate_retrieval_quality_suite",
+        lambda root, benchmarks, top_k, top_k_values, retrieval_mode=None: {
+            "retrieval_mode": "idf-rerank",
+            "default_top_k": 4,
+            "default_summary": {
+                "top_k": 4,
+                "pass_rate": 1.0,
+                "source_recall": 1.0,
+                "tag_summaries": [],
+            },
+            "top_k_summaries": [{"top_k": 4, "pass_rate": 1.0, "source_recall": 1.0}],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.check_retrieval_quality_thresholds",
+        lambda summary, minimum_pass_rate=None, minimum_source_recall=None: [],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.materialize_training_candidates",
+        lambda root, trace_paths, output_path, summary_path, include_statuses=("accepted", "candidate"): {
+            "candidate_count": 1,
+            "new_candidate_count": 1,
+            "output_path": "artifacts/trainer/training-candidates.yaml",
+            "summary_path": "artifacts/trainer/training-candidates-summary.json",
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._trainer_recompile_payload",
+        lambda *args, **kwargs: {
+            "recompile_status": "compiled",
+            "generated_training": {
+                "output_path": "artifacts/trainer/generated-training.yaml",
+                "summary_path": "artifacts/trainer/generated-training-summary.json",
+            },
+            "training_result": {
+                "run_name": "trainer-auto",
+                "bundle_version": "trainer-auto",
+                "metadata_path": "artifacts/dspy/trainer-auto/metadata.json",
+                "bundle_path": "artifacts/dspy/trainer-auto/bundle.json",
+                "benchmark_summary": {"pass_rate": 1.0},
+            },
+        },
+    )
+
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.publish_bundle",
+        lambda *args, **kwargs: {
+            "bundle_version": "trainer-auto",
+            "run_name": "trainer-auto",
+            "published_bundle_path": "artifacts/dspy/published/trainer-auto.json",
+            "bundle_path": "artifacts/dspy/trainer-auto/bundle.json",
+            "metadata_path": "artifacts/dspy/trainer-auto/metadata.json",
+            "program_path": "artifacts/dspy/trainer-auto/program.json",
+            "publish_status": "published",
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.resolve_azure_artifact_config",
+        lambda: AzureArtifactConfig(
+            account_name="storage",
+            account_key="secret",
+            connection_string=None,
+            trace_container="repo-rag-training-traces",
+            bundle_container="repo-rag-bundles",
+            queue_name="repo-rag-training",
+        ),
+    )
+
+    upload_calls: list[dict[str, object]] = []
+
+    def fake_upload_remote_bundle(
+        root: Path,
+        *,
+        published_record: dict[str, object],
+        config: AzureArtifactConfig,
+    ) -> dict[str, object]:
+        upload_calls.append(
+            {
+                "root": str(root),
+                "bundle_version": published_record["bundle_version"],
+                "bundle_container": config.bundle_container,
+            }
+        )
+        return {
+            "storage_backend": "azure-blob",
+            "bundle_container": config.bundle_container,
+            "remote_bundle_blobs": {
+                "bundle": "versions/trainer-auto/bundle.json",
+                "metadata": "versions/trainer-auto/metadata.json",
+                "program": "versions/trainer-auto/program.json",
+                "published": "versions/trainer-auto/published.json",
+            },
+        }
+
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.upload_remote_bundle",
+        fake_upload_remote_bundle,
+    )
+
+    payload = json.loads(
+        run_trainer_cycle(
+            tmp_path,
+            queue_name="dataset",
+            recompile_run_name="trainer-auto",
+        )
+    )
+
+    assert payload["command"] == "trainer-cycle"
+    assert payload["command_status"] == "success"
+    assert payload["publish_requested"] is True
+    assert payload["publish"]["bundle_version"] == "trainer-auto"
+    assert payload["publish"]["remote_publish"]["storage_backend"] == "azure-blob"
+    assert upload_calls == [
+        {
+            "root": str(tmp_path),
+            "bundle_version": "trainer-auto",
+            "bundle_container": "repo-rag-bundles",
+        }
+    ]
+
+
 def test_run_trainer_candidates_materializes_yaml_from_imported_traces(tmp_path: Path) -> None:
     imported_dir = tmp_path / "artifacts" / "traces" / "imported"
     imported_dir.mkdir(parents=True, exist_ok=True)
@@ -1110,8 +1347,12 @@ def test_run_trainer_candidates_materializes_yaml_from_imported_traces(tmp_path:
     assert summary_path.exists()
     materialized = yaml.safe_load(output_path.read_text(encoding="utf-8"))
     assert materialized[0]["question"] == "How do you build the publication PDF locally?"
-    assert materialized[0]["expected_sources"] == ["README.md", "publication/README.md"]
+    assert materialized[0]["expected_sources"] == []
     assert materialized[0]["candidate_status"] == "accepted"
+    assert materialized[0]["provenance"]["observed_sources"] == [
+        "README.md",
+        "publication/README.md",
+    ]
 
 
 def test_run_trainer_recompile_merges_candidates_and_reports_training_result(

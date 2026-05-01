@@ -22,12 +22,15 @@ RUN python -m pip install --upgrade pip uv
 
 WORKDIR /workspace/repo-rag
 
-COPY README.md Makefile pyproject.toml uv.lock ./
+COPY AGENTS.md README.md Makefile pyproject.toml uv.lock ./
 COPY config ./config
 COPY data ./data
+COPY docs ./docs
+COPY publication ./publication
 COPY rust-cli ./rust-cli
 COPY samples/training ./samples/training
 COPY src ./src
+COPY utilities ./utilities
 
 RUN python -m pip install -e ".[azure]"
 

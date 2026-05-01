@@ -550,6 +550,26 @@ def retrieve_repository_context(
     return context, context_sources
 
 
+def _format_generation_context(
+    context: Sequence[str], context_sources: Sequence[str]
+) -> list[str]:
+    """Attach source paths to DSPy generation context so file/path answers stay grounded."""
+
+    formatted: list[str] = []
+    for text, source in zip(context, context_sources, strict=False):
+        normalized_text = str(text).strip()
+        normalized_source = str(source).strip()
+        if normalized_source and normalized_text:
+            formatted.append(f"Source: {normalized_source}\n\n{normalized_text}")
+        elif normalized_source:
+            formatted.append(f"Source: {normalized_source}")
+        elif normalized_text:
+            formatted.append(normalized_text)
+    if len(context) > len(formatted):
+        formatted.extend(str(text).strip() for text in context[len(formatted) :] if str(text).strip())
+    return formatted
+
+
 def repository_answer_metric(
     example: ExampleLike, pred: PredictionLike, trace: object | None = None
 ) -> bool:
@@ -607,9 +627,10 @@ if _dspy is not None:
                 top_k=self.top_k,
                 retrieval_mode=self.retrieval_mode,
             )
+            generation_context = _format_generation_context(context, context_sources)
             dspy_module = _dspy
             assert dspy_module is not None
-            prediction = self.respond(question=question, context=context)
+            prediction = self.respond(question=question, context=generation_context)
             answer = str(getattr(prediction, "answer", ""))
             return dspy_module.Prediction(
                 answer=answer,

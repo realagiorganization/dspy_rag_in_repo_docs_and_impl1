@@ -185,14 +185,10 @@ Current implementation note:
   `CODEX_AZURE_CONFIG`, so Azure-auth mediation can bootstrap without a repo-local `.env`; the
   same downstream worker/runtime path now also defaults missing Azure Responses API versions to
   `2025-03-01-preview` and lets explicit `AZURE_OPENAI_API_VERSION` override any stale
-  `query_params.api-version` preserved in `CODEX_AZURE_CONFIG`. The newest AKS trace evidence shows
-  that this path now reaches successful proxy mediation plus trace export in-cluster, but the
-  global trainer handoff still stops at `trace_handoff_status = "skipped"` because the
-  `Generate AKS modules` workflow step creates `repo-rag-storage-config` before Blob credentials
-  are exported into the generator environment. The current downstream remediation now avoids
-  solving that by leaking storage credentials into worker pods; instead it performs trusted
-  post-processing trace enqueue after `execution_artifacts` rehydration in the deploy stage, where
-  Azure storage credentials already exist and Codex cannot read them from its own environment.
+  `query_params.api-version` preserved in `CODEX_AZURE_CONFIG`. The newest AKS trace evidence now
+  shows that this path reaches successful proxy mediation plus trace export in-cluster, and the
+  follow-up trusted downstream handoff now enqueues trainer items after `execution_artifacts`
+  rehydration in the deploy stage without leaking storage credentials into worker pods.
 - The trainer repository now also exposes `repo-rag trainer-cycle`, which wraps queue drain,
   retrieval gating, and optional bundle publish/promotion in one background-compatible pass so the
   next iteration can schedule it as a CronJob/systemd timer before introducing a fuller trainer
@@ -200,7 +196,9 @@ Current implementation note:
 - The trainer repository now also exposes `repo-rag trainer-service`, which wraps that same
   lifecycle in a long-running polling loop with persisted `artifacts/trainer/service-state.json`
   and per-cycle history records under `artifacts/trainer/history/`, so queue draining can now live
-  outside the worker hot path without inventing a second orchestration contract.
+  outside the worker hot path without inventing a second orchestration contract; the current live
+  AKS deployment now consumes the global `repo-rag-training` queue through Azure storage
+  credentials and can remote-publish bundle versions into `repo-rag-bundles`.
 - The trainer repository now also exposes `repo-rag trainer-recompile`, and both
   `trainer-cycle` and `trainer-service` can invoke the same candidate-to-bundle recompilation path
   after queue drain, so imported worker traces now have a concrete route into generated DSPy
@@ -209,17 +207,21 @@ Current implementation note:
   clone by default, so repo-aware augmentation no longer depends on replacing `codex` with an
   explicit `repo_rag_cli` backend. The local compatibility executor still keeps explicit
   `repo_rag_cli` auto-detection because it does not run the full worker-side Codex path.
-- Remaining AKS follow-up work is now about the background trainer/publisher service and
-  promotion-policy rollout rather than about basic backend availability.
+- Remaining AKS follow-up work is now specifically trainer-side:
+  - feed the live service a genuinely new accepted/candidate trace that survives dedupe so
+    auto-recompile can be observed end-to-end
+  - decide whether automatic promotion should remain disabled or be enabled intentionally through
+    `TRAINER_PROMOTE_CHANNEL`
+  - validate that later worker runs can resolve and consume a trainer-published stable bundle
 
 ## Phase 4. Global Training Loop
 
 - [x] Stage worker traces into a trainer-side queue so the worker hot path no longer depends on synchronous trainer-side import.
 - [x] Add a single-pass trainer cycle that can drain the queue and apply bundle gates in a cron/Kubernetes-job-friendly way.
 - [x] Stand up an asynchronous trainer/publisher service outside the worker hot path.
-- [x] Ingest worker traces, accepted edits, failures, retrieval misses, and benchmark outcomes into that service.
-- [x] Recompile and validate new bundles without forcing the originating pipeline run to wait.
-- [x] Publish only versions that clear the selected benchmark and safety gates.
+- [x] Ingest worker traces, accepted edits, failures, retrieval misses, and benchmark outcomes into that service in the live AKS deployment.
+- [ ] Recompile and validate new bundles without forcing the originating pipeline run to wait in the live AKS deployment.
+- [x] Publish only versions that clear the selected benchmark and safety gates in the live AKS deployment.
 
 ## Phase 5. Deployment Model
 
@@ -264,7 +266,9 @@ Current implementation note:
 
 ## Exit Criteria
 
-- [x] A `dataset` worker can pull a stable bundle, build a repo-local overlay, answer through `repo-rag`, and upload traces.
+- [x] A `dataset` worker can build a repo-local overlay, answer through `repo-rag`, and upload traces.
+- [ ] A `dataset` worker can resolve and pull a stable bundle from the global bundle store during live AKS runs.
 - [x] The main pipeline run never blocks on global retraining.
-- [x] New bundles are published asynchronously and become available to later workers.
+- [x] New bundles are published asynchronously into the shared global bundle store.
+- [ ] Those shared bundles are demonstrably consumed by later live AKS worker runs.
 - [x] The integration path is documented well enough to move from local runs to Kubernetes worker pools.

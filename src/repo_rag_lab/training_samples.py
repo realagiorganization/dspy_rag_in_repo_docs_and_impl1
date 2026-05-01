@@ -175,6 +175,12 @@ def _candidate_record_key(record: Mapping[str, Any]) -> tuple[str, str, tuple[st
     )
 
 
+def _candidate_question_key(record: Mapping[str, Any]) -> str:
+    """Return the stable question-level identity for one training-candidate record."""
+
+    return str(record.get("question") or "").strip().casefold()
+
+
 def _dedupe_tags(tags: Sequence[str]) -> list[str]:
     """Return tags in input order without duplicates or blanks."""
 
@@ -187,6 +193,35 @@ def _dedupe_tags(tags: Sequence[str]) -> list[str]:
         seen.add(cleaned)
         deduped.append(cleaned)
     return deduped
+
+
+def _normalize_materialized_candidate_record(record: Mapping[str, Any]) -> dict[str, Any]:
+    """Normalize one persisted trainer-candidate record for future trainer cycles."""
+
+    tags = _dedupe_tags(record.get("tags", []))
+    tag_set = {tag.casefold() for tag in tags}
+    expected_sources = [
+        str(source).strip()
+        for source in record.get("expected_sources", [])
+        if str(source).strip()
+    ]
+    if "trainer-candidate" in tag_set:
+        # Imported worker traces are global candidates, not repo-local retrieval benchmarks.
+        expected_sources = []
+
+    normalized: dict[str, Any] = {
+        "question": str(record.get("question") or "").strip(),
+        "expected_answer": str(record.get("expected_answer") or "").strip(),
+        "tags": tags,
+        "expected_sources": expected_sources,
+    }
+    candidate_status = str(record.get("candidate_status") or "").strip()
+    if candidate_status:
+        normalized["candidate_status"] = candidate_status
+    provenance = record.get("provenance")
+    if isinstance(provenance, Mapping):
+        normalized["provenance"] = dict(provenance)
+    return normalized
 
 
 def _training_candidate_from_trace_record(
@@ -211,7 +246,7 @@ def _training_candidate_from_trace_record(
     if include_statuses and acceptance_status and acceptance_status not in include_statuses:
         return None, "excluded-status"
 
-    expected_sources = [
+    observed_sources = [
         str(source).strip() for source in payload.get("sources", []) if str(source).strip()
     ]
     tags = _dedupe_tags(
@@ -230,11 +265,15 @@ def _training_candidate_from_trace_record(
             "question": question,
             "expected_answer": expected_answer,
             "tags": tags,
-            "expected_sources": expected_sources,
+            # Imported worker traces may originate from arbitrary repositories, so the global
+            # trainer keeps their source paths in provenance instead of turning them into
+            # repo-local retrieval benchmarks.
+            "expected_sources": [],
             "candidate_status": acceptance_status or None,
             "provenance": {
                 "trace_record_path": str(payload.get("trace_record_path") or ""),
                 "source_command": str(payload.get("source_command") or ""),
+                "observed_sources": observed_sources,
                 "recorded_at": str(trace_mapping.get("recorded_at") or ""),
                 "mode": str(trace_mapping.get("mode") or ""),
                 "retrieval_mode": str(trace_mapping.get("retrieval_mode") or ""),
@@ -299,26 +338,47 @@ def materialize_training_candidates(
             continue
         loaded_records.append(candidate_record)
 
-    existing_records = []
+    existing_records: list[dict[str, Any]] = []
     if resolved_output_path.is_file():
         existing_payload = yaml.safe_load(resolved_output_path.read_text(encoding="utf-8")) or []
         if isinstance(existing_payload, list):
             existing_records = [
-                record for record in existing_payload if isinstance(record, Mapping)
+                _normalize_materialized_candidate_record(record)
+                for record in existing_payload
+                if isinstance(record, Mapping)
             ]
 
-    existing_keys = {_candidate_record_key(record) for record in existing_records}
-    new_records: list[dict[str, Any]] = []
+    merged_records_by_question: dict[str, dict[str, Any]] = {}
+    merged_order: list[str] = []
+    for record in existing_records:
+        question_key = _candidate_question_key(record)
+        if not question_key:
+            continue
+        if question_key not in merged_records_by_question:
+            merged_order.append(question_key)
+        merged_records_by_question[question_key] = record
+
     duplicate_count = 0
+    replaced_count = 0
+    new_records: list[dict[str, Any]] = []
     for record in loaded_records:
-        key = _candidate_record_key(record)
-        if key in existing_keys:
+        question_key = _candidate_question_key(record)
+        if not question_key:
+            continue
+        existing_record = merged_records_by_question.get(question_key)
+        if existing_record is None:
+            merged_order.append(question_key)
+            merged_records_by_question[question_key] = record
+            new_records.append(record)
+            continue
+        if _candidate_record_key(existing_record) == _candidate_record_key(record):
             duplicate_count += 1
             continue
-        existing_keys.add(key)
+        merged_records_by_question[question_key] = record
+        replaced_count += 1
         new_records.append(record)
 
-    merged_records = [dict(record) for record in existing_records] + new_records
+    merged_records = [merged_records_by_question[key] for key in merged_order]
     resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
     resolved_output_path.write_text(
         yaml.safe_dump(merged_records, sort_keys=False, allow_unicode=False),
@@ -330,6 +390,7 @@ def materialize_training_candidates(
         "input_trace_count": len(candidate_paths),
         "loaded_candidate_count": len(loaded_records),
         "duplicate_count": duplicate_count,
+        "replaced_count": replaced_count,
         "skipped_reasons": dict(sorted(skipped_reasons.items())),
         "include_statuses": sorted(normalized_statuses),
         "trace_paths": [

@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-05-01-dataset-trusted-trace-handoff-postprocess-fix.md`
+- `2026-05-01-live-trainer-remote-bundle-publish.md`
 
 ## Usage
 

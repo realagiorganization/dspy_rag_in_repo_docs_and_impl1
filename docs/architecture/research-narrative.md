@@ -254,13 +254,12 @@ At the time of this document:
   defaults now also pin Azure Responses-compatible API-version fallbacks at
   `2025-03-01-preview` or later instead of backfilling stale `2023-12-01-preview` values when
   `CODEX_AZURE_CONFIG` omits an explicit `query_params.api-version`; the newest AKS evidence now
-  also shows that this proxy/export path is live in production-like runs, while trainer-side queue
-  handoff is still blocked one layer earlier by workflow wiring that generates
-  `repo-rag-storage-config` without Blob credentials during `Generate AKS modules`; the downstream
-  remediation now moves Azure Blob + Queue trace handoff out of the worker boundary and into the
-  trusted post-processing stage after `execution_artifacts` rehydration, so worker pods can stay
-  free of trainer storage secrets while the deploy runner still emits
-  `repo_rag_trace_enqueue.json` and trainer queue/blob side effects
+  shows that this proxy/export path is live in production-like runs; the downstream remediation
+  now moves Azure Blob + Queue trace handoff out of the worker boundary and into the trusted
+  post-processing stage after `execution_artifacts` rehydration, so worker pods can stay free of
+  trainer storage secrets while the deploy runner still emits `repo_rag_trace_enqueue.json` and
+  queued Blob/Queue items, and the separately deployed live trainer service now consumes that same
+  Azure queue/blob backend through its own secret boundary instead of a filesystem fallback
 - DSPy runtime answering is implemented and exposed through `make ask-dspy` after the same
   lookup-first narrowing pass
 - DSPy compile-save-reload is implemented and exposed through `make dspy-train`
@@ -280,7 +279,11 @@ At the time of this document:
   a cron/Kubernetes job before a longer-lived trainer service exists
 - a long-lived background trainer loop is now implemented and exposed through
   `make trainer-service`, so the same queue drain, gating, publish, and promotion workflow can
-  run continuously while recording trainer-side state/history artifacts under `artifacts/trainer/`
+  run continuously while recording trainer-side state/history artifacts under `artifacts/trainer/`;
+  the current live AKS trainer deployment now drains the Azure queue, uses
+  `TRAINER_RECOMPILE_RUN_NAME=trainer-auto`, and can remote-publish bundle versions into
+  `repo-rag-bundles`, while still leaving `TRAINER_PROMOTE_CHANNEL` empty so automatic channel
+  promotion stays disabled
 - trainer-side queue drain is now also summarized into first-pass ingestion counters for accepted
   vs. rejected outcomes, execution status, retrieval mode, bundle version, and empty
   source/context cases, so imported traces are no longer only stored but also surfaced as

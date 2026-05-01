@@ -145,6 +145,15 @@ def test_publication_surface_files_exist_and_are_linked() -> None:
     assert "Build the missing automated DSPy training path." not in todo_text
 
 
+def test_runtime_dockerfile_copies_training_reference_surfaces() -> None:
+    dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
+
+    assert "COPY AGENTS.md README.md Makefile pyproject.toml uv.lock ./" in dockerfile
+    assert "COPY docs ./docs" in dockerfile
+    assert "COPY publication ./publication" in dockerfile
+    assert "COPY utilities ./utilities" in dockerfile
+
+
 def test_rust_wrapper_surface_keeps_committed_lockfile_policy() -> None:
     checklist = (REPO_ROOT / "docs/archive/repo-completeness-checklist.md").read_text(
         encoding="utf-8"

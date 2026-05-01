@@ -274,6 +274,31 @@ def test_repository_answer_metric_accepts_strong_paraphrase() -> None:
     assert repository_answer_metric(Example(), Prediction()) is True
 
 
+def test_repository_answer_metric_accepts_live_repo_summary_style_answer() -> None:
+    class Example:
+        answer = (
+            "This repository researches repository-grounded question answering and RAG "
+            "workflows over repository files, with shared utilities, notebooks, evaluation, "
+            "and Azure deployment support."
+        )
+        expected_sources = ("README.md", "src/repo_rag_lab/utilities.py")
+
+    class Prediction:
+        answer = (
+            "This repository researches repository-grounded question answering: a baseline "
+            "RAG workflow that retrieves files from a code/documentation repository to answer "
+            "questions, with supporting work on notebooks, evaluation, utilities, and "
+            "deployment."
+        )
+        context_sources = (
+            "README.md",
+            "src/repo_rag_lab/utilities.py",
+            "src/repo_rag_lab/workflow.py",
+        )
+
+    assert repository_answer_metric(Example(), Prediction()) is True
+
+
 def test_evaluate_repository_program_reports_pass_rate() -> None:
     class FakeProgram:
         def __call__(self, *, question: str) -> object:
@@ -302,6 +327,54 @@ def test_evaluate_repository_program_reports_pass_rate() -> None:
     assert summary["case_count"] == 1
     assert summary["pass_count"] == 1
     assert summary["pass_rate"] == 1.0
+
+
+def test_repository_rag_program_includes_source_paths_in_generation_context(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    program = build_repository_rag_program(
+        tmp_path,
+        top_k=2,
+        require_configured_lm=False,
+    )
+    captured: dict[str, object] = {}
+
+    def fake_retrieve_repository_context(
+        root: Path,
+        question: str,
+        *,
+        top_k: int = 4,
+        retrieval_mode: str | None = None,
+    ) -> tuple[list[str], list[str]]:
+        del root, question, top_k, retrieval_mode
+        return (
+            ["README summary", "Package API notes"],
+            ["README.md", "docs/architecture/package-api.md"],
+        )
+
+    def fake_respond(*, question: str, context: list[str]) -> object:
+        captured["question"] = question
+        captured["context"] = context
+        return type("Prediction", (), {"answer": "Repository answer"})()
+
+    monkeypatch.setattr(
+        "repo_rag_lab.dspy_training.retrieve_repository_context",
+        fake_retrieve_repository_context,
+    )
+    program.respond = fake_respond
+
+    prediction = program(question="What does this repository research?")
+
+    assert captured["question"] == "What does this repository research?"
+    assert captured["context"] == [
+        "Source: README.md\n\nREADME summary",
+        "Source: docs/architecture/package-api.md\n\nPackage API notes",
+    ]
+    assert prediction.context == ["README summary", "Package API notes"]
+    assert prediction.context_sources == [
+        "README.md",
+        "docs/architecture/package-api.md",
+    ]
 
 
 def test_build_repository_rag_program_loads_saved_state_without_lm(tmp_path: Path) -> None:
