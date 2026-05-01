@@ -179,7 +179,10 @@ Current implementation note:
   bundle provenance for mediation, persist `repo_rag_codex_proxy_last.json`, export a normalized
   repo-rag trace after `codex exec`, and hand that trace off through `trace-enqueue` or
   `trace-import` with the same outcome metadata contract used by the explicit repo-rag runtime
-  paths.
+  paths. The worker/container wiring now also forwards explicit non-secret
+  `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT_NAME`, `AZURE_OPENAI_API_VERSION`, and
+  `AZURE_OPENAI_MODEL_NAME` values to the proxy subprocess, derived from either worker env or
+  `CODEX_AZURE_CONFIG`, so Azure-auth mediation can bootstrap without a repo-local `.env`.
 - The trainer repository now also exposes `repo-rag trainer-cycle`, which wraps queue drain,
   retrieval gating, and optional bundle publish/promotion in one background-compatible pass so the
   next iteration can schedule it as a CronJob/systemd timer before introducing a fuller trainer

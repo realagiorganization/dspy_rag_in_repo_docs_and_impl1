@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-05-01-aks-run-25191504814-project-root-resolution-inspection.md`
+- `2026-05-01-dataset-azure-runtime-env-propagation-fix.md`
 
 ## Usage
 
