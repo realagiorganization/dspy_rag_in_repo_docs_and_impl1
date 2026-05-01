@@ -182,7 +182,10 @@ Current implementation note:
   paths. The worker/container wiring now also forwards explicit non-secret
   `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT_NAME`, `AZURE_OPENAI_API_VERSION`, and
   `AZURE_OPENAI_MODEL_NAME` values to the proxy subprocess, derived from either worker env or
-  `CODEX_AZURE_CONFIG`, so Azure-auth mediation can bootstrap without a repo-local `.env`.
+  `CODEX_AZURE_CONFIG`, so Azure-auth mediation can bootstrap without a repo-local `.env`; the
+  same downstream worker/runtime path now also defaults missing Azure Responses API versions to
+  `2025-03-01-preview` and lets explicit `AZURE_OPENAI_API_VERSION` override any stale
+  `query_params.api-version` preserved in `CODEX_AZURE_CONFIG`.
 - The trainer repository now also exposes `repo-rag trainer-cycle`, which wraps queue drain,
   retrieval gating, and optional bundle publish/promotion in one background-compatible pass so the
   next iteration can schedule it as a CronJob/systemd timer before introducing a fuller trainer
