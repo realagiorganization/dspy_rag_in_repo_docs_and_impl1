@@ -7,9 +7,7 @@
 .codex
 AGENTS.md.d
 artifacts
-docs
 notebooks
-publication
 samples/logs
 tests
 __pycache__

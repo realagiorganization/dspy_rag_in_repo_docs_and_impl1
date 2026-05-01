@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -38,6 +39,7 @@ from .retrieval import RetrievalMode
 from .runtime_artifacts import (
     DEFAULT_TRAINER_GENERATED_TRAINING_PATH,
     DEFAULT_TRAINER_GENERATED_TRAINING_SUMMARY_PATH,
+    DEFAULT_TRAINER_RECOVERED_TRACES_DIR,
     DEFAULT_TRAINER_SERVICE_HISTORY_DIR,
     DEFAULT_TRAINER_SERVICE_STATE_PATH,
     DEFAULT_TRAINER_TRAINING_CANDIDATES_PATH,
@@ -58,6 +60,7 @@ from .runtime_artifacts import (
     resolve_azure_artifact_config,
     resolve_bundle_manifest,
     rollback_bundle,
+    restore_processed_trace_records,
     upload_remote_bundle,
     upload_remote_bundle_channel,
     write_trace_record,
@@ -154,6 +157,23 @@ def _write_json_artifact(path: Path, payload: Mapping[str, object]) -> None:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"{json.dumps(dict(payload), indent=2)}\n", encoding="utf-8")
+
+
+def _sanitize_training_run_name(name: str, *, default: str = DEFAULT_DSPY_RUN_NAME) -> str:
+    """Normalize one trainer family/run label into the artifact-safe DSPy naming surface."""
+
+    parts = [part for part in re.split(r"[^A-Za-z0-9._-]+", name.strip()) if part]
+    if parts:
+        return "-".join(parts)
+    return default
+
+
+def _versioned_training_run_name(run_family: str, *, recorded_at: datetime | None = None) -> str:
+    """Return one unique compile/publish identifier under a stable trainer family prefix."""
+
+    safe_family = _sanitize_training_run_name(run_family, default=DEFAULT_DSPY_RUN_NAME)
+    timestamp = (recorded_at or datetime.now(UTC)).strftime("%Y%m%dT%H%M%S%fZ")
+    return f"{safe_family}-{timestamp}"
 
 
 def _summarize_imported_trace_records(
@@ -1237,10 +1257,6 @@ def run_trainer_cycle(
             effective_minimum_pass_rate = 1.0
         if effective_minimum_source_recall is None:
             effective_minimum_source_recall = 1.0
-    if effective_minimum_bundle_pass_rate is None and (
-        promote_channel is not None or recompile_run_name is not None
-    ):
-        effective_minimum_bundle_pass_rate = 1.0
 
     queue_payload = drain_trace_queue(
         root,
@@ -1255,13 +1271,36 @@ def run_trainer_cycle(
         for item in normalized_queue_items
         if isinstance(item, Mapping) and item.get("imported_trace_record_path")
     ]
-    ingestion_summary = _summarize_imported_trace_records(root, imported_trace_paths)
+    durable_trace_recovery = restore_processed_trace_records(
+        root,
+        queue_name=queue_name,
+        output_dir=DEFAULT_TRAINER_RECOVERED_TRACES_DIR,
+    )
+    recovered_trace_paths = [
+        str(path)
+        for path in durable_trace_recovery.get("trace_paths", [])
+        if isinstance(path, str) and path.strip()
+    ]
+    trainer_trace_paths = recovered_trace_paths or imported_trace_paths
+    ingestion_summary = _summarize_imported_trace_records(root, trainer_trace_paths)
     training_candidates = materialize_training_candidates(
         root,
-        trace_paths=[Path(path) for path in imported_trace_paths],
+        trace_paths=[Path(path) for path in trainer_trace_paths],
         output_path=DEFAULT_TRAINER_TRAINING_CANDIDATES_PATH,
         summary_path=DEFAULT_TRAINER_TRAINING_CANDIDATES_SUMMARY_PATH,
+        seed_existing_output=False,
     )
+    new_candidate_count_raw = training_candidates.get("new_candidate_count")
+    try:
+        new_candidate_count = max(0, int(new_candidate_count_raw or 0))
+    except (TypeError, ValueError):
+        new_candidate_count = 0
+    recompile_requested = recompile_run_name is not None
+    recompile_triggered = recompile_requested and new_candidate_count > 0
+    if effective_minimum_bundle_pass_rate is None and (
+        promote_channel is not None or recompile_triggered
+    ):
+        effective_minimum_bundle_pass_rate = 1.0
     retrieval_payload = _build_retrieval_evaluation_payload(
         root,
         training_path=training_path,
@@ -1294,37 +1333,69 @@ def run_trainer_cycle(
             "One or more imported trace records could not be summarized during trainer ingestion."
         )
 
-    if recompile_run_name is not None:
-        try:
-            recompile_payload = _trainer_recompile_payload(
-                root,
-                run_name=recompile_run_name,
-                base_training_path=recompile_base_training_path,
-                candidates_path=recompile_candidates_path,
-                generated_training_path=recompile_generated_training_path,
-                generated_training_summary_path=recompile_generated_training_summary_path,
-                lm_config=recompile_lm_config,
-                optimizer=recompile_optimizer,
-                top_k=recompile_top_k,
-                retrieval_mode=retrieval_mode,
-                max_bootstrapped_demos=recompile_max_bootstrapped_demos,
-                max_labeled_demos=recompile_max_labeled_demos,
-                mipro_auto=recompile_mipro_auto,
-                num_threads=recompile_num_threads,
-                mipro_num_trials=recompile_mipro_num_trials,
-                skip_without_lm=True,
-            )
-            if recompile_payload.get("recompile_status") != "compiled":
-                cycle_warnings.append(
-                    "Trainer-side bundle recompilation was skipped because DSPy LM "
-                    "configuration is unavailable."
-                )
-        except Exception as exc:
-            recompile_error = {
-                "type": type(exc).__name__,
-                "message": str(exc),
+    if recompile_requested:
+        if not recompile_triggered:
+            recompile_payload = {
+                "recompile_status": "skipped-no-new-candidates",
+                "generated_training": None,
+                "training_result": None,
+                "new_candidate_count": new_candidate_count,
             }
-            cycle_warnings.append("Trainer-side bundle recompilation failed during trainer cycle.")
+            cycle_warnings.append(
+                "Trainer-side bundle recompilation was skipped because no new training "
+                "candidates were imported during this cycle."
+            )
+        else:
+            resolved_recompile_run_name = _versioned_training_run_name(recompile_run_name)
+            recompile_lineage = {
+                "run_family": recompile_run_name,
+                "resolved_run_name": resolved_recompile_run_name,
+                "imported_trace_record_paths": trainer_trace_paths,
+                "imported_trace_count": len(trainer_trace_paths),
+                "durable_trace_recovery": durable_trace_recovery,
+                "training_candidates_path": training_candidates.get("output_path"),
+                "training_candidates_summary_path": training_candidates.get("summary_path"),
+                "candidate_count": training_candidates.get("candidate_count"),
+                "new_candidate_count": new_candidate_count,
+                "duplicate_count": training_candidates.get("duplicate_count"),
+                "replaced_count": training_candidates.get("replaced_count"),
+            }
+            try:
+                recompile_payload = _trainer_recompile_payload(
+                    root,
+                    run_name=resolved_recompile_run_name,
+                    bundle_version=resolved_recompile_run_name,
+                    run_family=recompile_run_name,
+                    lineage_metadata=recompile_lineage,
+                    base_training_path=recompile_base_training_path,
+                    candidates_path=recompile_candidates_path,
+                    generated_training_path=recompile_generated_training_path,
+                    generated_training_summary_path=recompile_generated_training_summary_path,
+                    lm_config=recompile_lm_config,
+                    optimizer=recompile_optimizer,
+                    top_k=recompile_top_k,
+                    retrieval_mode=retrieval_mode,
+                    max_bootstrapped_demos=recompile_max_bootstrapped_demos,
+                    max_labeled_demos=recompile_max_labeled_demos,
+                    mipro_auto=recompile_mipro_auto,
+                    num_threads=recompile_num_threads,
+                    mipro_num_trials=recompile_mipro_num_trials,
+                    skip_without_lm=True,
+                )
+                recompile_payload["requested_run_name"] = recompile_run_name
+                recompile_payload["resolved_run_name"] = resolved_recompile_run_name
+                recompile_payload["lineage_metadata"] = recompile_lineage
+                if recompile_payload.get("recompile_status") != "compiled":
+                    cycle_warnings.append(
+                        "Trainer-side bundle recompilation was skipped because DSPy LM "
+                        "configuration is unavailable."
+                    )
+            except Exception as exc:
+                recompile_error = {
+                    "type": type(exc).__name__,
+                    "message": str(exc),
+                }
+                cycle_warnings.append("Trainer-side bundle recompilation failed during trainer cycle.")
 
     effective_publish_run_name = run_name
     if effective_publish_run_name is None and isinstance(recompile_payload, Mapping):
@@ -1339,7 +1410,11 @@ def run_trainer_cycle(
         root,
         run_name=effective_publish_run_name,
         bundle_version=bundle_version,
-        recompile_payload=recompile_payload if isinstance(recompile_payload, Mapping) else None,
+        recompile_payload=(
+            recompile_payload
+            if recompile_triggered and isinstance(recompile_payload, Mapping)
+            else None
+        ),
         minimum_pass_rate=effective_minimum_bundle_pass_rate,
     )
     bundle_gate_passed = bundle_gate_payload.get("status") in {"pass", "not-requested"}
@@ -1348,12 +1423,24 @@ def run_trainer_cycle(
 
     if publish_requested and bundle_gate_passed:
         try:
-            publish_payload = publish_bundle(
+            publish_record = publish_bundle(
                 root,
                 run_name=effective_publish_run_name,
                 bundle_version=bundle_version,
                 note=note,
             )
+            remote_publish = None
+            config = resolve_azure_artifact_config()
+            if config is not None and config.bundles_enabled:
+                remote_publish = upload_remote_bundle(
+                    root,
+                    published_record=publish_record,
+                    config=config,
+                )
+            publish_payload = {
+                **publish_record,
+                "remote_publish": remote_publish,
+            }
         except Exception as exc:
             publish_error = {
                 "type": type(exc).__name__,
@@ -1377,13 +1464,36 @@ def run_trainer_cycle(
             )
         else:
             try:
-                promote_payload = promote_bundle(
+                promote_state = promote_bundle(
                     root,
                     channel=promote_channel,
                     run_name=effective_publish_run_name,
                     bundle_version=bundle_version,
                     note=note,
                 )
+                remote_publish = None
+                remote_channel = None
+                config = resolve_azure_artifact_config()
+                if config is not None and config.bundles_enabled:
+                    published_record = published_bundle_record_from_state(
+                        promote_state,
+                        root=root,
+                    )
+                    remote_publish = upload_remote_bundle(
+                        root,
+                        published_record=published_record,
+                        config=config,
+                    )
+                    remote_channel = upload_remote_bundle_channel(
+                        promote_state,
+                        channel=promote_channel,
+                        config=config,
+                    )
+                promote_payload = {
+                    **promote_state,
+                    "remote_publish": remote_publish,
+                    "remote_channel": remote_channel,
+                }
                 promotion_status = "promoted"
             except Exception as exc:
                 promote_error = {
@@ -1404,6 +1514,7 @@ def run_trainer_cycle(
     cycle_payload: dict[str, object] = {
         "queue_name": queue_name,
         "queue_drain": queue_payload,
+        "durable_trace_recovery": durable_trace_recovery,
         "ingestion_summary": ingestion_summary,
         "training_candidates": training_candidates,
         "recompile": recompile_payload,
@@ -1428,10 +1539,10 @@ def run_trainer_cycle(
         else None
     )
     recompile_failed = recompile_error is not None or (
-        recompile_run_name is not None and recompile_status != "compiled"
+        recompile_triggered and recompile_status != "compiled"
     )
     bundle_gate_required = effective_minimum_bundle_pass_rate is not None and (
-        publish_requested or promote_channel is not None or recompile_run_name is not None
+        publish_requested or promote_channel is not None or recompile_triggered
     )
     cycle_failed = (
         bool(queue_payload.get("failed_count"))
@@ -1459,7 +1570,7 @@ def run_trainer_cycle(
         artifact_metadata=_artifact_metadata(
             input_paths=[str(retrieval_payload.get("training_path") or "")],
             generated_paths=[
-                *imported_trace_paths,
+                *trainer_trace_paths,
                 str(training_candidates.get("output_path") or ""),
                 str(training_candidates.get("summary_path") or ""),
                 str(generated_training_mapping.get("output_path") or ""),
@@ -1482,6 +1593,7 @@ def run_trainer_cycle(
             related_paths=[
                 "artifacts/traces/queued",
                 "artifacts/traces/imported",
+                "artifacts/trainer/recovered-imported-traces",
                 "artifacts/dspy/published",
                 "artifacts/dspy/channels",
             ],
@@ -1526,6 +1638,9 @@ def _trainer_recompile_payload(
     root: Path,
     *,
     run_name: str,
+    bundle_version: str | None = None,
+    run_family: str | None = None,
+    lineage_metadata: Mapping[str, object] | None = None,
     base_training_path: Path = DEFAULT_TRAINING_PATH,
     candidates_path: Path = DEFAULT_TRAINER_TRAINING_CANDIDATES_PATH,
     generated_training_path: Path = DEFAULT_TRAINER_GENERATED_TRAINING_PATH,
@@ -1568,6 +1683,9 @@ def _trainer_recompile_payload(
         training_config=DSPyTrainingConfig(
             training_path=generated_training_path,
             run_name=run_name,
+            bundle_version=bundle_version,
+            run_family=run_family,
+            lineage_metadata=lineage_metadata,
             optimizer=optimizer,
             top_k=top_k,
             retrieval_mode=retrieval_mode,

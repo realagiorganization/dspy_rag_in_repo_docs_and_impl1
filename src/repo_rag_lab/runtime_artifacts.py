@@ -51,6 +51,7 @@ DEFAULT_TRAINER_TRAINING_CANDIDATES_PATH = DEFAULT_TRAINER_SERVICE_DIR / "traini
 DEFAULT_TRAINER_TRAINING_CANDIDATES_SUMMARY_PATH = (
     DEFAULT_TRAINER_SERVICE_DIR / "training-candidates-summary.json"
 )
+DEFAULT_TRAINER_RECOVERED_TRACES_DIR = DEFAULT_TRAINER_SERVICE_DIR / "recovered-imported-traces"
 DEFAULT_TRAINER_GENERATED_TRAINING_PATH = DEFAULT_TRAINER_SERVICE_DIR / "generated-training.yaml"
 DEFAULT_TRAINER_GENERATED_TRAINING_SUMMARY_PATH = (
     DEFAULT_TRAINER_SERVICE_DIR / "generated-training-summary.json"
@@ -166,6 +167,7 @@ def build_bundle_manifest(
     resolved_bundle_path = bundle_manifest_path(resolved_metadata_path)
 
     run_name = str(metadata.get("run_name") or resolved_metadata_path.parent.name)
+    bundle_version = str(metadata.get("bundle_version") or run_name)
     artifact_dir = str(
         metadata.get("artifact_dir")
         or _relative_to_root(resolved_metadata_path.parent, resolved_root)
@@ -201,7 +203,7 @@ def build_bundle_manifest(
         "schema_version": BUNDLE_SCHEMA_VERSION,
         "bundle_kind": "global",
         "run_name": run_name,
-        "bundle_version": run_name,
+        "bundle_version": bundle_version,
         "bundle_status": bundle_status,
         "created_at": metadata.get("recorded_at"),
         "artifact_dir": artifact_dir,
@@ -215,6 +217,8 @@ def build_bundle_manifest(
         "benchmark_summary": benchmark_summary,
         "compiled_program_summary": compiled_program_summary,
         "lm": lm,
+        "run_family": _string_or_none(metadata.get("run_family")),
+        "lineage": _mapping_or_none(metadata.get("lineage")),
         "provenance": {
             "source": "repo-rag",
             "retrieval_profile_path": retrieval_profile_path,
@@ -1112,32 +1116,23 @@ def _trace_queue_dir(root: Path, queue_name: str, *, processed: bool) -> Path:
     return root / base_dir / safe_queue_name
 
 
-def write_trace_record(
+def _build_trace_record(
     root: Path,
-    payload: Mapping[str, object],
+    normalized_payload: Mapping[str, object],
     *,
-    trace_name: str | None = None,
-    imported: bool = False,
-    outcome: Mapping[str, object] | None = None,
+    trace_path: Path,
+    imported: bool,
+    outcome: Mapping[str, object] | None,
 ) -> dict[str, object]:
-    """Normalize and persist one runtime-trace record under ``artifacts/traces``."""
+    """Build one normalized stored trace record for a concrete path."""
 
     resolved_root = root.resolve()
-    normalized_payload = normalize_trace_record_payload(payload)
+    snapshot = _mapping_or_none(normalized_payload.get("snapshot")) or {}
+    trace = _mapping_or_none(normalized_payload.get("trace")) or {}
     normalized_outcome = _mapping_or_none(normalized_payload.get("outcome"))
     if outcome is not None:
         normalized_outcome = _normalize_outcome_payload(outcome)
-    trace_dir = _trace_storage_dir(resolved_root, imported=imported)
-    trace_dir.mkdir(parents=True, exist_ok=True)
-    safe_name = _sanitize_name(
-        trace_name or _default_trace_name(normalized_payload),
-        default="trace-record",
-    )
-    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    trace_path = trace_dir / f"{timestamp}-{safe_name}.json"
-    snapshot = _mapping_or_none(normalized_payload.get("snapshot")) or {}
-    trace = _mapping_or_none(normalized_payload.get("trace")) or {}
-    record: dict[str, object] = {
+    return {
         "schema_version": TRACE_RECORD_SCHEMA_VERSION,
         "trace_record_kind": TRACE_RECORD_KIND,
         "stored_at": datetime.now(UTC).isoformat(),
@@ -1166,8 +1161,146 @@ def write_trace_record(
         "trace": trace,
         "outcome": normalized_outcome,
     }
+
+
+def write_trace_record(
+    root: Path,
+    payload: Mapping[str, object],
+    *,
+    trace_name: str | None = None,
+    imported: bool = False,
+    outcome: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    """Normalize and persist one runtime-trace record under ``artifacts/traces``."""
+
+    resolved_root = root.resolve()
+    normalized_payload = normalize_trace_record_payload(payload)
+    normalized_outcome = _mapping_or_none(normalized_payload.get("outcome"))
+    if outcome is not None:
+        normalized_outcome = _normalize_outcome_payload(outcome)
+    trace_dir = _trace_storage_dir(resolved_root, imported=imported)
+    trace_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = _sanitize_name(
+        trace_name or _default_trace_name(normalized_payload),
+        default="trace-record",
+    )
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    trace_path = trace_dir / f"{timestamp}-{safe_name}.json"
+    record = _build_trace_record(
+        resolved_root,
+        normalized_payload,
+        trace_path=trace_path,
+        imported=imported,
+        outcome=normalized_outcome,
+    )
     trace_path.write_text(f"{json.dumps(record, indent=2)}\n", encoding="utf-8")
     return record
+
+
+def restore_processed_trace_records(
+    root: Path,
+    *,
+    queue_name: str = "default",
+    output_dir: Path = DEFAULT_TRAINER_RECOVERED_TRACES_DIR,
+) -> dict[str, object]:
+    """Restore a durable local trace ledger from processed queue items."""
+
+    resolved_root = root.resolve()
+    resolved_output_dir = output_dir if output_dir.is_absolute() else resolved_root / output_dir
+    resolved_output_dir.mkdir(parents=True, exist_ok=True)
+    normalized_queue_name = _sanitize_name(queue_name, default="default")
+    config = resolve_azure_artifact_config(queue_name=queue_name)
+
+    if config is not None and config.queue_enabled:
+        store = AzureArtifactStore(config)
+        container = repo_rag_trace_container(config)
+        queue_name_remote = repo_rag_trace_queue_name(config, fallback=normalized_queue_name)
+        prefix = processed_trace_blob_name(queue_name_remote, "")
+        blob_names = sorted(store.list_blobs(container, prefix=prefix))
+        restored_paths: list[str] = []
+        failures: list[dict[str, str]] = []
+        for blob_name in blob_names:
+            try:
+                queued_item = store.download_json(container, blob_name)
+                if _string_or_none(queued_item.get("queue_item_kind")) != TRACE_QUEUE_ITEM_KIND:
+                    raise ValueError("Processed trace blob is missing `queue_item_kind`.")
+                trace_payload = _mapping_or_none(queued_item.get("trace_payload"))
+                if trace_payload is None:
+                    raise ValueError("Processed trace blob is missing `trace_payload`.")
+                trace_path = resolved_output_dir / Path(blob_name).name
+                normalized_payload = normalize_trace_record_payload(trace_payload)
+                record = _build_trace_record(
+                    resolved_root,
+                    normalized_payload,
+                    trace_path=trace_path,
+                    imported=True,
+                    outcome=_mapping_or_none(queued_item.get("outcome")),
+                )
+                trace_path.write_text(f"{json.dumps(record, indent=2)}\n", encoding="utf-8")
+                restored_paths.append(_relative_to_root(trace_path, resolved_root))
+            except Exception as exc:
+                failures.append(
+                    {
+                        "queue_item_path": blob_name,
+                        "error_type": type(exc).__name__,
+                        "error_message": str(exc),
+                    }
+                )
+        return {
+            "queue_name": queue_name_remote,
+            "processed_queue_dir": f"azure://{container}/processed/{queue_name_remote}",
+            "output_dir": _relative_to_root(resolved_output_dir, resolved_root),
+            "queue_found": bool(blob_names),
+            "processed_count": len(blob_names),
+            "restored_count": len(restored_paths),
+            "failed_count": len(failures),
+            "storage_backend": "azure-blob-queue",
+            "trace_container": container,
+            "trace_paths": restored_paths,
+            "failures": failures,
+        }
+
+    processed_dir = _trace_queue_dir(resolved_root, queue_name, processed=True)
+    processed_paths = sorted(processed_dir.glob("*.json")) if processed_dir.is_dir() else []
+    restored_paths_local: list[str] = []
+    local_failures: list[dict[str, str]] = []
+    for processed_path in processed_paths:
+        try:
+            queued_item = _load_trace_queue_item(processed_path)
+            trace_payload = _mapping_or_none(queued_item.get("trace_payload"))
+            if trace_payload is None:
+                raise ValueError("Processed trace item is missing `trace_payload`.")
+            trace_path = resolved_output_dir / processed_path.name
+            normalized_payload = normalize_trace_record_payload(trace_payload)
+            record = _build_trace_record(
+                resolved_root,
+                normalized_payload,
+                trace_path=trace_path,
+                imported=True,
+                outcome=_mapping_or_none(queued_item.get("outcome")),
+            )
+            trace_path.write_text(f"{json.dumps(record, indent=2)}\n", encoding="utf-8")
+            restored_paths_local.append(_relative_to_root(trace_path, resolved_root))
+        except Exception as exc:
+            local_failures.append(
+                {
+                    "queue_item_path": _relative_to_root(processed_path, resolved_root),
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                }
+            )
+    return {
+        "queue_name": normalized_queue_name,
+        "processed_queue_dir": _relative_to_root(processed_dir, resolved_root),
+        "output_dir": _relative_to_root(resolved_output_dir, resolved_root),
+        "queue_found": processed_dir.is_dir(),
+        "processed_count": len(processed_paths),
+        "restored_count": len(restored_paths_local),
+        "failed_count": len(local_failures),
+        "storage_backend": "filesystem",
+        "trace_paths": restored_paths_local,
+        "failures": local_failures,
+    }
 
 
 def queue_trace_record(

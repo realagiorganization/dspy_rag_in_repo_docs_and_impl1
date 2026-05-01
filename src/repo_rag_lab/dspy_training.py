@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -135,6 +135,9 @@ class DSPyTrainingConfig:
 
     training_path: Path = DEFAULT_TRAINING_PATH
     run_name: str = DEFAULT_DSPY_RUN_NAME
+    bundle_version: str | None = None
+    run_family: str | None = None
+    lineage_metadata: Mapping[str, object] | None = None
     optimizer: str = "bootstrapfewshot"
     top_k: int = 4
     retrieval_mode: RetrievalMode | None = None
@@ -159,6 +162,7 @@ class DSPyTrainingResult:
     """Serializable summary of one DSPy training run."""
 
     run_name: str
+    run_family: str | None
     artifact_dir: str
     program_path: str
     metadata_path: str
@@ -169,6 +173,7 @@ class DSPyTrainingResult:
     lm_model: str
     bundle_path: str | None = None
     bundle_version: str | None = None
+    lineage_metadata: dict[str, object] | None = None
 
     def to_payload(self) -> dict[str, object]:
         """Return the training result as a machine-readable payload."""
@@ -550,6 +555,26 @@ def retrieve_repository_context(
     return context, context_sources
 
 
+def _format_generation_context(
+    context: Sequence[str], context_sources: Sequence[str]
+) -> list[str]:
+    """Attach source paths to DSPy generation context so file/path answers stay grounded."""
+
+    formatted: list[str] = []
+    for text, source in zip(context, context_sources, strict=False):
+        normalized_text = str(text).strip()
+        normalized_source = str(source).strip()
+        if normalized_source and normalized_text:
+            formatted.append(f"Source: {normalized_source}\n\n{normalized_text}")
+        elif normalized_source:
+            formatted.append(f"Source: {normalized_source}")
+        elif normalized_text:
+            formatted.append(normalized_text)
+    if len(context) > len(formatted):
+        formatted.extend(str(text).strip() for text in context[len(formatted) :] if str(text).strip())
+    return formatted
+
+
 def repository_answer_metric(
     example: ExampleLike, pred: PredictionLike, trace: object | None = None
 ) -> bool:
@@ -607,9 +632,10 @@ if _dspy is not None:
                 top_k=self.top_k,
                 retrieval_mode=self.retrieval_mode,
             )
+            generation_context = _format_generation_context(context, context_sources)
             dspy_module = _dspy
             assert dspy_module is not None
-            prediction = self.respond(question=question, context=context)
+            prediction = self.respond(question=question, context=generation_context)
             answer = str(getattr(prediction, "answer", ""))
             return dspy_module.Prediction(
                 answer=answer,
@@ -798,6 +824,14 @@ def train_repository_program(
     metadata = {
         "recorded_at": datetime.now(UTC).isoformat(),
         "run_name": _sanitize_run_name(training_config.run_name),
+        "bundle_version": _sanitize_run_name(
+            training_config.bundle_version or training_config.run_name
+        ),
+        "run_family": (
+            _sanitize_run_name(training_config.run_family)
+            if isinstance(training_config.run_family, str) and training_config.run_family.strip()
+            else None
+        ),
         "artifact_dir": str(artifact_paths.artifact_dir.relative_to(resolved_root)),
         "program_path": relative_program_path,
         "metadata_path": relative_metadata_path,
@@ -813,6 +847,11 @@ def train_repository_program(
             "trainset_size": len(trainset),
             "top_k": training_config.top_k,
         },
+        "lineage": (
+            dict(training_config.lineage_metadata)
+            if isinstance(training_config.lineage_metadata, Mapping)
+            else None
+        ),
     }
     artifact_paths.metadata_path.write_text(
         f"{json.dumps(metadata, indent=2)}\n",
@@ -821,6 +860,11 @@ def train_repository_program(
     bundle_manifest = write_bundle_manifest(resolved_root, artifact_paths.metadata_path)
     return DSPyTrainingResult(
         run_name=_sanitize_run_name(training_config.run_name),
+        run_family=(
+            _sanitize_run_name(training_config.run_family)
+            if isinstance(training_config.run_family, str) and training_config.run_family.strip()
+            else None
+        ),
         artifact_dir=str(artifact_paths.artifact_dir.relative_to(resolved_root)),
         program_path=relative_program_path,
         metadata_path=relative_metadata_path,
@@ -831,4 +875,9 @@ def train_repository_program(
         lm_model=lm_config.model,
         bundle_path=str(bundle_manifest.get("bundle_path") or ""),
         bundle_version=str(bundle_manifest.get("bundle_version") or ""),
+        lineage_metadata=(
+            dict(training_config.lineage_metadata)
+            if isinstance(training_config.lineage_metadata, Mapping)
+            else None
+        ),
     )

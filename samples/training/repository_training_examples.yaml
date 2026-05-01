@@ -1,7 +1,8 @@
 - question: What does this repository research?
   expected_answer: >-
-    It researches repository-grounded RAG workflows with shared uv-managed
-    utilities, MCP discovery, and Azure deployment manifest support.
+    This repository researches repository-grounded question answering and RAG
+    workflows over repository files, with shared utilities, notebooks,
+    evaluation, and Azure deployment support.
   tags:
     - repo
     - rag

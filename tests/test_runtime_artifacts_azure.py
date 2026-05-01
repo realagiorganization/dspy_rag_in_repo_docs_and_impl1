@@ -27,6 +27,7 @@ from repo_rag_lab.runtime_artifacts import (
     drain_trace_queue,
     fetch_remote_bundle,
     queue_trace_record,
+    restore_processed_trace_records,
 )
 
 
@@ -104,6 +105,13 @@ class _FakeAzureArtifactStore:
 
     def blob_exists(self, container_name: str, blob_name: str) -> bool:
         return (container_name, blob_name) in self.blobs
+
+    def list_blobs(self, container_name: str, *, prefix: str) -> list[str]:
+        return sorted(
+            blob_name
+            for (candidate_container, blob_name) in self.blobs
+            if candidate_container == container_name and blob_name.startswith(prefix)
+        )
 
 
 class _FakeAzureExistsError(Exception):
@@ -346,6 +354,71 @@ def test_queue_trace_record_and_drain_trace_queue_use_azure_blob_queue(
     imported_payload = json.loads(imported_path.read_text(encoding="utf-8"))
     assert imported_payload["outcome"]["acceptance_status"] == "accepted"
     assert store.deleted_messages == ["msg-1"]
+
+
+def test_restore_processed_trace_records_rebuilds_local_ledger_from_azure_processed_blobs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _FakeAzureArtifactStore()
+    config = AzureArtifactConfig(
+        account_name="acct",
+        account_key="key",
+        connection_string=None,
+        trace_container="repo-rag-training-traces",
+        bundle_container="repo-rag-bundles",
+        queue_name="repo-rag-training",
+    )
+
+    def fake_resolve_azure_artifact_config(queue_name: str | None = None) -> AzureArtifactConfig:
+        del queue_name
+        return config
+
+    def fake_azure_artifact_store(cfg: AzureArtifactConfig) -> _FakeAzureArtifactStore:
+        del cfg
+        return store
+
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config",
+        fake_resolve_azure_artifact_config,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
+        fake_azure_artifact_store,
+    )
+
+    queue_item_name = "20260501T180000Z-worker-demo.json"
+    store.upload_json(
+        "repo-rag-training-traces",
+        processed_trace_blob_name("repo-rag-training", queue_item_name),
+        {
+            "schema_version": 1,
+            "queue_item_kind": "repo-rag-trace-queue-item",
+            "queue_status": "imported",
+            "queue_name": "repo-rag-training",
+            "trace_name": "worker-demo",
+            "trace_payload": _sample_trace_payload(),
+            "outcome": {
+                "acceptance_status": "accepted",
+                "accepted": True,
+                "execution_status": "success",
+            },
+        },
+    )
+
+    restored = restore_processed_trace_records(tmp_path, queue_name="dataset")
+
+    assert restored["storage_backend"] == "azure-blob-queue"
+    assert restored["processed_count"] == 1
+    assert restored["restored_count"] == 1
+    trace_paths = restored["trace_paths"]
+    assert isinstance(trace_paths, list) and trace_paths
+    restored_path = tmp_path / str(trace_paths[0])
+    assert restored_path.exists()
+    restored_payload = json.loads(restored_path.read_text(encoding="utf-8"))
+    assert restored_payload["trace_record_kind"] == "repo-rag-trace-record"
+    assert restored_payload["question"] == "How does the trainer ingest traces?"
+    assert restored_payload["outcome"]["acceptance_status"] == "accepted"
 
 
 def test_fetch_remote_bundle_downloads_bundle_assets(
