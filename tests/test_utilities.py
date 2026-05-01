@@ -705,7 +705,7 @@ def test_run_trace_enqueue_and_drain_round_trip(tmp_path: Path) -> None:
     assert processed_item_path.exists()
 
 
-def test_versioned_training_run_name_uses_family_prefix_and_high_resolution_timestamp() -> None:
+def test_versioned_training_run_name_returns_high_resolution_timestamp_only() -> None:
     from repo_rag_lab.utilities import _versioned_training_run_name
 
     resolved = _versioned_training_run_name(
@@ -713,7 +713,7 @@ def test_versioned_training_run_name_uses_family_prefix_and_high_resolution_time
         recorded_at=datetime(2026, 5, 1, 17, 0, 0, 123456, tzinfo=UTC),
     )
 
-    assert resolved == "trainer-auto-20260501T170000123456Z"
+    assert resolved == "20260501T170000123456Z"
 
 
 def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
@@ -722,7 +722,7 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
 ) -> None:
     monkeypatch.setattr(
         "repo_rag_lab.utilities._versioned_training_run_name",
-        lambda run_family, recorded_at=None: f"{run_family}-20260501T170000Z",
+        lambda run_family, recorded_at=None: "20260501T170000Z",
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.drain_trace_queue",
@@ -815,10 +815,10 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
                 "summary_path": "artifacts/trainer/generated-training-summary.json",
             },
             "training_result": {
-                "run_name": "trainer-auto-20260501T170000Z",
-                "bundle_version": "trainer-auto-20260501T170000Z",
-                "metadata_path": "artifacts/dspy/trainer-auto-20260501T170000Z/metadata.json",
-                "bundle_path": "artifacts/dspy/trainer-auto-20260501T170000Z/bundle.json",
+                "run_name": "20260501T170000Z",
+                "bundle_version": "20260501T170000Z",
+                "metadata_path": "artifacts/dspy/20260501T170000Z/metadata.json",
+                "bundle_path": "artifacts/dspy/20260501T170000Z/bundle.json",
                 "benchmark_summary": {"pass_rate": 1.0},
             },
         },
@@ -871,7 +871,7 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
     assert payload["training_candidates"]["candidate_count"] == 1
     assert payload["gate_passed"] is True
     assert payload["recompile"]["requested_run_name"] == "trainer-auto"
-    assert payload["recompile"]["resolved_run_name"] == "trainer-auto-20260501T170000Z"
+    assert payload["recompile"]["resolved_run_name"] == "20260501T170000Z"
     assert payload["publish"]["publish_status"] == "published"
     assert payload["promotion_status"] == "promoted"
     assert payload["promotion"]["channel_name"] == "stable"
@@ -1240,7 +1240,7 @@ def test_run_trainer_cycle_uploads_remote_bundle_when_publish_succeeds(
 ) -> None:
     monkeypatch.setattr(
         "repo_rag_lab.utilities._versioned_training_run_name",
-        lambda run_family, recorded_at=None: f"{run_family}-20260501T170100Z",
+        lambda run_family, recorded_at=None: "20260501T170100Z",
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.drain_trace_queue",
@@ -1316,10 +1316,10 @@ def test_run_trainer_cycle_uploads_remote_bundle_when_publish_succeeds(
                 "summary_path": "artifacts/trainer/generated-training-summary.json",
             },
             "training_result": {
-                "run_name": "trainer-auto-20260501T170100Z",
-                "bundle_version": "trainer-auto-20260501T170100Z",
-                "metadata_path": "artifacts/dspy/trainer-auto-20260501T170100Z/metadata.json",
-                "bundle_path": "artifacts/dspy/trainer-auto-20260501T170100Z/bundle.json",
+                "run_name": "20260501T170100Z",
+                "bundle_version": "20260501T170100Z",
+                "metadata_path": "artifacts/dspy/20260501T170100Z/metadata.json",
+                "bundle_path": "artifacts/dspy/20260501T170100Z/bundle.json",
                 "benchmark_summary": {"pass_rate": 1.0},
             },
         },
@@ -1328,12 +1328,12 @@ def test_run_trainer_cycle_uploads_remote_bundle_when_publish_succeeds(
     monkeypatch.setattr(
         "repo_rag_lab.utilities.publish_bundle",
         lambda *args, **kwargs: {
-            "bundle_version": "trainer-auto-20260501T170100Z",
-            "run_name": "trainer-auto-20260501T170100Z",
-            "published_bundle_path": "artifacts/dspy/published/trainer-auto-20260501T170100Z.json",
-            "bundle_path": "artifacts/dspy/trainer-auto-20260501T170100Z/bundle.json",
-            "metadata_path": "artifacts/dspy/trainer-auto-20260501T170100Z/metadata.json",
-            "program_path": "artifacts/dspy/trainer-auto-20260501T170100Z/program.json",
+            "bundle_version": "20260501T170100Z",
+            "run_name": "20260501T170100Z",
+            "published_bundle_path": "artifacts/dspy/published/20260501T170100Z.json",
+            "bundle_path": "artifacts/dspy/20260501T170100Z/bundle.json",
+            "metadata_path": "artifacts/dspy/20260501T170100Z/metadata.json",
+            "program_path": "artifacts/dspy/20260501T170100Z/program.json",
             "publish_status": "published",
         },
     )
@@ -1368,10 +1368,10 @@ def test_run_trainer_cycle_uploads_remote_bundle_when_publish_succeeds(
             "storage_backend": "azure-blob",
             "bundle_container": config.bundle_container,
             "remote_bundle_blobs": {
-                "bundle": "versions/trainer-auto-20260501T170100Z/bundle.json",
-                "metadata": "versions/trainer-auto-20260501T170100Z/metadata.json",
-                "program": "versions/trainer-auto-20260501T170100Z/program.json",
-                "published": "versions/trainer-auto-20260501T170100Z/published.json",
+                "bundle": "versions/20260501T170100Z/bundle.json",
+                "metadata": "versions/20260501T170100Z/metadata.json",
+                "program": "versions/20260501T170100Z/program.json",
+                "published": "versions/20260501T170100Z/published.json",
             },
         }
 
@@ -1393,13 +1393,13 @@ def test_run_trainer_cycle_uploads_remote_bundle_when_publish_succeeds(
     assert payload["publish_requested"] is True
     assert payload["durable_trace_recovery"]["restored_count"] == 1
     assert payload["recompile"]["requested_run_name"] == "trainer-auto"
-    assert payload["recompile"]["resolved_run_name"] == "trainer-auto-20260501T170100Z"
-    assert payload["publish"]["bundle_version"] == "trainer-auto-20260501T170100Z"
+    assert payload["recompile"]["resolved_run_name"] == "20260501T170100Z"
+    assert payload["publish"]["bundle_version"] == "20260501T170100Z"
     assert payload["publish"]["remote_publish"]["storage_backend"] == "azure-blob"
     assert upload_calls == [
         {
             "root": str(tmp_path),
-            "bundle_version": "trainer-auto-20260501T170100Z",
+            "bundle_version": "20260501T170100Z",
             "bundle_container": "repo-rag-bundles",
         }
     ]

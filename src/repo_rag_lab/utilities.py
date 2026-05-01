@@ -169,11 +169,10 @@ def _sanitize_training_run_name(name: str, *, default: str = DEFAULT_DSPY_RUN_NA
 
 
 def _versioned_training_run_name(run_family: str, *, recorded_at: datetime | None = None) -> str:
-    """Return one unique compile/publish identifier under a stable trainer family prefix."""
+    """Return one timestamp-only immutable bundle version for trainer publish cycles."""
 
-    safe_family = _sanitize_training_run_name(run_family, default=DEFAULT_DSPY_RUN_NAME)
-    timestamp = (recorded_at or datetime.now(UTC)).strftime("%Y%m%dT%H%M%S%fZ")
-    return f"{safe_family}-{timestamp}"
+    _sanitize_training_run_name(run_family, default=DEFAULT_DSPY_RUN_NAME)
+    return (recorded_at or datetime.now(UTC)).strftime("%Y%m%dT%H%M%S%fZ")
 
 
 def _summarize_imported_trace_records(
@@ -286,22 +285,22 @@ def utility_summary(root: Path) -> str:
             "programs as JSON with shared command metadata"
         ),
         (
-            "- make bundle-inspect / uv run repo-rag bundle-inspect: inspect the latest or "
-            "named versioned DSPy bundle manifest or a promoted channel state for worker-side "
-            "startup"
+            "- make bundle-inspect / uv run repo-rag bundle-inspect: inspect one named immutable "
+            "DSPy bundle version or, when needed, a promoted channel alias for worker-side startup"
         ),
         (
             "- make bundle-publish / uv run repo-rag bundle-publish: publish a compiled DSPy "
-            "bundle version into the local bundle registry without changing stable/canary "
-            "channel pointers"
+            "bundle version into the local bundle registry without mutating a prior immutable "
+            "version"
         ),
         (
-            "- make bundle-promote / uv run repo-rag bundle-promote: point the stable or canary "
-            "channel at a published DSPy bundle version for worker-side selection"
+            "- make bundle-promote / uv run repo-rag bundle-promote: optionally point the stable "
+            "or canary channel at a published DSPy bundle version; channel aliases are a fallback "
+            "to the primary DSPY_BUNDLE_VERSION pinning contract"
         ),
         (
             "- make bundle-rollback / uv run repo-rag bundle-rollback: move a stable or canary "
-            "channel back to an earlier published bundle version"
+            "channel back to an earlier published bundle version when channel aliases are in use"
         ),
         (
             "- make bundle-fetch / uv run repo-rag bundle-fetch: download one remote bundle "
