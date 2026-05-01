@@ -253,7 +253,14 @@ At the time of this document:
   rediscovering those values from a repository-local `.env`, and the downstream worker/runtime
   defaults now also pin Azure Responses-compatible API-version fallbacks at
   `2025-03-01-preview` or later instead of backfilling stale `2023-12-01-preview` values when
-  `CODEX_AZURE_CONFIG` omits an explicit `query_params.api-version`
+  `CODEX_AZURE_CONFIG` omits an explicit `query_params.api-version`; the newest AKS evidence now
+  also shows that this proxy/export path is live in production-like runs, while trainer-side queue
+  handoff is still blocked one layer earlier by workflow wiring that generates
+  `repo-rag-storage-config` without Blob credentials during `Generate AKS modules`; the downstream
+  remediation now moves Azure Blob + Queue trace handoff out of the worker boundary and into the
+  trusted post-processing stage after `execution_artifacts` rehydration, so worker pods can stay
+  free of trainer storage secrets while the deploy runner still emits
+  `repo_rag_trace_enqueue.json` and trainer queue/blob side effects
 - DSPy runtime answering is implemented and exposed through `make ask-dspy` after the same
   lookup-first narrowing pass
 - DSPy compile-save-reload is implemented and exposed through `make dspy-train`

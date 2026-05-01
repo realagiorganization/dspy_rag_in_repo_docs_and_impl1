@@ -185,7 +185,14 @@ Current implementation note:
   `CODEX_AZURE_CONFIG`, so Azure-auth mediation can bootstrap without a repo-local `.env`; the
   same downstream worker/runtime path now also defaults missing Azure Responses API versions to
   `2025-03-01-preview` and lets explicit `AZURE_OPENAI_API_VERSION` override any stale
-  `query_params.api-version` preserved in `CODEX_AZURE_CONFIG`.
+  `query_params.api-version` preserved in `CODEX_AZURE_CONFIG`. The newest AKS trace evidence shows
+  that this path now reaches successful proxy mediation plus trace export in-cluster, but the
+  global trainer handoff still stops at `trace_handoff_status = "skipped"` because the
+  `Generate AKS modules` workflow step creates `repo-rag-storage-config` before Blob credentials
+  are exported into the generator environment. The current downstream remediation now avoids
+  solving that by leaking storage credentials into worker pods; instead it performs trusted
+  post-processing trace enqueue after `execution_artifacts` rehydration in the deploy stage, where
+  Azure storage credentials already exist and Codex cannot read them from its own environment.
 - The trainer repository now also exposes `repo-rag trainer-cycle`, which wraps queue drain,
   retrieval gating, and optional bundle publish/promotion in one background-compatible pass so the
   next iteration can schedule it as a CronJob/systemd timer before introducing a fuller trainer
