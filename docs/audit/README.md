@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-04-30-aks-run-25179828865-stale-image-inspection.md`
+- `2026-05-01-aks-run-25191504814-project-root-resolution-inspection.md`
 
 ## Usage
 
