@@ -237,11 +237,13 @@ At the time of this document:
 - that Codex mediation proxy now tries `RAG + DSPy` together first, degrades only the failed layer
   to heuristics when DSPy or retrieval is weak, and finally falls back to direct pass-through so
   an untrained bundle cannot block task execution
-- the explicit downstream `repo_rag_cli` / `dspy` runtime path can now resolve a stable bundle
-  version from a global bundle store through `repo-rag bundle-inspect --channel stable`, fetch the
-  actual program through `repo-rag bundle-fetch`, and stage exported traces through
-  `repo-rag trace-enqueue`; those records can include accepted/candidate outcome metadata, giving
-  the global trainer a cross-namespace source of DSPy recompilation inputs
+- the explicit downstream `repo_rag_cli` / `dspy` runtime path now treats one explicit immutable
+  bundle version as the primary runtime selector: workers can pin `DSPY_BUNDLE_VERSION` to one
+  published timestamped bundle such as `20260501T135609Z`, fetch that exact program through
+  `repo-rag bundle-fetch`, and only fall back to `bundle-inspect --channel stable` when no
+  explicit version pin is configured; exported traces still stage through `repo-rag trace-enqueue`,
+  and those records can include accepted/candidate outcome metadata, giving the global trainer a
+  cross-namespace source of DSPy recompilation inputs
 - the worker-side codex path now tries that mediation proxy for any repository-like prepared clone
   by default, so repo-aware augmentation no longer depends on switching execution methods away from
   `codex`; explicit `repo_rag_cli` remains available when a caller wants repo-RAG answers without
@@ -282,11 +284,13 @@ At the time of this document:
   run continuously while recording trainer-side state/history artifacts under `artifacts/trainer/`;
   the current live AKS trainer deployment now drains the Azure queue, uses
   `TRAINER_RECOMPILE_RUN_NAME=trainer-auto` as a run-family label, mints a unique timestamped
-  bundle version for each successful recompile, records imported trace paths plus candidate dedupe
-  counters in bundle lineage metadata, and can remote-publish those immutable bundle versions into
-  `repo-rag-bundles`; `stable` / `canary` promotion and rollback therefore point at concrete
-  published versions instead of a mutable `trainer-auto` artifact, while `TRAINER_PROMOTE_CHANNEL`
-  can still stay empty when automatic promotion should remain disabled; the trainer cycle now also
+  bundle version such as `20260501T135609Z` for each successful recompile, records imported trace
+  paths plus candidate dedupe counters in bundle lineage metadata, and can remote-publish those
+  immutable bundle versions into `repo-rag-bundles`; worker deployments can now pin one of those
+  versions globally through `DSPY_BUNDLE_VERSION`, while optional `stable` / `canary` promotion
+  and rollback remain available as alias/fallback mechanics instead of the primary runtime
+  selection path; `TRAINER_PROMOTE_CHANNEL` can still stay empty when automatic promotion should
+  remain disabled; the trainer cycle now also
   restores a durable local trace ledger from Azure `processed/<queue>/...` blobs before
   materializing candidates, so losing the trainer PVC no longer implies losing the accumulated
   example set used to build the next DSPy program

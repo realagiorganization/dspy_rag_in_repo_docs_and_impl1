@@ -6,7 +6,7 @@ repository to the `../dataset` pipeline without blocking pipeline execution on t
 ## Scope
 
 - The first integration path is direct runtime execution, not MCP-first orchestration.
-- Workers should use the latest stable bundle plus repo-local RAG state.
+- Workers should use one explicitly pinned global bundle version plus repo-local RAG state.
 - Global optimization should be asynchronous.
 
 ## Status
@@ -30,7 +30,7 @@ Current first-pass contract:
 - Retrieval regression call: `uv run repo-rag retrieval-eval --root <repo_path> --output json`
 - Artifact inspection call: `uv run repo-rag dspy-artifacts --root <repo_path> --output json`
 - Bundle inspection call: `uv run repo-rag bundle-inspect --root <repo_path> --channel stable --output json`
-- Bundle fetch call: `uv run repo-rag bundle-fetch --root <repo_path> --channel stable --output json`
+- Bundle fetch call: `uv run repo-rag bundle-fetch --root <repo_path> --bundle-version <timestamp_version> --output json`
 - Bundle publish call: `uv run repo-rag bundle-publish --root <trainer_repo> --run-name <bundle_run> --output json`
 - Bundle promote call: `uv run repo-rag bundle-promote --root <trainer_repo> --channel stable --run-name <bundle_run> --output json`
 - Bundle rollback call: `uv run repo-rag bundle-rollback --root <trainer_repo> --channel stable --output json`
@@ -75,7 +75,7 @@ Current first-pass worker inputs:
 - required now: an execution choice that maps to baseline `ask`, DSPy `ask --use-dspy`, or `ask-live`
 - required when the selected mode needs it: runtime provider config such as Azure/OpenAI or `DSPY_*`
 - optional now: `retrieval_mode` when the worker wants to override the repo-local profile default
-- optional now: `bundle_version` when a worker wants to pin or annotate the selected bundle
+- optional now: `bundle_version` when a worker wants to override the deployment-wide `DSPY_BUNDLE_VERSION` pin or annotate the selected bundle
 - optional now: `overlay_path` when a worker wants to persist or reuse a local overlay manifest
 
 Current first-pass worker outputs:
@@ -162,12 +162,13 @@ Current implementation note:
   low-signal-aware, and backed by a filesystem cache so the default `codex` loop does not pay for
   unbounded repeated prompt inflation.
 - The explicit local executor and worker `repo_rag_cli` / `dspy` paths now support a first-pass
-  bundle/trace lifecycle: they can resolve a stable bundle version from the global bundle store
-  through `repo-rag bundle-inspect --channel stable`, fetch the actual DSPy program through
-  `repo-rag bundle-fetch`, and then stage the exported trace into the global Azure Blob + Queue
-  transport through `repo-rag trace-enqueue` or, when explicitly requested, import it directly
-  through `repo-rag trace-import`, with warnings instead of hard failures when those sidecar steps
-  are unavailable.
+  bundle/trace lifecycle: they primarily consume one immutable bundle version pinned through
+  `DSPY_BUNDLE_VERSION` (or an explicit prompt-side `bundle_version` override), fetch that exact
+  DSPy program through `repo-rag bundle-fetch`, and only fall back to `repo-rag bundle-inspect
+  --channel stable` when no version pin is configured. They then stage the exported trace into the
+  global Azure Blob + Queue transport through `repo-rag trace-enqueue` or, when explicitly
+  requested, import it directly through `repo-rag trace-import`, with warnings instead of hard
+  failures when those sidecar steps are unavailable.
 - Those explicit `repo_rag_cli` / `dspy` runtime paths now also persist `repo_rag_outcome.json`
   and pass it to `repo-rag trace-import --outcome-path ...` or
   `repo-rag trace-enqueue --outcome-path ...`, so trainer-side imported or queued trace records now
@@ -206,10 +207,12 @@ Current implementation note:
   after queue drain, so imported worker traces now have a concrete route into generated DSPy
   compile inputs under `artifacts/trainer/generated-training.yaml`; the trainer now treats
   `TRAINER_RECOMPILE_RUN_NAME` as a run family such as `trainer-auto`, mints a unique immutable
-  `bundle_version` such as `trainer-auto-<timestamp>` for every successful recompile, records the
-  imported trace paths plus candidate dedupe counters in bundle lineage metadata, and leaves
+  `bundle_version` such as `<timestamp>` for every successful recompile, records the imported
+  trace paths plus candidate dedupe counters in bundle lineage metadata, and leaves optional
   `stable` / `canary` channel state plus rollback/promote operations pointed at those concrete
-  versioned bundles instead of overwriting one mutable trainer alias. The trainer cycle now also
+  versioned bundles instead of overwriting one mutable trainer alias. The primary worker-side
+  runtime selector is now the deployment-wide `DSPY_BUNDLE_VERSION` pin rather than a mandatory
+  channel lookup. The trainer cycle now also
   reconstructs its local compile ledger from Azure `processed/<queue>/...` blobs before candidate
   materialization, so the DSPy training input can be rebuilt after trainer PVC loss instead of
   depending on one surviving `training-candidates.yaml` snapshot.
@@ -222,7 +225,7 @@ Current implementation note:
     auto-recompile can be observed end-to-end
   - decide whether automatic promotion should remain disabled or be enabled intentionally through
     `TRAINER_PROMOTE_CHANNEL`
-  - validate that later worker runs can resolve and consume a trainer-published stable bundle
+  - validate that later worker runs can resolve and consume a trainer-published bundle via `DSPY_BUNDLE_VERSION`
 
 ## Phase 4. Global Training Loop
 
@@ -277,7 +280,7 @@ Current implementation note:
 ## Exit Criteria
 
 - [x] A `dataset` worker can build a repo-local overlay, answer through `repo-rag`, and upload traces.
-- [ ] A `dataset` worker can resolve and pull a stable bundle from the global bundle store during live AKS runs.
+- [ ] A `dataset` worker can resolve and pull one explicit `DSPY_BUNDLE_VERSION` bundle from the global bundle store during live AKS runs.
 - [x] The main pipeline run never blocks on global retraining.
 - [x] New bundles are published asynchronously into the shared global bundle store.
 - [ ] Those shared bundles are demonstrably consumed by later live AKS worker runs.

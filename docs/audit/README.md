@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-05-01-durable-trainer-progress-remote-recovery.md`
+- `2026-05-01-dspy-bundle-version-pinning-contract.md`
 
 ## Usage
 

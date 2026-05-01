@@ -12,6 +12,9 @@ that image as `repo-rag-runtime`.
 - Keep worker runtime and trainer runtime as separate Kubernetes roles.
 - Treat Azure Blob + Queue as the primary cross-namespace transport for worker traces and promoted
   DSPy bundles.
+- Treat the immutable bundle version directory under `versions/<timestamp>/` as the primary
+  runtime artifact, with deployment-time `DSPY_BUNDLE_VERSION` pinning selecting which published
+  version workers should consume.
 - Persist `artifacts/` on a trainer-local PVC so trainer history, generated candidates, cached
   remote bundles, and local audit artifacts survive pod restarts.
 - Keep the older file-backed queue path as compatibility-only; it is no longer the primary worker
@@ -71,6 +74,11 @@ Both surfaces still reuse the same repo-native runtime contract as the local Mak
 - `TRAINER_RECOMPILE_RUN_NAME`
 - `TRAINER_RECOMPILE_BASE_TRAINING_PATH`
 - `TRAINER_PROMOTE_CHANNEL`
+
+For the downstream `dataset` deployment contract, workers do not need channel promotion in order
+to use a global bundle. The primary runtime selector is one explicit immutable bundle version
+distributed through `DSPY_BUNDLE_VERSION`; `stable` / `canary` remain optional alias or rollback
+surfaces when a deployment wants indirection instead of direct version pinning.
 
 The generated Deployment now defaults to a non-terminating queue-consumer posture:
 
