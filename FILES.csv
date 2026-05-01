@@ -123,7 +123,7 @@ docs/audit/2026-04-29-trainer-service-loop.md,docs,markdown,133,6185,Repository 
 docs/audit/2026-04-30-aks-run-25179828865-stale-image-inspection.md,docs,markdown,117,6206,Repository audit note for 2026 04 30 aks run 25179828865 stale image inspection
 docs/audit/2026-04-30-codex-proxy-mediation-layer.md,docs,markdown,95,5279,Repository audit note for 2026 04 30 codex proxy mediation layer
 docs/audit/2026-04-30-codex-proxy-trace-handoff.md,docs,markdown,122,6543,Repository audit note for 2026 04 30 codex proxy trace handoff
-docs/audit/README.md,docs,markdown,14,427,Repository audit note for README
+docs/audit/README.md,docs,markdown,14,439,Repository audit note for README
 docs/guides/hushwheel-fixture-rag-guide.md,docs,markdown,138,5169,RAG Guide For The Hushwheel Fixture
 docs/operations/azure-deployment.md,docs,markdown,111,4901,Azure Deployment Notes
 docs/operations/environment.md,docs,markdown,122,6389,Environment and secret reference for local runtime and deployment workflows
