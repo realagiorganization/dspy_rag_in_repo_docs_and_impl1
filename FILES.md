@@ -46,7 +46,7 @@ This inventory is generated from the current Git index.
 | `docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md` | docs | markdown | 38 | 1555 | Implementing RAG with DSPy: Technical Guide |
 | `docs/architecture/mcp-discovery.md` | docs | markdown | 54 | 1757 | MCP Discovery Notes |
 | `docs/architecture/package-api.md` | docs | markdown | 127 | 9186 | Package API Notes |
-| `docs/architecture/research-narrative.md` | docs | markdown | 376 | 25599 | Repository research narrative tying code, docs, and verification together |
+| `docs/architecture/research-narrative.md` | docs | markdown | 383 | 26237 | Repository research narrative tying code, docs, and verification together |
 | `docs/archive/repo-completeness-checklist.md` | docs | markdown | 238 | 7450 | Archived completeness snapshot kept for workflow and lockfile policy context |
 | `docs/audit/2026-03-15-repo-state.md` | docs | markdown | 151 | 5989 | Repository audit note for 2026 03 15 repo state |
 | `docs/audit/2026-03-17-docs-and-uv-refresh.md` | docs | markdown | 79 | 3977 | Repository audit note for 2026 03 17 docs and uv refresh |
@@ -132,15 +132,16 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-04-30-codex-proxy-trace-handoff.md` | docs | markdown | 122 | 6543 | Repository audit note for 2026 04 30 codex proxy trace handoff |
 | `docs/audit/2026-05-01-aks-run-25191504814-project-root-resolution-inspection.md` | docs | markdown | 133 | 6002 | Repository audit note for 2026 05 01 aks run 25191504814 project root resolution inspection |
 | `docs/audit/2026-05-01-aks-run-25209573387-proxy-runtime-env-inspection.md` | docs | markdown | 129 | 5738 | Repository audit note for 2026 05 01 aks run 25209573387 proxy runtime env inspection |
+| `docs/audit/2026-05-01-dataset-azure-responses-api-version-default-fix.md` | docs | markdown | 133 | 6700 | Repository audit note for 2026 05 01 dataset azure responses api version default fix |
 | `docs/audit/2026-05-01-dataset-azure-runtime-env-propagation-fix.md` | docs | markdown | 81 | 4200 | Repository audit note for 2026 05 01 dataset azure runtime env propagation fix |
-| `docs/audit/README.md` | docs | markdown | 14 | 432 | Repository audit note for README |
+| `docs/audit/README.md` | docs | markdown | 14 | 430 | Repository audit note for README |
 | `docs/guides/hushwheel-fixture-rag-guide.md` | docs | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
 | `docs/operations/azure-deployment.md` | docs | markdown | 111 | 4901 | Azure Deployment Notes |
 | `docs/operations/environment.md` | docs | markdown | 122 | 6389 | Environment and secret reference for local runtime and deployment workflows |
 | `docs/operations/runtime-image.md` | docs | markdown | 46 | 1989 | Runtime Image Notes |
 | `docs/operations/simple-end-to-end-verification-guide.md` | docs | markdown | 105 | 4111 | Simple End-To-End Verification Guide |
 | `docs/operations/trainer-deployment.md` | docs | markdown | 144 | 5455 | Trainer Deployment Notes |
-| `docs/planning/dataset-integration-plan.md` | docs | markdown | 264 | 15981 | Dataset Integration Plan |
+| `docs/planning/dataset-integration-plan.md` | docs | markdown | 271 | 16674 | Dataset Integration Plan |
 | `docs/planning/repo-hardening-plan.md` | docs | markdown | 71 | 4545 | Repository Hardening Plan |
 | `mkdocs.yml` | mkdocs.yml | yaml | 37 | 843 | site_name: Repository RAG Lab |
 | `notebooks/01_repo_rag_research.ipynb` | notebooks | notebook | 281 | 9324 | Repository RAG Research Playbook |
@@ -224,6 +225,7 @@ This inventory is generated from the current Git index.
 | `samples/logs/20260430T122222Z-gh-runs-develop-no-new-run-after-codex-proxy-push.md` | samples | markdown | 25 | 908 | GitHub Actions check after pushing `bbdcf4b` |
 | `samples/logs/20260430T172518Z-gh-runs-develop-no-new-run-after-trace-handoff-push.md` | samples | markdown | 27 | 991 | GitHub Actions check after pushing `839f4cb` |
 | `samples/logs/20260501T103130Z-gh-runs-develop-no-new-run-after-azure-runtime-env-fix-push.md` | samples | markdown | 35 | 1411 | GitHub Actions check after pushing `9e627e1` |
+| `samples/logs/20260501T112330Z-gh-runs-develop-no-new-run-after-azure-responses-api-version-fix-push.md` | samples | markdown | 37 | 1522 | GitHub Actions check after pushing `128874b` |
 | `samples/logs/README.md` | samples | markdown | 11 | 331 | GitHub Run Logs |
 | `samples/population/hushwheel_fixture_population_candidates.yaml` | samples | yaml | 22 | 955 | - source: README.md |
 | `samples/population/repository_population_candidates.yaml` | samples | yaml | 16 | 690 | - source: README.md |
