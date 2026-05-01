@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-05-01-dataset-azure-runtime-env-propagation-fix.md`
+- `2026-05-01-dataset-azure-responses-api-version-default-fix.md`
 
 ## Usage
 

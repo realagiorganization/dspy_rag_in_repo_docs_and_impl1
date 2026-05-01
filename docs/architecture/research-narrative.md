@@ -250,7 +250,10 @@ At the time of this document:
   the same queue/import trainer surfaces used by the explicit repo-rag runtime path; that same
   path now also derives and forwards non-secret `AZURE_OPENAI_*` runtime settings for the local
   `repo-rag serve-codex-proxy` subprocess so Azure-auth workers no longer depend on the proxy
-  rediscovering those values from a repository-local `.env`
+  rediscovering those values from a repository-local `.env`, and the downstream worker/runtime
+  defaults now also pin Azure Responses-compatible API-version fallbacks at
+  `2025-03-01-preview` or later instead of backfilling stale `2023-12-01-preview` values when
+  `CODEX_AZURE_CONFIG` omits an explicit `query_params.api-version`
 - DSPy runtime answering is implemented and exposed through `make ask-dspy` after the same
   lookup-first narrowing pass
 - DSPy compile-save-reload is implemented and exposed through `make dspy-train`
