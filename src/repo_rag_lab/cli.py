@@ -35,6 +35,7 @@ from .runtime_artifacts import (
     resolve_bundle_manifest,
     resolve_bundle_version_for_program,
 )
+from .retrieval_profile import SUPPORTED_RETRIEVAL_MODES
 from .trainer_deployment import (
     DEFAULT_TRAINER_K8S_CYCLE_SCHEDULE,
     DEFAULT_TRAINER_K8S_IMAGE,
@@ -85,6 +86,8 @@ from .utilities import (
     utility_summary,
 )
 from .workflow import ask_repository, ask_repository_live
+
+RETRIEVAL_MODE_CHOICES = sorted(SUPPORTED_RETRIEVAL_MODES)
 
 
 def add_output_argument(
@@ -255,7 +258,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ask_parser.add_argument("--dspy-program-path")
     ask_parser.add_argument("--dspy-top-k", type=int, default=4)
-    ask_parser.add_argument("--retrieval-mode", choices=["lexical", "idf-rerank"])
+    ask_parser.add_argument("--retrieval-mode", choices=RETRIEVAL_MODE_CHOICES)
     ask_parser.add_argument("--bundle-version")
     ask_parser.add_argument("--overlay-path")
     add_output_argument(ask_parser, default="text")
@@ -270,7 +273,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="azure-openai",
     )
     ask_live_parser.add_argument("--load-env-file", action="store_true")
-    ask_live_parser.add_argument("--retrieval-mode", choices=["lexical", "idf-rerank"])
+    ask_live_parser.add_argument("--retrieval-mode", choices=RETRIEVAL_MODE_CHOICES)
     ask_live_parser.add_argument("--bundle-version")
     ask_live_parser.add_argument("--overlay-path")
     add_output_argument(ask_live_parser, default="text")
@@ -345,7 +348,7 @@ def build_parser() -> argparse.ArgumentParser:
     retrieval_eval_parser.add_argument("--training-path", default=str(DEFAULT_TRAINING_PATH))
     retrieval_eval_parser.add_argument("--top-k", type=int, default=DEFAULT_RETRIEVAL_EVAL_TOP_K)
     retrieval_eval_parser.add_argument("--top-k-sweep", default="1,2,4,8")
-    retrieval_eval_parser.add_argument("--retrieval-mode", choices=["lexical", "idf-rerank"])
+    retrieval_eval_parser.add_argument("--retrieval-mode", choices=RETRIEVAL_MODE_CHOICES)
     retrieval_eval_parser.add_argument("--minimum-pass-rate", type=float)
     retrieval_eval_parser.add_argument("--minimum-source-recall", type=float)
     add_output_argument(retrieval_eval_parser, default="json")
@@ -369,7 +372,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="bootstrapfewshot",
     )
     dspy_train_parser.add_argument("--dspy-top-k", type=int, default=4)
-    dspy_train_parser.add_argument("--retrieval-mode", choices=["lexical", "idf-rerank"])
+    dspy_train_parser.add_argument("--retrieval-mode", choices=RETRIEVAL_MODE_CHOICES)
     dspy_train_parser.add_argument("--max-bootstrapped-demos", type=int, default=2)
     dspy_train_parser.add_argument("--max-labeled-demos", type=int, default=2)
     dspy_train_parser.add_argument(
@@ -424,7 +427,7 @@ def build_parser() -> argparse.ArgumentParser:
     overlay_init_parser.add_argument("--root", default=".")
     overlay_init_parser.add_argument("--overlay-name", default="default")
     overlay_init_parser.add_argument("--bundle-version")
-    overlay_init_parser.add_argument("--retrieval-mode", choices=["lexical", "idf-rerank"])
+    overlay_init_parser.add_argument("--retrieval-mode", choices=RETRIEVAL_MODE_CHOICES)
     add_output_argument(overlay_init_parser, default="json")
 
     trace_export_parser = subparsers.add_parser("trace-export")
@@ -468,7 +471,7 @@ def build_parser() -> argparse.ArgumentParser:
     trainer_cycle_parser.add_argument("--training-path", default=str(DEFAULT_TRAINING_PATH))
     trainer_cycle_parser.add_argument("--top-k", type=int, default=DEFAULT_RETRIEVAL_EVAL_TOP_K)
     trainer_cycle_parser.add_argument("--top-k-sweep")
-    trainer_cycle_parser.add_argument("--retrieval-mode", choices=["lexical", "idf-rerank"])
+    trainer_cycle_parser.add_argument("--retrieval-mode", choices=RETRIEVAL_MODE_CHOICES)
     trainer_cycle_parser.add_argument("--minimum-pass-rate", type=float)
     trainer_cycle_parser.add_argument("--minimum-source-recall", type=float)
     trainer_cycle_parser.add_argument("--minimum-bundle-pass-rate", type=float)
@@ -487,7 +490,7 @@ def build_parser() -> argparse.ArgumentParser:
     trainer_service_parser.add_argument("--training-path", default=str(DEFAULT_TRAINING_PATH))
     trainer_service_parser.add_argument("--top-k", type=int, default=DEFAULT_RETRIEVAL_EVAL_TOP_K)
     trainer_service_parser.add_argument("--top-k-sweep")
-    trainer_service_parser.add_argument("--retrieval-mode", choices=["lexical", "idf-rerank"])
+    trainer_service_parser.add_argument("--retrieval-mode", choices=RETRIEVAL_MODE_CHOICES)
     trainer_service_parser.add_argument("--minimum-pass-rate", type=float)
     trainer_service_parser.add_argument("--minimum-source-recall", type=float)
     trainer_service_parser.add_argument("--minimum-bundle-pass-rate", type=float)
@@ -539,7 +542,7 @@ def build_parser() -> argparse.ArgumentParser:
     trainer_k8s_parser.add_argument("--training-path", default=str(DEFAULT_TRAINING_PATH))
     trainer_k8s_parser.add_argument("--top-k", type=int, default=DEFAULT_RETRIEVAL_EVAL_TOP_K)
     trainer_k8s_parser.add_argument("--top-k-sweep", default="1,2,4,8")
-    trainer_k8s_parser.add_argument("--retrieval-mode", choices=["lexical", "idf-rerank"])
+    trainer_k8s_parser.add_argument("--retrieval-mode", choices=RETRIEVAL_MODE_CHOICES)
     trainer_k8s_parser.add_argument(
         "--minimum-pass-rate", type=float, default=DEFAULT_TRAINER_K8S_MINIMUM_PASS_RATE
     )
@@ -584,7 +587,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="bootstrapfewshot",
     )
     trainer_recompile_parser.add_argument("--dspy-top-k", type=int, default=4)
-    trainer_recompile_parser.add_argument("--retrieval-mode", choices=["lexical", "idf-rerank"])
+    trainer_recompile_parser.add_argument("--retrieval-mode", choices=RETRIEVAL_MODE_CHOICES)
     trainer_recompile_parser.add_argument("--max-bootstrapped-demos", type=int, default=2)
     trainer_recompile_parser.add_argument("--max-labeled-demos", type=int, default=2)
     trainer_recompile_parser.add_argument(

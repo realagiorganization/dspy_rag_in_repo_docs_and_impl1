@@ -549,6 +549,7 @@ def retrieve_repository_context(
         top_k=top_k,
         profile=profile,
         retrieval_mode=retrieval_mode,
+        root=root,
     )
     context = [chunk.text for chunk in retrieved_chunks]
     context_sources = [str(chunk.source) for chunk in retrieved_chunks]

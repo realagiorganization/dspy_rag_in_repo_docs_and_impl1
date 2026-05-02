@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from importlib import import_module
 from pathlib import Path
@@ -25,6 +25,19 @@ class EnvLoadReport:
 @dataclass(frozen=True)
 class AzureOpenAIRuntimeConfig:
     """The normalized Azure OpenAI runtime settings required for chat calls."""
+
+    endpoint: str
+    endpoint_source: str
+    deployment_name: str
+    deployment_name_source: str
+    api_key: str
+    api_version: str
+    model_name: str | None
+
+
+@dataclass(frozen=True)
+class AzureOpenAIEmbeddingRuntimeConfig:
+    """The normalized Azure OpenAI runtime settings required for embedding calls."""
 
     endpoint: str
     endpoint_source: str
@@ -203,6 +216,63 @@ def resolve_azure_openai_runtime(
     )
 
 
+def resolve_azure_openai_embedding_runtime(
+    env: Mapping[str, str],
+) -> AzureOpenAIEmbeddingRuntimeConfig:
+    """Resolve Azure OpenAI embedding settings from the selected environment."""
+
+    endpoint_source = "AZURE_OPENAI_ENDPOINT"
+    endpoint = _normalize_url_origin(env.get("AZURE_OPENAI_ENDPOINT"))
+    if endpoint is None:
+        endpoint = _normalize_url_origin(env.get("AZURE_OPENAI_CHAT_COMPLETIONS_URI"))
+        endpoint_source = "AZURE_OPENAI_CHAT_COMPLETIONS_URI"
+
+    deployment_name_source = "AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME"
+    deployment_name = _first_non_empty(env.get("AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME"))
+    if deployment_name is None:
+        deployment_name = _first_non_empty(env.get("AZURE_OPENAI_EMBEDDING_MODEL_NAME"))
+        deployment_name_source = "AZURE_OPENAI_EMBEDDING_MODEL_NAME"
+
+    api_key = _first_non_empty(env.get("AZURE_OPENAI_API_KEY"))
+    api_version = _first_non_empty(
+        env.get("AZURE_OPENAI_EMBEDDING_API_VERSION"),
+        env.get("AZURE_OPENAI_API_VERSION"),
+    )
+
+    missing: list[str] = []
+    if endpoint is None:
+        missing.append("AZURE_OPENAI_ENDPOINT or AZURE_OPENAI_CHAT_COMPLETIONS_URI")
+    if deployment_name is None:
+        missing.append(
+            "AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME or AZURE_OPENAI_EMBEDDING_MODEL_NAME"
+        )
+    if api_key is None:
+        missing.append("AZURE_OPENAI_API_KEY")
+    if api_version is None:
+        missing.append("AZURE_OPENAI_EMBEDDING_API_VERSION or AZURE_OPENAI_API_VERSION")
+
+    if missing:
+        joined = ", ".join(missing)
+        raise RuntimeError(
+            f"Missing Azure OpenAI embedding settings: {joined}. "
+            "Export the values before using semantic retrieval."
+        )
+
+    assert endpoint is not None
+    assert deployment_name is not None
+    assert api_key is not None
+    assert api_version is not None
+    return AzureOpenAIEmbeddingRuntimeConfig(
+        endpoint=endpoint,
+        endpoint_source=endpoint_source,
+        deployment_name=deployment_name,
+        deployment_name_source=deployment_name_source,
+        api_key=api_key,
+        api_version=api_version,
+        model_name=_first_non_empty(env.get("AZURE_OPENAI_EMBEDDING_MODEL_NAME")),
+    )
+
+
 def resolve_azure_inference_runtime(
     env: Mapping[str, str],
 ) -> AzureInferenceRuntimeConfig:
@@ -346,6 +416,36 @@ def _complete_with_azure_openai(
         model=response.model,
         finish_reason=str(choice.finish_reason),
     )
+
+
+def embed_with_azure_openai(
+    config: AzureOpenAIEmbeddingRuntimeConfig,
+    *,
+    inputs: Sequence[str],
+) -> list[list[float]]:
+    """Return embedding vectors for ``inputs`` via Azure OpenAI."""
+
+    if not inputs:
+        return []
+    azure_openai_client = _require_openai_client()
+    client = azure_openai_client(
+        azure_endpoint=config.endpoint,
+        api_key=config.api_key,
+        api_version=config.api_version,
+    )
+    response = client.embeddings.create(model=config.deployment_name, input=list(inputs))
+    response_data = sorted(list(getattr(response, "data", [])), key=lambda item: int(item.index))
+    embeddings: list[list[float]] = []
+    for item in response_data:
+        vector = getattr(item, "embedding", None)
+        if not isinstance(vector, list):
+            raise RuntimeError("Azure OpenAI embedding response did not include vector payloads.")
+        embeddings.append([float(value) for value in vector])
+    if len(embeddings) != len(inputs):
+        raise RuntimeError(
+            "Azure OpenAI embedding response length did not match the requested input batch."
+        )
+    return embeddings
 
 
 def _complete_with_azure_inference(

@@ -12,10 +12,11 @@ from .mcp import discover_mcp_servers
 from .retrieval import (
     TOKEN_RE,
     Chunk,
+    RetrievalExecution,
     RetrievalMode,
     chunk_documents,
     resolve_retrieval_mode,
-    retrieve,
+    retrieve_with_metadata,
 )
 from .retrieval_profile import RetrievalProfile, load_retrieval_profile
 from .rust_lookup import lookup_candidate_paths
@@ -49,6 +50,7 @@ class RAGAnswer:
     mcp_servers: list[dict[str, str]]
     summary: str
     retrieval_mode: RetrievalMode
+    retrieval_warnings: tuple[str, ...] = ()
 
     def to_payload(self, *, root: Path) -> dict[str, object]:
         """Return a machine-readable payload for CLI and worker integrations."""
@@ -71,6 +73,7 @@ class RAGAnswer:
             "context": [serialize_chunk(chunk, root=root) for chunk in self.context],
             "mcp_candidates": list(self.mcp_servers),
             "retrieval_mode": self.retrieval_mode,
+            "retrieval_warnings": list(self.retrieval_warnings),
         }
 
 
@@ -83,14 +86,14 @@ def collect_repository_evidence(
     """Collect retrieved context chunks and MCP hints for ``question``."""
 
     profile, resolved_mode = _resolve_retrieval_profile(root, retrieval_mode=retrieval_mode)
-    context = collect_repository_context(
+    execution = _collect_repository_context_execution(
         question,
         root,
         retrieval_mode=resolved_mode,
         profile=profile,
     )
     mcp_servers = [candidate.__dict__ for candidate in discover_mcp_servers(root)]
-    return context, mcp_servers, resolved_mode
+    return list(execution.chunks), mcp_servers, execution.retrieval_mode
 
 
 def collect_repository_context(
@@ -103,6 +106,27 @@ def collect_repository_context(
 ) -> list[Chunk]:
     """Collect lookup-first repository context for ``question``."""
 
+    return list(
+        _collect_repository_context_execution(
+            question,
+            root,
+            top_k=top_k,
+            retrieval_mode=retrieval_mode,
+            profile=profile,
+        ).chunks
+    )
+
+
+def _collect_repository_context_execution(
+    question: str,
+    root: Path,
+    *,
+    top_k: int = 4,
+    retrieval_mode: RetrievalMode | None = None,
+    profile: RetrievalProfile | None = None,
+) -> RetrievalExecution:
+    """Collect lookup-first repository context plus retrieval diagnostics."""
+
     resolved_profile, resolved_mode = _resolve_retrieval_profile(
         root,
         retrieval_mode=retrieval_mode,
@@ -114,16 +138,18 @@ def collect_repository_context(
         narrowed_context = _retrieve_from_documents(
             question,
             narrowed_documents,
+            root=root,
             top_k=top_k,
             profile=resolved_profile,
             retrieval_mode=resolved_mode,
         )
-        if narrowed_context:
+        if narrowed_context.chunks:
             return narrowed_context
 
     return _retrieve_from_documents(
         question,
         load_documents(root),
+        root=root,
         top_k=top_k,
         profile=resolved_profile,
         retrieval_mode=resolved_mode,
@@ -138,11 +164,14 @@ def ask_repository(
 ) -> RAGAnswer:
     """Answer a repository-grounded question using the baseline retrieval pipeline."""
 
-    context, mcp_servers, resolved_mode = collect_repository_evidence(
+    execution = _collect_repository_context_execution(
         question,
         root,
         retrieval_mode=retrieval_mode,
     )
+    context = list(execution.chunks)
+    mcp_servers = [candidate.__dict__ for candidate in discover_mcp_servers(root)]
+    resolved_mode = execution.retrieval_mode
     summary = (
         _compose_answer_summary(question, context) if context else _no_evidence_message(question)
     )
@@ -154,6 +183,7 @@ def ask_repository(
         mcp_servers=mcp_servers,
         summary=summary,
         retrieval_mode=resolved_mode,
+        retrieval_warnings=execution.warnings,
     )
 
 
@@ -167,11 +197,14 @@ def ask_repository_live(
 ) -> RAGAnswer:
     """Answer a repository-grounded question with retrieved evidence plus a live Azure model."""
 
-    context, mcp_servers, resolved_mode = collect_repository_evidence(
+    execution = _collect_repository_context_execution(
         question,
         root,
         retrieval_mode=retrieval_mode,
     )
+    context = list(execution.chunks)
+    mcp_servers = [candidate.__dict__ for candidate in discover_mcp_servers(root)]
+    resolved_mode = execution.retrieval_mode
     if not context:
         summary = _no_evidence_message(question)
         answer = synthesize_answer(question=question, context=context, mcp_servers=mcp_servers)
@@ -182,6 +215,7 @@ def ask_repository_live(
             mcp_servers=mcp_servers,
             summary=summary,
             retrieval_mode=resolved_mode,
+            retrieval_warnings=execution.warnings,
         )
 
     system_prompt, user_prompt = build_live_answer_messages(
@@ -213,6 +247,7 @@ def ask_repository_live(
         mcp_servers=mcp_servers,
         summary=completion.answer.strip(),
         retrieval_mode=resolved_mode,
+        retrieval_warnings=execution.warnings,
     )
 
 
@@ -406,19 +441,21 @@ def _retrieve_from_documents(
     question: str,
     documents: list[RepoDocument],
     *,
+    root: Path,
     top_k: int,
     profile: RetrievalProfile,
     retrieval_mode: RetrievalMode,
-) -> list[Chunk]:
+) -> RetrievalExecution:
     """Chunk ``documents`` and retrieve the most relevant context."""
 
     chunks = chunk_documents(documents)
-    return retrieve(
+    return retrieve_with_metadata(
         question,
         chunks,
         top_k=top_k,
         profile=profile,
         retrieval_mode=retrieval_mode,
+        root=root,
     )
 
 

@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-05-01-live-trainer-no-timestamp-bundle-publish.md`
+- `2026-05-02-hybrid-vector-retrieval-default.md`
 
 ## Usage
 

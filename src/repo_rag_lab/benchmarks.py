@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .corpus import RepoDocument, load_documents
-from .retrieval import RetrievalMode, chunk_documents, resolve_retrieval_mode, retrieve
+from .retrieval import RetrievalMode, chunk_documents, retrieve_with_metadata
 from .retrieval_profile import load_retrieval_profile
 from .training_samples import TrainingExample
 
@@ -349,16 +349,16 @@ def evaluate_retrieval_benchmarks(
 
     chunks = chunk_documents(_select_benchmark_documents(root))
     profile = load_retrieval_profile(root)
-    resolved_mode = resolve_retrieval_mode(profile, retrieval_mode)
     results: list[RetrievalBenchmarkResult] = []
     for benchmark in benchmarks:
-        retrieved = retrieve(
+        retrieved = retrieve_with_metadata(
             benchmark.question,
             chunks,
             top_k=top_k,
             profile=profile,
-            retrieval_mode=resolved_mode,
-        )
+            retrieval_mode=retrieval_mode,
+            root=root,
+        ).chunks
         retrieved_sources = _unique_in_order([str(chunk.source) for chunk in retrieved])
         results.append(
             _build_retrieval_benchmark_result(benchmark, retrieved_sources=retrieved_sources)
@@ -379,21 +379,24 @@ def evaluate_retrieval_quality_suite(
     normalized_top_k_values = normalize_retrieval_top_k_values(top_k_values, default_top_k=top_k)
     chunks = chunk_documents(_select_benchmark_documents(root))
     profile = load_retrieval_profile(root)
-    resolved_mode = resolve_retrieval_mode(profile, retrieval_mode)
     max_top_k = max(normalized_top_k_values, default=top_k)
     results_by_top_k: dict[int, list[RetrievalBenchmarkResult]] = {
         value: [] for value in normalized_top_k_values
     }
+    effective_mode: RetrievalMode | None = None
 
     for benchmark in benchmarks:
-        retrieved = retrieve(
+        execution = retrieve_with_metadata(
             benchmark.question,
             chunks,
             top_k=max_top_k,
             profile=profile,
-            retrieval_mode=resolved_mode,
+            retrieval_mode=retrieval_mode,
+            root=root,
         )
-        retrieved_sources = _unique_in_order([str(chunk.source) for chunk in retrieved])
+        if effective_mode is None:
+            effective_mode = execution.retrieval_mode
+        retrieved_sources = _unique_in_order([str(chunk.source) for chunk in execution.chunks])
         for sweep_top_k in normalized_top_k_values:
             results_by_top_k[sweep_top_k].append(
                 _build_retrieval_benchmark_result(
@@ -418,7 +421,7 @@ def evaluate_retrieval_quality_suite(
     )
     return {
         "case_count": len(benchmarks),
-        "retrieval_mode": resolved_mode,
+        "retrieval_mode": effective_mode if effective_mode is not None else profile.retrieval_mode,
         "default_top_k": top_k,
         "top_k_values": list(normalized_top_k_values),
         "default_summary": default_summary,

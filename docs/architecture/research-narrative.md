@@ -63,11 +63,14 @@ dataset. That story starts in:
 - [notebooks/01_repo_rag_research.ipynb](../../notebooks/01_repo_rag_research.ipynb)
 
 The repo loads its own text-like files, chunks them into paragraph-aware slices with fixed-width
-fallback, ranks them lexically with profile-aware adjustments plus source diversity, and
-synthesizes a baseline answer. The retriever now also applies light lexical normalization,
-optional `idf-rerank` second-stage scoring, and repository-root-relative source normalization plus
-repo-local profile overrides from `config/retrieval-profile.json` so primary docs beat synthetic
-echoes from tests, training samples, audits, generated inventories, and similar meta surfaces.
+fallback, ranks them with profile-aware adjustments plus source diversity, and synthesizes a
+baseline answer. The retriever now applies light lexical normalization, optional `idf-rerank`
+second-stage scoring, and an Azure OpenAI embedding-backed `vector` / `hybrid-vector` path that
+stores a local semantic chunk index under `artifacts/retrieval/semantic-index.json`; it still
+keeps repository-root-relative source normalization plus repo-local profile overrides from
+`config/retrieval-profile.json` so primary docs beat synthetic echoes from tests, training
+samples, audits, generated inventories, and similar meta surfaces, and it falls back to lexical
+ranking with explicit warnings when the embedding runtime is unavailable.
 This is the minimum honest system: before
 optimization, before benchmarking, and before deployment, the repo must be able to explain itself
 from its own contents instead of from its own scaffolding.
@@ -304,7 +307,10 @@ At the time of this document:
 - those cumulative candidates can now also be merged back into
   `artifacts/trainer/generated-training.yaml` and compiled into a fresh DSPy run through
   `make trainer-recompile`, so the trainer path now has an explicit bridge from worker traces to
-  generated compile inputs instead of stopping at raw candidate accumulation
+  generated compile inputs instead of stopping at raw candidate accumulation; that merge step now
+  also strips legacy worker-only `expected_sources` from trainer-candidate-tagged records and
+  enforces one question-level record in the final generated training set, so stale worker prompt
+  artifacts and answer-variant duplicates do not reappear as invalid DSPy compile inputs
 - the background trainer path now also enforces a trainer-side DSPy benchmark gate before
   publish/promotion, so an automatically recompiled bundle cannot advance purely because the
   retrieval gate passed

@@ -3,8 +3,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import repo_rag_lab.retrieval as retrieval_module
 from repo_rag_lab.corpus import load_documents
-from repo_rag_lab.retrieval import Chunk, chunk_documents, resolve_retrieval_mode, retrieve, score
+from repo_rag_lab.retrieval import (
+    Chunk,
+    chunk_documents,
+    resolve_retrieval_mode,
+    retrieve,
+    retrieve_with_metadata,
+    score,
+)
 from repo_rag_lab.retrieval_profile import RetrievalProfile, load_retrieval_profile
 from repo_rag_lab.training_samples import load_training_examples
 
@@ -213,4 +221,70 @@ def test_retrieve_idf_rerank_prefers_phrase_coherent_chunk() -> None:
 
 
 def test_resolve_retrieval_mode_uses_profile_default() -> None:
-    assert resolve_retrieval_mode(REPO_PROFILE) == "idf-rerank"
+    assert resolve_retrieval_mode(REPO_PROFILE) == "hybrid-vector"
+
+
+def test_retrieve_vector_mode_uses_semantic_rankings(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    chunks = [
+        Chunk(source=Path("docs/auth.md"), text="Session login orchestration and access flow."),
+        Chunk(source=Path("docs/cache.md"), text="Cache eviction and invalidation rules."),
+    ]
+
+    monkeypatch.setattr(
+        retrieval_module,
+        "rank_semantic_chunks",
+        lambda question, *, root, chunk_records, max_candidates=None: ([(0, 0.95), (1, 0.2)], []),
+    )
+
+    result = retrieve_with_metadata(
+        "Where is the sign-in flow explained?",
+        chunks,
+        top_k=1,
+        retrieval_mode="vector",
+        root=tmp_path,
+    )
+
+    assert result.retrieval_mode == "vector"
+    assert result.warnings == ()
+    assert [chunk.source for chunk in result.chunks] == [Path("docs/auth.md")]
+
+
+def test_retrieve_hybrid_vector_falls_back_to_idf_rerank_when_embeddings_are_unavailable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    chunks = [
+        Chunk(
+            source=Path("docs/ordered.md"),
+            text="Inspired implementation summaries are stored under docs architecture notes.",
+        ),
+        Chunk(
+            source=Path("docs/scrambled.md"),
+            text="Stored summaries inspired implementation under docs architecture notes.",
+        ),
+    ]
+
+    monkeypatch.setattr(
+        retrieval_module,
+        "rank_semantic_chunks",
+        lambda question, *, root, chunk_records, max_candidates=None: (
+            [],
+            ["Semantic retrieval unavailable: missing embedding deployment."],
+        ),
+    )
+
+    result = retrieve_with_metadata(
+        "Where are inspired implementation summaries stored?",
+        chunks,
+        top_k=1,
+        retrieval_mode="hybrid-vector",
+        root=tmp_path,
+    )
+
+    assert result.retrieval_mode == "idf-rerank"
+    assert result.warnings == (
+        "Semantic retrieval unavailable: missing embedding deployment.",
+        "Semantic retrieval fell back to idf-rerank.",
+    )
+    assert [chunk.source for chunk in result.chunks] == [Path("docs/ordered.md")]

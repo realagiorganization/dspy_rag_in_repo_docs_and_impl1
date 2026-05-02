@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_RETRIEVAL_PROFILE_PATH = Path("config/retrieval-profile.json")
-SUPPORTED_RETRIEVAL_MODES = frozenset({"lexical", "idf-rerank"})
+SUPPORTED_RETRIEVAL_MODES = frozenset({"lexical", "idf-rerank", "vector", "hybrid-vector"})
 
 
 @dataclass(frozen=True)

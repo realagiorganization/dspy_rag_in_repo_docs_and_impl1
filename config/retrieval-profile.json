@@ -1,6 +1,6 @@
 {
   "name": "repository-rag-lab",
-  "retrieval_mode": "idf-rerank",
+  "retrieval_mode": "hybrid-vector",
   "rerank_candidate_pool_size": 24,
   "source_adjustments_by_name": {
     "README.md": 1.4,

@@ -17,6 +17,7 @@ from .retrieval_profile import (
     SUPPORTED_RETRIEVAL_MODES,
     RetrievalProfile,
 )
+from .semantic_retrieval import rank_semantic_chunks
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9_]{2,}")
 PARAGRAPH_SPLIT_RE = re.compile(r"\n\s*\n+")
@@ -92,7 +93,11 @@ QUESTION_AUDIT_SEEKING_TERMS = {
     "verification",
     "verify",
 }
-RetrievalMode = Literal["lexical", "idf-rerank"]
+RetrievalMode = Literal["lexical", "idf-rerank", "vector", "hybrid-vector"]
+_HYBRID_RRF_K = 40.0
+_HYBRID_LEXICAL_WEIGHT = 0.45
+_HYBRID_SEMANTIC_WEIGHT = 0.75
+_SEMANTIC_CANDIDATE_MULTIPLIER = 2
 
 
 @dataclass(frozen=True)
@@ -101,6 +106,15 @@ class Chunk:
 
     source: Path
     text: str
+
+
+@dataclass(frozen=True)
+class RetrievalExecution:
+    """Describe one retrieval pass including the effective mode and warnings."""
+
+    chunks: tuple[Chunk, ...]
+    retrieval_mode: RetrievalMode
+    warnings: tuple[str, ...] = ()
 
 
 def chunk_documents(documents: list[RepoDocument], chunk_size: int = 1200) -> list[Chunk]:
@@ -123,31 +137,133 @@ def retrieve(
     *,
     profile: RetrievalProfile = DEFAULT_RETRIEVAL_PROFILE,
     retrieval_mode: RetrievalMode | None = None,
+    root: Path | None = None,
 ) -> list[Chunk]:
     """Return the highest-scoring chunks for ``question``."""
 
+    return list(
+        retrieve_with_metadata(
+            question,
+            chunks,
+            top_k=top_k,
+            profile=profile,
+            retrieval_mode=retrieval_mode,
+            root=root,
+        ).chunks
+    )
+
+
+def retrieve_with_metadata(
+    question: str,
+    chunks: list[Chunk],
+    top_k: int = 4,
+    *,
+    profile: RetrievalProfile = DEFAULT_RETRIEVAL_PROFILE,
+    retrieval_mode: RetrievalMode | None = None,
+    root: Path | None = None,
+) -> RetrievalExecution:
+    """Return retrieved chunks plus the effective retrieval mode and fallback warnings."""
+
     resolved_mode = resolve_retrieval_mode(profile, retrieval_mode)
-    scored = sorted(
+    eligible_chunks = [chunk for chunk in chunks if not profile.excludes(chunk.source)]
+    lexical_scored = _score_chunks(question, eligible_chunks, profile=profile)
+
+    if resolved_mode == "lexical":
+        ranked = [chunk for value, chunk in lexical_scored if value > 0]
+        return RetrievalExecution(
+            chunks=tuple(_select_diverse_chunks(ranked, top_k=top_k)),
+            retrieval_mode="lexical",
+        )
+
+    lexical_ranked = _rerank_chunks(
+        question,
+        lexical_scored,
+        top_k=top_k,
+        candidate_pool_size=profile.rerank_candidate_pool_size,
+        profile=profile,
+    )
+    if resolved_mode == "idf-rerank":
+        return RetrievalExecution(
+            chunks=tuple(_select_diverse_chunks(lexical_ranked, top_k=top_k)),
+            retrieval_mode="idf-rerank",
+        )
+
+    semantic_rankings, semantic_warnings = rank_semantic_chunks(
+        question,
+        root=root.resolve() if root is not None else Path.cwd(),
+        chunk_records=[
+            (_semantic_source_key(chunk.source, root=root), chunk.text) for chunk in eligible_chunks
+        ],
+        max_candidates=max(top_k, profile.rerank_candidate_pool_size * _SEMANTIC_CANDIDATE_MULTIPLIER),
+    )
+    if not semantic_rankings:
+        fallback_ranked = lexical_ranked
+        warnings = tuple(
+            [
+                *semantic_warnings,
+                "Semantic retrieval fell back to idf-rerank.",
+            ]
+        )
+        return RetrievalExecution(
+            chunks=tuple(_select_diverse_chunks(fallback_ranked, top_k=top_k)),
+            retrieval_mode="idf-rerank",
+            warnings=warnings,
+        )
+
+    semantic_ranked_chunks = [eligible_chunks[index] for index, _ in semantic_rankings]
+    if resolved_mode == "vector":
+        return RetrievalExecution(
+            chunks=tuple(_select_diverse_chunks(semantic_ranked_chunks, top_k=top_k)),
+            retrieval_mode="vector",
+            warnings=tuple(semantic_warnings),
+        )
+
+    hybrid_ranked = _hybrid_ranked_chunks(
+        lexical_ranked=lexical_ranked,
+        semantic_rankings=semantic_rankings,
+        semantic_chunks=eligible_chunks,
+        top_k=top_k,
+        candidate_pool_size=profile.rerank_candidate_pool_size,
+    )
+    return RetrievalExecution(
+        chunks=tuple(_select_diverse_chunks(hybrid_ranked, top_k=top_k)),
+        retrieval_mode="hybrid-vector",
+        warnings=tuple(semantic_warnings),
+    )
+
+
+def resolve_retrieval_mode(
+    profile: RetrievalProfile,
+    retrieval_mode: RetrievalMode | None = None,
+) -> RetrievalMode:
+    """Return the active retrieval mode, preferring explicit overrides over profile defaults."""
+
+    selected_mode = retrieval_mode if retrieval_mode is not None else profile.retrieval_mode
+    if selected_mode not in SUPPORTED_RETRIEVAL_MODES:
+        supported = ", ".join(sorted(SUPPORTED_RETRIEVAL_MODES))
+        raise ValueError(
+            f"Unsupported retrieval mode `{selected_mode}`. Expected one of: {supported}"
+        )
+    return cast(RetrievalMode, selected_mode)
+
+
+def _score_chunks(
+    question: str,
+    chunks: list[Chunk],
+    *,
+    profile: RetrievalProfile,
+) -> list[tuple[float, Chunk]]:
+    return sorted(
         [
             (score(question, chunk.text, source=chunk.source, profile=profile), chunk)
             for chunk in chunks
-            if not profile.excludes(chunk.source)
         ],
         key=lambda item: item[0],
         reverse=True,
     )
-    ranked = (
-        _rerank_chunks(
-            question,
-            scored,
-            top_k=top_k,
-            candidate_pool_size=profile.rerank_candidate_pool_size,
-            profile=profile,
-        )
-        if resolved_mode == "idf-rerank"
-        else [chunk for value, chunk in scored if value > 0]
-    )
 
+
+def _select_diverse_chunks(ranked: list[Chunk], *, top_k: int) -> list[Chunk]:
     selected: list[Chunk] = []
     seen_sources: set[Path] = set()
     for chunk in ranked:
@@ -165,23 +281,60 @@ def retrieve(
         selected.append(chunk)
         if len(selected) >= top_k:
             break
-
     return selected
 
 
-def resolve_retrieval_mode(
-    profile: RetrievalProfile,
-    retrieval_mode: RetrievalMode | None = None,
-) -> RetrievalMode:
-    """Return the active retrieval mode, preferring explicit overrides over profile defaults."""
+def _semantic_source_key(source: Path, *, root: Path | None) -> str:
+    if root is None:
+        return source.as_posix()
+    try:
+        return source.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return source.as_posix()
 
-    selected_mode = retrieval_mode if retrieval_mode is not None else profile.retrieval_mode
-    if selected_mode not in SUPPORTED_RETRIEVAL_MODES:
-        supported = ", ".join(sorted(SUPPORTED_RETRIEVAL_MODES))
-        raise ValueError(
-            f"Unsupported retrieval mode `{selected_mode}`. Expected one of: {supported}"
-        )
-    return cast(RetrievalMode, selected_mode)
+
+def _hybrid_ranked_chunks(
+    *,
+    lexical_ranked: list[Chunk],
+    semantic_rankings: list[tuple[int, float]],
+    semantic_chunks: list[Chunk],
+    top_k: int,
+    candidate_pool_size: int,
+) -> list[Chunk]:
+    lexical_pool = lexical_ranked[: max(top_k, candidate_pool_size)]
+    semantic_pool = [
+        semantic_chunks[index]
+        for index, _ in semantic_rankings[: max(top_k, candidate_pool_size)]
+    ]
+    lexical_positions = {chunk: position for position, chunk in enumerate(lexical_pool, start=1)}
+    semantic_positions = {chunk: position for position, chunk in enumerate(semantic_pool, start=1)}
+    semantic_scores = {
+        semantic_chunks[index]: value
+        for index, value in semantic_rankings[: max(top_k, candidate_pool_size)]
+    }
+    candidates = {
+        *lexical_pool,
+        *semantic_pool,
+    }
+    if not candidates:
+        return []
+
+    def _rrf(position: int, *, weight: float) -> float:
+        return weight / (_HYBRID_RRF_K + position)
+
+    return sorted(
+        candidates,
+        key=lambda chunk: (
+            (_rrf(lexical_positions[chunk], weight=_HYBRID_LEXICAL_WEIGHT)
+            if chunk in lexical_positions
+            else 0.0)
+            + (_rrf(semantic_positions[chunk], weight=_HYBRID_SEMANTIC_WEIGHT)
+            if chunk in semantic_positions
+            else 0.0)
+            + (semantic_scores.get(chunk, 0.0) * 0.05)
+        ),
+        reverse=True,
+    )
 
 
 def _rerank_chunks(

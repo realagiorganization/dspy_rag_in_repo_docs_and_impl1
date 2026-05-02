@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import BinaryIO
 
 from .retrieval import RetrievalMode
+from .retrieval_profile import SUPPORTED_RETRIEVAL_MODES
 from .runtime_artifacts import RuntimeTraceContext, build_runtime_trace
 from .utilities import run_bundle_inspection, run_dspy_artifacts, run_trace_enqueue
 from .workflow import ask_repository
@@ -24,6 +25,7 @@ MCP_SERVER_INSTRUCTIONS = (
     "Use these tools only for bounded repo-RAG operations. Do not route long DSPy training, "
     "full retrieval-eval sweeps, or notebook execution through this MCP surface."
 )
+RETRIEVAL_MODE_ENUM = sorted(SUPPORTED_RETRIEVAL_MODES)
 
 
 @dataclass(frozen=True)
@@ -105,7 +107,7 @@ def build_mcp_tool_definitions() -> list[MCPToolDefinition]:
                 "properties": {
                     "question": {"type": "string"},
                     "root": {"type": "string"},
-                    "retrieval_mode": {"type": "string", "enum": ["lexical", "idf-rerank"]},
+                    "retrieval_mode": {"type": "string", "enum": RETRIEVAL_MODE_ENUM},
                     "bundle_version": {"type": "string"},
                     "overlay_path": {"type": "string"},
                 },
@@ -190,13 +192,19 @@ def call_mcp_tool(
         if not isinstance(question, str) or not question.strip():
             raise ValueError("`ask_repo` requires a non-empty `question`.")
         retrieval_mode = params.get("retrieval_mode")
-        if retrieval_mode is not None and retrieval_mode not in {"lexical", "idf-rerank"}:
-            raise ValueError("`retrieval_mode` must be `lexical` or `idf-rerank`.")
+        if retrieval_mode is not None and retrieval_mode not in SUPPORTED_RETRIEVAL_MODES:
+            raise ValueError(
+                "`retrieval_mode` must be one of: " + ", ".join(sorted(SUPPORTED_RETRIEVAL_MODES))
+            )
         retrieval_mode_value: RetrievalMode | None = None
         if retrieval_mode == "lexical":
             retrieval_mode_value = "lexical"
         elif retrieval_mode == "idf-rerank":
             retrieval_mode_value = "idf-rerank"
+        elif retrieval_mode == "vector":
+            retrieval_mode_value = "vector"
+        elif retrieval_mode == "hybrid-vector":
+            retrieval_mode_value = "hybrid-vector"
         rag_result = ask_repository(
             question=question,
             root=root,
