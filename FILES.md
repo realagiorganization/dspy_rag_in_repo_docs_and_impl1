@@ -133,14 +133,16 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-05-01-aks-run-25191504814-project-root-resolution-inspection.md` | docs | markdown | 133 | 6002 | Repository audit note for 2026 05 01 aks run 25191504814 project root resolution inspection |
 | `docs/audit/2026-05-01-aks-run-25209573387-proxy-runtime-env-inspection.md` | docs | markdown | 129 | 5738 | Repository audit note for 2026 05 01 aks run 25209573387 proxy runtime env inspection |
 | `docs/audit/2026-05-01-aks-run-25212955759-trace-handoff-secret-gap.md` | docs | markdown | 121 | 4594 | Repository audit note for 2026 05 01 aks run 25212955759 trace handoff secret gap |
+| `docs/audit/2026-05-01-aks-run-25226558751-rag-heuristic-trusted-handoff.md` | docs | markdown | 130 | 5092 | Repository audit note for 2026 05 01 aks run 25226558751 rag heuristic trusted handoff |
 | `docs/audit/2026-05-01-dataset-azure-responses-api-version-default-fix.md` | docs | markdown | 133 | 6700 | Repository audit note for 2026 05 01 dataset azure responses api version default fix |
 | `docs/audit/2026-05-01-dataset-azure-runtime-env-propagation-fix.md` | docs | markdown | 81 | 4200 | Repository audit note for 2026 05 01 dataset azure runtime env propagation fix |
 | `docs/audit/2026-05-01-dataset-trusted-trace-handoff-postprocess-fix.md` | docs | markdown | 81 | 3880 | Repository audit note for 2026 05 01 dataset trusted trace handoff postprocess fix |
+| `docs/audit/2026-05-01-dspy-bundle-version-pinning-contract.md` | docs | markdown | 118 | 5763 | Repository audit note for 2026 05 01 dspy bundle version pinning contract |
 | `docs/audit/2026-05-01-durable-trainer-progress-remote-recovery.md` | docs | markdown | 115 | 5141 | Repository audit note for 2026 05 01 durable trainer progress remote recovery |
 | `docs/audit/2026-05-01-live-trainer-remote-bundle-publish.md` | docs | markdown | 148 | 7444 | Repository audit note for 2026 05 01 live trainer remote bundle publish |
 | `docs/audit/2026-05-01-live-trainer-service-azure-fallback.md` | docs | markdown | 167 | 6390 | Repository audit note for 2026 05 01 live trainer service azure fallback |
 | `docs/audit/2026-05-01-versioned-trainer-lineage-bundles.md` | docs | markdown | 123 | 5821 | Repository audit note for 2026 05 01 versioned trainer lineage bundles |
-| `docs/audit/README.md` | docs | markdown | 14 | 421 | Repository audit note for README |
+| `docs/audit/README.md` | docs | markdown | 14 | 425 | Repository audit note for README |
 | `docs/guides/hushwheel-fixture-rag-guide.md` | docs | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
 | `docs/operations/azure-deployment.md` | docs | markdown | 111 | 4901 | Azure Deployment Notes |
 | `docs/operations/environment.md` | docs | markdown | 122 | 6389 | Environment and secret reference for local runtime and deployment workflows |
@@ -235,6 +237,7 @@ This inventory is generated from the current Git index.
 | `samples/logs/20260501T125058Z-gh-runs-develop-no-new-run-after-trusted-trace-handoff-push.md` | samples | markdown | 30 | 1355 | GitHub Actions check after pushing `66a7ad4` |
 | `samples/logs/20260501T162125Z-gh-runs-develop-no-new-run-after-live-trainer-bundle-publication-push.md` | samples | markdown | 30 | 1486 | GitHub Run Inspection |
 | `samples/logs/20260501T174147Z-gh-runs-develop-no-new-run-after-versioned-trainer-recovery-push.md` | samples | markdown | 30 | 1505 | GitHub Run Inspection |
+| `samples/logs/20260501T201242Z-gh-runs-develop-no-new-run-after-dspy-bundle-version-pinning-push.md` | samples | markdown | 41 | 2076 | GitHub Run Inspection |
 | `samples/logs/README.md` | samples | markdown | 11 | 331 | GitHub Run Logs |
 | `samples/population/hushwheel_fixture_population_candidates.yaml` | samples | yaml | 22 | 955 | - source: README.md |
 | `samples/population/repository_population_candidates.yaml` | samples | yaml | 16 | 690 | - source: README.md |
