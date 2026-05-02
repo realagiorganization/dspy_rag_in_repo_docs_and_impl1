@@ -193,3 +193,192 @@ Repository-local checks executed after those follow-up fixes:
 - `cargo build --manifest-path rust-cli/Cargo.toml` -> `pass`
 - `make verify-surfaces` -> `pass`
 - `make files-sync` -> `pass`
+
+## Latest Live Worker And Trainer Check
+
+- Checked local worker artifact export `../dataset/artifacts/` for Azure upload
+  `executions/25252299455_20260502_131144`.
+- Re-ran the repository-native verification baseline in this turn:
+  - `uv run python -m compileall src tests` -> `pass`
+  - `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q` -> `pass`
+    (`40 passed`)
+  - `uv run repo-rag smoke-test` -> `pass`
+  - `cargo build --manifest-path rust-cli/Cargo.toml` -> `pass`
+
+### Worker-Side Results
+
+The latest worker run now confirms that the updated worker image and retrieval-isolation changes are
+live:
+
+1. Prompt traces are no longer written into the analyzed repository tree.
+   - `execution.log` now shows:
+     - `Persisted prompt trace at /tmp/artifacts/prompts_shards_of_lokar_game-p00000-355cca/prompt_artifacts/...`
+   - The earlier `/tmp/repositories/.../prompt_artifacts/...` placement is gone from the latest
+     run.
+
+2. Retrieval no longer pulls `prompt_artifacts/...` back into the mediation context.
+   - `repo_rag_codex_proxy_last.json` now reports:
+     - `sources = ["README.md", "docs/USAGE.md", "docs/AGENTS.md", "docs/ASSUMPTIONS.md"]`
+   - That means the corpus exclusion for runtime-generated worker scaffolding is active in the live
+     worker path.
+
+3. The worker still runs repo-rag successfully, but DSPy still falls back to heuristic synthesis.
+   - `repo_rag_backend.json` shows:
+     - `backend = "codex_cli_repo_rag_proxy"`
+     - `rag_status = "success"`
+     - `dspy_status = "heuristic"`
+     - `bundle_resolved = false`
+     - `bundle_version = null`
+   - `repo_rag_codex_proxy_last.json` still warns:
+     - `DSPy mediation was unavailable; using heuristic synthesis instead. (No compiled DSPy bundle is available.)`
+
+4. Trusted trace handoff still works correctly.
+   - `trusted_trace_handoff_summary.json` shows:
+     - `attempted = 1`
+     - `queued = 1`
+     - `failed = 0`
+   - Azure queue/blob inspection shows the same item later under:
+     - `processed/repo-rag-training/20260502T131143Z-prompts_shards_of_lokar_game-p00000-355cca.json`
+
+### Trainer-Side Results
+
+The live trainer now has an active global bundle channel:
+
+- `artifacts/dspy/channels/stable.json` exists in the running trainer pod
+- `stable.json` currently points at:
+  - `current_bundle_version = "20260502T122127191445Z"`
+- Azure blob inspection confirms:
+  - `repo-rag-bundles/channels/stable.json` exists
+  - immutable bundle files exist under:
+    - `versions/20260502T120805498593Z/...`
+    - `versions/20260502T122127191445Z/...`
+
+A manual trainer cycle run on the current image also succeeded and produced a valid `stable`
+channel pointer earlier in this turn.
+
+### Remaining Live Gap
+
+The remaining live problem is now narrower and clearer:
+
+- the trainer can publish and promote `stable`
+- the worker can run repo-rag and improved retrieval
+- but the worker still does **not** resolve the promoted bundle before calling `repo-rag ask`
+
+The reason is visible in the live worker job spec and the current worker code contract:
+
+1. The worker pod only receives this repo-rag storage config secret:
+   - `DATASET_REPO_RAG_BUNDLE_CONTAINER=repo-rag-bundles`
+   - `DATASET_REPO_RAG_TRACE_CONTAINER=repo-rag-training-traces`
+   - `DATASET_REPO_RAG_TRACE_QUEUE_NAME=repo-rag-training`
+
+2. The worker does **not** receive:
+   - `AZURE_STORAGE_ACCOUNT`
+   - `AZURE_STORAGE_KEY`
+   - `AZURE_STORAGE_CONNECTION_STRING`
+   - any repo-rag trainer root / shared bundle root mount
+
+3. Worker-side bundle lookup only runs when one of these is true:
+   - `trainer_root is not None`
+   - `_repo_rag_bundle_store_configured()` is true
+
+4. In the live worker pod, neither condition is met, so the worker never runs `bundle-inspect`
+   against the promoted `stable` channel and therefore falls back to heuristic DSPy every time.
+
+This means the current live architecture now has:
+
+- working live retrieval isolation
+- working live trusted trace handoff
+- working live trainer publish/promote to `stable`
+- **missing live worker-side access path to the promoted bundle**
+
+The next fix therefore should not target retrieval quality again. It should provide one safe
+worker-readable bundle-distribution path, for example:
+
+- sync the promoted bundle into a non-secret shared mount available to workers, or
+- provide a tightly scoped read-only bundle-store credential path that lets workers resolve
+  `stable` without exposing broad write-capable Azure storage credentials.
+
+## Repository-Local Safe Stable-Bundle Follow-Up
+
+The current worktree now implements the first of those worker-side fixes without giving blob
+credentials to `codex` or the worker pod itself.
+
+Repository-local behavior is now:
+
+1. the runner-side deployment script stages a local mirror of:
+   - `channels/stable.json`
+   - `versions/<stable_bundle_version>/{bundle.json,metadata.json,program.json,published.json}`
+   - optionally an explicitly pinned bundle version when a non-placeholder
+     `DSPY_BUNDLE_VERSION` / `DATASET_REPO_RAG_BUNDLE_VERSION` is set
+2. that mirror is synced into the existing artifacts PVC under:
+   - `.repo_rag_bundle_store/`
+3. worker pods receive a non-secret env default:
+   - `DATASET_REPO_RAG_BUNDLE_ROOT=/tmp/artifacts/.repo_rag_bundle_store`
+4. worker-side repo-rag execution now:
+   - treats placeholder pins such as `0`, `null`, `none`, or `unset` as not configured
+   - tries an explicit bundle version first when one is valid
+   - falls back to `bundle-inspect --channel stable` against the local mirrored bundle root when
+     the explicit version is invalid or absent
+5. Codex proxy bundle resolution now also understands that local staged bundle root directly,
+   instead of only fetching remote bundles or falling back to repository-local `artifacts/dspy`
+
+This means the repository-local contract is now:
+
+- no worker-side blob credentials
+- no requirement for a shared trainer root mount
+- stable-channel fallback still works, but from a safe runner-staged local mirror
+
+Repository-local checks executed for that follow-up:
+
+- `uv run python -m compileall src tests` -> `pass`
+- `uv run pytest tests/test_codex_proxy.py tests/test_utilities.py tests/test_repository_rag_bdd.py -q` -> `pass` (`46 passed`)
+- `uv run repo-rag smoke-test` -> `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml` -> `pass`
+
+What is still **not** claimed here:
+
+- a fresh live AKS worker run that consumes `stable.json` through the new artifacts-PVC mirror
+- end-to-end proof that a worker with empty/invalid `DSPY_BUNDLE_VERSION` now resolves the
+  promoted stable bundle in production
+
+## Latest Build And Trainer Redeploy Check
+
+The dataset-side image build and trainer redeploy for the safe worker bundle-mirror path have now
+been completed live.
+
+Commands executed in this turn:
+
+- `BUILD_MODE=acr IMAGE_TAG=20260502-135903 ./build_and_push_images.sh` from
+  `../dataset` -> `pass`
+- `IMAGE_TAG=20260502-135903 ./deploy_repo_rag_trainer.sh` from `../dataset` -> `pass`
+
+Built images:
+
+- `llmpromptsacr.azurecr.io/repo-rag-runtime:20260502-135903`
+- `llmpromptsacr.azurecr.io/prompt-executor:20260502-135903`
+- `llmpromptsacr.azurecr.io/queue-initializer:20260502-135903`
+
+Live trainer deployment evidence after redeploy:
+
+- `kubectl -n repo-rag get deploy repo-rag-trainer-service -o yaml` shows:
+  - `image: llmpromptsacr.azurecr.io/repo-rag-runtime:20260502-135903`
+  - `--promote-channel stable`
+- `kubectl -n repo-rag get deploy,po,cm,secret` shows:
+  - `deployment.apps/repo-rag-trainer-service` -> `READY 1/1`
+  - running pod `repo-rag-trainer-service-5b856bf894-f7jl4`
+- Azure bundle-channel inspection of `repo-rag-bundles/channels/stable.json` still resolves to:
+  - `current_bundle_version = "20260502T122127191445Z"`
+  - `current_program_path = "artifacts/dspy/20260502T122127191445Z/program.json"`
+
+What this redeploy check confirms:
+
+- the current repo-rag runtime image now exists in ACR for the safe stable-bundle fallback work
+- the live trainer is running that new runtime image
+- the live trainer still promotes to `stable`
+- the global `stable` channel pointer remains intact after redeploy
+
+What this redeploy check still does **not** confirm:
+
+- a new worker/pipeline run using `prompt-executor:20260502-135903`
+- end-to-end worker resolution of the promoted bundle through the new artifacts-PVC bundle mirror
+- live compiled-DSPy execution after removing or invalidating `DSPY_BUNDLE_VERSION`

@@ -132,6 +132,7 @@ Current error contract:
 ## Phase 2. Bundle And Overlay Lifecycle
 
 - [x] Implement stable bundle fetch at worker start.
+- [x] Mirror the promoted `stable` bundle into the artifacts PVC so workers can resolve it locally without blob credentials.
 - [x] Build repo-local retrieval artifacts and local overlay state inside the worker before answering.
 - [x] Persist repo-local traces after the worker run.
 - [x] Ingest accepted outcomes after the worker run.
@@ -218,7 +219,11 @@ Current implementation note:
   versioned bundles instead of overwriting one mutable trainer alias. The primary worker-side
   runtime selector is now the deployment-wide `DSPY_BUNDLE_VERSION` pin rather than a mandatory
   channel lookup, while repository-local deployment defaults now promote `stable` unless an
-  operator intentionally clears `TRAINER_PROMOTE_CHANNEL`. The trainer cycle now also
+  operator intentionally clears `TRAINER_PROMOTE_CHANNEL`. When that pin is absent or a
+  placeholder such as `0`, the deploy-stage runner now mirrors `channels/stable.json` plus the
+  referenced immutable bundle assets into the artifacts PVC under `.repo_rag_bundle_store/`, and
+  workers resolve `stable` through `DATASET_REPO_RAG_BUNDLE_ROOT` instead of needing blob
+  credentials or a shared trainer-root mount. The trainer cycle now also
   reconstructs its local compile ledger from Azure `processed/<queue>/...` blobs before candidate
   materialization, so the DSPy training input can be rebuilt after trainer PVC loss instead of
   depending on one surviving `training-candidates.yaml` snapshot. The generated training merge now
