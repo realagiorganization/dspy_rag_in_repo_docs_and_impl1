@@ -143,6 +143,8 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-05-01-live-trainer-remote-bundle-publish.md` | docs | markdown | 148 | 7444 | Repository audit note for 2026 05 01 live trainer remote bundle publish |
 | `docs/audit/2026-05-01-live-trainer-service-azure-fallback.md` | docs | markdown | 167 | 6390 | Repository audit note for 2026 05 01 live trainer service azure fallback |
 | `docs/audit/2026-05-01-versioned-trainer-lineage-bundles.md` | docs | markdown | 123 | 5821 | Repository audit note for 2026 05 01 versioned trainer lineage bundles |
+| `docs/audit/2026-05-02-hybrid-vector-retrieval-default.md` | docs | markdown | 79 | 3287 | Repository audit note for 2026 05 02 hybrid vector retrieval default |
+| `docs/audit/2026-05-02-live-trainer-still-not-publishing-bundles.md` | docs | markdown | 162 | 6657 | Repository audit note for 2026 05 02 live trainer still not publishing bundles |
 | `docs/audit/README.md` | docs | markdown | 14 | 416 | Repository audit note for README |
 | `docs/guides/hushwheel-fixture-rag-guide.md` | docs | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
 | `docs/operations/azure-deployment.md` | docs | markdown | 111 | 4901 | Azure Deployment Notes |
@@ -269,6 +271,7 @@ This inventory is generated from the current Git index.
 | `src/repo_rag_lab/retrieval_profile.py` | src | python | 236 | 9527 | Profile-driven retrieval weighting, exclusions, and repo-local overrides. |
 | `src/repo_rag_lab/runtime_artifacts.py` | src | python | 1586 | 67350 | Versioned bundle, overlay, and runtime-trace helpers. |
 | `src/repo_rag_lab/rust_lookup.py` | src | python | 295 | 7724 | Helpers for the native Rust-backed SQLite lookup index. |
+| `src/repo_rag_lab/semantic_retrieval.py` | src | python | 212 | 7373 | Azure OpenAI embedding-backed semantic retrieval helpers. |
 | `src/repo_rag_lab/settings.py` | src | python | 28 | 699 | Shared repository path settings derived from a repository root. |
 | `src/repo_rag_lab/todo_backlog.py` | src | python | 276 | 8434 | Shared backlog rendering helpers for Markdown and LaTeX surfaces. |
 | `src/repo_rag_lab/trainer_deployment.py` | src | python | 415 | 17227 | Kubernetes manifest helpers for trainer-side repo-RAG deployment surfaces. |
