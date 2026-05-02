@@ -1394,6 +1394,18 @@ def _load_trace_queue_item(path: Path) -> dict[str, object]:
     return payload
 
 
+def _is_stale_failed_queue_blob(blob_name: str | None, exc: Exception) -> bool:
+    """Return whether one Azure queue pointer refers to an already-missing failed blob."""
+
+    if not blob_name or not blob_name.startswith("failed/"):
+        return False
+    error_text = str(exc)
+    return (
+        type(exc).__name__ in {"ResourceNotFoundError", "KeyError"}
+        or "BlobNotFound" in error_text
+    )
+
+
 def drain_trace_queue(
     root: Path,
     *,
@@ -1413,7 +1425,10 @@ def drain_trace_queue(
         received_messages = store.receive_queue_messages(queue_name_remote, limit=limit)
         imported_items: list[dict[str, object]] = []
         failures: list[dict[str, object]] = []
+        skipped_items: list[dict[str, object]] = []
         for message in received_messages:
+            message_payload = None
+            blob_name = None
             try:
                 message_payload = decode_queue_message(message.content)
                 blob_name = _string_or_none(message_payload.get("blob_name"))
@@ -1460,9 +1475,20 @@ def drain_trace_queue(
                     }
                 )
             except Exception as exc:
+                if _is_stale_failed_queue_blob(blob_name, exc):
+                    store.delete_queue_message(queue_name_remote, message)
+                    skipped_items.append(
+                        {
+                            "queue_item_path": blob_name,
+                            "skip_reason": "stale-failed-blob",
+                            "error_type": type(exc).__name__,
+                            "error_message": str(exc),
+                        }
+                    )
+                    continue
                 failure_blob = None
                 try:
-                    payload = decode_queue_message(message.content)
+                    payload = message_payload or decode_queue_message(message.content)
                     blob_name = _string_or_none(payload.get("blob_name"))
                     if blob_name is not None:
                         failure_blob = failed_trace_blob_name(
@@ -1499,6 +1525,7 @@ def drain_trace_queue(
             "selected_count": len(received_messages),
             "drained_count": len(imported_items),
             "failed_count": len(failures),
+            "skipped_count": len(skipped_items),
             "remaining_count": None,
             "keep_queued": keep_queued,
             "status": "success" if not failures else "partial",
@@ -1506,6 +1533,7 @@ def drain_trace_queue(
             "trace_container": container,
             "items": imported_items,
             "failures": failures,
+            "skipped_items": skipped_items,
         }
 
     queue_dir = _trace_queue_dir(resolved_root, queue_name, processed=False)

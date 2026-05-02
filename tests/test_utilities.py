@@ -242,7 +242,7 @@ def test_run_trainer_k8s_manifest_generation_writes_expected_manifests(tmp_path:
     assert config_map["data"]["TRAINER_SERVICE_MAX_IDLE_CYCLES"] == ""
     assert config_map["data"]["RETRIEVAL_MIN_PASS_RATE"] == ""
     assert config_map["data"]["RETRIEVAL_MIN_SOURCE_RECALL"] == ""
-    assert config_map["data"]["TRAINER_PROMOTE_CHANNEL"] == ""
+    assert config_map["data"]["TRAINER_PROMOTE_CHANNEL"] == "stable"
     assert secret_example["kind"] == "Secret"
     assert "AZURE_OPENAI_API_KEY" in secret_example["stringData"]
 
@@ -794,7 +794,7 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
     ) -> dict[str, object]:
         del root, output_path, summary_path, include_statuses
         assert trace_paths == [Path("artifacts/trainer/recovered-imported-traces/demo.json")]
-        assert seed_existing_output is False
+        assert seed_existing_output is True
         return {
             "candidate_count": 1,
             "new_candidate_count": 1,

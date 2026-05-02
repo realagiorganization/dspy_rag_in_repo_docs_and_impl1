@@ -365,37 +365,57 @@ def materialize_training_candidates(
                 if isinstance(record, Mapping)
             ]
 
-    merged_records_by_question: dict[str, dict[str, Any]] = {}
-    merged_order: list[str] = []
+    existing_records_by_question: dict[str, dict[str, Any]] = {}
     for record in existing_records:
         question_key = _candidate_question_key(record)
         if not question_key:
             continue
-        if question_key not in merged_records_by_question:
-            merged_order.append(question_key)
-        merged_records_by_question[question_key] = record
+        existing_records_by_question[question_key] = record
 
+    merged_records_by_question: dict[str, dict[str, Any]] = {}
+    merged_order: list[str] = []
     duplicate_count = 0
     replaced_count = 0
-    new_records: list[dict[str, Any]] = []
     for record in loaded_records:
         question_key = _candidate_question_key(record)
         if not question_key:
             continue
-        existing_record = merged_records_by_question.get(question_key)
-        if existing_record is None:
+        loaded_record = merged_records_by_question.get(question_key)
+        if loaded_record is None:
             merged_order.append(question_key)
             merged_records_by_question[question_key] = record
-            new_records.append(record)
             continue
-        if _candidate_record_key(existing_record) == _candidate_record_key(record):
+        if _candidate_record_key(loaded_record) == _candidate_record_key(record):
             duplicate_count += 1
             continue
         merged_records_by_question[question_key] = record
         replaced_count += 1
-        new_records.append(record)
 
-    merged_records = [merged_records_by_question[key] for key in merged_order]
+    authoritative_records = [merged_records_by_question[key] for key in merged_order]
+    if authoritative_records:
+        merged_records = authoritative_records
+    else:
+        existing_canonical: dict[str, dict[str, Any]] = {}
+        existing_order: list[str] = []
+        for record in existing_records:
+            question_key = _candidate_question_key(record)
+            if not question_key:
+                continue
+            if question_key not in existing_canonical:
+                existing_order.append(question_key)
+            existing_canonical[question_key] = record
+        merged_records = [existing_canonical[key] for key in existing_order]
+
+    new_candidate_count = 0
+    if authoritative_records:
+        for question_key, record in merged_records_by_question.items():
+            existing_record = existing_records_by_question.get(question_key)
+            if existing_record is None:
+                new_candidate_count += 1
+                continue
+            if _candidate_record_key(existing_record) != _candidate_record_key(record):
+                new_candidate_count += 1
+
     resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
     resolved_output_path.write_text(
         yaml.safe_dump(merged_records, sort_keys=False, allow_unicode=False),
@@ -403,11 +423,19 @@ def materialize_training_candidates(
     )
     summary: dict[str, Any] = {
         "candidate_count": len(merged_records),
-        "new_candidate_count": len(new_records),
+        "new_candidate_count": new_candidate_count,
         "input_trace_count": len(candidate_paths),
         "loaded_candidate_count": len(loaded_records),
         "duplicate_count": duplicate_count,
-        "replaced_count": replaced_count,
+        "replaced_count": sum(
+            1
+            for question_key, record in merged_records_by_question.items()
+            if (
+                question_key in existing_records_by_question
+                and _candidate_record_key(existing_records_by_question[question_key])
+                != _candidate_record_key(record)
+            )
+        ),
         "skipped_reasons": dict(sorted(skipped_reasons.items())),
         "include_statuses": sorted(normalized_statuses),
         "trace_paths": [

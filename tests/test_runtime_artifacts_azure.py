@@ -356,6 +356,62 @@ def test_queue_trace_record_and_drain_trace_queue_use_azure_blob_queue(
     assert store.deleted_messages == ["msg-1"]
 
 
+def test_drain_trace_queue_skips_stale_failed_blob_messages(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _FakeAzureArtifactStore()
+    config = AzureArtifactConfig(
+        account_name="acct",
+        account_key="key",
+        connection_string=None,
+        trace_container="repo-rag-training-traces",
+        bundle_container="repo-rag-bundles",
+        queue_name="repo-rag-training",
+    )
+
+    def fake_resolve_azure_artifact_config(queue_name: str | None = None) -> AzureArtifactConfig:
+        del queue_name
+        return config
+
+    def fake_azure_artifact_store(cfg: AzureArtifactConfig) -> _FakeAzureArtifactStore:
+        del cfg
+        return store
+
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config",
+        fake_resolve_azure_artifact_config,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
+        fake_azure_artifact_store,
+    )
+
+    store.messages.append(
+        AzureQueueMessage(
+            message_id="msg-stale",
+            pop_receipt="receipt-stale",
+            content=json.dumps(
+                {
+                    "blob_name": "failed/repo-rag-training/stale-failure.json",
+                    "queue_item_kind": "repo-rag-trace-queue-item",
+                }
+            ),
+            dequeue_count=2,
+        )
+    )
+
+    drained = drain_trace_queue(tmp_path, queue_name="dataset")
+
+    assert drained["storage_backend"] == "azure-blob-queue"
+    assert drained["drained_count"] == 0
+    assert drained["failed_count"] == 0
+    assert drained["skipped_count"] == 1
+    assert drained["status"] == "success"
+    assert drained["skipped_items"][0]["skip_reason"] == "stale-failed-blob"
+    assert store.deleted_messages == ["msg-stale"]
+
+
 def test_restore_processed_trace_records_rebuilds_local_ledger_from_azure_processed_blobs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
