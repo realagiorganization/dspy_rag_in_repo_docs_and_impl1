@@ -225,6 +225,10 @@ def test_run_trainer_k8s_manifest_generation_writes_expected_manifests(tmp_path:
     assert "--minimum-pass-rate" not in deployment_spec["containers"][0]["command"]
     assert "--minimum-source-recall" not in deployment_spec["containers"][0]["command"]
     assert "--minimum-bundle-pass-rate" not in deployment_spec["containers"][0]["command"]
+    min_new_index = deployment_spec["containers"][0]["command"].index(
+        "--min-new-candidates-for-recompile"
+    )
+    assert deployment_spec["containers"][0]["command"][min_new_index + 1] == "1"
     assert "--recompile-run-name" not in deployment_spec["containers"][0]["command"]
     assert cronjob["kind"] == "CronJob"
     assert cronjob["spec"]["schedule"] == "*/15 * * * *"
@@ -239,6 +243,7 @@ def test_run_trainer_k8s_manifest_generation_writes_expected_manifests(tmp_path:
     assert config_map["kind"] == "ConfigMap"
     assert config_map["data"]["TRAINER_RECOMPILE_RUN_NAME"] == ""
     assert config_map["data"]["TRAINER_MIN_BUNDLE_PASS_RATE"] == ""
+    assert config_map["data"]["TRAINER_MIN_NEW_CANDIDATES_FOR_RECOMPILE"] == "1"
     assert config_map["data"]["TRAINER_SERVICE_MAX_IDLE_CYCLES"] == ""
     assert config_map["data"]["RETRIEVAL_MIN_PASS_RATE"] == ""
     assert config_map["data"]["RETRIEVAL_MIN_SOURCE_RECALL"] == ""
@@ -518,7 +523,13 @@ def test_run_trace_export_persists_normalized_record(tmp_path: Path) -> None:
                 "answer": "Repository answer",
                 "response_text": "Question: ...",
                 "sources": ["README.md"],
-                "context": [{"source": "README.md", "text": "Context"}],
+                "context": [
+                    {
+                        "source": "README.md",
+                        "preview": "Context",
+                        "text": "Context",
+                    }
+                ],
                 "trace": {
                     "schema_version": 1,
                     "trace_kind": "repo-rag-runtime",
@@ -554,6 +565,9 @@ def test_run_trace_export_persists_normalized_record(tmp_path: Path) -> None:
     assert exported["artifact_metadata"]["input_paths"] == [str(payload_path)]
     trace_record_path = tmp_path / exported["trace_record_path"]
     assert trace_record_path.exists()
+    trace_record = json.loads(trace_record_path.read_text(encoding="utf-8"))
+    assert trace_record["trace"]["evidence_count"] == 1
+    assert len(trace_record["trace"]["evidence_fingerprints"]) == 1
 
 
 def test_run_trace_import_ingests_external_trace_record(tmp_path: Path) -> None:
@@ -798,6 +812,9 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
         return {
             "candidate_count": 1,
             "new_candidate_count": 1,
+            "prompt_family_count": 1,
+            "context_group_count": 1,
+            "champion_index_path": "artifacts/trainer/champion-index.json",
             "output_path": "artifacts/trainer/training-candidates.yaml",
             "summary_path": "artifacts/trainer/training-candidates-summary.json",
         }
@@ -982,6 +999,9 @@ def test_run_trainer_cycle_blocks_promotion_when_gate_fails(
         return {
             "candidate_count": 0,
             "new_candidate_count": 0,
+            "prompt_family_count": 0,
+            "context_group_count": 0,
+            "champion_index_path": "artifacts/trainer/champion-index.json",
             "output_path": "artifacts/trainer/training-candidates.yaml",
             "summary_path": "artifacts/trainer/training-candidates-summary.json",
         }
@@ -1093,6 +1113,9 @@ def test_run_trainer_cycle_blocks_publish_when_bundle_benchmark_gate_fails(
         return {
             "candidate_count": 1,
             "new_candidate_count": 1,
+            "prompt_family_count": 1,
+            "context_group_count": 1,
+            "champion_index_path": "artifacts/trainer/champion-index.json",
             "output_path": "artifacts/trainer/training-candidates.yaml",
             "summary_path": "artifacts/trainer/training-candidates-summary.json",
         }
@@ -1199,6 +1222,9 @@ def test_run_trainer_cycle_skips_recompile_and_publish_without_new_candidates(
         lambda root, trace_paths, output_path, summary_path, include_statuses=("accepted", "candidate"), seed_existing_output=True: {
             "candidate_count": 1,
             "new_candidate_count": 0,
+            "prompt_family_count": 1,
+            "context_group_count": 2,
+            "champion_index_path": "artifacts/trainer/champion-index.json",
             "output_path": "artifacts/trainer/training-candidates.yaml",
             "summary_path": "artifacts/trainer/training-candidates-summary.json",
         },
@@ -1232,6 +1258,110 @@ def test_run_trainer_cycle_skips_recompile_and_publish_without_new_candidates(
     assert payload["publish"] is None
     assert payload["bundle_gate"]["status"] == "not-requested"
     assert any("no new training candidates" in warning for warning in payload["warnings"])
+
+
+def test_run_trainer_cycle_skips_recompile_below_new_candidate_threshold(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.drain_trace_queue",
+        lambda root, queue_name="default", limit=None, keep_queued=False: {
+            "queue_name": queue_name,
+            "queue_found": True,
+            "queued_count_before": 1,
+            "selected_count": 1,
+            "drained_count": 1,
+            "failed_count": 0,
+            "remaining_count": 0,
+            "keep_queued": keep_queued,
+            "status": "success",
+            "items": [{"imported_trace_record_path": "artifacts/traces/imported/one.json"}],
+            "failures": [],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.restore_processed_trace_records",
+        lambda root, queue_name="default", output_dir=Path("artifacts/trainer/recovered-imported-traces"): {
+            "storage_backend": "azure-blob-queue",
+            "queue_name": queue_name,
+            "processed_count": 1,
+            "restored_count": 1,
+            "failed_count": 0,
+            "trace_paths": ["artifacts/trainer/recovered-imported-traces/one.json"],
+            "failures": [],
+            "output_dir": str(output_dir),
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.load_training_examples",
+        lambda path: ["example"],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.build_retrieval_benchmarks",
+        lambda examples: [{"question": "demo"}],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.evaluate_retrieval_quality_suite",
+        lambda root, benchmarks, top_k, top_k_values, retrieval_mode=None: {
+            "retrieval_mode": "idf-rerank",
+            "default_top_k": 4,
+            "default_summary": {
+                "top_k": 4,
+                "pass_rate": 1.0,
+                "source_recall": 1.0,
+                "tag_summaries": [],
+            },
+            "top_k_summaries": [{"top_k": 4, "pass_rate": 1.0, "source_recall": 1.0}],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.check_retrieval_quality_thresholds",
+        lambda summary, minimum_pass_rate=None, minimum_source_recall=None: [],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.materialize_training_candidates",
+        lambda root, trace_paths, output_path, summary_path, include_statuses=("accepted", "candidate"), seed_existing_output=True: {
+            "candidate_count": 2,
+            "new_candidate_count": 1,
+            "prompt_family_count": 1,
+            "context_group_count": 2,
+            "champion_index_path": "artifacts/trainer/champion-index.json",
+            "output_path": "artifacts/trainer/training-candidates.yaml",
+            "summary_path": "artifacts/trainer/training-candidates-summary.json",
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._trainer_recompile_payload",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("trainer recompile should not run below the candidate threshold")
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.publish_bundle",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("bundle publish should not run below the candidate threshold")
+        ),
+    )
+
+    payload = json.loads(
+        run_trainer_cycle(
+            tmp_path,
+            queue_name="dataset",
+            recompile_run_name="trainer-auto",
+            min_new_candidates_for_recompile=2,
+        )
+    )
+
+    assert payload["command"] == "trainer-cycle"
+    assert payload["command_status"] == "success"
+    assert payload["training_candidates"]["new_candidate_count"] == 1
+    assert payload["min_new_candidates_for_recompile"] == 2
+    assert payload["recompile_threshold_met"] is False
+    assert payload["recompile"]["recompile_status"] == "skipped-below-new-candidate-threshold"
+    assert payload["publish_requested"] is False
+    assert payload["publish"] is None
+    assert any("minimum threshold" in warning for warning in payload["warnings"])
 
 
 def test_run_trainer_cycle_uploads_remote_bundle_when_publish_succeeds(
@@ -1303,6 +1433,9 @@ def test_run_trainer_cycle_uploads_remote_bundle_when_publish_succeeds(
         lambda root, trace_paths, output_path, summary_path, include_statuses=("accepted", "candidate"), seed_existing_output=True: {
             "candidate_count": 1,
             "new_candidate_count": 1,
+            "prompt_family_count": 1,
+            "context_group_count": 1,
+            "champion_index_path": "artifacts/trainer/champion-index.json",
             "output_path": "artifacts/trainer/training-candidates.yaml",
             "summary_path": "artifacts/trainer/training-candidates-summary.json",
         },
@@ -1456,8 +1589,10 @@ def test_run_trainer_candidates_materializes_yaml_from_imported_traces(tmp_path:
     assert payload["new_candidate_count"] == 1
     output_path = tmp_path / payload["output_path"]
     summary_path = tmp_path / payload["summary_path"]
+    champion_index_path = tmp_path / payload["champion_index_path"]
     assert output_path.exists()
     assert summary_path.exists()
+    assert champion_index_path.exists()
     materialized = yaml.safe_load(output_path.read_text(encoding="utf-8"))
     assert materialized[0]["question"] == "How do you build the publication PDF locally?"
     assert materialized[0]["expected_sources"] == []
@@ -1466,6 +1601,8 @@ def test_run_trainer_candidates_materializes_yaml_from_imported_traces(tmp_path:
         "README.md",
         "publication/README.md",
     ]
+    champion_index = json.loads(champion_index_path.read_text(encoding="utf-8"))
+    assert champion_index["record_kind"] == "repo-rag-trainer-champion-index"
 
 
 def test_run_trainer_recompile_merges_candidates_and_reports_training_result(
@@ -1551,6 +1688,13 @@ def test_run_trainer_service_writes_state_and_history(
                 },
                 "gate_passed": True,
                 "bundle_gate_passed": True,
+                "training_candidates": {
+                    "candidate_count": 1,
+                    "new_candidate_count": 1,
+                    "prompt_family_count": 1,
+                    "context_group_count": 2,
+                    "champion_index_path": "artifacts/trainer/champion-index.json",
+                },
                 "publish": {"published_bundle_path": "artifacts/dspy/published/demo.json"},
                 "promotion": {"channel_path": "artifacts/dspy/channels/stable.json"},
             },
@@ -1583,6 +1727,13 @@ def test_run_trainer_service_writes_state_and_history(
                 },
                 "gate_passed": True,
                 "bundle_gate_passed": True,
+                "training_candidates": {
+                    "candidate_count": 1,
+                    "new_candidate_count": 0,
+                    "prompt_family_count": 1,
+                    "context_group_count": 2,
+                    "champion_index_path": "artifacts/trainer/champion-index.json",
+                },
                 "publish": None,
                 "promotion": None,
             },
@@ -1611,6 +1762,8 @@ def test_run_trainer_service_writes_state_and_history(
     assert payload["total_publish_count"] == 1
     assert payload["total_promotion_count"] == 1
     assert payload["bundle_gate_failure_count"] == 0
+    assert payload["total_prompt_family_count"] == 1
+    assert payload["total_context_group_count"] == 2
     assert payload["acceptance_status_totals"] == {"accepted": 1}
     assert payload["execution_status_totals"] == {"success": 1}
     assert payload["used_baseline_fallback_count"] == 1
@@ -1625,6 +1778,8 @@ def test_run_trainer_service_writes_state_and_history(
     state_payload = json.loads((tmp_path / payload["state_path"]).read_text(encoding="utf-8"))
     assert state_payload["cycles_executed"] == 2
     assert state_payload["last_cycle_command_status"] == "success"
+    assert state_payload["total_prompt_family_count"] == 1
+    assert state_payload["total_context_group_count"] == 2
 
 
 def test_run_trainer_service_reports_failed_cycles(

@@ -232,6 +232,25 @@ Current implementation note:
   recompilation through stale prompt-artifact paths or answer-variant duplicate rows; unchanged
   recovered ledgers no longer count as new trainer work, and stale `failed/...` queue blobs are
   skipped instead of poisoning the next poll cycle.
+- The trainer now also has a first-stage context-aware champion model instead of only
+  question-level replacement. Imported traces are persisted immutably in the trace ledger, then
+  grouped in `artifacts/trainer/champion-index.json` by prompt family plus soft retrieval-context
+  similarity. The compile-facing `training-candidates.yaml` still materializes only one family
+  champion per prompt family because the current DSPy compile contract is still
+  `question -> expected_answer`; this stage removes `last write wins` churn without pretending the
+  compile dataset can already hold conflicting answers for the same visible question safely.
+  Repeated same-answer traces now increase explicit support for the current context-group champion,
+  and gradual retrieval-source drift can stay inside one context group instead of splitting into a
+  fresh group on every small source shuffle. Runtime traces now also carry snippet-level
+  `evidence_fingerprints`, with `trace-export` backfilling them from stored context rows when
+  needed, so trainer grouping can distinguish same-source runs that actually saw different
+  retrieved snippets. Family-champion selection is now also support-aware across context groups, so
+  a new low-support group with only a slight score advantage does not immediately replace the
+  compile-facing champion. Trainer-cycle and trainer-service now also accept a
+  `min_new_candidates_for_recompile` threshold so live deployments can batch several champion
+  updates before recompiling and publishing the next bundle, and the `dataset`
+  `deploy_repo_rag_trainer.sh` helper now wires that threshold through the generated AKS
+  Deployment/CronJob manifests via `TRAINER_MIN_NEW_CANDIDATES_FOR_RECOMPILE`.
 - The worker-side `codex` path now attempts that mediation proxy for any repository-like prepared
   clone by default, so repo-aware augmentation no longer depends on replacing `codex` with an
   explicit `repo_rag_cli` backend. The local compatibility executor still keeps explicit

@@ -1372,6 +1372,7 @@ def test_cli_main_trainer_cycle_command(
         minimum_pass_rate: float | None = None,
         minimum_source_recall: float | None = None,
         minimum_bundle_pass_rate: float | None = None,
+        min_new_candidates_for_recompile: int = 1,
     ) -> str:
         return json.dumps(
             {
@@ -1398,6 +1399,7 @@ def test_cli_main_trainer_cycle_command(
                 "minimum_pass_rate": minimum_pass_rate,
                 "minimum_source_recall": minimum_source_recall,
                 "minimum_bundle_pass_rate": minimum_bundle_pass_rate,
+                "min_new_candidates_for_recompile": min_new_candidates_for_recompile,
             }
         )
 
@@ -1444,6 +1446,7 @@ def test_cli_main_trainer_cycle_command(
                 "minimum_pass_rate": 1.0,
                 "minimum_source_recall": 1.0,
                 "minimum_bundle_pass_rate": 1.0,
+                "min_new_candidates_for_recompile": 2,
             },
         )()
 
@@ -1457,6 +1460,7 @@ def test_cli_main_trainer_cycle_command(
     assert '"run_name": "demo-run"' in output
     assert '"promote_channel": "stable"' in output
     assert '"minimum_bundle_pass_rate": 1.0' in output
+    assert '"min_new_candidates_for_recompile": 2' in output
 
 
 def test_cli_main_trainer_service_command(
@@ -1496,6 +1500,7 @@ def test_cli_main_trainer_service_command(
         minimum_pass_rate: float | None = None,
         minimum_source_recall: float | None = None,
         minimum_bundle_pass_rate: float | None = None,
+        min_new_candidates_for_recompile: int = 1,
         poll_interval_seconds: float = 60.0,
         max_cycles: int | None = None,
         max_idle_cycles: int | None = None,
@@ -1527,6 +1532,7 @@ def test_cli_main_trainer_service_command(
                 "minimum_pass_rate": minimum_pass_rate,
                 "minimum_source_recall": minimum_source_recall,
                 "minimum_bundle_pass_rate": minimum_bundle_pass_rate,
+                "min_new_candidates_for_recompile": min_new_candidates_for_recompile,
                 "poll_interval_seconds": poll_interval_seconds,
                 "max_cycles": max_cycles,
                 "max_idle_cycles": max_idle_cycles,
@@ -1578,6 +1584,7 @@ def test_cli_main_trainer_service_command(
                 "minimum_pass_rate": 1.0,
                 "minimum_source_recall": 1.0,
                 "minimum_bundle_pass_rate": 1.0,
+                "min_new_candidates_for_recompile": 3,
                 "poll_interval_seconds": 0.0,
                 "max_cycles": 3,
                 "max_idle_cycles": 1,
@@ -1596,6 +1603,7 @@ def test_cli_main_trainer_service_command(
     assert '"promote_channel": "canary"' in output
     assert '"max_cycles": 3' in output
     assert '"minimum_bundle_pass_rate": 1.0' in output
+    assert '"min_new_candidates_for_recompile": 3' in output
 
 
 def test_cli_main_trainer_k8s_manifests_command(
@@ -1628,6 +1636,7 @@ def test_cli_main_trainer_k8s_manifests_command(
         minimum_source_recall: float | None,
         minimum_bundle_pass_rate: float | None,
         recompile_run_name: str | None,
+        min_new_candidates_for_recompile: int,
         recompile_base_training_path: Path,
     ) -> str:
         return json.dumps(
@@ -1649,6 +1658,7 @@ def test_cli_main_trainer_k8s_manifests_command(
                 "queue_name": queue_name,
                 "cycle_schedule": cycle_schedule,
                 "minimum_bundle_pass_rate": minimum_bundle_pass_rate,
+                "min_new_candidates_for_recompile": min_new_candidates_for_recompile,
                 "image_pull_secret_name": image_pull_secret_name,
                 "manifest_dir": str(output_dir),
             }
@@ -1686,6 +1696,7 @@ def test_cli_main_trainer_k8s_manifests_command(
                 "minimum_source_recall": None,
                 "minimum_bundle_pass_rate": None,
                 "recompile_run_name": None,
+                "min_new_candidates_for_recompile": 3,
                 "recompile_base_training_path": (
                     "samples/training/repository_training_examples.yaml"
                 ),
@@ -1703,6 +1714,7 @@ def test_cli_main_trainer_k8s_manifests_command(
     assert '"pvc_storage_class_name": "azurefile-csi"' in output
     assert '"queue_name": "dataset"' in output
     assert '"minimum_bundle_pass_rate": null' in output
+    assert '"min_new_candidates_for_recompile": 3' in output
 
 
 def test_cli_main_trainer_recompile_command(

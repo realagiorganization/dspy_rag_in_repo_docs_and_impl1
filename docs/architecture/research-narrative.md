@@ -305,6 +305,29 @@ At the time of this document:
 - imported traces can now also be materialized into cumulative YAML candidate examples under
   `artifacts/trainer/training-candidates.yaml`, which gives the future global trainer a concrete
   bridge from worker traces to DSPy review/compile inputs
+- that trainer materialization path now also persists a separate
+  `artifacts/trainer/champion-index.json` state surface, where imported traces are grouped first
+  by prompt family (normalized question) and then by soft retrieval-context groups instead of
+  using question-level `last write wins`; the compile-facing `training-candidates.yaml` file is now
+  materialized from one family champion per prompt family, so replaying many worker traces for the
+  same evolving prompt no longer necessarily creates recompile churn unless the effective family
+  champion actually changes; trainer-cycle and trainer-service summaries now also expose
+  `prompt_family_count`, `context_group_count`, and `champion_index_path`, so that grouping
+  behavior is visible without reopening the raw JSON state by hand; repeated same-answer traces now
+  increase explicit champion support inside one context group, and the group summary now merges
+  gradual retrieval-source drift so `README.md -> README.md + docs/USAGE.md -> docs/USAGE.md`
+  can remain one training context instead of fragmenting on every small repository change; the
+  runtime trace schema now also exports snippet-level `evidence_fingerprints`, and `trace-export`
+  backfills them from stored `context` / `retrieved_context` rows for older command envelopes, so
+  same-source retrievals that actually used different snippets can still separate into different
+  trainer context groups; family-champion selection now also has a stability gate across those
+  context groups, so a small score-only edge is not enough to flip the compile-facing champion
+  when the incumbent group already has stronger support; trainer-cycle and trainer-service now
+  also expose a `min_new_candidates_for_recompile` batching gate so one or two fresh champion
+  updates can be accumulated before the next DSPy recompilation instead of forcing a new bundle on
+  every single cycle, and the trainer Kubernetes/deploy helpers now thread that threshold through
+  generated ConfigMaps plus `trainer-cycle` / `trainer-service` command lines so live AKS
+  deployments can honor the same batching policy as the local CLI
 - those cumulative candidates can now also be merged back into
   `artifacts/trainer/generated-training.yaml` and compiled into a fresh DSPy run through
   `make trainer-recompile`, so the trainer path now has an explicit bridge from worker traces to

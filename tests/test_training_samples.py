@@ -310,6 +310,457 @@ def test_materialize_training_candidates_reports_no_new_candidates_for_unchanged
     assert json.loads(summary_path.read_text(encoding="utf-8"))["new_candidate_count"] == 0
 
 
+def test_materialize_training_candidates_tracks_context_groups_but_materializes_one_family_champion(
+    tmp_path: Path,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    trainer_dir = tmp_path / "artifacts" / "trainer"
+    trainer_dir.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "README.md").write_text("# Demo\n", encoding="utf-8")
+    (tmp_path / "docs").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "docs" / "USAGE.md").write_text("# Usage\n", encoding="utf-8")
+    question = "Continue developing this game"
+
+    (imported_dir / "accepted.json").write_text(
+        f"""{{
+  "trace_record_kind": "repo-rag-trace-record",
+  "trace_record_path": "artifacts/traces/imported/accepted.json",
+  "question": "{question}",
+  "answer": "Focus first on the core gameplay loop and wire the save system after the combat pass.",
+  "sources": ["README.md"],
+  "trace": {{
+    "schema_version": 1,
+    "trace_kind": "repo-rag-runtime",
+    "recorded_at": "2026-05-02T12:00:00+00:00",
+    "question": "{question}",
+    "mode": "codex-proxy",
+    "retrieval_mode": "hybrid-vector",
+    "sources": ["README.md"],
+    "source_count": 1,
+    "context_count": 1,
+    "context_field": "evidence_previews",
+    "top_k": 4,
+    "program_loaded": true,
+    "mcp_candidate_count": 0,
+    "answer_length": 92
+  }},
+  "outcome": {{
+    "acceptance_status": "accepted",
+    "accepted": true,
+    "execution_status": "success",
+    "method": "codex_cli",
+    "backend": "codex_cli_repo_rag_proxy",
+    "used_baseline_fallback": false
+  }}
+}}
+""",
+        encoding="utf-8",
+    )
+    (imported_dir / "candidate.json").write_text(
+        f"""{{
+  "trace_record_kind": "repo-rag-trace-record",
+  "trace_record_path": "artifacts/traces/imported/candidate.json",
+  "question": "{question}",
+  "answer": "Document the remaining gameplay systems after the current implementation pass.",
+  "sources": ["docs/USAGE.md"],
+  "trace": {{
+    "schema_version": 1,
+    "trace_kind": "repo-rag-runtime",
+    "recorded_at": "2026-05-02T12:05:00+00:00",
+    "question": "{question}",
+    "mode": "codex-proxy",
+    "retrieval_mode": "hybrid-vector",
+    "sources": ["docs/USAGE.md"],
+    "source_count": 1,
+    "context_count": 1,
+    "context_field": "evidence_previews",
+    "top_k": 4,
+    "program_loaded": false,
+    "mcp_candidate_count": 0,
+    "answer_length": 78
+  }},
+  "outcome": {{
+    "acceptance_status": "candidate",
+    "accepted": null,
+    "execution_status": "success",
+    "method": "codex_cli",
+    "backend": "codex_cli_repo_rag_proxy",
+    "used_baseline_fallback": false
+  }}
+}}
+""",
+        encoding="utf-8",
+    )
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+    )
+
+    assert summary["candidate_count"] == 1
+    assert summary["new_candidate_count"] == 1
+    assert summary["prompt_family_count"] == 1
+    assert summary["context_group_count"] == 2
+    assert summary["new_context_group_count"] == 2
+
+    materialized = load_training_examples(tmp_path / "artifacts" / "trainer" / "training-candidates.yaml")
+    assert len(materialized) == 1
+    assert "core gameplay loop" in materialized[0].expected_answer
+
+    champion_index = json.loads(
+        (tmp_path / "artifacts" / "trainer" / "champion-index.json").read_text(encoding="utf-8")
+    )
+    assert champion_index["record_kind"] == "repo-rag-trainer-champion-index"
+    assert len(champion_index["prompt_families"]) == 1
+    family = champion_index["prompt_families"][0]
+    assert len(family["context_groups"]) == 2
+    assert family["family_champion_record"]["candidate_status"] == "accepted"
+
+
+def test_materialize_training_candidates_accumulates_support_for_repeated_answer_variant(
+    tmp_path: Path,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    question = "Continue developing this game"
+    answer = "Focus first on the core gameplay loop and wire the save system after the combat pass."
+    for name, recorded_at in (
+        ("accepted-a.json", "2026-05-02T12:00:00+00:00"),
+        ("accepted-b.json", "2026-05-02T12:05:00+00:00"),
+    ):
+        (imported_dir / name).write_text(
+            f"""{{
+  "trace_record_kind": "repo-rag-trace-record",
+  "trace_record_path": "artifacts/traces/imported/{name}",
+  "question": "{question}",
+  "answer": "{answer}",
+  "sources": ["README.md"],
+  "trace": {{
+    "schema_version": 1,
+    "trace_kind": "repo-rag-runtime",
+    "recorded_at": "{recorded_at}",
+    "question": "{question}",
+    "mode": "codex-proxy",
+    "retrieval_mode": "hybrid-vector",
+    "sources": ["README.md"],
+    "source_count": 1,
+    "context_count": 1,
+    "context_field": "evidence_previews",
+    "top_k": 4,
+    "program_loaded": true,
+    "mcp_candidate_count": 0,
+    "answer_length": 92
+  }},
+  "outcome": {{
+    "acceptance_status": "accepted",
+    "accepted": true,
+    "execution_status": "success",
+    "method": "codex_cli",
+    "backend": "codex_cli_repo_rag_proxy",
+    "used_baseline_fallback": false
+  }}
+}}
+""",
+            encoding="utf-8",
+        )
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+    )
+
+    assert summary["candidate_count"] == 1
+    assert summary["new_candidate_count"] == 1
+    assert summary["context_group_count"] == 1
+
+    champion_index = json.loads(
+        (tmp_path / "artifacts" / "trainer" / "champion-index.json").read_text(encoding="utf-8")
+    )
+    family = champion_index["prompt_families"][0]
+    group = family["context_groups"][0]
+    assert group["trace_count"] == 2
+    champion_record = group["champion_record"]
+    assert champion_record["support_count"] == 2
+    assert family["family_champion_record"]["support_count"] == 2
+
+
+def test_materialize_training_candidates_keeps_gradual_source_drift_in_one_context_group(
+    tmp_path: Path,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    question = "Continue developing this game"
+    answer = "Focus first on the core gameplay loop and wire the save system after the combat pass."
+    traces = (
+        ("accepted-a.json", "2026-05-02T12:00:00+00:00", ["README.md"], 1),
+        ("accepted-b.json", "2026-05-02T12:05:00+00:00", ["README.md", "docs/USAGE.md"], 2),
+        ("accepted-c.json", "2026-05-02T12:10:00+00:00", ["docs/USAGE.md"], 1),
+    )
+    for name, recorded_at, sources, context_count in traces:
+        sources_json = json.dumps(sources)
+        (imported_dir / name).write_text(
+            f"""{{
+  "trace_record_kind": "repo-rag-trace-record",
+  "trace_record_path": "artifacts/traces/imported/{name}",
+  "question": "{question}",
+  "answer": "{answer}",
+  "sources": {sources_json},
+  "trace": {{
+    "schema_version": 1,
+    "trace_kind": "repo-rag-runtime",
+    "recorded_at": "{recorded_at}",
+    "question": "{question}",
+    "mode": "codex-proxy",
+    "retrieval_mode": "hybrid-vector",
+    "sources": {sources_json},
+    "source_count": {len(sources)},
+    "context_count": {context_count},
+    "context_field": "evidence_previews",
+    "top_k": 4,
+    "program_loaded": true,
+    "mcp_candidate_count": 0,
+    "answer_length": 92
+  }},
+  "outcome": {{
+    "acceptance_status": "accepted",
+    "accepted": true,
+    "execution_status": "success",
+    "method": "codex_cli",
+    "backend": "codex_cli_repo_rag_proxy",
+    "used_baseline_fallback": false
+  }}
+}}
+""",
+            encoding="utf-8",
+        )
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+    )
+
+    assert summary["candidate_count"] == 1
+    assert summary["context_group_count"] == 1
+
+    champion_index = json.loads(
+        (tmp_path / "artifacts" / "trainer" / "champion-index.json").read_text(encoding="utf-8")
+    )
+    family = champion_index["prompt_families"][0]
+    group = family["context_groups"][0]
+    assert group["trace_count"] == 3
+    assert group["sources"] == ["README.md", "docs/USAGE.md"]
+    assert group["source_count"] == 2
+    assert group["context_count"] == 2
+
+
+def test_materialize_training_candidates_splits_same_sources_when_evidence_fingerprints_diverge(
+    tmp_path: Path,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    question = "Continue developing this game"
+
+    first_trace = {
+        "trace_record_kind": "repo-rag-trace-record",
+        "trace_record_path": "artifacts/traces/imported/accepted-a.json",
+        "question": question,
+        "answer": "Prioritize combat and progression balancing first.",
+        "sources": ["README.md"],
+        "context": [
+            {
+                "source": "README.md",
+                "preview": "Combat loop, saving, and progression priorities.",
+                "text": "Combat loop, saving, and progression priorities.",
+            }
+        ],
+        "trace": {
+            "schema_version": 1,
+            "trace_kind": "repo-rag-runtime",
+            "recorded_at": "2026-05-02T12:00:00+00:00",
+            "question": question,
+            "mode": "codex-proxy",
+            "retrieval_mode": "hybrid-vector",
+            "sources": ["README.md"],
+            "source_count": 1,
+            "context_count": 1,
+            "context_field": "context",
+            "top_k": 4,
+            "program_loaded": True,
+            "mcp_candidate_count": 0,
+            "answer_length": 49,
+        },
+        "outcome": {
+            "acceptance_status": "accepted",
+            "accepted": True,
+            "execution_status": "success",
+            "method": "codex_cli",
+            "backend": "codex_cli_repo_rag_proxy",
+            "used_baseline_fallback": False,
+        },
+    }
+    second_trace = {
+        "trace_record_kind": "repo-rag-trace-record",
+        "trace_record_path": "artifacts/traces/imported/accepted-b.json",
+        "question": question,
+        "answer": "Prioritize localization and UI documentation first.",
+        "sources": ["README.md"],
+        "context": [
+            {
+                "source": "README.md",
+                "preview": "Localization checklist, UI docs, and menu polish.",
+                "text": "Localization checklist, UI docs, and menu polish.",
+            }
+        ],
+        "trace": {
+            "schema_version": 1,
+            "trace_kind": "repo-rag-runtime",
+            "recorded_at": "2026-05-02T12:05:00+00:00",
+            "question": question,
+            "mode": "codex-proxy",
+            "retrieval_mode": "hybrid-vector",
+            "sources": ["README.md"],
+            "source_count": 1,
+            "context_count": 1,
+            "context_field": "context",
+            "top_k": 4,
+            "program_loaded": True,
+            "mcp_candidate_count": 0,
+            "answer_length": 52,
+        },
+        "outcome": {
+            "acceptance_status": "candidate",
+            "accepted": None,
+            "execution_status": "success",
+            "method": "codex_cli",
+            "backend": "codex_cli_repo_rag_proxy",
+            "used_baseline_fallback": False,
+        },
+    }
+    (imported_dir / "accepted-a.json").write_text(json.dumps(first_trace), encoding="utf-8")
+    (imported_dir / "accepted-b.json").write_text(json.dumps(second_trace), encoding="utf-8")
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+    )
+
+    assert summary["candidate_count"] == 1
+    assert summary["context_group_count"] == 2
+
+    champion_index = json.loads(
+        (tmp_path / "artifacts" / "trainer" / "champion-index.json").read_text(encoding="utf-8")
+    )
+    family = champion_index["prompt_families"][0]
+    assert len(family["context_groups"]) == 2
+
+
+def test_materialize_training_candidates_keeps_supported_family_champion_against_small_score_advantage(
+    tmp_path: Path,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    question = "Continue developing this game"
+    supported_answer = "A" * 320
+    slight_better_answer = "B" * 400
+
+    for name, recorded_at in (
+        ("supported-a.json", "2026-05-02T12:00:00+00:00"),
+        ("supported-b.json", "2026-05-02T12:05:00+00:00"),
+    ):
+        (imported_dir / name).write_text(
+            f"""{{
+  "trace_record_kind": "repo-rag-trace-record",
+  "trace_record_path": "artifacts/traces/imported/{name}",
+  "question": "{question}",
+  "answer": "{supported_answer}",
+  "sources": ["README.md"],
+  "trace": {{
+    "schema_version": 1,
+    "trace_kind": "repo-rag-runtime",
+    "recorded_at": "{recorded_at}",
+    "question": "{question}",
+    "mode": "codex-proxy",
+    "retrieval_mode": "hybrid-vector",
+    "sources": ["README.md"],
+    "source_count": 1,
+    "context_count": 1,
+    "context_field": "evidence_previews",
+    "top_k": 4,
+    "program_loaded": true,
+    "mcp_candidate_count": 0,
+    "answer_length": 320
+  }},
+  "outcome": {{
+    "acceptance_status": "accepted",
+    "accepted": true,
+    "execution_status": "success",
+    "method": "codex_cli",
+    "backend": "codex_cli_repo_rag_proxy",
+    "used_baseline_fallback": false
+  }}
+}}
+""",
+            encoding="utf-8",
+        )
+
+    (imported_dir / "challenger.json").write_text(
+        f"""{{
+  "trace_record_kind": "repo-rag-trace-record",
+  "trace_record_path": "artifacts/traces/imported/challenger.json",
+  "question": "{question}",
+  "answer": "{slight_better_answer}",
+  "sources": ["docs/USAGE.md"],
+  "trace": {{
+    "schema_version": 1,
+    "trace_kind": "repo-rag-runtime",
+    "recorded_at": "2026-05-02T12:10:00+00:00",
+    "question": "{question}",
+    "mode": "codex-proxy",
+    "retrieval_mode": "hybrid-vector",
+    "sources": ["docs/USAGE.md"],
+    "source_count": 1,
+    "context_count": 1,
+    "context_field": "evidence_previews",
+    "top_k": 4,
+    "program_loaded": true,
+    "mcp_candidate_count": 0,
+    "answer_length": 400
+  }},
+  "outcome": {{
+    "acceptance_status": "accepted",
+    "accepted": true,
+    "execution_status": "success",
+    "method": "codex_cli",
+    "backend": "codex_cli_repo_rag_proxy",
+    "used_baseline_fallback": false
+  }}
+}}
+""",
+        encoding="utf-8",
+    )
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+    )
+
+    assert summary["candidate_count"] == 1
+    assert summary["context_group_count"] == 2
+
+    champion_index = json.loads(
+        (tmp_path / "artifacts" / "trainer" / "champion-index.json").read_text(encoding="utf-8")
+    )
+    family = champion_index["prompt_families"][0]
+    assert family["family_champion_record"]["expected_answer"] == supported_answer
+    assert family["family_champion_record"]["support_count"] == 2
+
+
 def test_materialize_combined_training_examples_replaces_duplicate_questions_and_strips_legacy_worker_sources(
     tmp_path: Path,
 ) -> None:
