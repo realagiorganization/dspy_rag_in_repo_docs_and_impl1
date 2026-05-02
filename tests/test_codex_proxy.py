@@ -12,6 +12,7 @@ import pytest
 from repo_rag_lab.codex_proxy import (
     CodexMediationResult,
     CodexProxyConfig,
+    _resolve_program_path_and_bundle_version,
     augment_responses_payload,
     build_codex_mediation,
     extract_codex_task_text,
@@ -198,6 +199,42 @@ def test_build_codex_mediation_suppresses_low_signal(
     assert mediation.injected is False
     assert mediation.developer_message == ""
     assert any("suppressed" in warning.lower() for warning in mediation.warnings)
+
+
+def test_resolve_program_path_and_bundle_version_uses_local_bundle_root_without_remote_fetch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    bundle_root = tmp_path / "bundle-root"
+    program_dir = bundle_root / "artifacts" / "dspy" / "remote" / "stable-42"
+    program_dir.mkdir(parents=True)
+    program_path = program_dir / "program.json"
+    program_path.write_text('{"program":"demo"}\n', encoding="utf-8")
+
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.fetch_remote_bundle", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.inspect_bundle_channel",
+        lambda root, channel: {
+            "channel_found": True,
+            "current_bundle_version": "stable-42",
+            "current_program_path": "artifacts/dspy/remote/stable-42/program.json",
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.RepositoryRAG",
+        lambda *args, **kwargs: pytest.fail("RepositoryRAG fallback should not run"),
+    )
+
+    resolved_program_path, resolved_bundle_version = _resolve_program_path_and_bundle_version(
+        repository_root=repository_root,
+        bundle_root=bundle_root,
+        bundle_version=None,
+        bundle_channel="stable",
+    )
+
+    assert resolved_program_path == program_path.resolve()
+    assert resolved_bundle_version == "stable-42"
 
 
 def test_running_codex_proxy_uses_budgeted_disk_cache(

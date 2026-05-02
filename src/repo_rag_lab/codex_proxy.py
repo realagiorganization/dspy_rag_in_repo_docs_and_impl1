@@ -20,7 +20,12 @@ import httpx
 from .azure_runtime import resolve_azure_openai_runtime
 from .dspy_training import resolve_dspy_lm_config
 from .dspy_workflow import RepositoryRAG
-from .runtime_artifacts import fetch_remote_bundle, resolve_bundle_version_for_program
+from .runtime_artifacts import (
+    fetch_remote_bundle,
+    inspect_bundle_channel,
+    resolve_bundle_manifest,
+    resolve_bundle_version_for_program,
+)
 from .workflow import ask_repository
 
 _DEFAULT_SNIPPET_LIMIT = 280
@@ -389,6 +394,37 @@ def _resolve_program_path_and_bundle_version(
                 remote_bundle.get("bundle_version") or bundle_version or ""
             ).strip() or None
             return program_path, resolved_version
+    if bundle_version is not None:
+        try:
+            _, local_bundle = resolve_bundle_manifest(
+                bundle_root,
+                bundle_version=bundle_version,
+            )
+        except ValueError:
+            local_bundle = None
+        local_program_path_text = (
+            local_bundle.get("program_path")
+            if isinstance(local_bundle, dict)
+            else None
+        )
+        if isinstance(local_program_path_text, str) and local_program_path_text.strip():
+            local_program_path = (bundle_root / local_program_path_text).resolve()
+            if local_program_path.is_file():
+                return local_program_path, bundle_version
+    else:
+        channel_state = inspect_bundle_channel(bundle_root, channel=bundle_channel)
+        local_program_path_text = (
+            channel_state.get("current_program_path")
+            if channel_state.get("channel_found")
+            else None
+        )
+        if isinstance(local_program_path_text, str) and local_program_path_text.strip():
+            local_program_path = (bundle_root / local_program_path_text).resolve()
+            if local_program_path.is_file():
+                resolved_version = str(
+                    channel_state.get("current_bundle_version") or ""
+                ).strip() or None
+                return local_program_path, resolved_version
     runner = RepositoryRAG(repository_root, top_k=4)
     local_program_path = runner.program_path
     if local_program_path is None:
@@ -423,7 +459,7 @@ def build_codex_mediation(
 
     warnings: list[str] = []
     rag_answer = ask_repository(question=question, root=resolved_root)
-    warnings.extend(rag_answer.retrieval_warnings)
+    warnings.extend(getattr(rag_answer, "retrieval_warnings", ()) or ())
     previews: list[dict[str, str]] = []
     sources: list[str] = []
     if rag_answer.context:

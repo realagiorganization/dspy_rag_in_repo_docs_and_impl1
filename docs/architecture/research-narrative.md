@@ -351,6 +351,12 @@ At the time of this document:
   truth but only publishes a new immutable bundle when the effective materialized candidate set
   changes relative to the existing snapshot; stale `failed/...` queue pointers are skipped as
   queue noise instead of counting as fresh work
+- the downstream `../dataset` worker path now also has a safe promoted-bundle distribution
+  contract: the deploy-stage runner mirrors `channels/stable.json` plus the referenced immutable
+  bundle assets into the artifacts PVC under `.repo_rag_bundle_store/`, worker pods read that
+  non-secret local mirror through `DATASET_REPO_RAG_BUNDLE_ROOT`, and placeholder bundle pins
+  such as `0` fall back to `stable` without requiring blob credentials inside the worker or Codex
+  subprocess
 - notebook batch execution and reporting are implemented and exposed through
   `make notebook-report`
 - TODO and publication backlog synchronization are implemented and exposed through
