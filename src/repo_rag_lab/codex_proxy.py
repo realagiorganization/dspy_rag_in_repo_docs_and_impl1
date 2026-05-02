@@ -423,6 +423,7 @@ def build_codex_mediation(
 
     warnings: list[str] = []
     rag_answer = ask_repository(question=question, root=resolved_root)
+    warnings.extend(rag_answer.retrieval_warnings)
     previews: list[dict[str, str]] = []
     sources: list[str] = []
     if rag_answer.context:

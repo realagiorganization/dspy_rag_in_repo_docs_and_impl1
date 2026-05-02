@@ -23,7 +23,10 @@ These are the variables most relevant to real usage and downstream deployment.
 | `AZURE_OPENAI_API_KEY` | Azure OpenAI authentication | Local notebooks, ad hoc scripts, future DSPy/Azure integrations | Secret. Do not commit. |
 | `AZURE_OPENAI_DEPLOYMENT_NAME` | Selecting the Azure deployment | Local notebooks, ad hoc scripts, future DSPy/Azure integrations | Validated locally on `2026-04-29` with `gpt-5.4`. |
 | `AZURE_OPENAI_MODEL_NAME` | Human-readable model label | Local docs and downstream tooling | Optional but useful when deployment name and model name differ. |
-| `AZURE_OPENAI_API_VERSION` | Azure OpenAI request compatibility | Deployment docs and downstream tooling | Validated locally on `2026-04-29` with `2024-12-01-preview`. |
+| `AZURE_OPENAI_API_VERSION` | Azure OpenAI request compatibility | Deployment docs and downstream tooling | Validated locally on `2026-05-01` with `2025-03-01-preview`. |
+| `AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME` | Azure OpenAI semantic retrieval | `src/repo_rag_lab/semantic_retrieval.py`, `src/repo_rag_lab/retrieval.py` | Non-secret. Required for `vector` / `hybrid-vector` retrieval to build the local semantic index. |
+| `AZURE_OPENAI_EMBEDDING_MODEL_NAME` | Optional embedding deployment alias/label | `src/repo_rag_lab/azure_runtime.py` | Optional fallback label when deployment name and model name are the same. |
+| `AZURE_OPENAI_EMBEDDING_API_VERSION` | Optional embedding-specific API-version override | `src/repo_rag_lab/azure_runtime.py` | Falls back to `AZURE_OPENAI_API_VERSION` when unset. |
 | `AZURE_INFERENCE_ENDPOINT` | Deployment/runtime environment contract | `src/repo_rag_lab/azure.py`, `azure-deployment.md` | This repo stores it in generated deployment manifests. |
 | `AZURE_INFERENCE_CREDENTIAL` | Deployment/runtime environment contract | `src/repo_rag_lab/azure.py`, `azure-deployment.md` | Usually the same secret as `AZURE_OPENAI_API_KEY` when key auth is used. |
 
@@ -42,6 +45,8 @@ organization provides the Azure runtime configuration through GitHub secrets and
 | `AZURE_OPENAI_DEPLOYMENT_NAME` | Optional live Azure OpenAI CI integration | `.github/workflows/ci.yml`, `tests/test_live_azure_integration.py` | Prefer a GitHub Actions variable. |
 | `AZURE_OPENAI_API_VERSION` | Optional live Azure OpenAI CI integration | `.github/workflows/ci.yml`, `tests/test_live_azure_integration.py` | Prefer a GitHub Actions variable. |
 | `AZURE_OPENAI_MODEL_NAME` | Optional live Azure OpenAI CI labeling | `.github/workflows/ci.yml` | Optional, non-secret. |
+| `AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME` | Optional live semantic retrieval | Retrieval-heavy local/CI runs, worker-side Codex mediation | Prefer a GitHub Actions variable because it is not itself secret. |
+| `AZURE_OPENAI_EMBEDDING_API_VERSION` | Optional live semantic retrieval override | Retrieval-heavy local/CI runs | Optional; defaults to `AZURE_OPENAI_API_VERSION`. |
 
 ## Make And Shell Override Variables
 
@@ -64,6 +69,7 @@ Current checked-in code and docs explicitly reference these runtime env vars:
 - `AZURE_INFERENCE_ENDPOINT`
 - `AZURE_INFERENCE_CREDENTIAL`
 - `AZURE_OPENAI_API_VERSION`
+- `AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME`
 
 Current checked-in operational tooling explicitly relies on:
 
@@ -84,6 +90,8 @@ Current local Azure OpenAI usage guidance in this repo should also carry:
 - `AZURE_OPENAI_DEPLOYMENT_NAME`
 - `AZURE_OPENAI_API_VERSION`
 - `AZURE_OPENAI_MODEL_NAME`
+- `AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME`
+- `AZURE_OPENAI_EMBEDDING_API_VERSION` when the embedding deployment needs a different API-version
 
 ## Recommended Local Workflow
 

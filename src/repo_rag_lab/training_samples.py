@@ -224,6 +224,22 @@ def _normalize_materialized_candidate_record(record: Mapping[str, Any]) -> dict[
     return normalized
 
 
+def _normalize_combined_training_record(record: Mapping[str, Any]) -> dict[str, Any]:
+    """Normalize one base/candidate record for the generated trainer compile dataset."""
+
+    normalized = _normalize_materialized_candidate_record(record)
+    return {
+        "question": str(normalized.get("question") or "").strip(),
+        "expected_answer": str(normalized.get("expected_answer") or "").strip(),
+        "tags": _dedupe_tags(normalized.get("tags", [])),
+        "expected_sources": [
+            str(source).strip()
+            for source in normalized.get("expected_sources", [])
+            if str(source).strip()
+        ],
+    }
+
+
 def _training_candidate_from_trace_record(
     payload: Mapping[str, Any],
     *,
@@ -462,45 +478,46 @@ def materialize_combined_training_examples(
             )
         candidate_records = [record for record in candidate_payload if isinstance(record, Mapping)]
 
-    merged_records: list[dict[str, Any]] = []
-    merged_keys: set[tuple[str, str, tuple[str, ...], str]] = set()
+    merged_records_by_question: dict[str, dict[str, Any]] = {}
+    merged_order: list[str] = []
+    duplicate_base_count = 0
     for record in base_records:
-        normalized = {
-            "question": str(record.get("question") or "").strip(),
-            "expected_answer": str(record.get("expected_answer") or "").strip(),
-            "tags": _dedupe_tags(record.get("tags", [])),
-            "expected_sources": [
-                str(source).strip()
-                for source in record.get("expected_sources", [])
-                if str(source).strip()
-            ],
-        }
-        key = _candidate_record_key(normalized)
-        if key in merged_keys:
+        normalized = _normalize_combined_training_record(record)
+        question_key = _candidate_question_key(normalized)
+        if not question_key:
+            merged_order.append(f"__blank-base-{len(merged_order)}")
+            merged_records_by_question[merged_order[-1]] = normalized
             continue
-        merged_keys.add(key)
-        merged_records.append(normalized)
+        if question_key in merged_records_by_question:
+            duplicate_base_count += 1
+            continue
+        merged_order.append(question_key)
+        merged_records_by_question[question_key] = normalized
 
     new_candidate_count = 0
     duplicate_candidate_count = 0
+    replaced_candidate_count = 0
     for record in candidate_records:
-        normalized = {
-            "question": str(record.get("question") or "").strip(),
-            "expected_answer": str(record.get("expected_answer") or "").strip(),
-            "tags": _dedupe_tags(record.get("tags", [])),
-            "expected_sources": [
-                str(source).strip()
-                for source in record.get("expected_sources", [])
-                if str(source).strip()
-            ],
-        }
-        key = _candidate_record_key(normalized)
-        if key in merged_keys:
+        normalized = _normalize_combined_training_record(record)
+        question_key = _candidate_question_key(normalized)
+        if not question_key:
+            merged_order.append(f"__blank-candidate-{len(merged_order)}")
+            merged_records_by_question[merged_order[-1]] = normalized
+            new_candidate_count += 1
+            continue
+        existing_record = merged_records_by_question.get(question_key)
+        if existing_record is None:
+            merged_order.append(question_key)
+            merged_records_by_question[question_key] = normalized
+            new_candidate_count += 1
+            continue
+        if _candidate_record_key(existing_record) == _candidate_record_key(normalized):
             duplicate_candidate_count += 1
             continue
-        merged_keys.add(key)
-        merged_records.append(normalized)
-        new_candidate_count += 1
+        merged_records_by_question[question_key] = normalized
+        replaced_candidate_count += 1
+
+    merged_records = [merged_records_by_question[key] for key in merged_order]
 
     resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
     resolved_output_path.write_text(
@@ -513,6 +530,8 @@ def materialize_combined_training_examples(
         "combined_example_count": len(merged_records),
         "new_candidate_count": new_candidate_count,
         "duplicate_candidate_count": duplicate_candidate_count,
+        "replaced_candidate_count": replaced_candidate_count,
+        "duplicate_base_count": duplicate_base_count,
         "base_training_path": (
             str(resolved_base_path.relative_to(resolved_root))
             if resolved_base_path.is_relative_to(resolved_root)

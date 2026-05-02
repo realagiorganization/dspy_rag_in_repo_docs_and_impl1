@@ -14,9 +14,11 @@ The Rust wrapper also exposes a compact SQLite lookup path for tracked files, an
 `make ask` / `uv run repo-rag ask` path now uses that native index first before falling back to
 the broader baseline retriever. That lookup-first path now works against arbitrary git repository
 roots passed through `--root`, not only this repository itself. The broader retriever now has a
-profile-driven optional `idf-rerank` second stage and normalizes corpus paths relative to the
-selected repository root, so nested fixture roots and worker-style temporary clones reuse the same
-ranking logic cleanly.
+profile-driven hybrid retrieval stack: lexical lookup-first narrowing through Rust/SQLite FTS,
+optional `idf-rerank` lexical refinement, and Azure OpenAI embedding-backed `vector` /
+`hybrid-vector` ranking with a local semantic chunk index under `artifacts/retrieval/`. Corpus
+paths stay normalized relative to the selected repository root, so nested fixture roots and
+worker-style temporary clones reuse the same ranking logic cleanly.
 
 ## What The Repository Covers
 
@@ -80,7 +82,7 @@ the Rust wrapper.
 | Backlog sync | `make todo-sync` | Regenerate the linkified TODO table in both Markdown and the publication article. |
 | Exploratorium sync | `make exploratorium-sync` | Regenerate the bilingual file-link-fetch-state publication inventory. |
 | Pages catalog build | `make pages-build` | Generate and build the MkDocs Material GitHub Pages catalog of tracked Markdown files. |
-| Ask a repo question | `make ask QUESTION="..."` | Run the lookup-first repository-grounded workflow with explicit `Question:`, `Answer:`, and `Evidence:` output, narrowing to native SQLite file hits before falling back to the broader baseline retriever. The same path now works for arbitrary git repo roots through `uv run repo-rag ask --root <repo_path> --question "..." --output json`, with optional `--retrieval-mode lexical|idf-rerank` overrides, reserved `--bundle-version` / `--overlay-path` worker hints, and a stable `trace` payload in JSON output. |
+| Ask a repo question | `make ask QUESTION="..."` | Run the lookup-first repository-grounded workflow with explicit `Question:`, `Answer:`, and `Evidence:` output, narrowing to native SQLite file hits before falling back to the broader baseline retriever. The same path now works for arbitrary git repo roots through `uv run repo-rag ask --root <repo_path> --question "..." --output json`, with optional `--retrieval-mode lexical|idf-rerank|vector|hybrid-vector` overrides, reserved `--bundle-version` / `--overlay-path` worker hints, a stable `trace` payload in JSON output, and explicit retrieval warnings when semantic retrieval falls back to lexical ranking. |
 | DSPy ask | `make ask-dspy QUESTION="..."` | Run the explicit DSPy runtime path with LM config from `DSPY_*`, Azure, or OpenAI environment variables, automatically reusing the latest compiled program when one exists after the same lookup-first narrowing pass; pair it with `make rust-lookup` when you want to inspect those candidate files directly. Use `uv run repo-rag ask --question "..." --use-dspy --output json` for machine-readable output, bundle-aware trace metadata, and the same optional retrieval-mode override. |
 | Live Azure ask | `make ask-live QUESTION="..."` | Retrieve repository evidence locally, then synthesize a live answer through Azure OpenAI or Azure AI Inference. Use `uv run repo-rag ask-live --question "..." --output json` for machine-readable output with the same runtime trace schema. |
 | DSPy compile | `make dspy-train DSPY_RUN_NAME=...` | Compile and save a repository-grounded DSPy program under `artifacts/dspy/`. |
@@ -276,10 +278,13 @@ question answering, `make ask` already uses the Rust lookup path first. Run `mak
 QUERY="..."` when you want to inspect those candidate files directly before moving to
 `make ask-dspy`. Retrieval weighting now also has a repo-local profile surface in
 `config/retrieval-profile.json`, so repository-specific ranking tweaks no longer have to stay
-hardcoded inside `src/repo_rag_lab/retrieval.py`. The retrieval stack now also supports a
-profile-selected `idf-rerank` mode and stores corpus paths relative to the selected `--root`,
-which keeps temporary worker clones and nested fixture repositories aligned with the same runtime
-contract. The same worker-side contract now also includes versioned bundle inspection through
+hardcoded inside `src/repo_rag_lab/retrieval.py`. The retrieval stack now also supports
+profile-selected `lexical`, `idf-rerank`, `vector`, and `hybrid-vector` modes, builds a local
+semantic chunk index under `artifacts/retrieval/` when
+`AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME` is configured, and falls back to lexical ranking with an
+explicit warning when embedding runtime is unavailable. It also stores corpus paths relative to
+the selected `--root`, which keeps temporary worker clones and nested fixture repositories aligned
+with the same runtime contract. The same worker-side contract now also includes versioned bundle inspection through
 `make bundle-inspect`, explicit bundle publish/promotion/rollback through `make bundle-publish`,
 `make bundle-promote`, and `make bundle-rollback`, overlay creation through `make overlay-init`,
 runtime traces embedded in JSON ask outputs, explicit trace export/import surfaces, and queued

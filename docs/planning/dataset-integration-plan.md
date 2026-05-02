@@ -44,8 +44,8 @@ Current first-pass contract:
 
 The `--root` path above is now validated by repository tests against arbitrary temporary git
 repositories, not only against this repository's own root. The same CLI family now also supports
-an explicit `--retrieval-mode lexical|idf-rerank` override while keeping the repo-local profile
-default available for worker-side reuse.
+an explicit `--retrieval-mode lexical|idf-rerank|vector|hybrid-vector` override while keeping the
+repo-local profile default available for worker-side reuse.
 
 Current shared envelope fields:
 
@@ -75,6 +75,8 @@ Current first-pass worker inputs:
 - required now: an execution choice that maps to baseline `ask`, DSPy `ask --use-dspy`, or `ask-live`
 - required when the selected mode needs it: runtime provider config such as Azure/OpenAI or `DSPY_*`
 - optional now: `retrieval_mode` when the worker wants to override the repo-local profile default
+  - `vector` and `hybrid-vector` require `AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME`; otherwise the
+    runtime now falls back to lexical ranking and records a retrieval warning in the trace payload
 - optional now: `bundle_version` when a worker wants to override the deployment-wide `DSPY_BUNDLE_VERSION` pin or annotate the selected bundle
 - optional now: `overlay_path` when a worker wants to persist or reuse a local overlay manifest
 
@@ -215,7 +217,10 @@ Current implementation note:
   channel lookup. The trainer cycle now also
   reconstructs its local compile ledger from Azure `processed/<queue>/...` blobs before candidate
   materialization, so the DSPy training input can be rebuilt after trainer PVC loss instead of
-  depending on one surviving `training-candidates.yaml` snapshot.
+  depending on one surviving `training-candidates.yaml` snapshot. The generated training merge now
+  also strips legacy worker-only `expected_sources` and collapses duplicate questions at the final
+  compile-input stage, so one evolving worker prompt cannot keep re-invalidating trainer
+  recompilation through stale prompt-artifact paths or answer-variant duplicate rows.
 - The worker-side `codex` path now attempts that mediation proxy for any repository-like prepared
   clone by default, so repo-aware augmentation no longer depends on replacing `codex` with an
   explicit `repo_rag_cli` backend. The local compatibility executor still keeps explicit

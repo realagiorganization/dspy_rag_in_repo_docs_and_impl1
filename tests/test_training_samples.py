@@ -138,6 +138,7 @@ def test_materialize_training_candidates_and_combined_training_examples(tmp_path
     assert combined_summary["base_example_count"] == 1
     assert combined_summary["candidate_example_count"] == 1
     assert combined_summary["combined_example_count"] == 2
+    assert combined_summary["replaced_candidate_count"] == 0
 
 
 def test_materialize_training_candidates_normalizes_legacy_worker_sources_and_duplicate_questions(
@@ -241,3 +242,67 @@ def test_materialize_training_candidates_replaces_existing_candidate_with_new_tr
     assert len(materialized) == 1
     assert materialized[0].expected_answer == "It researches repository-grounded RAG."
     assert materialized[0].expected_sources == ()
+
+
+def test_materialize_combined_training_examples_replaces_duplicate_questions_and_strips_legacy_worker_sources(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "README.md").write_text("# Demo\n", encoding="utf-8")
+    base_training_path = tmp_path / "samples" / "training" / "base.yaml"
+    base_training_path.parent.mkdir(parents=True, exist_ok=True)
+    base_training_path.write_text(
+        (
+            '- question: "What does this repository research?"\n'
+            '  expected_answer: "Base answer."\n'
+            '  tags: ["repo"]\n'
+            "  expected_sources:\n"
+            '    - "README.md"\n'
+            '- question: "Where are logs stored?"\n'
+            '  expected_answer: "samples/logs"\n'
+            '  tags: ["logs"]\n'
+        ),
+        encoding="utf-8",
+    )
+
+    candidates_path = tmp_path / "artifacts" / "trainer" / "training-candidates.yaml"
+    candidates_path.parent.mkdir(parents=True, exist_ok=True)
+    candidates_path.write_text(
+        (
+            '- question: "What does this repository research?"\n'
+            '  expected_answer: "Legacy worker answer."\n'
+            '  tags: ["trainer-candidate", "candidate"]\n'
+            "  expected_sources:\n"
+            '    - "prompt_artifacts/prompts_shards_of_lokar_game-p00000-355cca.txt"\n'
+            '- question: "What does this repository research?"\n'
+            '  expected_answer: "Fresh worker answer."\n'
+            '  tags: ["trainer-candidate", "candidate"]\n'
+            "  expected_sources:\n"
+            '    - "docs/USAGE.md"\n'
+        ),
+        encoding="utf-8",
+    )
+
+    combined_summary = materialize_combined_training_examples(
+        tmp_path,
+        base_training_path=Path("samples/training/base.yaml"),
+        candidates_path=Path("artifacts/trainer/training-candidates.yaml"),
+        output_path=Path("artifacts/trainer/generated-training.yaml"),
+        summary_path=Path("artifacts/trainer/generated-training-summary.json"),
+    )
+
+    assert combined_summary["base_example_count"] == 2
+    assert combined_summary["candidate_example_count"] == 2
+    assert combined_summary["combined_example_count"] == 2
+    assert combined_summary["new_candidate_count"] == 0
+    assert combined_summary["duplicate_candidate_count"] == 0
+    assert combined_summary["replaced_candidate_count"] == 2
+
+    combined_examples = load_training_examples(
+        tmp_path / "artifacts" / "trainer" / "generated-training.yaml"
+    )
+    assert len(combined_examples) == 2
+    first_example = combined_examples[0]
+    assert first_example.question == "What does this repository research?"
+    assert first_example.expected_answer == "Fresh worker answer."
+    assert first_example.expected_sources == ()
+    assert validate_training_examples(combined_examples, root=tmp_path) == []
