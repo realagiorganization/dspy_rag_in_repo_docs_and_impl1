@@ -46,7 +46,7 @@ This inventory is generated from the current Git index.
 | `docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md` | docs | markdown | 38 | 1555 | Implementing RAG with DSPy: Technical Guide |
 | `docs/architecture/mcp-discovery.md` | docs | markdown | 54 | 1757 | MCP Discovery Notes |
 | `docs/architecture/package-api.md` | docs | markdown | 127 | 9186 | Package API Notes |
-| `docs/architecture/research-narrative.md` | docs | markdown | 403 | 28033 | Repository research narrative tying code, docs, and verification together |
+| `docs/architecture/research-narrative.md` | docs | markdown | 407 | 28418 | Repository research narrative tying code, docs, and verification together |
 | `docs/archive/repo-completeness-checklist.md` | docs | markdown | 238 | 7450 | Archived completeness snapshot kept for workflow and lockfile policy context |
 | `docs/audit/2026-03-15-repo-state.md` | docs | markdown | 151 | 5989 | Repository audit note for 2026 03 15 repo state |
 | `docs/audit/2026-03-17-docs-and-uv-refresh.md` | docs | markdown | 79 | 3977 | Repository audit note for 2026 03 17 docs and uv refresh |
@@ -143,7 +143,7 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-05-01-live-trainer-remote-bundle-publish.md` | docs | markdown | 148 | 7444 | Repository audit note for 2026 05 01 live trainer remote bundle publish |
 | `docs/audit/2026-05-01-live-trainer-service-azure-fallback.md` | docs | markdown | 167 | 6390 | Repository audit note for 2026 05 01 live trainer service azure fallback |
 | `docs/audit/2026-05-01-versioned-trainer-lineage-bundles.md` | docs | markdown | 123 | 5821 | Repository audit note for 2026 05 01 versioned trainer lineage bundles |
-| `docs/audit/2026-05-02-hybrid-vector-retrieval-default.md` | docs | markdown | 165 | 7898 | Repository audit note for 2026 05 02 hybrid vector retrieval default |
+| `docs/audit/2026-05-02-hybrid-vector-retrieval-default.md` | docs | markdown | 196 | 9849 | Repository audit note for 2026 05 02 hybrid vector retrieval default |
 | `docs/audit/2026-05-02-live-trainer-still-not-publishing-bundles.md` | docs | markdown | 162 | 6657 | Repository audit note for 2026 05 02 live trainer still not publishing bundles |
 | `docs/audit/README.md` | docs | markdown | 14 | 416 | Repository audit note for README |
 | `docs/guides/hushwheel-fixture-rag-guide.md` | docs | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
@@ -152,7 +152,7 @@ This inventory is generated from the current Git index.
 | `docs/operations/runtime-image.md` | docs | markdown | 46 | 1989 | Runtime Image Notes |
 | `docs/operations/simple-end-to-end-verification-guide.md` | docs | markdown | 105 | 4111 | Simple End-To-End Verification Guide |
 | `docs/operations/trainer-deployment.md` | docs | markdown | 152 | 6047 | Trainer Deployment Notes |
-| `docs/planning/dataset-integration-plan.md` | docs | markdown | 296 | 19063 | Dataset Integration Plan |
+| `docs/planning/dataset-integration-plan.md` | docs | markdown | 299 | 19387 | Dataset Integration Plan |
 | `docs/planning/repo-hardening-plan.md` | docs | markdown | 71 | 4545 | Repository Hardening Plan |
 | `mkdocs.yml` | mkdocs.yml | yaml | 37 | 843 | site_name: Repository RAG Lab |
 | `notebooks/01_repo_rag_research.ipynb` | notebooks | notebook | 281 | 9324 | Repository RAG Research Playbook |
