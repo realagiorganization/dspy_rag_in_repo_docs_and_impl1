@@ -1287,7 +1287,7 @@ def run_trainer_cycle(
         trace_paths=[Path(path) for path in trainer_trace_paths],
         output_path=DEFAULT_TRAINER_TRAINING_CANDIDATES_PATH,
         summary_path=DEFAULT_TRAINER_TRAINING_CANDIDATES_SUMMARY_PATH,
-        seed_existing_output=False,
+        seed_existing_output=True,
     )
     new_candidate_count_raw = training_candidates.get("new_candidate_count")
     try:

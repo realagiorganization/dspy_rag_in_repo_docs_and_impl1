@@ -48,6 +48,9 @@ Important behavior changes:
   semantic retrieval fell back to lexical ranking
 - benchmark and notebook-facing retrieval quality summaries now report the **effective** retrieval
   mode after semantic fallback instead of only echoing the requested profile mode
+- corpus loading and benchmark-corpus selection now both exclude runtime-generated worker
+  scaffolding such as `prompt_artifacts/`, `_context_repos/`, and `.repo_rag_cache/`, so
+  retrieval cannot win by rereading its own prompt echoes or temporary repo-link/cache state
 
 ## Verification
 
@@ -59,6 +62,11 @@ Repository-local checks executed in this turn:
 - `uv run repo-rag smoke-test` -> `pass`
 - `cargo build --manifest-path rust-cli/Cargo.toml` -> `pass`
 - `make files-sync` -> `pass`
+- `make verify-surfaces` -> `pass`
+
+Follow-up hardening checks executed in the current turn:
+
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py tests/test_retrieval.py tests/test_benchmarks_and_notebook_scaffolding.py -q` -> `pass` (`66 passed`)
 - `make verify-surfaces` -> `pass`
 
 ## Limits
@@ -76,3 +84,112 @@ What is verified here is:
 - code compiles
 - retrieval/workflow/MCP fallback behavior is covered by local tests
 - the repository default now requests `hybrid-vector`
+- runtime-generated worker prompt traces and context-link scaffolding are now outside the live
+  retrieval/benchmark corpus contract
+
+## Latest Live Deployment Check
+
+- Checked artifact upload `executions/25250270123_20260502_111853` from local
+  `../dataset/artifacts/`.
+- Re-ran the repository-native baseline locally in this turn:
+  - `uv run python -m compileall src tests` -> `pass`
+  - `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q` -> `pass`
+    (`40 passed`)
+  - `uv run repo-rag smoke-test` -> `pass`
+  - `cargo build --manifest-path rust-cli/Cargo.toml` -> `pass`
+
+Live conclusions from the uploaded worker artifacts and the running `repo-rag` trainer:
+
+1. The latest worker run did **not** exercise the updated prompt-artifact isolation or the new
+   retrieval exclusion policy.
+   - `repo_rag_codex_proxy_last.json` still retrieved:
+     - `prompt_artifacts/prompts_shards_of_lokar_game-p00000-355cca.txt`
+     - `prompt_artifacts/prompts_shards_of_lokar_game-p00000-9dc50a.txt`
+     - `prompt_artifacts/prompts_shards_of_lokar_game.txt`
+     - `README.md`
+   - `execution.log` from the same run still shows:
+     - `Persisted prompt trace at /tmp/repositories/realagiorganization_shards_of_lokar_game/prompt_artifacts/...`
+   - That means the AKS worker image used for this run still contained the old worker-side prompt
+     trace placement, so the repo-local exclusion and prompt-artifact relocation fixes present in
+     the current worktree had not been deployed yet.
+
+2. DSPy still did **not** run in compiled-bundle mode in that worker run.
+   - `repo_rag_backend.json` shows:
+     - `bundle_resolved = false`
+     - `bundle_version = null`
+     - `dspy_status = "heuristic"`
+   - `repo_rag_trace.json` shows:
+     - `program_loaded = false`
+     - `program_path = null`
+   - Azure blob inspection confirmed:
+     - `channels/stable.json` -> `BlobNotFound`
+     - `channels/canary.json` -> `BlobNotFound`
+   - The current live trainer env still has `TRAINER_PROMOTE_CHANNEL=""`, so workers do not have
+     an active global channel pointer to resolve by default.
+
+3. The trainer is now publishing versioned bundles, but it is publishing **too many** of them.
+   - Live `service-state.json` at `2026-05-02T11:31:37Z` shows:
+     - `cycles_executed = 18`
+     - `successful_cycle_count = 2`
+     - `failed_cycle_count = 16`
+     - `total_recompiled_run_count = 18`
+     - `total_publish_count = 18`
+     - `total_drained_count = 1`
+   - The latest bundle versions present in Azure include timestamps such as:
+     - `20260502T112224258019Z`
+     - `20260502T112740532590Z`
+     - `20260502T113020328758Z`
+   - The live cycle records show why this is happening:
+     - `durable_trace_recovery` restores the same processed trace ledger every cycle
+     - `training_candidates.new_candidate_count` still reports work every cycle
+     - `recompile.recompile_status = "compiled"` and publish happens again on the same effective
+       training set
+   - This **does not** match the intended training behavior. The expected contract is to publish a
+     new immutable bundle only when the effective candidate set changes, not once per poll cycle on
+     a stable recovered ledger.
+
+4. There is still a stale trainer-queue failure unrelated to the main worker result.
+   - Live cycle records continue to show one `BlobNotFound` against an old
+     `failed/repo-rag-training/...trainer-validation-seed...json` blob.
+   - That failure is noisy, but it is not the primary reason the worker missed DSPy. The primary
+     blockers are:
+     - no promoted `stable`/`canary` channel pointer
+     - trainer-side republish churn on unchanged recovered traces
+
+Current live state therefore differs from the repository-local target in two ways:
+
+- worker-side retrieval isolation changes are locally implemented and tested, but were not present
+  in the last uploaded AKS worker artifacts
+- trainer-side versioned bundle publishing is live, but the change-detection gate for recompilation
+  and publish is still too permissive, causing churn
+
+## Repository-Local Hardening After The Live Check
+
+The current worktree now closes the gaps identified above, even though those fixes were not yet in
+the last uploaded AKS artifacts:
+
+1. Worker-side prompt traces are expected to stay under execution artifacts instead of being
+   written into the analyzed repository tree, and repo-rag corpus loading/benchmark selection now
+   excludes runtime-generated scaffolding such as `prompt_artifacts/`, `_context_repos/`, and
+   `.repo_rag_cache/`.
+2. Trainer-side candidate materialization now seeds from the existing materialized candidate YAML
+   when replaying the durable processed-trace ledger, so one unchanged recovered ledger no longer
+   reports fresh `new_candidate_count` work every poll cycle.
+3. Azure queue drain now treats already-missing `failed/...` blob pointers as stale queue noise,
+   deletes the queue message, and records a `stale-failed-blob` skip instead of poisoning the
+   trainer cycle with another synthetic failure.
+4. Repository-local trainer deployment defaults now assume `TRAINER_PROMOTE_CHANNEL=stable`,
+   making the intended global worker path “publish immutable version -> promote `stable` ->
+   workers resolve `stable` unless a version pin overrides it”.
+5. Worker-side bundle resolution now treats placeholder pins such as `DSPY_BUNDLE_VERSION=0` as
+   unset, so a forgotten placeholder no longer blocks fallback resolution through the promoted
+   bundle channel.
+
+Repository-local checks executed after those follow-up fixes:
+
+- `uv run python -m compileall src tests` -> `pass`
+- `uv run pytest tests/test_training_samples.py tests/test_runtime_artifacts_azure.py tests/test_utilities.py tests/test_retrieval.py tests/test_benchmarks_and_notebook_scaffolding.py -q` -> `pass` (`80 passed`)
+- `uv run repo-rag smoke-test` -> `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml` -> `pass`
+- `make verify-surfaces` -> `pass`
+- `make files-sync` -> `pass`

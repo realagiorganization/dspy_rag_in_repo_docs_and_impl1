@@ -45,7 +45,10 @@ Current first-pass contract:
 The `--root` path above is now validated by repository tests against arbitrary temporary git
 repositories, not only against this repository's own root. The same CLI family now also supports
 an explicit `--retrieval-mode lexical|idf-rerank|vector|hybrid-vector` override while keeping the
-repo-local profile default available for worker-side reuse.
+repo-local profile default available for worker-side reuse. Runtime-generated worker scaffolding
+such as `prompt_artifacts/`, `_context_repos/`, and `.repo_rag_cache/` is now treated as
+non-corpus data, and the worker path should persist prompt traces under execution artifacts rather
+than back into the analyzed repository tree.
 
 Current shared envelope fields:
 
@@ -214,13 +217,16 @@ Current implementation note:
   `stable` / `canary` channel state plus rollback/promote operations pointed at those concrete
   versioned bundles instead of overwriting one mutable trainer alias. The primary worker-side
   runtime selector is now the deployment-wide `DSPY_BUNDLE_VERSION` pin rather than a mandatory
-  channel lookup. The trainer cycle now also
+  channel lookup, while repository-local deployment defaults now promote `stable` unless an
+  operator intentionally clears `TRAINER_PROMOTE_CHANNEL`. The trainer cycle now also
   reconstructs its local compile ledger from Azure `processed/<queue>/...` blobs before candidate
   materialization, so the DSPy training input can be rebuilt after trainer PVC loss instead of
   depending on one surviving `training-candidates.yaml` snapshot. The generated training merge now
   also strips legacy worker-only `expected_sources` and collapses duplicate questions at the final
   compile-input stage, so one evolving worker prompt cannot keep re-invalidating trainer
-  recompilation through stale prompt-artifact paths or answer-variant duplicate rows.
+  recompilation through stale prompt-artifact paths or answer-variant duplicate rows; unchanged
+  recovered ledgers no longer count as new trainer work, and stale `failed/...` queue blobs are
+  skipped instead of poisoning the next poll cycle.
 - The worker-side `codex` path now attempts that mediation proxy for any repository-like prepared
   clone by default, so repo-aware augmentation no longer depends on replacing `codex` with an
   explicit `repo_rag_cli` backend. The local compatibility executor still keeps explicit
@@ -228,8 +234,8 @@ Current implementation note:
 - Remaining AKS follow-up work is now specifically trainer-side:
   - feed the live service a genuinely new accepted/candidate trace that survives dedupe so
     auto-recompile can be observed end-to-end
-  - decide whether automatic promotion should remain disabled or be enabled intentionally through
-    `TRAINER_PROMOTE_CHANNEL`
+  - confirm whether the new default `TRAINER_PROMOTE_CHANNEL=stable` should remain enabled in live
+    AKS or be overridden explicitly for manual-only promotion
   - validate that later worker runs can resolve and consume a trainer-published bundle via `DSPY_BUNDLE_VERSION`
 
 ## Phase 4. Global Training Loop

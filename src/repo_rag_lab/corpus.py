@@ -22,14 +22,19 @@ TEXT_SUFFIXES = {
 }
 
 EXCLUDED_PARTS = {
+    ".codex",
     ".git",
+    ".github",
     ".mypy_cache",
     ".pre-commit-cache",
     ".ruff_cache",
     ".venv",
     "__pycache__",
+    ".repo_rag_cache",
     ".pytest_cache",
+    "_context_repos",
     "artifacts",
+    "prompt_artifacts",
     "target",
     "build",
     "dist",

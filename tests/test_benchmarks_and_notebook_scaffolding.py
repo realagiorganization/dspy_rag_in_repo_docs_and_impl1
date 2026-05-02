@@ -172,6 +172,9 @@ def test_is_benchmark_document_path_excludes_operational_repo_surfaces() -> None
         is False
     )
     assert is_benchmark_document_path(Path("artifacts/notebook_logs/run.json")) is False
+    assert is_benchmark_document_path(Path("prompt_artifacts/prompt.txt")) is False
+    assert is_benchmark_document_path(Path("_context_repos/shadow/README.md")) is False
+    assert is_benchmark_document_path(Path(".repo_rag_cache/cache.txt")) is False
     assert is_benchmark_document_path(Path("tests/test_utilities.py")) is False
     assert is_benchmark_document_path(Path("docs/architecture/dspy-rag-guide.md")) is False
 

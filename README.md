@@ -18,7 +18,9 @@ profile-driven hybrid retrieval stack: lexical lookup-first narrowing through Ru
 optional `idf-rerank` lexical refinement, and Azure OpenAI embedding-backed `vector` /
 `hybrid-vector` ranking with a local semantic chunk index under `artifacts/retrieval/`. Corpus
 paths stay normalized relative to the selected repository root, so nested fixture roots and
-worker-style temporary clones reuse the same ranking logic cleanly.
+worker-style temporary clones reuse the same ranking logic cleanly. Runtime-generated scaffolding
+such as `artifacts/`, `prompt_artifacts/`, `_context_repos/`, and `.repo_rag_cache/` is excluded
+from corpus loading so retrieval cannot win by re-reading its own prompt echoes or worker cache.
 
 ## What The Repository Covers
 

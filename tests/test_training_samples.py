@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from repo_rag_lab.training_samples import (
@@ -242,6 +243,71 @@ def test_materialize_training_candidates_replaces_existing_candidate_with_new_tr
     assert len(materialized) == 1
     assert materialized[0].expected_answer == "It researches repository-grounded RAG."
     assert materialized[0].expected_sources == ()
+
+
+def test_materialize_training_candidates_reports_no_new_candidates_for_unchanged_full_ledger(
+    tmp_path: Path,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    trainer_dir = tmp_path / "artifacts" / "trainer"
+    trainer_dir.mkdir(parents=True, exist_ok=True)
+    candidates_path = trainer_dir / "training-candidates.yaml"
+    summary_path = trainer_dir / "training-candidates-summary.json"
+    trace_path = imported_dir / "accepted.json"
+    trace_path.write_text(
+        """{
+  "trace_record_kind": "repo-rag-trace-record",
+  "trace_record_path": "artifacts/traces/imported/accepted.json",
+  "question": "What does this repository research?",
+  "answer": "It researches repository-grounded RAG.",
+  "sources": ["README.md"],
+  "trace": {
+    "schema_version": 1,
+    "trace_kind": "repo-rag-runtime",
+    "recorded_at": "2026-05-01T00:00:00+00:00",
+    "question": "What does this repository research?",
+    "mode": "codex-proxy",
+    "retrieval_mode": "rag_heuristic_dspy",
+    "sources": ["README.md"],
+    "source_count": 1,
+    "context_count": 1,
+    "context_field": "context",
+    "mcp_candidate_count": 0,
+    "answer_length": 20
+  },
+  "outcome": {
+    "acceptance_status": "candidate",
+    "accepted": null,
+    "execution_status": "success",
+    "method": "codex_cli",
+    "backend": "codex_cli_repo_rag_proxy"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    first_summary = materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+    )
+    second_summary = materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+    )
+
+    assert first_summary["candidate_count"] == 1
+    assert first_summary["new_candidate_count"] == 1
+    assert second_summary["candidate_count"] == 1
+    assert second_summary["new_candidate_count"] == 0
+    assert second_summary["replaced_count"] == 0
+    assert load_training_examples(candidates_path)[0].expected_answer == (
+        "It researches repository-grounded RAG."
+    )
+    assert json.loads(summary_path.read_text(encoding="utf-8"))["new_candidate_count"] == 0
 
 
 def test_materialize_combined_training_examples_replaces_duplicate_questions_and_strips_legacy_worker_sources(

@@ -202,6 +202,25 @@ def test_retrieve_profile_can_exclude_sources() -> None:
     assert [chunk.source for chunk in retrieved] == [Path("docs/guide.md")]
 
 
+def test_load_documents_excludes_runtime_generated_prompt_and_context_scaffolding(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "README.md").write_text("# Demo\n", encoding="utf-8")
+    prompt_dir = tmp_path / "prompt_artifacts"
+    prompt_dir.mkdir()
+    (prompt_dir / "prompt.txt").write_text("runtime prompt echo", encoding="utf-8")
+    context_dir = tmp_path / "_context_repos"
+    context_dir.mkdir()
+    (context_dir / "shadow.md").write_text("runtime context repo link target", encoding="utf-8")
+    cache_dir = tmp_path / ".repo_rag_cache"
+    cache_dir.mkdir()
+    (cache_dir / "cache.txt").write_text("cached retrieval data", encoding="utf-8")
+
+    sources = {str(document.path) for document in load_documents(tmp_path)}
+
+    assert sources == {"README.md"}
+
+
 def test_retrieve_idf_rerank_prefers_phrase_coherent_chunk() -> None:
     question = "Where are inspired implementation summaries stored?"
     chunks = [

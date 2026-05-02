@@ -69,7 +69,8 @@ second-stage scoring, and an Azure OpenAI embedding-backed `vector` / `hybrid-ve
 stores a local semantic chunk index under `artifacts/retrieval/semantic-index.json`; it still
 keeps repository-root-relative source normalization plus repo-local profile overrides from
 `config/retrieval-profile.json` so primary docs beat synthetic echoes from tests, training
-samples, audits, generated inventories, and similar meta surfaces, and it falls back to lexical
+samples, audits, generated inventories, runtime-generated `prompt_artifacts/`,
+worker-scaffold `_context_repos/`, and similar meta surfaces, and it falls back to lexical
 ranking with explicit warnings when the embedding runtime is unavailable.
 This is the minimum honest system: before
 optimization, before benchmarking, and before deployment, the repo must be able to explain itself
@@ -292,8 +293,8 @@ At the time of this document:
   immutable bundle versions into `repo-rag-bundles`; worker deployments can now pin one of those
   versions globally through `DSPY_BUNDLE_VERSION`, while optional `stable` / `canary` promotion
   and rollback remain available as alias/fallback mechanics instead of the primary runtime
-  selection path; `TRAINER_PROMOTE_CHANNEL` can still stay empty when automatic promotion should
-  remain disabled; the trainer cycle now also
+  selection path; repository-local deployment defaults now promote `stable` unless an operator
+  explicitly clears `TRAINER_PROMOTE_CHANNEL` for manual-only promotion; the trainer cycle now also
   restores a durable local trace ledger from Azure `processed/<queue>/...` blobs before
   materializing candidates, so losing the trainer PVC no longer implies losing the accumulated
   example set used to build the next DSPy program
@@ -346,6 +347,10 @@ At the time of this document:
 - bundle inspection/fetch/publish/promotion and queued trace handoff now speak a global Azure
   Blob + Queue contract when storage credentials are present, while retaining the older local
   filesystem registry/queue only as a single-repository fallback
+- trainer-side change detection now treats the durable processed-trace ledger as the source of
+  truth but only publishes a new immutable bundle when the effective materialized candidate set
+  changes relative to the existing snapshot; stale `failed/...` queue pointers are skipped as
+  queue noise instead of counting as fresh work
 - notebook batch execution and reporting are implemented and exposed through
   `make notebook-report`
 - TODO and publication backlog synchronization are implemented and exposed through
