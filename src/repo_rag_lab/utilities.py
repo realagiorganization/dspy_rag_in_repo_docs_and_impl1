@@ -71,6 +71,7 @@ from .trainer_deployment import (
     DEFAULT_TRAINER_K8S_IMAGE,
     DEFAULT_TRAINER_K8S_IMAGE_PULL_SECRET_NAME,
     DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE,
+    DEFAULT_TRAINER_K8S_MIN_NEW_CANDIDATES_FOR_RECOMPILE,
     DEFAULT_TRAINER_K8S_MINIMUM_PASS_RATE,
     DEFAULT_TRAINER_K8S_MINIMUM_SOURCE_RECALL,
     DEFAULT_TRAINER_K8S_NAMESPACE,
@@ -471,6 +472,9 @@ def run_trainer_k8s_manifest_generation(
     minimum_source_recall: float | None = DEFAULT_TRAINER_K8S_MINIMUM_SOURCE_RECALL,
     minimum_bundle_pass_rate: float | None = DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE,
     recompile_run_name: str | None = DEFAULT_TRAINER_K8S_RECOMPILE_RUN_NAME,
+    min_new_candidates_for_recompile: int = (
+        DEFAULT_TRAINER_K8S_MIN_NEW_CANDIDATES_FOR_RECOMPILE
+    ),
     recompile_base_training_path: Path = DEFAULT_TRAINING_PATH,
 ) -> str:
     """Materialize Kubernetes manifests for trainer-service and trainer-cycle roles."""
@@ -502,6 +506,7 @@ def run_trainer_k8s_manifest_generation(
             minimum_source_recall=minimum_source_recall,
             minimum_bundle_pass_rate=minimum_bundle_pass_rate,
             recompile_run_name=recompile_run_name,
+            min_new_candidates_for_recompile=min_new_candidates_for_recompile,
             recompile_base_training_path=str(recompile_base_training_path),
         ),
     )
@@ -1245,6 +1250,7 @@ def run_trainer_cycle(
     minimum_pass_rate: float | None = None,
     minimum_source_recall: float | None = None,
     minimum_bundle_pass_rate: float | None = None,
+    min_new_candidates_for_recompile: int = 1,
 ) -> str:
     """Run one background-compatible trainer pass for queue drain, gating, and promotion."""
 
@@ -1294,8 +1300,10 @@ def run_trainer_cycle(
         new_candidate_count = max(0, int(new_candidate_count_raw or 0))
     except (TypeError, ValueError):
         new_candidate_count = 0
+    effective_min_new_candidates = max(1, int(min_new_candidates_for_recompile))
     recompile_requested = recompile_run_name is not None
-    recompile_triggered = recompile_requested and new_candidate_count > 0
+    recompile_threshold_met = new_candidate_count >= effective_min_new_candidates
+    recompile_triggered = recompile_requested and recompile_threshold_met
     if effective_minimum_bundle_pass_rate is None and (
         promote_channel is not None or recompile_triggered
     ):
@@ -1334,16 +1342,28 @@ def run_trainer_cycle(
 
     if recompile_requested:
         if not recompile_triggered:
+            recompile_status = (
+                "skipped-no-new-candidates"
+                if new_candidate_count == 0
+                else "skipped-below-new-candidate-threshold"
+            )
             recompile_payload = {
-                "recompile_status": "skipped-no-new-candidates",
+                "recompile_status": recompile_status,
                 "generated_training": None,
                 "training_result": None,
                 "new_candidate_count": new_candidate_count,
+                "min_new_candidates_for_recompile": effective_min_new_candidates,
             }
-            cycle_warnings.append(
-                "Trainer-side bundle recompilation was skipped because no new training "
-                "candidates were imported during this cycle."
-            )
+            if new_candidate_count == 0:
+                cycle_warnings.append(
+                    "Trainer-side bundle recompilation was skipped because no new training "
+                    "candidates were imported during this cycle."
+                )
+            else:
+                cycle_warnings.append(
+                    "Trainer-side bundle recompilation was skipped because the number of new "
+                    "training candidates did not reach the configured minimum threshold."
+                )
         else:
             resolved_recompile_run_name = _versioned_training_run_name(recompile_run_name)
             recompile_lineage = {
@@ -1354,10 +1374,14 @@ def run_trainer_cycle(
                 "durable_trace_recovery": durable_trace_recovery,
                 "training_candidates_path": training_candidates.get("output_path"),
                 "training_candidates_summary_path": training_candidates.get("summary_path"),
+                "champion_index_path": training_candidates.get("champion_index_path"),
                 "candidate_count": training_candidates.get("candidate_count"),
                 "new_candidate_count": new_candidate_count,
+                "min_new_candidates_for_recompile": effective_min_new_candidates,
                 "duplicate_count": training_candidates.get("duplicate_count"),
                 "replaced_count": training_candidates.get("replaced_count"),
+                "prompt_family_count": training_candidates.get("prompt_family_count"),
+                "context_group_count": training_candidates.get("context_group_count"),
             }
             try:
                 recompile_payload = _trainer_recompile_payload(
@@ -1516,6 +1540,8 @@ def run_trainer_cycle(
         "durable_trace_recovery": durable_trace_recovery,
         "ingestion_summary": ingestion_summary,
         "training_candidates": training_candidates,
+        "min_new_candidates_for_recompile": effective_min_new_candidates,
+        "recompile_threshold_met": recompile_threshold_met,
         "recompile": recompile_payload,
         "recompile_error": recompile_error,
         "retrieval_gate": retrieval_payload,
@@ -1627,6 +1653,7 @@ def run_trainer_candidates(
             generated_paths=[
                 str(payload.get("output_path") or ""),
                 str(payload.get("summary_path") or ""),
+                str(payload.get("champion_index_path") or ""),
             ],
             related_paths=["artifacts/traces/imported"],
         ),
@@ -1806,6 +1833,7 @@ def run_trainer_service(
     minimum_pass_rate: float | None = None,
     minimum_source_recall: float | None = None,
     minimum_bundle_pass_rate: float | None = None,
+    min_new_candidates_for_recompile: int = 1,
     poll_interval_seconds: float = 60.0,
     max_cycles: int | None = None,
     max_idle_cycles: int | None = None,
@@ -1827,6 +1855,8 @@ def run_trainer_service(
     total_promotion_count = 0
     total_training_candidate_count = 0
     total_new_training_candidate_count = 0
+    total_prompt_family_count = 0
+    total_context_group_count = 0
     total_recompiled_run_count = 0
     total_skipped_recompile_count = 0
     gate_failure_count = 0
@@ -1882,6 +1912,7 @@ def run_trainer_service(
                     minimum_pass_rate=minimum_pass_rate,
                     minimum_source_recall=minimum_source_recall,
                     minimum_bundle_pass_rate=minimum_bundle_pass_rate,
+                    min_new_candidates_for_recompile=min_new_candidates_for_recompile,
                 )
             )
             cycles_executed += 1
@@ -1934,6 +1965,12 @@ def run_trainer_service(
                 )
                 total_new_training_candidate_count += int(
                     training_candidates.get("new_candidate_count") or 0
+                )
+                total_prompt_family_count = int(
+                    training_candidates.get("prompt_family_count") or total_prompt_family_count
+                )
+                total_context_group_count = int(
+                    training_candidates.get("context_group_count") or total_context_group_count
                 )
 
             ingestion_summary = cycle_payload.get("ingestion_summary")
@@ -1990,6 +2027,8 @@ def run_trainer_service(
                 "total_promotion_count": total_promotion_count,
                 "total_training_candidate_count": total_training_candidate_count,
                 "total_new_training_candidate_count": total_new_training_candidate_count,
+                "total_prompt_family_count": total_prompt_family_count,
+                "total_context_group_count": total_context_group_count,
                 "total_recompiled_run_count": total_recompiled_run_count,
                 "total_skipped_recompile_count": total_skipped_recompile_count,
                 "gate_failure_count": gate_failure_count,
@@ -2068,6 +2107,9 @@ def run_trainer_service(
         "total_promotion_count": total_promotion_count,
         "total_training_candidate_count": total_training_candidate_count,
         "total_new_training_candidate_count": total_new_training_candidate_count,
+        "min_new_candidates_for_recompile": max(1, int(min_new_candidates_for_recompile)),
+        "total_prompt_family_count": total_prompt_family_count,
+        "total_context_group_count": total_context_group_count,
         "total_recompiled_run_count": total_recompiled_run_count,
         "total_skipped_recompile_count": total_skipped_recompile_count,
         "bundle_gate_failure_count": bundle_gate_failure_count,

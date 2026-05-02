@@ -36,6 +36,7 @@ DEFAULT_TRAINER_K8S_MINIMUM_PASS_RATE: float | None = None
 DEFAULT_TRAINER_K8S_MINIMUM_SOURCE_RECALL: float | None = None
 DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE: float | None = None
 DEFAULT_TRAINER_K8S_RECOMPILE_RUN_NAME: str | None = None
+DEFAULT_TRAINER_K8S_MIN_NEW_CANDIDATES_FOR_RECOMPILE = 1
 
 
 def _relative_path_text(root: Path, path: Path) -> str:
@@ -85,6 +86,9 @@ class TrainerK8sConfig:
     trace_queue_limit: int | None = None
     trace_keep_queued: bool = False
     recompile_run_name: str | None = DEFAULT_TRAINER_K8S_RECOMPILE_RUN_NAME
+    min_new_candidates_for_recompile: int = (
+        DEFAULT_TRAINER_K8S_MIN_NEW_CANDIDATES_FOR_RECOMPILE
+    )
     recompile_base_training_path: str = str(DEFAULT_TRAINING_PATH)
     recompile_optimizer: str = "bootstrapfewshot"
     recompile_top_k: int = 4
@@ -129,6 +133,9 @@ def _config_map_payload(config: TrainerK8sConfig) -> dict[str, object]:
             str(config.minimum_bundle_pass_rate)
             if config.minimum_bundle_pass_rate is not None
             else ""
+        ),
+        "TRAINER_MIN_NEW_CANDIDATES_FOR_RECOMPILE": str(
+            max(1, int(config.min_new_candidates_for_recompile))
         ),
         "TRAINER_RECOMPILE_RUN_NAME": config.recompile_run_name or "",
         "TRAINER_RECOMPILE_BASE_TRAINING_PATH": config.recompile_base_training_path,
@@ -253,6 +260,12 @@ def _trainer_command(config: TrainerK8sConfig, *, role: str) -> list[str]:
         command.extend(["--minimum-source-recall", str(config.minimum_source_recall)])
     if config.minimum_bundle_pass_rate is not None:
         command.extend(["--minimum-bundle-pass-rate", str(config.minimum_bundle_pass_rate)])
+    command.extend(
+        [
+            "--min-new-candidates-for-recompile",
+            str(max(1, int(config.min_new_candidates_for_recompile))),
+        ]
+    )
     if config.recompile_run_name:
         command.extend(["--recompile-run-name", config.recompile_run_name])
     if config.promote_channel:
@@ -402,6 +415,9 @@ def write_trainer_k8s_manifests(root: Path, *, config: TrainerK8sConfig) -> dict
         "cycle_schedule": config.cycle_schedule,
         "promote_channel": config.promote_channel,
         "minimum_bundle_pass_rate": config.minimum_bundle_pass_rate,
+        "min_new_candidates_for_recompile": max(
+            1, int(config.min_new_candidates_for_recompile)
+        ),
         "manifest_dir": _relative_path_text(resolved_root, output_dir),
         "manifest_paths": [
             _relative_path_text(resolved_root, service_account_path),

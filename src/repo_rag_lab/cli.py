@@ -41,6 +41,7 @@ from .trainer_deployment import (
     DEFAULT_TRAINER_K8S_IMAGE,
     DEFAULT_TRAINER_K8S_IMAGE_PULL_SECRET_NAME,
     DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE,
+    DEFAULT_TRAINER_K8S_MIN_NEW_CANDIDATES_FOR_RECOMPILE,
     DEFAULT_TRAINER_K8S_MINIMUM_PASS_RATE,
     DEFAULT_TRAINER_K8S_MINIMUM_SOURCE_RECALL,
     DEFAULT_TRAINER_K8S_NAMESPACE,
@@ -475,6 +476,7 @@ def build_parser() -> argparse.ArgumentParser:
     trainer_cycle_parser.add_argument("--minimum-pass-rate", type=float)
     trainer_cycle_parser.add_argument("--minimum-source-recall", type=float)
     trainer_cycle_parser.add_argument("--minimum-bundle-pass-rate", type=float)
+    trainer_cycle_parser.add_argument("--min-new-candidates-for-recompile", type=int, default=1)
     add_trainer_recompile_arguments(trainer_cycle_parser)
     add_output_argument(trainer_cycle_parser, default="json")
 
@@ -494,6 +496,7 @@ def build_parser() -> argparse.ArgumentParser:
     trainer_service_parser.add_argument("--minimum-pass-rate", type=float)
     trainer_service_parser.add_argument("--minimum-source-recall", type=float)
     trainer_service_parser.add_argument("--minimum-bundle-pass-rate", type=float)
+    trainer_service_parser.add_argument("--min-new-candidates-for-recompile", type=int, default=1)
     trainer_service_parser.add_argument("--poll-interval-seconds", type=float, default=60.0)
     trainer_service_parser.add_argument("--max-cycles", type=int)
     trainer_service_parser.add_argument("--max-idle-cycles", type=int)
@@ -558,6 +561,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     trainer_k8s_parser.add_argument(
         "--recompile-run-name", default=DEFAULT_TRAINER_K8S_RECOMPILE_RUN_NAME
+    )
+    trainer_k8s_parser.add_argument(
+        "--min-new-candidates-for-recompile",
+        type=int,
+        default=DEFAULT_TRAINER_K8S_MIN_NEW_CANDIDATES_FOR_RECOMPILE,
     )
     trainer_k8s_parser.add_argument(
         "--recompile-base-training-path", default=str(DEFAULT_TRAINING_PATH)
@@ -697,6 +705,11 @@ def main() -> int:
                             mcp_candidate_count=0,
                             answer_length=len(str(result.get("answer") or "")),
                             context_field="retrieved_context",
+                            evidence_items=[
+                                item
+                                for item in result.get("retrieved_context", [])
+                                if isinstance(item, dict)
+                            ],
                         )
                     )
                     _print_json(_command_payload("ask", root=root, result=result))
@@ -729,6 +742,9 @@ def main() -> int:
                         mcp_candidate_count=_list_length_field(result, "mcp_candidates"),
                         answer_length=len(str(result.get("answer") or "")),
                         context_field="context",
+                        evidence_items=[
+                            item for item in result.get("context", []) if isinstance(item, dict)
+                        ],
                     )
                 )
                 _print_json(_command_payload("ask", root=root, result=result))
@@ -774,6 +790,9 @@ def main() -> int:
                         mcp_candidate_count=_list_length_field(result, "mcp_candidates"),
                         answer_length=len(str(result.get("answer") or "")),
                         context_field="context",
+                        evidence_items=[
+                            item for item in result.get("context", []) if isinstance(item, dict)
+                        ],
                     )
                 )
                 _print_json(_command_payload("ask-live", root=root, result=result))
@@ -1141,6 +1160,7 @@ def main() -> int:
                 minimum_pass_rate=args.minimum_pass_rate,
                 minimum_source_recall=args.minimum_source_recall,
                 minimum_bundle_pass_rate=args.minimum_bundle_pass_rate,
+                min_new_candidates_for_recompile=args.min_new_candidates_for_recompile,
             ),
         )
 
@@ -1185,6 +1205,7 @@ def main() -> int:
                 minimum_pass_rate=args.minimum_pass_rate,
                 minimum_source_recall=args.minimum_source_recall,
                 minimum_bundle_pass_rate=args.minimum_bundle_pass_rate,
+                min_new_candidates_for_recompile=args.min_new_candidates_for_recompile,
                 poll_interval_seconds=args.poll_interval_seconds,
                 max_cycles=args.max_cycles,
                 max_idle_cycles=args.max_idle_cycles,
@@ -1231,6 +1252,7 @@ def main() -> int:
                 minimum_source_recall=args.minimum_source_recall,
                 minimum_bundle_pass_rate=args.minimum_bundle_pass_rate,
                 recompile_run_name=args.recompile_run_name,
+                min_new_candidates_for_recompile=args.min_new_candidates_for_recompile,
                 recompile_base_training_path=Path(args.recompile_base_training_path),
             ),
         )

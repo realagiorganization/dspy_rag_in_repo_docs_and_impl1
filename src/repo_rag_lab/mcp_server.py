@@ -241,6 +241,9 @@ def call_mcp_tool(
                 mcp_candidate_count=len(normalized_mcp_candidates),
                 answer_length=len(str(payload.get("answer") or "")),
                 context_field="context",
+                evidence_items=[
+                    item for item in normalized_context_items if isinstance(item, dict)
+                ],
             )
         )
         return _json_content(payload)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import hashlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -51,6 +52,7 @@ DEFAULT_TRAINER_TRAINING_CANDIDATES_PATH = DEFAULT_TRAINER_SERVICE_DIR / "traini
 DEFAULT_TRAINER_TRAINING_CANDIDATES_SUMMARY_PATH = (
     DEFAULT_TRAINER_SERVICE_DIR / "training-candidates-summary.json"
 )
+DEFAULT_TRAINER_CHAMPION_INDEX_PATH = DEFAULT_TRAINER_SERVICE_DIR / "champion-index.json"
 DEFAULT_TRAINER_RECOVERED_TRACES_DIR = DEFAULT_TRAINER_SERVICE_DIR / "recovered-imported-traces"
 DEFAULT_TRAINER_GENERATED_TRAINING_PATH = DEFAULT_TRAINER_SERVICE_DIR / "generated-training.yaml"
 DEFAULT_TRAINER_GENERATED_TRAINING_SUMMARY_PATH = (
@@ -83,6 +85,7 @@ class RuntimeTraceContext:
     mcp_candidate_count: int = 0
     answer_length: int | None = None
     context_field: str = "context"
+    evidence_items: Sequence[Mapping[str, object]] = ()
 
 
 def _relative_to_root(path: Path, root: Path) -> str:
@@ -127,6 +130,46 @@ def _string_list(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item) for item in value]
+
+
+def _dedupe_string_list(values: Sequence[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for value in values:
+        cleaned = str(value).strip()
+        if not cleaned:
+            continue
+        key = cleaned.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        ordered.append(cleaned)
+    return ordered
+
+
+def _normalize_evidence_preview(value: object) -> str:
+    return " ".join(str(value or "").strip().split())[:240]
+
+
+def _trace_evidence_fingerprints(rows: Sequence[Mapping[str, object]]) -> list[str]:
+    fingerprints: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        source = " ".join(str(row.get("source") or "").strip().split())
+        preview = _normalize_evidence_preview(row.get("preview") or row.get("text"))
+        if not source and not preview:
+            continue
+        payload = json.dumps(
+            [source.casefold(), preview.casefold()],
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        token = f"ev-{hashlib.sha256(payload).hexdigest()[:16]}"
+        if token in seen:
+            continue
+        seen.add(token)
+        fingerprints.append(token)
+    return fingerprints
 
 
 def _list_or_empty(value: object) -> list[object]:
@@ -884,6 +927,7 @@ def initialize_local_overlay(
 def build_runtime_trace(trace: RuntimeTraceContext) -> dict[str, object]:
     """Return a stable runtime-trace payload for worker-side persistence."""
 
+    evidence_fingerprints = _dedupe_string_list(_trace_evidence_fingerprints(trace.evidence_items))
     payload: dict[str, object] = {
         "schema_version": TRACE_SCHEMA_VERSION,
         "trace_kind": "repo-rag-runtime",
@@ -901,6 +945,8 @@ def build_runtime_trace(trace: RuntimeTraceContext) -> dict[str, object]:
         "source_count": len(trace.sources),
         "context_count": trace.context_count,
         "context_field": trace.context_field,
+        "evidence_fingerprints": evidence_fingerprints,
+        "evidence_count": len(evidence_fingerprints),
         "mcp_candidate_count": trace.mcp_candidate_count,
         "answer_length": trace.answer_length,
     }
@@ -933,9 +979,11 @@ def _normalize_runtime_trace(payload: Mapping[str, object]) -> dict[str, object]
     top_k = _int_or_none(payload.get("top_k"))
     source_count = _int_or_none(payload.get("source_count"))
     context_count = _int_or_none(payload.get("context_count"))
+    evidence_count = _int_or_none(payload.get("evidence_count"))
     mcp_candidate_count = _int_or_none(payload.get("mcp_candidate_count"))
     answer_length = _int_or_none(payload.get("answer_length"))
     sources = _string_list(payload.get("sources"))
+    evidence_fingerprints = _dedupe_string_list(_string_list(payload.get("evidence_fingerprints")))
     return {
         "schema_version": schema_version,
         "trace_kind": trace_kind,
@@ -955,6 +1003,8 @@ def _normalize_runtime_trace(payload: Mapping[str, object]) -> dict[str, object]
         "source_count": source_count if source_count is not None else len(sources),
         "context_count": context_count if context_count is not None else 0,
         "context_field": _string_or_none(payload.get("context_field")) or "context",
+        "evidence_fingerprints": evidence_fingerprints,
+        "evidence_count": evidence_count if evidence_count is not None else len(evidence_fingerprints),
         "mcp_candidate_count": mcp_candidate_count if mcp_candidate_count is not None else 0,
         "answer_length": answer_length,
     }
@@ -979,6 +1029,32 @@ def _trace_record_snapshot(payload: Mapping[str, object]) -> dict[str, object]:
         },
         "error": _mapping_or_none(payload.get("source_error") or payload.get("error")),
     }
+
+
+def _backfill_runtime_trace_evidence(
+    trace_payload: Mapping[str, object],
+    snapshot: Mapping[str, object],
+) -> dict[str, object]:
+    """Backfill evidence fingerprints from stored context rows when the trace lacks them."""
+
+    normalized = {str(key): value for key, value in trace_payload.items()}
+    evidence_fingerprints = _dedupe_string_list(_string_list(normalized.get("evidence_fingerprints")))
+    if not evidence_fingerprints:
+        evidence_rows = [
+            row
+            for row in _list_or_empty(snapshot.get("retrieved_context"))
+            if isinstance(row, Mapping)
+        ]
+        evidence_rows.extend(
+            row for row in _list_or_empty(snapshot.get("context")) if isinstance(row, Mapping)
+        )
+        evidence_fingerprints = _trace_evidence_fingerprints(evidence_rows)
+    normalized["evidence_fingerprints"] = evidence_fingerprints
+    evidence_count = _int_or_none(normalized.get("evidence_count"))
+    normalized["evidence_count"] = (
+        evidence_count if evidence_count is not None else len(evidence_fingerprints)
+    )
+    return normalized
 
 
 def _normalize_outcome_payload(payload: Mapping[str, object]) -> dict[str, object]:
@@ -1019,7 +1095,27 @@ def normalize_trace_record_payload(payload: Mapping[str, object]) -> dict[str, o
         runtime_trace_payload = _mapping_or_none(payload.get("trace"))
         if runtime_trace_payload is None:
             raise ValueError("Trace record payload must include a `trace` object.")
-        normalized_trace = _normalize_runtime_trace(runtime_trace_payload)
+        snapshot = {
+            "question": _string_or_none(payload.get("question")),
+            "answer": _string_or_none(payload.get("answer")),
+            "response_text": _string_or_none(payload.get("response_text")),
+            "sources": _string_list(payload.get("sources")),
+            "context": _list_or_empty(payload.get("context")),
+            "retrieved_context": _list_or_empty(payload.get("retrieved_context")),
+            "warnings": _string_list(payload.get("source_warnings") or payload.get("warnings")),
+            "artifact_metadata": _mapping_or_none(
+                payload.get("source_artifact_metadata") or payload.get("artifact_metadata")
+            )
+            or {
+                "input_paths": [],
+                "generated_paths": [],
+                "related_paths": [],
+            },
+            "error": _mapping_or_none(payload.get("source_error") or payload.get("error")),
+        }
+        normalized_trace = _normalize_runtime_trace(
+            _backfill_runtime_trace_evidence(runtime_trace_payload, snapshot)
+        )
         outcome_payload = _mapping_or_none(payload.get("outcome"))
         return {
             "source_command": _string_or_none(payload.get("source_command")) or "trace-record",
@@ -1027,23 +1123,9 @@ def normalize_trace_record_payload(payload: Mapping[str, object]) -> dict[str, o
             or "success",
             "source_root": _string_or_none(payload.get("source_root")),
             "snapshot": {
-                "question": _string_or_none(payload.get("question"))
-                or normalized_trace["question"],
-                "answer": _string_or_none(payload.get("answer")),
-                "response_text": _string_or_none(payload.get("response_text")),
-                "sources": _string_list(payload.get("sources")) or normalized_trace["sources"],
-                "context": _list_or_empty(payload.get("context")),
-                "retrieved_context": _list_or_empty(payload.get("retrieved_context")),
-                "warnings": _string_list(payload.get("source_warnings") or payload.get("warnings")),
-                "artifact_metadata": _mapping_or_none(
-                    payload.get("source_artifact_metadata") or payload.get("artifact_metadata")
-                )
-                or {
-                    "input_paths": [],
-                    "generated_paths": [],
-                    "related_paths": [],
-                },
-                "error": _mapping_or_none(payload.get("source_error") or payload.get("error")),
+                **snapshot,
+                "question": snapshot["question"] or normalized_trace["question"],
+                "sources": snapshot["sources"] or normalized_trace["sources"],
             },
             "trace": normalized_trace,
             "outcome": _normalize_outcome_payload(outcome_payload)
@@ -1054,12 +1136,15 @@ def normalize_trace_record_payload(payload: Mapping[str, object]) -> dict[str, o
     embedded_trace = _mapping_or_none(payload.get("trace"))
     if embedded_trace is not None:
         outcome_payload = _mapping_or_none(payload.get("outcome"))
+        snapshot = _trace_record_snapshot(payload)
         return {
             "source_command": _string_or_none(payload.get("command")) or "unknown-command",
             "source_command_status": _string_or_none(payload.get("command_status")) or "success",
             "source_root": _string_or_none(payload.get("root")),
-            "snapshot": _trace_record_snapshot(payload),
-            "trace": _normalize_runtime_trace(embedded_trace),
+            "snapshot": snapshot,
+            "trace": _normalize_runtime_trace(
+                _backfill_runtime_trace_evidence(embedded_trace, snapshot)
+            ),
             "outcome": _normalize_outcome_payload(outcome_payload)
             if outcome_payload is not None
             else None,
