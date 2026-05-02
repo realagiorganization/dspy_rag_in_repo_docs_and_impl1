@@ -340,3 +340,45 @@ What is still **not** claimed here:
 - a fresh live AKS worker run that consumes `stable.json` through the new artifacts-PVC mirror
 - end-to-end proof that a worker with empty/invalid `DSPY_BUNDLE_VERSION` now resolves the
   promoted stable bundle in production
+
+## Latest Build And Trainer Redeploy Check
+
+The dataset-side image build and trainer redeploy for the safe worker bundle-mirror path have now
+been completed live.
+
+Commands executed in this turn:
+
+- `BUILD_MODE=acr IMAGE_TAG=20260502-135903 ./build_and_push_images.sh` from
+  `../dataset` -> `pass`
+- `IMAGE_TAG=20260502-135903 ./deploy_repo_rag_trainer.sh` from `../dataset` -> `pass`
+
+Built images:
+
+- `llmpromptsacr.azurecr.io/repo-rag-runtime:20260502-135903`
+- `llmpromptsacr.azurecr.io/prompt-executor:20260502-135903`
+- `llmpromptsacr.azurecr.io/queue-initializer:20260502-135903`
+
+Live trainer deployment evidence after redeploy:
+
+- `kubectl -n repo-rag get deploy repo-rag-trainer-service -o yaml` shows:
+  - `image: llmpromptsacr.azurecr.io/repo-rag-runtime:20260502-135903`
+  - `--promote-channel stable`
+- `kubectl -n repo-rag get deploy,po,cm,secret` shows:
+  - `deployment.apps/repo-rag-trainer-service` -> `READY 1/1`
+  - running pod `repo-rag-trainer-service-5b856bf894-f7jl4`
+- Azure bundle-channel inspection of `repo-rag-bundles/channels/stable.json` still resolves to:
+  - `current_bundle_version = "20260502T122127191445Z"`
+  - `current_program_path = "artifacts/dspy/20260502T122127191445Z/program.json"`
+
+What this redeploy check confirms:
+
+- the current repo-rag runtime image now exists in ACR for the safe stable-bundle fallback work
+- the live trainer is running that new runtime image
+- the live trainer still promotes to `stable`
+- the global `stable` channel pointer remains intact after redeploy
+
+What this redeploy check still does **not** confirm:
+
+- a new worker/pipeline run using `prompt-executor:20260502-135903`
+- end-to-end worker resolution of the promoted bundle through the new artifacts-PVC bundle mirror
+- live compiled-DSPy execution after removing or invalidating `DSPY_BUNDLE_VERSION`
