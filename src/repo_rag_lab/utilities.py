@@ -1304,8 +1304,9 @@ def run_trainer_cycle(
     recompile_requested = recompile_run_name is not None
     recompile_threshold_met = new_candidate_count >= effective_min_new_candidates
     recompile_triggered = recompile_requested and recompile_threshold_met
+    explicit_publish_requested = run_name is not None or bundle_version is not None
     if effective_minimum_bundle_pass_rate is None and (
-        promote_channel is not None or recompile_triggered
+        explicit_publish_requested or recompile_triggered
     ):
         effective_minimum_bundle_pass_rate = 1.0
     retrieval_payload = _build_retrieval_evaluation_payload(
@@ -1324,8 +1325,8 @@ def run_trainer_cycle(
     recompile_payload: dict[str, object] | None = None
     bundle_gate_payload: dict[str, object] | None = None
     cycle_warnings: list[str] = []
-    explicit_publish_requested = run_name is not None or bundle_version is not None
     publish_requested = explicit_publish_requested
+    promotion_requested = False
     promotion_status = "not-requested" if promote_channel is None else "blocked"
     publish_error: dict[str, str] | None = None
     promote_error: dict[str, str] | None = None
@@ -1428,6 +1429,9 @@ def run_trainer_cycle(
             if isinstance(training_run_name, str) and training_run_name.strip():
                 effective_publish_run_name = training_run_name.strip()
                 publish_requested = True
+    promotion_requested = promote_channel is not None and publish_requested
+    if promote_channel is not None and not promotion_requested:
+        promotion_status = "not-requested"
 
     bundle_gate_payload = _build_bundle_benchmark_gate(
         root,
@@ -1471,7 +1475,7 @@ def run_trainer_cycle(
             }
             cycle_warnings.append("Bundle publish failed during trainer cycle.")
 
-    if promote_channel is not None:
+    if promotion_requested:
         if not gate_passed:
             cycle_warnings.append(
                 f"Promotion to `{promote_channel}` was blocked by retrieval gate failures."
@@ -1526,12 +1530,7 @@ def run_trainer_cycle(
                 promotion_status = "failed"
                 cycle_warnings.append("Bundle promotion failed during trainer cycle.")
 
-    if (
-        promote_channel is not None
-        and gate_passed
-        and publish_error is None
-        and promote_payload is None
-    ):
+    if promotion_requested and gate_passed and publish_error is None and promote_payload is None:
         promotion_status = "failed"
 
     cycle_payload: dict[str, object] = {
@@ -1549,6 +1548,7 @@ def run_trainer_cycle(
         "bundle_gate": bundle_gate_payload,
         "bundle_gate_passed": bundle_gate_passed,
         "publish_requested": publish_requested,
+        "promotion_requested": promotion_requested,
         "publish": publish_payload,
         "publish_error": publish_error,
         "promote_channel": promote_channel,
@@ -1567,11 +1567,11 @@ def run_trainer_cycle(
         recompile_triggered and recompile_status != "compiled"
     )
     bundle_gate_required = effective_minimum_bundle_pass_rate is not None and (
-        publish_requested or promote_channel is not None or recompile_triggered
+        publish_requested or recompile_triggered
     )
     cycle_failed = (
         bool(queue_payload.get("failed_count"))
-        or not gate_passed
+        or (promotion_requested and not gate_passed)
         or (bundle_gate_required and not bundle_gate_passed)
         or publish_error is not None
         or promote_error is not None

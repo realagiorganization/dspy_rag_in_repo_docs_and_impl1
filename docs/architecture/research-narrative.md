@@ -240,7 +240,12 @@ latest local slice also adds `DATASET_CODEX_AUTO_SESSION_LANE_MODE`, which can d
 lanes automatically from `queue_label` and/or `prompt_slug` when no explicit lane hint is set, so
 unrelated queue families stop sharing one increasingly broad Codex lane. Persisted lane metadata
 now records `lane_source`, allowing later live validation to distinguish explicit operator forks
-from automatic task-family routing.
+from automatic task-family routing. The newest bundle-resolution follow-up also tightens the DSPy
+handoff path itself: `repo-rag` local bundle lookup now understands both the repo-local
+`artifacts/dspy/...` layout and the staged worker mirror layout `channels/...` + `versions/...`,
+while the `dataset` deploy path now refreshes `repo-rag-storage-config` from the active Azure
+Storage environment so workers can resolve `stable` either from a staged PVC mirror or directly
+from the shared Blob store when credentials are available.
 
 ## Current State
 
@@ -430,7 +435,8 @@ At the time of this document:
   bundle assets into the artifacts PVC under `.repo_rag_bundle_store/`, worker pods read that
   non-secret local mirror through `DATASET_REPO_RAG_BUNDLE_ROOT`, and placeholder bundle pins
   such as `0` fall back to `stable` without requiring blob credentials inside the worker or Codex
-  subprocess
+  subprocess; trainer-side no-op cycles now also avoid false-failing on the historical
+  bundle-manifest gate when no new bundle candidate exists to publish or promote
 - notebook batch execution and reporting are implemented and exposed through
   `make notebook-report`
 - TODO and publication backlog synchronization are implemented and exposed through
