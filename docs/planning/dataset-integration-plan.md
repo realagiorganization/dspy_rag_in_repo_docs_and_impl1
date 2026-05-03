@@ -258,6 +258,53 @@ Current implementation note:
 - Remaining AKS follow-up work is now specifically trainer-side:
   - feed the live service a genuinely new accepted/candidate trace that survives dedupe so
     auto-recompile can be observed end-to-end
+  - pivot the worker hot path from fresh `codex exec` starts to PVC-backed `codex exec resume`
+    sessions so repo-RAG is no longer asked to emulate Codex execution memory through stateless
+    prompt injection alone; the dedicated plan for that shift now lives in
+    [docs/planning/codex-exec-resume-plan.md](codex-exec-resume-plan.md)
+  - the first local implementation slice for that pivot now exists in `../dataset`: worker temp
+    `CODEX_HOME` instances can restore persisted non-credential Codex state, regenerate fresh
+    credential/config files, rerun guard preflight, and prefer `codex exec resume --last` when a
+    persisted session snapshot is available; the same slice now also writes a PVC-root
+    `session-index.json` plus per-run `codex_session_state.json` metadata so later AKS validation
+    can confirm which lane resumed and which latest session hint survived pod turnover, and it now
+    skips restore automatically when the persisted working-directory, repo-root / branch,
+    model-profile, or auth/config contract no longer matches the current worker run; the generated
+    worker manifest now pins
+    `DATASET_CODEX_SESSION_STATE_DIR=/tmp/artifacts/_codex_sessions` so that state lives on the
+    artifacts PVC by explicit contract instead of by path coincidence. A second local slice now
+    narrows that persisted state to a current minimal durable allowlist, records repo/model lane
+    metadata, and distinguishes `fresh`, `reset`, `resumed`, and `resumed-then-reset` worker
+    outcomes in `codex_session_state.json`, while validating restored snapshots against an explicit
+    manifest before attempting resume; the same worker slice now also exposes explicit reset
+    controls (`DATASET_CODEX_SESSION_RESET` / `DATASET_CODEX_FORCE_FRESH`) and a
+    repeated-resume-failure threshold (`DATASET_CODEX_MAX_RESUME_FAILURES`) plus a tunable
+    same-lane repo drift reset threshold (`DATASET_CODEX_REPO_DRIFT_RESET_THRESHOLD`) so a bad
+    or overly drifted session lane can rebuild itself without manual PVC surgery, and it now
+    reports `restore_status`, `persist_status`, and `pvc_sync_health` so AKS validation can tell
+    whether a lane truly resumed, reset cleanly, or degraded while writing session state back to
+    the artifacts PVC; the local worker suite now also covers a true two-run `fresh -> resumed`
+    cycle instead of only synthetic seeded-restore fixtures. A further local slice now adds one
+    explicit divergent-lane trigger through `DATASET_CODEX_SESSION_LANE` or prompt fields
+    `codex_session_lane` / `session_lane`, so a new task-family lane can restore from the base
+    repository lane, continue as `forked`, and persist its own durable snapshot plus fork
+    provenance in `codex_session_state.json`. The same artifact surface now records
+    `usage_metrics`, `usage_delta_vs_previous`, and `usage_delta_vs_last_fresh`, so later live AKS
+    validation can compare paid token usage between fresh, resumed, and forked lanes without
+    diffing raw worker logs by hand. The same lane state now also persists transcript-level
+    path/read summaries plus deltas versus the previous run and the last fresh baseline, so later
+    validation can compare repeated file-reading behavior without hand-grepping `codex_response`
+    artifacts. The latest worker slice also copies `codex_session_mode` and `codex_session_state`
+    into repo-RAG trace/outcome payloads, keeping downstream DSPy training compatible with resumed
+    and forked Codex lanes instead of hiding that provenance in a worker-only side artifact. The
+    same session metadata now tracks lane run counters and rollover timestamps, and the worker can
+    force `reset` when one lane exceeds configured age, resumed-run, or prompt-token growth
+    thresholds; the AKS worker manifest now also passes those session-policy env vars through to
+    live pods. The newest local slice also adds
+    `DATASET_CODEX_AUTO_SESSION_LANE_MODE`, so workers can derive task-family lanes automatically
+    from `queue_label` and/or `prompt_slug` when no explicit lane hint is present; persisted lane
+    metadata now records `lane_source`, making it possible to distinguish explicit operator/prompt
+    forks from automatic prompt-family routing in later AKS validation
   - confirm whether the new default `TRAINER_PROMOTE_CHANNEL=stable` should remain enabled in live
     AKS or be overridden explicitly for manual-only promotion
   - validate that later worker runs can resolve and consume a trainer-published bundle via `DSPY_BUNDLE_VERSION`
