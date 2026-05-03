@@ -258,6 +258,84 @@ remained `false` even though `stable.json` existed on the trainer side:
   `reset`, not through a second-generation automatic child lane.
 - Local coverage now proves `fresh -> resumed`, corruption fallback, operator reset, repeated
   resume-failure cooldown, and repo-drift reset, but it still does not prove AKS PVC behavior or
+
+## 2026-05-03 live follow-up after rebuilt images and trainer redeploy
+
+### Live actions executed
+
+- `cd /home/standard/Desktop/realagi_work/dataset && BUILD_MODE=acr ./build_and_push_images.sh`
+  - `pass`
+  - produced:
+    - `llmpromptsacr.azurecr.io/repo-rag-runtime:20260503-153814`
+    - `llmpromptsacr.azurecr.io/prompt-executor:20260503-153814`
+    - `llmpromptsacr.azurecr.io/queue-initializer:20260503-153814`
+- `cd /home/standard/Desktop/realagi_work/dataset && IMAGE_TAG=20260503-153814 ./deploy_repo_rag_trainer.sh`
+  - `pass`
+  - live trainer rollout completed onto `repo-rag-runtime:20260503-153814`
+
+### Live trainer observations
+
+- New service pod:
+  - `repo-rag-trainer-service-7b8c8fbf8-f7qnv`
+  - image `llmpromptsacr.azurecr.io/repo-rag-runtime:20260503-153814`
+- New trainer cycle history now proves the stale-queue skip is live:
+  - `artifacts/trainer/history/20260503T155304Z-cycle-0001.json`
+  - `queue_drain.failed_count = 0`
+  - `queue_drain.skipped_count = 1`
+  - skipped item tagged as:
+    - `skip_reason = "stale-queue-blob"`
+    - `error_type = "ResourceNotFoundError"`
+- This confirms the rebuilt image now skips the old missing queue blob instead of treating it as a
+  drain failure.
+
+### Remaining live issue after the stale-queue fix
+
+- The new live cycle still recorded `command_status = "fail"` even though the stale blob was
+  skipped cleanly and no new training candidates were imported.
+- Root cause from local code inspection:
+  - `trainer-cycle` still treated `promote_channel=stable` as enough reason to require
+    `minimum_bundle_pass_rate`
+  - when no new bundle candidate existed, `_build_bundle_benchmark_gate(...)` fell back to the
+    last local bundle manifest (`20260502T180452813814Z`) and failed the cycle on that old gate
+  - this left `promotion_status = "blocked"` and `command_status = "fail"` for a no-op cycle
+
+### Local fix applied after that live observation
+
+- `src/repo_rag_lab/utilities.py`
+  - bundle-gate requirement is now enabled only when there is an explicit bundle candidate:
+    - explicit `run_name` / `bundle_version`
+    - or a trainer-side recompilation that actually produced a bundle candidate
+  - `promotion_requested` is now explicit and false for `stable`-configured no-op cycles
+  - retrieval gate failure no longer marks the cycle as failed when there is no bundle candidate
+    to publish or promote
+- `tests/test_utilities.py`
+  - added coverage for:
+    - no new candidates + `promote_channel=stable` + failed retrieval gate -> `command_status=success`
+    - no publish / no promotion side effects in that case
+
+### Verification executed for that local fix
+
+- `uv run python -m compileall src tests`
+  - `pass`
+- `uv run pytest tests/test_utilities.py -k 'run_trainer_cycle and (skips_recompile_and_publish_without_new_candidates or does_not_fail_promotion_without_new_bundle_candidate or bundle_gate_failure)' -q`
+  - `pass` (`2 passed`)
+- `uv run pytest tests/test_utilities.py -k 'run_trainer_service' -q`
+  - `pass` (`2 passed`)
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+
+### Current repository state after this follow-up
+
+- Live trainer image rebuild and redeploy are confirmed.
+- Live stale-queue skipping is confirmed.
+- The no-op-cycle false-fail fix is local-only until the repository is pushed and the trainer image
+  is rebuilt once more.
+- Worker-side DSPy bundle resolution and worker-side `codex exec resume` still need one fresh AKS
+  worker run after the updated images and deployment script are used by the prompt-execution path.
   token-cost reduction under a real worker rollout.
 - No live AKS proof exists yet for resumed Codex sessions, PVC restoration, or token-cost
   reduction. This slice is local-code and unit-test verified only.

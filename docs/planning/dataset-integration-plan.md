@@ -250,7 +250,10 @@ Current implementation note:
   `min_new_candidates_for_recompile` threshold so live deployments can batch several champion
   updates before recompiling and publishing the next bundle, and the `dataset`
   `deploy_repo_rag_trainer.sh` helper now wires that threshold through the generated AKS
-  Deployment/CronJob manifests via `TRAINER_MIN_NEW_CANDIDATES_FOR_RECOMPILE`.
+  Deployment/CronJob manifests via `TRAINER_MIN_NEW_CANDIDATES_FOR_RECOMPILE`. A later live fix
+  also stops those `stable`-configured trainer cycles from failing purely because an old local
+  bundle manifest still misses the bundle gate when the current cycle did not actually produce a
+  new bundle candidate.
 - The worker-side `codex` path now attempts that mediation proxy for any repository-like prepared
   clone by default, so repo-aware augmentation no longer depends on replacing `codex` with an
   explicit `repo_rag_cli` backend. The local compatibility executor still keeps explicit

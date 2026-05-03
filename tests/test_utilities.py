@@ -1260,6 +1260,118 @@ def test_run_trainer_cycle_skips_recompile_and_publish_without_new_candidates(
     assert any("no new training candidates" in warning for warning in payload["warnings"])
 
 
+def test_run_trainer_cycle_does_not_fail_promotion_without_new_bundle_candidate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.drain_trace_queue",
+        lambda root, queue_name="default", limit=None, keep_queued=False: {
+            "queue_name": queue_name,
+            "queue_found": True,
+            "queued_count_before": 0,
+            "selected_count": 0,
+            "drained_count": 0,
+            "failed_count": 0,
+            "remaining_count": 0,
+            "keep_queued": keep_queued,
+            "status": "success",
+            "items": [],
+            "failures": [],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.restore_processed_trace_records",
+        lambda root, queue_name="default", output_dir=Path("artifacts/trainer/recovered-imported-traces"): {
+            "storage_backend": "azure-blob-queue",
+            "queue_name": queue_name,
+            "processed_count": 0,
+            "restored_count": 0,
+            "failed_count": 0,
+            "trace_paths": [],
+            "failures": [],
+            "output_dir": str(output_dir),
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.load_training_examples",
+        lambda path: ["example"],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.build_retrieval_benchmarks",
+        lambda examples: [{"question": "demo"}],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.evaluate_retrieval_quality_suite",
+        lambda root, benchmarks, top_k, top_k_values, retrieval_mode=None: {
+            "retrieval_mode": "idf-rerank",
+            "default_top_k": 4,
+            "default_summary": {
+                "top_k": 4,
+                "pass_rate": 0.5,
+                "source_recall": 0.5,
+                "tag_summaries": [],
+            },
+            "top_k_summaries": [{"top_k": 4, "pass_rate": 0.5, "source_recall": 0.5}],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.check_retrieval_quality_thresholds",
+        lambda summary, minimum_pass_rate=None, minimum_source_recall=None: [
+            "below-threshold"
+        ],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.materialize_training_candidates",
+        lambda root, trace_paths, output_path, summary_path, include_statuses=("accepted", "candidate"), seed_existing_output=True: {
+            "candidate_count": 1,
+            "new_candidate_count": 0,
+            "prompt_family_count": 1,
+            "context_group_count": 1,
+            "champion_index_path": "artifacts/trainer/champion-index.json",
+            "output_path": "artifacts/trainer/training-candidates.yaml",
+            "summary_path": "artifacts/trainer/training-candidates-summary.json",
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._trainer_recompile_payload",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("trainer recompile should not run without new candidates")
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.publish_bundle",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("bundle publish should not run without new candidates")
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.promote_bundle",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("bundle promotion should not run without a publish candidate")
+        ),
+    )
+
+    payload = json.loads(
+        run_trainer_cycle(
+            tmp_path,
+            queue_name="dataset",
+            recompile_run_name="trainer-auto",
+            promote_channel="stable",
+            minimum_pass_rate=1.0,
+            minimum_source_recall=1.0,
+        )
+    )
+
+    assert payload["command_status"] == "success"
+    assert payload["gate_passed"] is False
+    assert payload["publish_requested"] is False
+    assert payload["promotion_requested"] is False
+    assert payload["promotion_status"] == "not-requested"
+    assert payload["bundle_gate"]["status"] == "not-requested"
+    assert not any("Promotion to `stable` was blocked" in warning for warning in payload["warnings"])
+
+
 def test_run_trainer_cycle_skips_recompile_below_new_candidate_threshold(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

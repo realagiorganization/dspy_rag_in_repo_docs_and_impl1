@@ -435,7 +435,8 @@ At the time of this document:
   bundle assets into the artifacts PVC under `.repo_rag_bundle_store/`, worker pods read that
   non-secret local mirror through `DATASET_REPO_RAG_BUNDLE_ROOT`, and placeholder bundle pins
   such as `0` fall back to `stable` without requiring blob credentials inside the worker or Codex
-  subprocess
+  subprocess; trainer-side no-op cycles now also avoid false-failing on the historical
+  bundle-manifest gate when no new bundle candidate exists to publish or promote
 - notebook batch execution and reporting are implemented and exposed through
   `make notebook-report`
 - TODO and publication backlog synchronization are implemented and exposed through
