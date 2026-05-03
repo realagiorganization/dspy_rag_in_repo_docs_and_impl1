@@ -240,7 +240,12 @@ latest local slice also adds `DATASET_CODEX_AUTO_SESSION_LANE_MODE`, which can d
 lanes automatically from `queue_label` and/or `prompt_slug` when no explicit lane hint is set, so
 unrelated queue families stop sharing one increasingly broad Codex lane. Persisted lane metadata
 now records `lane_source`, allowing later live validation to distinguish explicit operator forks
-from automatic task-family routing.
+from automatic task-family routing. The newest bundle-resolution follow-up also tightens the DSPy
+handoff path itself: `repo-rag` local bundle lookup now understands both the repo-local
+`artifacts/dspy/...` layout and the staged worker mirror layout `channels/...` + `versions/...`,
+while the `dataset` deploy path now refreshes `repo-rag-storage-config` from the active Azure
+Storage environment so workers can resolve `stable` either from a staged PVC mirror or directly
+from the shared Blob store when credentials are available.
 
 ## Current State
 

@@ -26,7 +26,9 @@ from repo_rag_lab.azure_artifacts import (
 from repo_rag_lab.runtime_artifacts import (
     drain_trace_queue,
     fetch_remote_bundle,
+    inspect_bundle_channel,
     queue_trace_record,
+    resolve_bundle_manifest,
     restore_processed_trace_records,
 )
 
@@ -412,6 +414,62 @@ def test_drain_trace_queue_skips_stale_failed_blob_messages(
     assert store.deleted_messages == ["msg-stale"]
 
 
+def test_drain_trace_queue_skips_stale_missing_queued_blob_messages(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _FakeAzureArtifactStore()
+    config = AzureArtifactConfig(
+        account_name="acct",
+        account_key="key",
+        connection_string=None,
+        trace_container="repo-rag-training-traces",
+        bundle_container="repo-rag-bundles",
+        queue_name="repo-rag-training",
+    )
+
+    def fake_resolve_azure_artifact_config(queue_name: str | None = None) -> AzureArtifactConfig:
+        del queue_name
+        return config
+
+    def fake_azure_artifact_store(cfg: AzureArtifactConfig) -> _FakeAzureArtifactStore:
+        del cfg
+        return store
+
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config",
+        fake_resolve_azure_artifact_config,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
+        fake_azure_artifact_store,
+    )
+
+    store.messages.append(
+        AzureQueueMessage(
+            message_id="msg-stale-queued",
+            pop_receipt="receipt-stale-queued",
+            content=json.dumps(
+                {
+                    "blob_name": "queued/repo-rag-training/stale-queued.json",
+                    "queue_item_kind": "repo-rag-trace-queue-item",
+                }
+            ),
+            dequeue_count=2,
+        )
+    )
+
+    drained = drain_trace_queue(tmp_path, queue_name="dataset")
+
+    assert drained["storage_backend"] == "azure-blob-queue"
+    assert drained["drained_count"] == 0
+    assert drained["failed_count"] == 0
+    assert drained["skipped_count"] == 1
+    assert drained["status"] == "success"
+    assert drained["skipped_items"][0]["skip_reason"] == "stale-queue-blob"
+    assert store.deleted_messages == ["msg-stale-queued"]
+
+
 def test_restore_processed_trace_records_rebuilds_local_ledger_from_azure_processed_blobs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -559,6 +617,58 @@ def test_fetch_remote_bundle_downloads_bundle_assets(
     program_path = tmp_path / str(payload["program_path"])
     assert program_path.exists()
     assert program_path.read_text(encoding="utf-8") == '{"program":"demo"}\n'
+
+
+def test_inspect_bundle_channel_supports_staged_worker_bundle_store_layout(
+    tmp_path: Path,
+) -> None:
+    channel_path = tmp_path / "channels" / "stable.json"
+    channel_path.parent.mkdir(parents=True)
+    channel_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "channel_kind": "bundle-channel",
+                "channel_name": "stable",
+                "current_bundle_version": "stable-77",
+                "current_program_path": "versions/stable-77/program.json",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    state = inspect_bundle_channel(tmp_path, channel="stable")
+
+    assert state["channel_found"] is True
+    assert state["channel_path"] == "channels/stable.json"
+    assert state["current_bundle_version"] == "stable-77"
+    assert state["current_program_path"] == "versions/stable-77/program.json"
+
+
+def test_resolve_bundle_manifest_supports_staged_worker_bundle_store_layout(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = tmp_path / "versions" / "stable-77"
+    bundle_dir.mkdir(parents=True)
+    (bundle_dir / "bundle.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "bundle_kind": "global",
+                "bundle_version": "stable-77",
+                "run_name": "stable-77",
+                "created_at": "2026-05-03T09:00:00+00:00",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    bundle_path, payload = resolve_bundle_manifest(tmp_path, bundle_version="stable-77")
+
+    assert bundle_path == (bundle_dir / "bundle.json").resolve()
+    assert payload["bundle_version"] == "stable-77"
 
 
 def test_azure_artifact_store_supports_connection_string_and_queue_roundtrip(

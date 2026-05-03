@@ -304,7 +304,12 @@ Current implementation note:
     `DATASET_CODEX_AUTO_SESSION_LANE_MODE`, so workers can derive task-family lanes automatically
     from `queue_label` and/or `prompt_slug` when no explicit lane hint is present; persisted lane
     metadata now records `lane_source`, making it possible to distinguish explicit operator/prompt
-    forks from automatic prompt-family routing in later AKS validation
+    forks from automatic prompt-family routing in later AKS validation. The current local
+    bundle-resolution follow-up also closes one worker-side contract gap: `repo-rag` now treats
+    both `artifacts/dspy/...` and staged mirror `channels/...` + `versions/...` layouts as valid
+    local bundle stores, and the `dataset` deploy path now refreshes `repo-rag-storage-config`
+    from the active Azure Storage environment so the worker can reach the shared bundle/trace bus
+    directly when Blob credentials are available
   - confirm whether the new default `TRAINER_PROMOTE_CHANNEL=stable` should remain enabled in live
     AKS or be overridden explicitly for manual-only promotion
   - validate that later worker runs can resolve and consume a trainer-published bundle via `DSPY_BUNDLE_VERSION`

@@ -167,6 +167,73 @@
   - `pass`
 - `cargo build --manifest-path rust-cli/Cargo.toml`
   - `pass`
+
+## Local bundle-resolution follow-up after the worker artifact review
+
+The next blocker investigation found two separate worker-side reasons that `bundle_resolved`
+remained `false` even though `stable.json` existed on the trainer side:
+
+- The staged worker mirror under `/tmp/artifacts/.repo_rag_bundle_store` uses the remote-store
+  layout:
+  - `channels/stable.json`
+  - `versions/<bundle-version>/{bundle,metadata,program,published}.json`
+- The local `repo-rag` fallback path still expected repo-style local artifacts under:
+  - `artifacts/dspy/channels/*.json`
+  - `artifacts/dspy/<run-name>/bundle.json`
+- Separately, the live worker namespace secret `repo-rag-storage-config` currently contains only:
+  - `DATASET_REPO_RAG_BUNDLE_CONTAINER`
+  - `DATASET_REPO_RAG_TRACE_CONTAINER`
+  - `DATASET_REPO_RAG_TRACE_QUEUE_NAME`
+  and does **not** contain `AZURE_STORAGE_*` / `REPO_RAG_AZURE_STORAGE_*` credentials. That means
+  worker-side global bundle lookup cannot rely on Blob credentials being present in the pod.
+
+### Local fixes applied for bundle lookup
+
+- current repository
+  - `src/repo_rag_lab/runtime_artifacts.py`
+  - `tests/test_runtime_artifacts_azure.py`
+  - `repo-rag` local bundle lookup now supports both layouts:
+    - repo-local `artifacts/dspy/...`
+    - staged worker mirror `channels/...` + `versions/...`
+  - `inspect_bundle_channel(...)` now also returns `channel_path` for found channels, which makes
+    mirror-layout diagnostics explicit.
+- `../dataset`
+  - `aks_module_generator/templates/deployment_script/part_1.txt`
+  - `aks_module_generator/templates/deployment_script/part_2.txt`
+  - `tests/test_aks_module_generator_manifests.py`
+  - The worker deployment script now refreshes `repo-rag-storage-config` at deploy time from the
+    current Azure environment, including:
+    - `AZURE_STORAGE_ACCOUNT`
+    - `AZURE_STORAGE_KEY`
+    - `AZURE_STORAGE_CONNECTION_STRING`
+    - `REPO_RAG_AZURE_STORAGE_*`
+    - bundle/trace container names and queue name
+  - If only `AZURE_STORAGE_ACCOUNT` is present, the script now tries to resolve
+    `AZURE_STORAGE_KEY` through `az storage account keys list`, matching the trainer-side pattern.
+
+### Verification executed for those local fixes
+
+- `uv run python -m compileall src tests`
+  - `pass`
+- `uv run pytest tests/test_runtime_artifacts_azure.py -q`
+  - `pass` (`10 passed`)
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`41 passed`)
+- `uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+- `cd /home/standard/Desktop/realagi_work/dataset && python -m compileall aks_module_generator/templates/deployment_script/part_1.txt aks_module_generator/templates/deployment_script/part_2.txt tests/test_aks_module_generator_manifests.py`
+  - `pass`
+- `cd /home/standard/Desktop/realagi_work/dataset && uv run pytest tests/test_aks_module_generator_manifests.py -q`
+  - `pass` (`31 passed`)
+
+### Updated remaining blockers after this local slice
+
+- Live worker-side DSPy bundle resolution still needs one rebuilt image plus redeploy/run to verify
+  the new mirror-layout lookup and refreshed storage secret path in AKS.
+- Live Codex session resume reuse still needs a second run against the same lane to prove that
+  `_codex_sessions` now persists and restores end-to-end.
 - `make files-sync`
   - `pass`
 - `make verify-surfaces`
@@ -226,3 +293,141 @@
     show that the existing session is likely too broad to remain efficient,
   - exposing those rollover env knobs in the AKS worker manifest so live deployments can opt in
     without another code change.
+
+## Live artifact check on 2026-05-03
+
+The latest uploaded worker artifacts and the live trainer pod show that the repository-level
+resume design is implemented, but the end-to-end worker/trainer loop is still only partially
+working in AKS.
+
+### Worker outcome
+
+- The latest worker run completed successfully and recorded `328850` prompt tokens in
+  `dataset/artifacts/redis_results.json`.
+- `repo_rag_backend.json` reported:
+  - `backend = codex_cli_repo_rag_proxy`
+  - `rag_status = success`
+  - `dspy_status = heuristic`
+  - `bundle_resolved = false`
+  - `trace_handoff_status = queued`
+- `repo_rag_trace.json` reported:
+  - `program_loaded = false`
+  - `bundle_version = null`
+  - `codex_session_mode = fresh`
+- `codex_session_state.json` reported:
+  - `resume_candidate_present = false`
+  - `resume_attempted = false`
+  - `resume_used = false`
+  - `restore_status = fresh-no-snapshot`
+  - `persist_status = persisted-empty`
+  - `pvc_sync_health = degraded`
+  - `persisted_files = 0`
+- The exported artifact tarball did **not** contain `_codex_sessions/`, `session-index.json`, or
+  any restored snapshot payloads, so this AKS run did not yet prove durable Codex session reuse.
+
+### RAG and transcript behavior
+
+- `repo_rag_codex_proxy_last.json` showed clean repo-grounded retrieval sources:
+  - `README.md`
+  - `docs/AGENTS.md`
+  - `docs/ASSUMPTIONS.md`
+  - `docs/USAGE.md`
+- `prompt_artifacts/...` no longer appeared in the retrieval sources and did not appear in the
+  exported `codex_response.txt`.
+- The transcript still remained documentation-heavy because the worker contract explicitly requires
+  those docs on each run. In the latest `codex_response.txt`:
+  - `README.md` appeared `47` times
+  - `docs/DEVPLAN.md` appeared `41` times
+  - `docs/AGENTS.md` appeared `42` times
+  - `docs/ENVS.md` appeared `39` times
+  - `docs/USAGE.md` appeared `42` times
+  - `docs/ASSUMPTIONS.md` appeared `41` times
+  - each of those files had one direct `sed -n` read and seven repeated `diff --git` blocks
+- The `# Environment Variables` heading from `docs/ENVS.md` appeared once in the transcript, from
+  one explicit `sed -n '1,260p' docs/ENVS.md` read.
+
+### Trainer state
+
+- The worker-side trusted handoff succeeded:
+  - `trusted_trace_handoff_summary.json` reported `queued = 1`, `failed = 0`
+- The live trainer pod recovered the latest processed trace
+  `20260503T085906Z-prompts_shards_of_lokar_game-p00000-355cca.json`, so the new run did reach
+  trainer-side durable recovery.
+- The trainer service is still unhealthy overall. Live `artifacts/trainer/service-state.json`
+  showed:
+  - `cycles_executed = 71`
+  - `successful_cycle_count = 0`
+  - `failed_cycle_count = 71`
+  - `total_recompiled_run_count = 0`
+  - `total_skipped_recompile_count = 71`
+  - `total_publish_count = 0`
+  - `total_promotion_count = 0`
+- The latest cycle failed because:
+  - queue drain still hits one stale `failed/...` blob with `BlobNotFound`
+  - `new_candidate_count = 0`, so recompilation was skipped
+  - the retrieval gate still blocks promotion
+- The live stable channel still points at bundle `20260502T122127191445Z`, so worker-side DSPy
+  fallback remains expected until bundle resolution and trainer health are fixed.
+
+### Verification executed for this live check
+
+- `uv run python -m compileall src tests`
+  - `pass`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`41 passed`)
+- `uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+- `kubectl -n repo-rag exec repo-rag-trainer-service-766448db7b-hj4j6 -- sh -lc 'cd /workspace/repo-rag && sed -n "1,260p" artifacts/trainer/service-state.json'`
+  - `pass`
+- `kubectl -n repo-rag exec repo-rag-trainer-service-766448db7b-hj4j6 -- sh -lc 'cd /workspace/repo-rag && latest=$(ls -1t artifacts/trainer/history | head -n 1); sed -n "1,260p" artifacts/trainer/history/$latest'`
+  - `pass`
+- `kubectl -n repo-rag exec repo-rag-trainer-service-766448db7b-hj4j6 -- sh -lc 'cd /workspace/repo-rag && sed -n "1,220p" artifacts/dspy/channels/stable.json'`
+  - `pass`
+
+### Updated status summary
+
+- Live RAG isolation: `pass`
+- Live DSPy bundle use in worker: `fail`
+- Live Codex session resume reuse in worker: `not yet demonstrated`
+- Live trainer queue recovery of the latest trace: `pass`
+- Live trainer service health / publish-promote loop: `fail`
+
+## Local fixes after the live artifact review
+
+Two follow-up fixes were applied locally after the 2026-05-03 live artifact inspection:
+
+- `../dataset`
+  - `docker/prompt-executor/worker_codex_cli_helpers.py`
+  - `docker/prompt-executor/worker_codex_cli_exec.py`
+  - The worker now flushes Codex HOME persistence before writing `codex_session_state.json` and
+    returning the result payload. This fixes the stale telemetry case where the live artifact could
+    report `persisted-empty` / `degraded` even though the actual persist hook ran later during
+    context-manager teardown.
+- current repository
+  - `src/repo_rag_lab/runtime_artifacts.py`
+  - `tests/test_runtime_artifacts_azure.py`
+  - Trainer queue drain now treats any Azure queue pointer whose target blob already disappeared as
+    a harmless stale queue message, not just stale `failed/...` pointers. Missing `queued/...`
+    blobs now produce `skip_reason = stale-queue-blob` and no longer needlessly poison the cycle
+    with `failed_count = 1`.
+
+### Verification executed for those local fixes
+
+- `cd /home/standard/Desktop/realagi_work/dataset && python -m compileall docker/prompt-executor/worker_codex_cli_exec.py docker/prompt-executor/worker_codex_cli_helpers.py tests/unit/test_worker_codex_cli_exec_small.py`
+  - `pass`
+- `cd /home/standard/Desktop/realagi_work/dataset && uv run pytest tests/unit/test_worker_codex_cli_exec_small.py -q`
+  - `pass` (`36 passed`)
+- `cd /home/standard/Desktop/realagi_work/dataset && uv run pytest tests/test_aks_module_generator_generate_modules.py tests/unit/test_worker_codex_cli_exec_small.py -q`
+  - `pass` (`74 passed`)
+- `uv run python -m compileall src tests`
+  - `pass`
+- `uv run pytest tests/test_runtime_artifacts_azure.py -q`
+  - `pass` (`8 passed`)
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`41 passed`)
+- `uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`

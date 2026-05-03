@@ -200,6 +200,22 @@ def bundle_manifest_path(metadata_path: Path) -> Path:
     return metadata_path.parent / BUNDLE_FILENAME
 
 
+def _bundle_store_is_mirror_layout(root: Path) -> bool:
+    """Return whether ``root`` looks like the staged worker bundle mirror."""
+
+    resolved_root = root.resolve()
+    return (resolved_root / "channels").is_dir() or (resolved_root / "versions").is_dir()
+
+
+def _bundle_channels_dir(root: Path) -> Path:
+    """Return the bundle-channel directory for either repo or mirror layout."""
+
+    resolved_root = root.resolve()
+    if _bundle_store_is_mirror_layout(resolved_root):
+        return resolved_root / "channels"
+    return resolved_root / DEFAULT_BUNDLE_CHANNELS_DIR
+
+
 def build_bundle_manifest(
     root: Path, metadata: Mapping[str, object], metadata_path: Path
 ) -> dict[str, object]:
@@ -296,18 +312,26 @@ def load_bundle_manifest(bundle_path: Path) -> dict[str, object]:
 
 
 def _bundle_manifest_candidates(root: Path) -> list[tuple[Path, dict[str, object]]]:
-    artifact_root = root / "artifacts" / "dspy"
-    if not artifact_root.exists():
-        return []
+    resolved_root = root.resolve()
+    if _bundle_store_is_mirror_layout(resolved_root):
+        versions_root = resolved_root / "versions"
+        if not versions_root.exists():
+            return []
+        candidate_paths = versions_root.glob(f"*/{BUNDLE_FILENAME}")
+    else:
+        artifact_root = resolved_root / "artifacts" / "dspy"
+        if not artifact_root.exists():
+            return []
+        candidate_paths = artifact_root.glob(f"*/{BUNDLE_FILENAME}")
     candidates: list[tuple[Path, dict[str, object]]] = []
-    for bundle_path in artifact_root.glob(f"*/{BUNDLE_FILENAME}"):
+    for bundle_path in candidate_paths:
         payload = load_bundle_manifest(bundle_path)
         candidates.append((bundle_path.resolve(), payload))
     return sorted(
         candidates,
         key=lambda item: (
             str(item[1].get("created_at") or ""),
-            str(_relative_to_root(item[0], root)),
+            str(_relative_to_root(item[0], resolved_root)),
         ),
         reverse=True,
     )
@@ -647,7 +671,7 @@ def bundle_channel_state_path(root: Path, channel: str) -> Path:
     """Return the persisted channel-state path for ``channel``."""
 
     normalized_channel = _validate_bundle_channel(channel)
-    return root / DEFAULT_BUNDLE_CHANNELS_DIR / f"{normalized_channel}.json"
+    return _bundle_channels_dir(root) / f"{normalized_channel}.json"
 
 
 def load_bundle_channel_state(path: Path) -> dict[str, object]:
@@ -675,6 +699,7 @@ def inspect_bundle_channel(root: Path, *, channel: str) -> dict[str, object]:
     return {
         "channel_found": True,
         "requested_channel": normalized_channel,
+        "channel_path": _relative_to_root(channel_path, resolved_root),
         **payload,
     }
 
@@ -1479,10 +1504,10 @@ def _load_trace_queue_item(path: Path) -> dict[str, object]:
     return payload
 
 
-def _is_stale_failed_queue_blob(blob_name: str | None, exc: Exception) -> bool:
-    """Return whether one Azure queue pointer refers to an already-missing failed blob."""
+def _is_stale_queue_blob_pointer(blob_name: str | None, exc: Exception) -> bool:
+    """Return whether one Azure queue pointer refers to an already-missing trace blob."""
 
-    if not blob_name or not blob_name.startswith("failed/"):
+    if not blob_name:
         return False
     error_text = str(exc)
     return (
@@ -1560,12 +1585,17 @@ def drain_trace_queue(
                     }
                 )
             except Exception as exc:
-                if _is_stale_failed_queue_blob(blob_name, exc):
+                if _is_stale_queue_blob_pointer(blob_name, exc):
+                    skip_reason = (
+                        "stale-failed-blob"
+                        if str(blob_name).startswith("failed/")
+                        else "stale-queue-blob"
+                    )
                     store.delete_queue_message(queue_name_remote, message)
                     skipped_items.append(
                         {
                             "queue_item_path": blob_name,
-                            "skip_reason": "stale-failed-blob",
+                            "skip_reason": skip_reason,
                             "error_type": type(exc).__name__,
                             "error_message": str(exc),
                         }
