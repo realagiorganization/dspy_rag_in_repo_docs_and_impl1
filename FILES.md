@@ -146,6 +146,7 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-05-02-hybrid-vector-retrieval-default.md` | docs | markdown | 385 | 18302 | Repository audit note for 2026 05 02 hybrid vector retrieval default |
 | `docs/audit/2026-05-02-live-trainer-still-not-publishing-bundles.md` | docs | markdown | 162 | 6657 | Repository audit note for 2026 05 02 live trainer still not publishing bundles |
 | `docs/audit/2026-05-02-trainer-context-group-champion-index-stage1.md` | docs | markdown | 330 | 18201 | Repository audit note for 2026 05 02 trainer context group champion index stage1 |
+| `docs/audit/2026-05-02-zz-codex-exec-resume-session-state-stage0.md` | docs | markdown | 229 | 17190 | Repository audit note for 2026 05 02 zz codex exec resume session state stage0 |
 | `docs/audit/README.md` | docs | markdown | 14 | 426 | Repository audit note for README |
 | `docs/guides/hushwheel-fixture-rag-guide.md` | docs | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
 | `docs/operations/azure-deployment.md` | docs | markdown | 111 | 4901 | Azure Deployment Notes |
@@ -153,6 +154,7 @@ This inventory is generated from the current Git index.
 | `docs/operations/runtime-image.md` | docs | markdown | 46 | 1989 | Runtime Image Notes |
 | `docs/operations/simple-end-to-end-verification-guide.md` | docs | markdown | 105 | 4111 | Simple End-To-End Verification Guide |
 | `docs/operations/trainer-deployment.md` | docs | markdown | 152 | 6047 | Trainer Deployment Notes |
+| `docs/planning/codex-exec-resume-plan.md` | docs | markdown | 187 | 10163 | Codex Exec Resume Plan |
 | `docs/planning/dataset-integration-plan.md` | docs | markdown | 370 | 25886 | Dataset Integration Plan |
 | `docs/planning/repo-hardening-plan.md` | docs | markdown | 71 | 4545 | Repository Hardening Plan |
 | `docs/planning/trainer-context-group-champion-plan.md` | docs | markdown | 62 | 4058 | Trainer Context-Group Champion Plan |
