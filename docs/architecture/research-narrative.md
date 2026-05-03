@@ -191,6 +191,57 @@ state of referenced papers and documentation, summarizes all tracked files, and 
 authored explicit URL in English and Russian. That turns repository self-inventory into a
 publication surface rather than leaving it as hidden maintenance glue.
 
+The newest worker-cost investigations also sharpen one deployment boundary that the repository had
+previously blurred: stateless repo-RAG mediation is not the same thing as Codex execution memory.
+The current pipeline still starts fresh `codex exec` sessions, so repo-grounded snippets improve
+the first request but do not stop Codex from re-reading broad repository context later in the run.
+That evidence now motivates a separate execution-memory track based on persistent
+`codex exec resume` sessions backed by PVC-cached Codex state, recorded in
+[docs/planning/codex-exec-resume-plan.md](../planning/codex-exec-resume-plan.md). In that design,
+the global DSPy bundle stays immutable and universal, while Codex session continuity becomes a
+local worker concern. The first dataset-side implementation slice now exists: worker temp
+`CODEX_HOME` instances restore persisted non-credential Codex state, regenerate fresh
+`auth.json` / `config.toml`, rerun guard preflight, and can switch to `codex exec resume --last`
+when restored state is present. That slice also writes a PVC-root `session-index.json` plus a
+per-run `codex_session_state.json`, so later validation can tell which lane resumed and which
+latest Codex session-file hint was preserved. The same slice now refuses to resume when the
+persisted working-directory, repo-root / branch, model-profile, or auth/config digest contract no
+longer matches the current worker, and the AKS worker manifest now pins
+`DATASET_CODEX_SESSION_STATE_DIR` explicitly to `/tmp/artifacts/_codex_sessions` on the artifacts
+PVC. A second local slice now narrows the persisted Codex state to a current minimal durable
+allowlist, records repo/model lane metadata, distinguishes `fresh`, `reset`, `resumed`, and
+`resumed-then-reset` worker outcomes, validates restored snapshots against an explicit snapshot
+manifest before attempting resume, and adds explicit reset controls plus repeated-resume-failure
+cooldown through `DATASET_CODEX_SESSION_RESET` / `DATASET_CODEX_FORCE_FRESH`,
+`DATASET_CODEX_MAX_RESUME_FAILURES`, and a tunable same-lane repo drift reset threshold via
+`DATASET_CODEX_REPO_DRIFT_RESET_THRESHOLD`. The same worker artifact surface now also reports
+`restore_status`, `persist_status`, and `pvc_sync_health`, so later AKS validation can tell the
+difference between a true restored lane, a reset caused by compatibility guards, and a degraded
+PVC snapshot write. Local worker coverage now also proves the basic `fresh -> resumed` lane
+transition rather than only seeded restore fixtures. A further local slice now supports divergent
+task-family forks: operators or prompts can supply `DATASET_CODEX_SESSION_LANE`,
+`codex_session_lane`, or `session_lane`, and when that lane is new but the base repository lane
+already has a durable snapshot the worker restores from the base lane, resumes Codex, and records
+`forked`, `lane_hint`, `fork_origin_lane_key`, and `forked_from_base` in
+`codex_session_state.json`. The same worker artifact now also persists `usage_metrics`,
+`usage_delta_vs_previous`, and `usage_delta_vs_last_fresh`, so later AKS validation can measure
+whether resumed or forked lanes are actually reducing prompt-token spend rather than only proving
+that the restore path ran. The same lane metadata now also persists transcript-level path/read
+summaries plus deltas versus the prior run and the lane's last fresh baseline, so live AKS
+validation can quantify whether repeated file-reading behavior dropped without manually grepping
+`codex_response.txt`. The latest slice also threads `codex_session_mode` plus the session state
+summary into repo-RAG trace/outcome payloads, so downstream DSPy training and queued-trace
+analysis can correlate candidates with `fresh`, `resumed`, or `forked` Codex execution lanes. The
+same lane metadata now also tracks run counts and rollover timestamps, and the worker can force
+`reset` instead of another resume when one lane exceeds configured age, resumed-run, or
+prompt-token growth thresholds. Those session-policy env knobs are now also wired through the AKS
+worker manifest so live pods can enforce the same rollover policy as the local worker tests. The
+latest local slice also adds `DATASET_CODEX_AUTO_SESSION_LANE_MODE`, which can derive task-family
+lanes automatically from `queue_label` and/or `prompt_slug` when no explicit lane hint is set, so
+unrelated queue families stop sharing one increasingly broad Codex lane. Persisted lane metadata
+now records `lane_source`, allowing later live validation to distinguish explicit operator forks
+from automatic task-family routing.
+
 ## Current State
 
 At the time of this document:

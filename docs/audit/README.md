@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-05-02-trainer-context-group-champion-index-stage1.md`
+- `2026-05-02-zz-codex-exec-resume-session-state-stage0.md`
 
 ## Usage
 
