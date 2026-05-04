@@ -245,7 +245,11 @@ from automatic task-family routing. The newest restore-debug slice now also trea
 instead of relying only on the direct current `lane_dir`, and it writes a `restore_probe` block
 into `codex_session_state.json` so the next live AKS run can report whether startup actually saw
 the PVC root, the direct lane directory, the session index, or only a filesystem-discovered lane
-match before deciding between `fresh`, `reset`, `resumed`, or `forked`. The newest
+match before deciding between `fresh`, `reset`, `resumed`, or `forked`. The same local hardening
+pass now also normalizes repo-rag localhost proxy origins to the stable sentinel
+`repo-rag-proxy://local` before deriving the session config digest or comparing persisted
+`model_profile.base_url_origin`, so a normal ephemeral proxy-port change does not force
+`config-payload-mismatch` or `model-profile-mismatch` resets on an otherwise reusable lane. The newest
 bundle-resolution follow-up also tightens the DSPy
 handoff path itself: `repo-rag` local bundle lookup now understands both the repo-local
 `artifacts/dspy/...` layout and the staged worker mirror layout `channels/...` + `versions/...`,
