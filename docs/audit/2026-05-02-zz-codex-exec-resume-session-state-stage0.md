@@ -26,9 +26,9 @@
   used a fresh or resumed Codex session and whether guard/credential hydration succeeded.
 - Added an initial restore-compatibility guard so the worker skips resume when persisted lane
   metadata no longer matches the current working directory or auth/config contract.
-- Wired the worker manifest default `DATASET_CODEX_SESSION_STATE_DIR=/tmp/artifacts/_codex_sessions`
-  so AKS runs pin Codex session snapshots to the artifacts PVC explicitly rather than relying on an
-  implicit `exec_dir.parent` layout.
+- Wired the worker manifest default `DATASET_CODEX_SESSION_STATE_DIR=/app/artifacts/_codex_sessions`
+  so AKS runs pin Codex session snapshots to the actual artifacts PVC mount explicitly rather than
+  relying on an implicit `exec_dir.parent` layout.
 - Tightened the persisted snapshot scope to a current minimal durable allowlist:
   - `history.jsonl`
   - `sessions/`
@@ -351,7 +351,7 @@ remained `false` even though `stable.json` existed on the trainer side:
   - writing back the updated non-credential session state for the next worker run,
   - surfacing lane metadata through `session-index.json` and `codex_session_state.json`,
   - pinning the default AKS session root to the artifacts PVC through
-    `DATASET_CODEX_SESSION_STATE_DIR=/tmp/artifacts/_codex_sessions`,
+    `DATASET_CODEX_SESSION_STATE_DIR=/app/artifacts/_codex_sessions`,
   - skipping restore automatically when the persisted auth/config contract no longer matches the
     current worker run,
   - using a current minimal durable snapshot allowlist instead of a whole-home copy,
@@ -509,3 +509,352 @@ Two follow-up fixes were applied locally after the 2026-05-03 live artifact insp
   - `pass`
 - `cargo build --manifest-path rust-cli/Cargo.toml`
   - `pass`
+
+## 2026-05-03 live follow-up after trainer no-op cycle rebuild
+
+After the local `trainer-cycle` no-op promotion fix was committed, a fresh ACR build and live
+trainer redeploy were completed from `../dataset`:
+
+- `BUILD_MODE=acr ./build_and_push_images.sh`
+  - `pass`
+  - built and pushed:
+    - `llmpromptsacr.azurecr.io/repo-rag-runtime:20260503-160343`
+    - `llmpromptsacr.azurecr.io/prompt-executor:20260503-160343`
+    - `llmpromptsacr.azurecr.io/queue-initializer:20260503-160343`
+- `cd /home/standard/Desktop/realagi_work/dataset && IMAGE_TAG=20260503-160343 ./deploy_repo_rag_trainer.sh`
+  - `pass`
+
+### Live trainer state after redeploy
+
+- The live trainer service deployment now uses
+  `llmpromptsacr.azurecr.io/repo-rag-runtime:20260503-160343`.
+- The trainer CronJob template also now points at
+  `llmpromptsacr.azurecr.io/repo-rag-runtime:20260503-160343`.
+- The new service pod wrote its first service-cycle file:
+  - `artifacts/trainer/history/20260503T161713Z-cycle-0001.json`
+
+### Live validation of the no-op trainer-cycle fix
+
+The new service-cycle from `20260503T161713Z-cycle-0001.json` confirms that a no-op cycle no
+longer fails just because `promote_channel=stable` is configured:
+
+- `command_status = success`
+- `training_candidates.new_candidate_count = 0`
+- `recompile.recompile_status = skipped-no-new-candidates`
+- `publish_requested = false`
+- `promotion_requested = false`
+- `promotion_status = not-requested`
+- `queue_drain.status = success`
+- `queue_drain.failed_count = 0`
+
+The only warning left in that cycle is the expected no-op warning:
+
+- `Trainer-side bundle recompilation was skipped because no new training candidates were imported during this cycle.`
+
+This removes the previous false-negative service behavior where the cycle ended with:
+
+- `command_status = fail`
+- `promotion_status = blocked`
+- a stale `bundle_gate` failure against the historical local manifest
+  `artifacts/dspy/20260502T180452813814Z/bundle.json`
+
+### Operational cleanup after redeploy
+
+- A stale pre-redeploy CronJob execution was still running on the older image and inherited the
+  old false-failing behavior.
+- The old job `repo-rag-trainer-cycle-29630400` was deleted so `concurrencyPolicy=Forbid` would
+  stop blocking new scheduled jobs.
+- A replacement job `repo-rag-trainer-cycle-29630415-mtpkl` then appeared and is now running on
+  `llmpromptsacr.azurecr.io/repo-rag-runtime:20260503-160343`.
+
+### Updated live trainer status summary
+
+- Live trainer queue drain stale-pointer handling: `pass`
+- Live trainer no-op cycle success semantics: `pass`
+- Live worker-side DSPy bundle use: `still failing`
+- Live worker-side Codex session resume reuse: `still not demonstrated`
+
+## 2026-05-03 worker artifact follow-up after the rebuilt trainer/service fixes
+
+Fresh worker artifacts from `../dataset/artifacts` now show that worker-side DSPy bundle
+resolution is live:
+
+- `repo_rag_backend.json`
+  - `bundle_resolved = true`
+  - `bundle_version = 20260502T122127191445Z`
+  - `mediation_mode = dspy_rag`
+  - `rag_status = success`
+  - `dspy_status = success`
+- `repo_rag_trace.json`
+  - `program_loaded = true`
+  - `program_path = artifacts/dspy/remote/20260502T122127191445Z/program.json`
+
+That means the earlier worker-side `stable`/bundle lookup gap is now closed for the current AKS
+path. Trainer-side recovered traces confirm the same outcome: the live service now reports
+`retrieval_mode_counts.dspy_rag = 2` and `bundle_version_counts.20260502T122127191445Z = 2`.
+
+### RAG behavior in this run
+
+- Retrieval remained clean and repo-grounded:
+  - `README.md`
+  - `docs/AGENTS.md`
+  - `docs/ASSUMPTIONS.md`
+  - `docs/USAGE.md`
+- `prompt_artifacts/...` no longer appeared in either retrieval sources or the exported
+  `codex_response.txt`.
+
+So the current live repo-RAG path is no longer polluting evidence with worker-generated prompt
+artifacts.
+
+### Codex session reuse state in this run
+
+`codex_session_state.json` still shows a first-run lane rather than a resumed lane:
+
+- `session_mode = fresh`
+- `restore_status = fresh-no-snapshot`
+- `resume_candidate_present = false`
+- `resume_attempted = false`
+- `resume_used = false`
+- `persist_status = persisted`
+- `pvc_sync_health = healthy`
+- `persisted_files = 4`
+
+This is expected for the first run on a new lane. The worker did persist a durable session
+snapshot successfully, so the next run against the same lane is the one that should prove
+`codex exec resume`.
+
+### Token cost and transcript behavior
+
+The run still consumed very high prompt tokens:
+
+- `redis_results.json`
+  - `prompt_tokens = 995058`
+  - `total_tokens = 995058`
+
+The main cost driver remains the autonomous Codex transcript, not retrieval pollution:
+
+- `codex_response.txt` size: `1,255,938` bytes
+- repeated document references:
+  - `README.md`: `245`
+  - `docs/DEVPLAN.md`: `42`
+  - `docs/AGENTS.md`: `42`
+  - `docs/ENVS.md`: `42`
+  - `docs/USAGE.md`: `42`
+  - `docs/ASSUMPTIONS.md`: `44`
+- command repetition:
+  - `diff --git`: `169`
+  - `sed -n`: `42`
+
+The `# Environment Variables` heading still appeared twice in the transcript because `docs/ENVS.md`
+is still read and then reappears in later diff blocks. That is no longer a repo-RAG retrieval
+problem; it is a fresh-session Codex execution-contract problem.
+
+### Trainer-side handoff for this run
+
+- `trusted_trace_handoff_summary.json`
+  - `queued = 1`
+  - `failed = 0`
+- live trainer `recovered-imported-traces/` now includes:
+  - `20260503T175254Z-worker-0-prompts_shards_of_lokar_game-p00000-355cca-realagiorganization_shards_of_lokar_game.json`
+  - `20260503T175421Z-prompts_shards_of_lokar_game-p00000-355cca.json`
+
+The latest live service cycle still ends as a no-op success with:
+
+- `command_status = success`
+- `new_candidate_count = 0`
+- `recompile_status = skipped-no-new-candidates`
+
+### Verification executed for this follow-up
+
+- `uv run python -m compileall src tests`
+  - `pass`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+
+### Updated status summary after this run
+
+- Live RAG isolation: `pass`
+- Live worker-side DSPy bundle resolution/use: `pass`
+- Live worker-side Codex session resume reuse: `not yet demonstrated`
+- Live trainer queue handoff and recovery: `pass`
+- Live trainer no-op publish/promote semantics: `pass`
+- Token-efficiency goal: `still failing`
+
+## 2026-05-04 worker artifact follow-up after another fresh run
+
+Another worker artifact export from `../dataset/artifacts` confirms that the improved worker path
+is stable, but the new run still started as a fresh lane instead of a resumed lane.
+
+### Worker-side runtime results
+
+- `repo_rag_backend.json`
+  - `bundle_resolved = true`
+  - `bundle_version = 20260502T122127191445Z`
+  - `mediation_mode = dspy_rag`
+  - `rag_status = success`
+  - `dspy_status = success`
+- `repo_rag_trace.json`
+  - `program_loaded = true`
+  - `program_path = artifacts/dspy/remote/20260502T122127191445Z/program.json`
+- `repo_rag_outcome.json`
+  - `codex_session_mode = fresh`
+
+### RAG and transcript quality
+
+- Retrieval sources remained clean:
+  - `README.md`
+  - `docs/AGENTS.md`
+  - `docs/ASSUMPTIONS.md`
+  - `docs/USAGE.md`
+- `prompt_artifacts/...` did not appear in retrieval sources or `codex_response.txt`.
+
+The transcript was still documentation-heavy, but materially smaller than the previous
+2026-05-03 fresh run:
+
+- `redis_results.json`
+  - `prompt_tokens = 173495`
+  - `total_tokens = 173495`
+- `codex_response.txt` size: `768616` bytes
+- repeated document references:
+  - `README.md`: `48`
+  - `docs/DEVPLAN.md`: `38`
+  - `docs/AGENTS.md`: `35`
+  - `docs/ENVS.md`: `39`
+  - `docs/USAGE.md`: `37`
+  - `docs/ASSUMPTIONS.md`: `40`
+- command repetition:
+  - `diff --git`: `88`
+  - `sed -n`: `33`
+
+So token use is still high, but much lower than the prior `995058`-token fresh run. The main
+remaining cost driver is still repetitive documentation reads/diffs inside the autonomous Codex
+transcript rather than retrieval pollution.
+
+### Codex session state for this run
+
+`codex_session_state.json` still reports a first-run lane:
+
+- `session_mode = fresh`
+- `restore_status = fresh-no-snapshot`
+- `resume_candidate_present = false`
+- `resume_attempted = false`
+- `resume_used = false`
+- `persist_status = persisted`
+- `pvc_sync_health = healthy`
+- `persisted_files = 4`
+
+The lane key is still stable:
+
+- `lane_key = realagiorganization_shards_of_lokar_game-a3fbd616bb4892c8`
+
+but the exported artifact tarball still does **not** include `_codex_sessions/` or
+`session-index.json`. That means the worker is persisting some Codex session files internally,
+yet the current artifact export still does not prove that the next worker pod can see the prior
+lane snapshot.
+
+### Trainer-side state after this run
+
+The trusted handoff succeeded again:
+
+- `trusted_trace_handoff_summary.json`
+  - `queued = 1`
+  - `failed = 0`
+
+The live trainer service remained healthy:
+
+- latest service cycle: `20260504T082430Z-cycle-0536.json`
+- `command_status = success`
+- `new_candidate_count = 0`
+- `processed_count = 23`
+- `restored_count = 23`
+- `retrieval_mode_counts`
+  - `dspy_rag = 4`
+  - `rag_heuristic_dspy = 19`
+- `bundle_version_counts`
+  - `20260502T122127191445Z = 4`
+
+So trainer-side recovery clearly sees the newer DSPy-backed worker traces.
+
+### Verification executed for this follow-up
+
+- `uv run python -m compileall src tests`
+  - `pass`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+
+### Updated status summary after the 2026-05-04 run
+
+- Live RAG isolation: `pass`
+- Live worker-side DSPy bundle resolution/use: `pass`
+- Live trainer queue handoff and recovery: `pass`
+- Live trainer no-op publish/promote semantics: `pass`
+- Live worker-side Codex session resume reuse: `still not demonstrated`
+- Token-efficiency goal: `improved but still failing`
+
+## Root cause analysis for the repeated `fresh` Codex session starts
+
+The 2026-05-04 run was expected to resume the existing lane
+`realagiorganization_shards_of_lokar_game-a3fbd616bb4892c8`, but it still reported:
+
+- `session_mode = fresh`
+- `restore_status = fresh-no-snapshot`
+- `resume_candidate_present = false`
+- `resume_attempted = false`
+- `resume_used = false`
+
+The root cause is now clear from the current `dataset` wiring:
+
+- `dataset/aks_module_generator/mixins/k8s_manifests.py`
+  - worker env exports:
+    - `ARTIFACTS_DIR=/tmp/artifacts`
+    - `DATASET_CODEX_SESSION_STATE_DIR=/tmp/artifacts/_codex_sessions`
+- `dataset/aks_module_generator/mixins/attachments.py`
+  - the shared artifacts PVC is mounted only at:
+    - `/app/artifacts`
+
+So the worker was writing its Codex session snapshot into `/tmp/artifacts/_codex_sessions`, while
+the durable RWX artifacts PVC is mounted at `/app/artifacts`. A new worker pod gets a fresh `/tmp`,
+so the next run could not see the previous lane snapshot even though the worker reported:
+
+- `persist_status = persisted`
+- `persisted_files = 4`
+- `pvc_sync_health = healthy`
+
+Those values only describe the local write into the configured session root; they do **not** prove
+that the configured root itself is on the shared PVC.
+
+### Supporting evidence
+
+- The lane key stayed stable across runs:
+  - `realagiorganization_shards_of_lokar_game-a3fbd616bb4892c8`
+- The pipeline namespace and artifacts PVC are long-lived:
+  - namespace `prompt-exec-1353735964635435100`
+  - PVC `artifacts-g1353735964635435100`
+- Yet the next run still reported:
+  - `restored_files = 0`
+  - `resume_candidate_present = false`
+  - a new `first_created_at_epoch`
+- The exported artifact tarball still contains no `_codex_sessions/` or `session-index.json`,
+  which matches the current broken persistence contract.
+
+### Conclusion
+
+The current blocker for live `codex exec resume` is **not** DSPy, lane hashing, or trainer
+handoff. It is a storage-path mismatch:
+
+- durable artifacts mount: `/app/artifacts`
+- configured Codex session root: `/tmp/artifacts/_codex_sessions`
+
+That mismatch is now fixed locally in `dataset` by retargeting the generated worker env to
+`DATASET_CODEX_SESSION_STATE_DIR=/app/artifacts/_codex_sessions` while leaving prompt-scoped
+execution artifacts under `/tmp/artifacts`. Live AKS validation is still pending; until a rebuilt
+worker image is deployed and rerun, the latest uploaded runs should still be expected to show
+`fresh-no-snapshot`.
