@@ -308,6 +308,12 @@ Current implementation note:
     from `queue_label` and/or `prompt_slug` when no explicit lane hint is present; persisted lane
     metadata now records `lane_source`, making it possible to distinguish explicit operator/prompt
     forks from automatic prompt-family routing in later AKS validation. The current local
+    restore-debug follow-up now also consults `session-index.json` plus persisted
+    `*/session_state.json` files as restore fallbacks instead of relying only on the direct
+    current `lane_dir`, and it writes a `restore_probe` block into `codex_session_state.json` so
+    the next live run can reveal whether startup actually saw the PVC root, the direct lane
+    directory, the session index, or only a filesystem-discovered fallback before deciding to
+    resume or reset. The current local
     bundle-resolution follow-up also closes one worker-side contract gap: `repo-rag` now treats
     both `artifacts/dspy/...` and staged mirror `channels/...` + `versions/...` layouts as valid
     local bundle stores, and the `dataset` deploy path now refreshes `repo-rag-storage-config`
@@ -318,8 +324,9 @@ Current implementation note:
     instead of false-failing on an old local bundle gate. The latest worker-artifact analysis then
     isolated the resume blocker to a path mismatch: prompt-scoped execution artifacts intentionally
     live under `/tmp/artifacts`, but the durable session snapshot root must target the actual PVC
-    mount at `/app/artifacts/_codex_sessions`. That local fix is now landed in `dataset`; live
-    rebuild/redeploy validation is still pending
+    mount at `/app/artifacts/_codex_sessions`. That fix is now live in the worker image; the first
+    run on the corrected root still started `fresh` and seeded the durable snapshot, so the next
+    same-lane run is the one that should prove `resumed`
   - confirm whether the new default `TRAINER_PROMOTE_CHANNEL=stable` should remain enabled in live
     AKS or be overridden explicitly for manual-only promotion
   - validate that later worker runs can resolve and consume a trainer-published bundle via `DSPY_BUNDLE_VERSION`
