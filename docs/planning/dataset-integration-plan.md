@@ -318,7 +318,12 @@ Current implementation note:
     resume or reset. That same local hardening pass now also normalizes repo-rag localhost proxy
     origins to the stable sentinel `repo-rag-proxy://local` before deriving session config
     digests or comparing persisted `model_profile.base_url_origin`, so a normal ephemeral proxy
-    port change no longer forces `config-payload-mismatch` / `model-profile-mismatch` resets. The current local
+    port change no longer forces `config-payload-mismatch` / `model-profile-mismatch` resets. The
+    newest diagnostic follow-up now also persists durable root and parent continuity markers plus
+    a dedicated `codex_restore_probe.json` artifact, so the next live run can distinguish
+    “startup never saw `_codex_sessions`” from “startup saw the snapshot but still rejected it”;
+    the same follow-up also keeps guard preflight out of the session lifecycle itself so
+    `codex --version` checks cannot overwrite a lane before the real worker exec starts. The current local
     bundle-resolution follow-up also closes one worker-side contract gap: `repo-rag` now treats
     both `artifacts/dspy/...` and staged mirror `channels/...` + `versions/...` layouts as valid
     local bundle stores, and the `dataset` deploy path now refreshes `repo-rag-storage-config`

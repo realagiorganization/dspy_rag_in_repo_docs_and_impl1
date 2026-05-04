@@ -83,6 +83,9 @@ session files.
 - [x] Add a deeper repo-state drift guard beyond repo-root / branch mismatch, so large repository
       drift can force a controlled reset without blocking ordinary same-branch development.
 - [x] Add an explicitly parsed model/profile mismatch guard beyond config-digest checks.
+- [x] Persist startup-debug continuity markers plus a dedicated restore-probe artifact so live
+      runs can distinguish “worker never saw `_codex_sessions`” from “worker saw it but rejected
+      it”.
 
 ## Phase 2.5: Guard, Auth, And Temp HOME Hydration
 
@@ -102,6 +105,8 @@ session files.
       - successful guard preflight
 - [x] Add a fallback rule: if session state restores but auth/config hydration or guard preflight
       fails, do not attempt resume with partial credentials.
+- [x] Keep guard preflight out of the PVC-backed session lifecycle itself so `codex --version`
+      verification cannot seed, reset, or overwrite a live resume lane accidentally.
 
 ## Phase 3: Worker Runner Pivot
 

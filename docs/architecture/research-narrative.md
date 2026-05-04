@@ -251,7 +251,12 @@ match before deciding between `fresh`, `reset`, `resumed`, or `forked`. The same
 pass now also normalizes repo-rag localhost proxy origins to the stable sentinel
 `repo-rag-proxy://local` before deriving the session config digest or comparing persisted
 `model_profile.base_url_origin`, so a normal ephemeral proxy-port change does not force
-`config-payload-mismatch` or `model-profile-mismatch` resets on an otherwise reusable lane. The newest
+`config-payload-mismatch` or `model-profile-mismatch` resets on an otherwise reusable lane. The
+latest diagnostic follow-up now also writes durable root and parent continuity markers plus a
+dedicated `codex_restore_probe.json` artifact, so later live runs can distinguish “worker never
+saw `_codex_sessions`” from “worker saw it and still rejected resume”; the same follow-up also
+suspends `_active_codex_session_spec` during guard preflight so `codex --version` checks cannot
+mutate the PVC-backed session lane before the real worker run begins. The newest
 bundle-resolution follow-up also tightens the DSPy
 handoff path itself: `repo-rag` local bundle lookup now understands both the repo-local
 `artifacts/dspy/...` layout and the staged worker mirror layout `channels/...` + `versions/...`,
