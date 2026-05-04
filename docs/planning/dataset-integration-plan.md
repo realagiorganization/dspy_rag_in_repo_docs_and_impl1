@@ -267,8 +267,10 @@ Current implementation note:
     [docs/planning/codex-exec-resume-plan.md](codex-exec-resume-plan.md)
   - the first local implementation slice for that pivot now exists in `../dataset`: worker temp
     `CODEX_HOME` instances can restore persisted non-credential Codex state, regenerate fresh
-    credential/config files, rerun guard preflight, and prefer `codex exec resume --last` when a
-    persisted session snapshot is available; the same slice now also writes a PVC-root
+    credential/config files, rerun guard preflight, and prefer an explicit persisted
+    `latest_session_id` when a persisted session snapshot is available, only falling back to
+    `codex exec resume --last --all` when older snapshots do not record a usable id; the same
+    slice now also writes a PVC-root
     `session-index.json` plus per-run `codex_session_state.json` metadata so later AKS validation
     can confirm which lane resumed and which latest session hint survived pod turnover, and it now
     skips restore automatically when the persisted working-directory, repo-root / branch,
@@ -329,7 +331,12 @@ Current implementation note:
     live under `/tmp/artifacts`, but the durable session snapshot root must target the actual PVC
     mount at `/app/artifacts/_codex_sessions`. That fix is now live in the worker image; the first
     run on the corrected root still started `fresh` and seeded the durable snapshot, so the next
-    same-lane run is the one that should prove `resumed`
+    same-lane run is the one that should prove `resumed`. The newest local hardening slice now
+    also fixes two orchestration details around the shared artifacts PVC: worker restore reads
+    `latest_session_id` back out of persisted lane metadata before deciding how to resume, and
+    `tools/pvc_artifact_sync.sh` now auto-cleans helper pods on script exit while explicit
+    `cleanup` also deletes by `app=artifacts-sync,claim=<claim>` label so older `artifacts-sync-run`
+    pods created without `--guild-id` no longer linger indefinitely
   - confirm whether the new default `TRAINER_PROMOTE_CHANNEL=stable` should remain enabled in live
     AKS or be overridden explicitly for manual-only promotion
   - validate that later worker runs can resolve and consume a trainer-published bundle via `DSPY_BUNDLE_VERSION`
