@@ -207,8 +207,8 @@ per-run `codex_session_state.json`, so later validation can tell which lane resu
 latest Codex session-file hint was preserved. The same slice now refuses to resume when the
 persisted working-directory, repo-root / branch, model-profile, or auth/config digest contract no
 longer matches the current worker, and the AKS worker manifest now pins
-`DATASET_CODEX_SESSION_STATE_DIR` explicitly to `/tmp/artifacts/_codex_sessions` on the artifacts
-PVC. A second local slice now narrows the persisted Codex state to a current minimal durable
+`DATASET_CODEX_SESSION_STATE_DIR` explicitly to `/app/artifacts/_codex_sessions` on the artifacts
+PVC while leaving prompt-scoped execution artifacts under `/tmp/artifacts`. A second local slice now narrows the persisted Codex state to a current minimal durable
 allowlist, records repo/model lane metadata, distinguishes `fresh`, `reset`, `resumed`, and
 `resumed-then-reset` worker outcomes, validates restored snapshots against an explicit snapshot
 manifest before attempting resume, and adds explicit reset controls plus repeated-resume-failure
@@ -436,7 +436,13 @@ At the time of this document:
   non-secret local mirror through `DATASET_REPO_RAG_BUNDLE_ROOT`, and placeholder bundle pins
   such as `0` fall back to `stable` without requiring blob credentials inside the worker or Codex
   subprocess; trainer-side no-op cycles now also avoid false-failing on the historical
-  bundle-manifest gate when no new bundle candidate exists to publish or promote
+  bundle-manifest gate when no new bundle candidate exists to publish or promote, and that
+  no-op-cycle behavior is now verified live on the `20260503-160343` trainer image through the
+  first post-redeploy service-cycle `20260503T161713Z-cycle-0001.json`; the remaining live
+  Codex-resume blocker was narrowed to a storage-path mismatch between
+  `/tmp/artifacts/_codex_sessions` and the durable `/app/artifacts` PVC mount; the current local
+  fix now retargets only the session snapshot root to `/app/artifacts/_codex_sessions`, but live
+  worker validation is still pending
 - notebook batch execution and reporting are implemented and exposed through
   `make notebook-report`
 - TODO and publication backlog synchronization are implemented and exposed through

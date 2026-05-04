@@ -274,8 +274,8 @@ Current implementation note:
     skips restore automatically when the persisted working-directory, repo-root / branch,
     model-profile, or auth/config contract no longer matches the current worker run; the generated
     worker manifest now pins
-    `DATASET_CODEX_SESSION_STATE_DIR=/tmp/artifacts/_codex_sessions` so that state lives on the
-    artifacts PVC by explicit contract instead of by path coincidence. A second local slice now
+    `DATASET_CODEX_SESSION_STATE_DIR=/app/artifacts/_codex_sessions` so that state lives on the
+    actual artifacts PVC mount by explicit contract instead of by path coincidence. A second local slice now
     narrows that persisted state to a current minimal durable allowlist, records repo/model lane
     metadata, and distinguishes `fresh`, `reset`, `resumed`, and `resumed-then-reset` worker
     outcomes in `codex_session_state.json`, while validating restored snapshots against an explicit
@@ -312,7 +312,14 @@ Current implementation note:
     both `artifacts/dspy/...` and staged mirror `channels/...` + `versions/...` layouts as valid
     local bundle stores, and the `dataset` deploy path now refreshes `repo-rag-storage-config`
     from the active Azure Storage environment so the worker can reach the shared bundle/trace bus
-    directly when Blob credentials are available
+    directly when Blob credentials are available. The subsequent live trainer redeploy on image
+    `20260503-160343` also confirms that stable-configured no-op trainer cycles now finish with
+    `command_status=success`, `publish_requested=false`, and `promotion_status=not-requested`
+    instead of false-failing on an old local bundle gate. The latest worker-artifact analysis then
+    isolated the resume blocker to a path mismatch: prompt-scoped execution artifacts intentionally
+    live under `/tmp/artifacts`, but the durable session snapshot root must target the actual PVC
+    mount at `/app/artifacts/_codex_sessions`. That local fix is now landed in `dataset`; live
+    rebuild/redeploy validation is still pending
   - confirm whether the new default `TRAINER_PROMOTE_CHANNEL=stable` should remain enabled in live
     AKS or be overridden explicitly for manual-only promotion
   - validate that later worker runs can resolve and consume a trainer-published bundle via `DSPY_BUNDLE_VERSION`
