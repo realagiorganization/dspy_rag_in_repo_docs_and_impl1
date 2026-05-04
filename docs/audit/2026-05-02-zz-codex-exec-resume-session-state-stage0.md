@@ -168,6 +168,122 @@
 - `cargo build --manifest-path rust-cli/Cargo.toml`
   - `pass`
 
+### Deep live root-cause analysis after the latest failed `resume` run
+
+The newest uploaded artifacts plus direct cluster inspection finally narrow the remaining failure
+to one specific layer.
+
+#### What the latest run proves
+
+- The worker image **did** contain the newest `resume` diagnostics and command-selection code.
+  The latest `codex_session_state.json` already includes:
+  - `resume_target_session_id`
+  - `resume_command_mode`
+  - `restore_probe`
+- The live prompt-worker job **did** mount the expected guild-scoped artifacts PVC:
+  - namespace: `prompt-exec-1353735964635435100`
+  - claim: `artifacts-g1353735964635435100`
+  - mount: `/app/artifacts`
+  - env:
+    - `ARTIFACTS_DIR=/tmp/artifacts`
+    - `DATASET_CODEX_SESSION_STATE_DIR=/app/artifacts/_codex_sessions`
+- The current worker run **did** persist a valid Codex session snapshot into that PVC:
+  - `/artifacts/_codex_sessions/session-index.json`
+  - `/artifacts/_codex_sessions/realagiorganization_shards_of_lokar_game-a3fbd616bb4892c8/session_state.json`
+  - `/artifacts/_codex_sessions/.../home_snapshot/installation_id`
+  - `/artifacts/_codex_sessions/.../home_snapshot/logs_2.sqlite`
+  - `/artifacts/_codex_sessions/.../home_snapshot/state_5.sqlite`
+  - `/artifacts/_codex_sessions/.../home_snapshot/sessions/2026/05/04/rollout-2026-05-04T16-41-36-019df3dd-dc71-7aa1-b95b-ecad8cdae5af.jsonl`
+
+#### What the latest run also proves
+
+- The failure is **not** in the Codex on-disk layout anymore.
+  The persisted snapshot already includes the JSONL session transcript plus the two SQLite files
+  that match the normal Codex home shape.
+- The failure is **not** a wrong-claim / wrong-namespace mount on the current worker.
+  The captured live worker job manifest shows the same guild PVC claim and the explicit
+  `DATASET_CODEX_SESSION_STATE_DIR=/app/artifacts/_codex_sessions` env that the code expects.
+- The failure is **not** in the `resume` command assembly for this specific run.
+  The worker never reached a state where resume was even attempted:
+  - `resume_candidate_present = false`
+  - `resume_attempted = false`
+  - `resume_used = false`
+  - `restore_status = fresh-no-snapshot`
+
+#### The actual current blocker
+
+For the latest failed run, startup inspection inside the worker reported:
+
+- `persistent_root_exists = false`
+- `lane_dir_exists = false`
+- `index_path_exists = false`
+- `persistent_root_parent_entries = ["runs", "worker_execution.log"]`
+- `nested_session_root_count = 0`
+- `nested_session_metadata_count = 0`
+
+So, on **this** startup, the mounted `/app/artifacts` view contained only the run tree and the
+root worker log. There was no pre-existing `_codex_sessions` subtree visible to restore from.
+
+That aligns with the persisted session metadata now sitting on the PVC after the run:
+
+- `first_created_at_epoch = 1777912896`
+- `total_run_count = 1`
+- `fresh_run_count = 1`
+- `resumed_run_count = 0`
+
+This is the critical correction to the earlier investigation:
+
+- the recent worker-side fixes around explicit `latest_session_id`, localhost proxy normalization,
+  nested search, and helper cleanup were **real**, but they addressed later restore/selection
+  stages
+- the latest live evidence shows those stages were never reached, because the new worker had no
+  prior `_codex_sessions` snapshot visible on the mounted claim at startup
+
+In other words, the current failed run was still a **seed run on the correct durable root**, not a
+real second-run `resume` attempt on an already-seeded root.
+
+#### Why the previous effort looked ineffective
+
+The previous debugging rounds were too optimistic about what counted as a valid “next run”
+verification. The root mistake in the investigation order was:
+
+1. fixing restore guards / session-id targeting first
+2. before proving that the exact live guild-scoped PVC root already contained a previous
+   `_codex_sessions` snapshot visible to the next worker
+
+The newest cluster-level inspection corrects that:
+
+- current live PVC root now unquestionably contains the session snapshot
+- current live worker manifest unquestionably points to that PVC root
+- but the latest failed worker startup still saw no prior `_codex_sessions`
+- therefore this run did **not** exercise the intended `resume` path yet
+
+#### What remains unresolved after this deep analysis
+
+The remaining open question is no longer “how should `codex exec resume` be invoked?”.
+It is now strictly one of cross-run storage continuity:
+
+- either older runs were still writing session state somewhere else (for example before the
+  explicit `/app/artifacts/_codex_sessions` path became live in the worker image), or
+- some external lifecycle step is removing or replacing `_codex_sessions` between runs before the
+  next worker starts
+
+The normal workflow code path inspected in this turn still does **not** show an automatic
+root-level wipe of the artifacts PVC during a standard run:
+
+- no normal workflow step invokes `tools/pvc_artifact_sync.sh reset`
+- the only `--delete-extra` syncs target:
+  - `.repo_rag_cache`
+  - `.repo_rag_bundle_store`
+- the worker manifest directly mounts `artifacts-g1353735964635435100` at `/app/artifacts`
+  without a `subPath`
+
+So the remaining bug is best described as:
+
+- **live cross-run session continuity on the guild-scoped artifacts PVC has not yet been proven**
+- **the latest run still seeded the durable root instead of restoring from an older lane snapshot**
+
+
 ## Local bundle-resolution follow-up after the worker artifact review
 
 The next blocker investigation found two separate worker-side reasons that `bundle_resolved`
@@ -1119,6 +1235,63 @@ That is consistent with:
 - `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
   - `pass`
 - `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+
+### Latest local continuity-marker and guard-preflight isolation follow-up
+
+The newest local debug slice in `../dataset` intentionally does two things that the prior rounds
+did not do:
+
+- it writes two durable continuity markers on every successful session persist:
+  - `/app/artifacts/_codex_sessions/resume-root-marker.json`
+  - `/app/artifacts/resume-root-parent-marker.json`
+- it writes a dedicated per-run `codex_restore_probe.json` artifact alongside
+  `codex_session_state.json`, so later artifact inspection can separate:
+  - startup never saw `_codex_sessions`
+  - startup saw `_codex_sessions` but rejected the snapshot
+  - startup restored a snapshot and selected a specific resume source
+
+This turns the remaining live question into a binary one on the next worker image:
+
+- if the next failed run shows the parent marker but not the root marker, `_codex_sessions`
+  disappeared specifically between runs
+- if the next failed run shows both markers and still reports `fresh-no-snapshot`, the worker is
+  still skipping a visible snapshot
+- if the next run reports `root_marker_exists=true`, `parent_marker_exists=true`, and
+  `selected_source=...`, then the continuity problem has moved from storage visibility to resume
+  acceptance/selection
+
+One additional implementation defect also surfaced locally while adding that instrumentation:
+
+- `_ensure_codex_guard_verified()` used the same `_codex_home()` lifecycle as the real run while
+  `_active_codex_session_spec` was still populated
+- that meant guard preflight could perform its own restore/persist cycle around `codex --version`
+  before the real worker exec started
+- the duplicate startup/completed restore logs visible in local tests came from that nested
+  preflight path
+
+The latest local fix now explicitly suspends `_active_codex_session_spec` during guard preflight,
+so `codex --version` checks cannot seed, reset, or overwrite a PVC-backed lane on their own. This
+does not yet prove the live resume path, but it removes one source of false churn and one way a
+failed or aborted run could have damaged the lane before the real `codex exec` started.
+
+### Verification executed in this turn
+
+- `python -m compileall /home/standard/Desktop/realagi_work/dataset/docker/prompt-executor/worker_codex_cli_exec.py /home/standard/Desktop/realagi_work/dataset/tests/unit/test_worker_codex_cli_exec_small.py`
+  - `pass`
+- `cd /home/standard/Desktop/realagi_work/dataset && uv run pytest tests/unit/test_worker_codex_cli_exec_small.py -q`
+  - `pass` (`41 passed`)
+- `cd /home/standard/Desktop/realagi_work/dataset && uv run pytest tests/test_aks_module_generator_generate_modules.py tests/test_aks_module_generator_manifests.py -q`
+  - `pass` (`69 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+- `make verify-surfaces`
   - `pass`
 
 Verification categories not executed in this turn:
