@@ -1015,3 +1015,252 @@ So the current state is:
 - live Codex resume path fix in image: `pass`
 - live Codex session reuse proof: `not yet demonstrated`
 - token-efficiency goal: `fail`
+
+## 2026-05-04 latest worker artifact review after the restore-fallback patch
+
+The next uploaded worker run still did **not** resume:
+
+- `codex_session_mode = fresh`
+- `restore_status = fresh-no-snapshot`
+- `resume_candidate_present = false`
+- `resume_attempted = false`
+- `resume_used = false`
+- `persist_status = persisted`
+- `pvc_sync_health = healthy`
+- `persisted_files = 6`
+
+The new `restore_probe` block makes the failure mode narrower and clearer than before:
+
+- `persistent_root_exists = false`
+- `lane_dir_exists = false`
+- `snapshot_dir_exists = false`
+- `metadata_path_exists = false`
+- `index_path_exists = false`
+- `index_entry_count = 0`
+
+So this latest live run did **not** merely fail to match a lane or read stale metadata. At worker
+startup, the process reported that `/app/artifacts/_codex_sessions` itself was absent from its
+filesystem view. That means the remaining live blocker has shifted from the restore-selection logic
+into the pod runtime/storage path: the worker is still starting without seeing the durable session
+root at restore time, even though the same run later persists a fresh snapshot there successfully.
+
+### What worked in the latest run
+
+- `repo_rag_backend.json`
+  - `rag_status = success`
+  - `dspy_status = success`
+  - `mediation_mode = dspy_rag`
+  - `bundle_resolved = true`
+  - `bundle_version = 20260502T122127191445Z`
+- `repo_rag_trace.json`
+  - `program_loaded = true`
+  - `program_path = artifacts/dspy/remote/20260502T122127191445Z/program.json`
+- `repo_rag_trace_enqueue.json`
+  - `queue_status = queued`
+- `repo_rag_codex_proxy_last.json`
+  - retrieval sources stayed clean:
+    - `docs/AGENTS.md`
+    - `docs/ASSUMPTIONS.md`
+    - `README.md`
+    - `docs/USAGE.md`
+- `prompt_artifacts` did not leak back into retrieval or the visible Codex transcript.
+
+### What still did not work
+
+- `codex exec resume` still did not activate.
+- The worker still started from a `fresh` session with no cached input reuse visible in usage:
+  - `prompt_tokens = 559267`
+  - `completion_tokens = 0`
+  - `total_tokens = 559267`
+  - `cached_input_tokens = null`
+
+### Token cost and transcript behavior in this latest run
+
+The transcript remains doc-heavy and diff-heavy, which means the dominant cost is still the
+growing internal `codex exec` conversation rather than the initial `RAG` / `DSPy` mediation
+payload:
+
+- `codex_response.txt` size: `1,382,973` bytes
+- repeated mentions:
+  - `README.md`: `81`
+  - `docs/DEVPLAN.md`: `97`
+  - `docs/ENVS.md`: `48`
+  - `docs/AGENTS.md`: `42`
+  - `docs/USAGE.md`: `71`
+  - `docs/ASSUMPTIONS.md`: `84`
+  - `diff --git`: `198`
+  - `sed -n`: `50`
+
+The first read commands in the transcript show the same pattern as earlier fresh runs:
+
+- `sed -n '1,260p' docs/USAGE.md`
+- `sed -n '1,220p' docs/AGENTS.md`
+- `sed -n '1,220p' docs/ASSUMPTIONS.md`
+- `sed -n '1,260p' README.md`
+- `sed -n '1,260p' docs/DEVPLAN.md`
+- `sed -n '1,240p' docs/ENVS.md`
+
+That is consistent with:
+
+- live `RAG` isolation: `pass`
+- live `DSPy` mediation: `pass`
+- live trainer handoff: `pass`
+- live restore-fallback code path in image: `present`
+- live session-root visibility at worker startup: `fail`
+- live resume proof: `fail`
+- token-efficiency goal: `fail`
+
+### Repository-native verification rerun in this turn
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+
+Verification categories not executed in this turn:
+
+- coverage
+- lint / formatting
+- type checking
+- UI or notebook execution
+- deployment or AKS integration checks
+
+## 2026-05-04 second post-seed worker artifact review
+
+The next uploaded run was expected to be the first real `resume` check after the earlier seed run,
+but it still started as `fresh`:
+
+- `codex_session_mode = fresh`
+- `restore_status = fresh-no-snapshot`
+- `resume_candidate_present = false`
+- `resume_attempted = false`
+- `resume_used = false`
+- `persist_status = persisted`
+- `pvc_sync_health = healthy`
+- `persisted_files = 4`
+
+### Live PVC and job inspection
+
+Live cluster inspection in namespace `prompt-exec-1353735964635435100` confirms:
+
+- worker job still mounts the stable PVC
+  - claim: `artifacts-g1353735964635435100`
+  - mount path: `/app/artifacts`
+  - env: `DATASET_CODEX_SESSION_STATE_DIR=/app/artifacts/_codex_sessions`
+- after the run, the shared PVC again contains:
+  - `/artifacts/_codex_sessions/session-index.json`
+  - `/artifacts/_codex_sessions/realagiorganization_shards_of_lokar_game-a3fbd616bb4892c8/session_state.json`
+  - `/artifacts/_codex_sessions/.../home_snapshot/{installation_id,logs_2.sqlite,state_5.sqlite,snapshot_manifest.json}`
+
+But the persisted `session-index.json` still shows this run as a brand-new lane snapshot:
+
+- `total_run_count = 1`
+- `fresh_run_count = 1`
+- `resumed_run_count = 0`
+- `restored_files = 0`
+- `resume_candidate_present = false`
+- `restore_status = fresh-no-snapshot`
+
+That means `_codex_sessions` did **not** survive into worker startup as a usable preexisting
+directory for this run. The worker did not merely reject a candidate; it began with no visible lane
+snapshot and then seeded a fresh one again.
+
+### Additional hidden blocker found during code inspection
+
+Even after the storage/root-visibility issue is fixed, the current restore guard is still too
+strict for the live proxy configuration:
+
+- `_build_codex_session_spec()` stores `config_payload_digest` from the full
+  `codex_config_payload`
+- `_model_profile_metadata()` stores `base_url_origin`
+- in this worker path that origin is the local repo-rag proxy on `127.0.0.1:<ephemeral-port>`
+
+So a normal new run can change both:
+
+- `config_payload_digest`
+- `model_profile.base_url_origin`
+
+without any meaningful change in the real Codex auth/model contract. Once restore begins seeing the
+previous snapshot again, these fields are likely to trigger:
+
+- `config-payload-mismatch`
+- or `model-profile-mismatch`
+
+unless the comparison is relaxed to ignore the ephemeral localhost proxy port.
+
+### Current state after this second post-seed run
+
+- live `RAG` isolation: `pass`
+- live `DSPy` mediation: `pass`
+- live trainer handoff: `pass`
+- live worker mount/env wiring for `_codex_sessions`: `present`
+- live session-root continuity between runs: `fail`
+- live restore-guard stability against ephemeral proxy ports: `fail`
+- live `resume` proof: `fail`
+
+### Token cost in this second post-seed run
+
+The run still consumed high input tokens without cached resume reuse:
+
+- `prompt_tokens = 561834`
+- `completion_tokens = 0`
+- `total_tokens = 561834`
+- `cached_input_tokens = null`
+
+The transcript stayed documentation-first:
+
+- `README.md`: `55`
+- `docs/DEVPLAN.md`: `50`
+- `docs/ENVS.md`: `48`
+- `docs/AGENTS.md`: `48`
+- `docs/USAGE.md`: `43`
+- `docs/ASSUMPTIONS.md`: `49`
+- `diff --git`: `82`
+- `sed -n`: `45`
+
+So the dominant cost is still fresh-session Codex exploration, not the initial `RAG` / `DSPy`
+developer-block payload.
+
+## 2026-05-04 local restore hardening after the second post-seed run
+
+The next local worker slice hardens two restore edges found in that live review:
+
+- Azure/session compatibility now normalizes repo-rag localhost proxy origins before storing
+  `model_profile.base_url_origin` or deriving the session config digest. In practice, a proxy move
+  from `http://127.0.0.1:44973/openai` to `http://127.0.0.1:40111/openai` now maps to the stable
+  sentinel `repo-rag-proxy://local` instead of forcing:
+  - `config-payload-mismatch`
+  - `model-profile-mismatch`
+- Worker restore search now goes beyond the direct current `lane_dir`, base lane, PVC-root
+  `session-index.json`, and root `*/session_state.json` scan:
+  - `restore_probe` now records whether the parent artifacts root existed
+  - it also records nested `_codex_sessions` roots / metadata discovered below that parent
+  - restore can now recover from nested `**/_codex_sessions/*/session_state.json` locations when
+    the direct `persistent_root` is absent but a valid older lane snapshot still exists elsewhere
+    under `/app/artifacts`
+
+### Verification executed in this turn
+
+- `python -m compileall /home/standard/Desktop/realagi_work/dataset/docker/prompt-executor/worker_codex_cli_exec.py /home/standard/Desktop/realagi_work/dataset/tests/unit/test_worker_codex_cli_exec_small.py`
+  - `pass`
+- `cd /home/standard/Desktop/realagi_work/dataset && uv run pytest tests/unit/test_worker_codex_cli_exec_small.py -q`
+  - `pass` (`39 passed`)
+- `cd /home/standard/Desktop/realagi_work/dataset && uv run pytest tests/test_aks_module_generator_generate_modules.py tests/test_aks_module_generator_manifests.py -q`
+  - `pass` (`69 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+
+### Remaining live question after this local hardening
+
+The next worker run is now expected to answer one narrower question:
+
+- does startup still see an actually empty `/app/artifacts/_codex_sessions`, or was the remaining
+  blocker only the unstable localhost-proxy compatibility guard?

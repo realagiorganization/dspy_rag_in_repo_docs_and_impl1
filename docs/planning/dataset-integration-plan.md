@@ -313,7 +313,10 @@ Current implementation note:
     current `lane_dir`, and it writes a `restore_probe` block into `codex_session_state.json` so
     the next live run can reveal whether startup actually saw the PVC root, the direct lane
     directory, the session index, or only a filesystem-discovered fallback before deciding to
-    resume or reset. The current local
+    resume or reset. That same local hardening pass now also normalizes repo-rag localhost proxy
+    origins to the stable sentinel `repo-rag-proxy://local` before deriving session config
+    digests or comparing persisted `model_profile.base_url_origin`, so a normal ephemeral proxy
+    port change no longer forces `config-payload-mismatch` / `model-profile-mismatch` resets. The current local
     bundle-resolution follow-up also closes one worker-side contract gap: `repo-rag` now treats
     both `artifacts/dspy/...` and staged mirror `channels/...` + `versions/...` layouts as valid
     local bundle stores, and the `dataset` deploy path now refreshes `repo-rag-storage-config`
