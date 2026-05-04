@@ -858,3 +858,160 @@ That mismatch is now fixed locally in `dataset` by retargeting the generated wor
 execution artifacts under `/tmp/artifacts`. Live AKS validation is still pending; until a rebuilt
 worker image is deployed and rerun, the latest uploaded runs should still be expected to show
 `fresh-no-snapshot`.
+
+## 2026-05-04 worker artifact follow-up after the PVC session-root fix
+
+Fresh worker artifacts uploaded from `../dataset/artifacts` show that the rebuilt worker image is
+now using the corrected Codex session root:
+
+- `codex_session_state.json`
+  - `persistent_root = /app/artifacts/_codex_sessions`
+  - `lane_dir = /app/artifacts/_codex_sessions/realagiorganization_shards_of_lokar_game-a3fbd616bb4892c8`
+  - `index_path = /app/artifacts/_codex_sessions/session-index.json`
+
+That confirms the current worker image includes the path fix from `dataset`.
+
+### What worked
+
+- `repo_rag_backend.json`
+  - `bundle_resolved = true`
+  - `bundle_version = 20260502T122127191445Z`
+  - `mediation_mode = dspy_rag`
+  - `rag_status = success`
+  - `dspy_status = success`
+- `repo_rag_trace.json`
+  - `program_loaded = true`
+  - `program_path = artifacts/dspy/remote/20260502T122127191445Z/program.json`
+- `trusted_trace_handoff_summary.json`
+  - `queued = 1`
+  - `failed = 0`
+
+Retrieval remained clean and repo-grounded:
+
+- `README.md`
+- `docs/AGENTS.md`
+- `docs/ASSUMPTIONS.md`
+- `docs/USAGE.md`
+
+`prompt_artifacts/...` did not appear in `repo_rag_codex_proxy_last.json` retrieval sources. The
+runtime still emits prompt traces under the worker artifact tree, which is expected, but retrieval
+did not use them.
+
+### What did not work
+
+`codex exec resume` still did not activate in this run:
+
+- `session_mode = fresh`
+- `restore_status = fresh-no-snapshot`
+- `resume_candidate_present = false`
+- `resume_attempted = false`
+- `resume_used = false`
+- `restored_files = 0`
+- `persisted_files = 4`
+- `persist_status = persisted`
+- `pvc_sync_health = healthy`
+
+This is now a different situation from the previous broken runs. Earlier runs could never resume
+because session snapshots were written under `/tmp/artifacts/_codex_sessions`, which was not on the
+durable PVC. This run already writes to `/app/artifacts/_codex_sessions`, so the most likely
+reading is:
+
+- this run is the first live run on the corrected durable session root
+- it seeded the durable lane snapshot successfully
+- the **next** run on the same lane is the one that should finally prove `resumed`
+
+The current artifact export still does not include `_codex_sessions/` or `session-index.json`,
+only the per-run `codex_session_state.json`, so the uploaded tarball itself still cannot prove that
+the next pod will see the snapshot. The state file, however, now points at the correct durable PVC
+location.
+
+## 2026-05-04 restore-path debug follow-up after inspecting the live PVC
+
+The next uploaded run still started as `fresh`, so the session-root path mismatch is no longer a
+sufficient explanation by itself. Live PVC inspection now confirms that the worker **is** writing
+durable Codex lane state into the shared artifacts claim:
+
+- namespace `prompt-exec-1353735964635435100`
+- PVC `artifacts-g1353735964635435100`
+- `_codex_sessions/session-index.json`
+- `_codex_sessions/realagiorganization_shards_of_lokar_game-a3fbd616bb4892c8/session_state.json`
+- `_codex_sessions/.../home_snapshot/history.jsonl`
+- `_codex_sessions/.../home_snapshot/state_5.sqlite`
+- `_codex_sessions/.../home_snapshot/logs_2.sqlite`
+- `_codex_sessions/.../home_snapshot/sessions/2026/05/04/rollout-2026-05-04T10-29-28-019df289-272d-7401-8353-03aa49369449.jsonl`
+
+That means the remaining blocker moved again: the worker startup path is still not discovering an
+already-persisted lane snapshot at restore time even though the snapshot is present on the shared
+PVC.
+
+To harden that restore path locally, `dataset/docker/prompt-executor/worker_codex_cli_exec.py`
+now adds:
+
+- a `restore_probe` block in `codex_session_state.json` so the next live run can report what the
+  worker actually saw under `persistent_root`, whether `session-index.json` existed, and which
+  candidate source was selected
+- an index-based fallback: if the direct `lane_dir` probe misses, restore now consults
+  `session-index.json` for matching `lane_key`, `base_lane_key`, `working_dir`, and repo
+  fingerprint entries
+- a filesystem fallback: if the index is missing or stale, restore now scans
+  `persistent_root/*/session_state.json` for matching workspace metadata before giving up and
+  treating the run as `fresh`
+
+This does **not** prove live `resumed` behavior yet. It does mean the next worker image should be
+able to recover from lane/index drift cases that the previous implementation silently collapsed into
+`fresh-no-snapshot`, and if it still fails the new `restore_probe` fields should identify whether
+the worker saw the PVC root at all.
+
+### Local verification for the restore-debug slice
+
+Dataset-side checks executed after adding the new fallback/probe logic:
+
+- `python -m compileall docker/prompt-executor/worker_codex_cli_exec.py tests/unit/test_worker_codex_cli_exec_small.py`
+  - `pass`
+- `uv run pytest tests/unit/test_worker_codex_cli_exec_small.py -q`
+  - `pass` (`37 passed`)
+- `uv run pytest tests/test_aks_module_generator_generate_modules.py -k disk_backed_paths -q`
+  - `pass`
+
+Repository-native checks rerun in this repo while updating the audit narrative:
+
+- `uv run python -m compileall src tests`
+  - `pass`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+- `make verify-surfaces`
+  - `pass`
+
+### Token cost and transcript behavior
+
+Prompt-token spend is still far too high:
+
+- `redis_results.json`
+  - `result.prompt_tokens = 3427041`
+  - `result.total_tokens = 3427041`
+- `codex_response.txt` size: `2,205,535` bytes
+
+The transcript remains heavily documentation/diff driven:
+
+- `README.md`: `167`
+- `docs/DEVPLAN.md`: `149`
+- `docs/ENVS.md`: `115`
+- `docs/AGENTS.md`: `124`
+- `docs/USAGE.md`: `119`
+- `docs/ASSUMPTIONS.md`: `76`
+- `diff --git`: `380`
+- `sed -n`: `44`
+- `# Environment Variables`: `2`
+
+So the current state is:
+
+- live RAG isolation: `pass`
+- live worker-side DSPy bundle use: `pass`
+- live trainer handoff: `pass`
+- live Codex resume path fix in image: `pass`
+- live Codex session reuse proof: `not yet demonstrated`
+- token-efficiency goal: `fail`

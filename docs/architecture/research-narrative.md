@@ -240,7 +240,13 @@ latest local slice also adds `DATASET_CODEX_AUTO_SESSION_LANE_MODE`, which can d
 lanes automatically from `queue_label` and/or `prompt_slug` when no explicit lane hint is set, so
 unrelated queue families stop sharing one increasingly broad Codex lane. Persisted lane metadata
 now records `lane_source`, allowing later live validation to distinguish explicit operator forks
-from automatic task-family routing. The newest bundle-resolution follow-up also tightens the DSPy
+from automatic task-family routing. The newest restore-debug slice now also treats
+`session-index.json` and persisted `*/session_state.json` files as explicit restore fallbacks
+instead of relying only on the direct current `lane_dir`, and it writes a `restore_probe` block
+into `codex_session_state.json` so the next live AKS run can report whether startup actually saw
+the PVC root, the direct lane directory, the session index, or only a filesystem-discovered lane
+match before deciding between `fresh`, `reset`, `resumed`, or `forked`. The newest
+bundle-resolution follow-up also tightens the DSPy
 handoff path itself: `repo-rag` local bundle lookup now understands both the repo-local
 `artifacts/dspy/...` layout and the staged worker mirror layout `channels/...` + `versions/...`,
 while the `dataset` deploy path now refreshes `repo-rag-storage-config` from the active Azure
@@ -440,9 +446,10 @@ At the time of this document:
   no-op-cycle behavior is now verified live on the `20260503-160343` trainer image through the
   first post-redeploy service-cycle `20260503T161713Z-cycle-0001.json`; the remaining live
   Codex-resume blocker was narrowed to a storage-path mismatch between
-  `/tmp/artifacts/_codex_sessions` and the durable `/app/artifacts` PVC mount; the current local
-  fix now retargets only the session snapshot root to `/app/artifacts/_codex_sessions`, but live
-  worker validation is still pending
+  `/tmp/artifacts/_codex_sessions` and the durable `/app/artifacts` PVC mount; the rebuilt worker
+  image now reports `persistent_root=/app/artifacts/_codex_sessions` live, so the path fix itself
+  is present in AKS, but the first run on that corrected root still started as `fresh` and only
+  seeded the durable snapshot. Actual `resumed` proof now depends on the next run on the same lane
 - notebook batch execution and reporting are implemented and exposed through
   `make notebook-report`
 - TODO and publication backlog synchronization are implemented and exposed through

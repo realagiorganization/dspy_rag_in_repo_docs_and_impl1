@@ -40,7 +40,7 @@ docs/architecture/inspired/dspy-rag-tutorial.md,docs,markdown,35,1474,DSPy Tutor
 docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md,docs,markdown,38,1555,Implementing RAG with DSPy: Technical Guide
 docs/architecture/mcp-discovery.md,docs,markdown,54,1757,MCP Discovery Notes
 docs/architecture/package-api.md,docs,markdown,127,9186,Package API Notes
-docs/architecture/research-narrative.md,docs,markdown,499,36860,"Repository research narrative tying code, docs, and verification together"
+docs/architecture/research-narrative.md,docs,markdown,506,37523,"Repository research narrative tying code, docs, and verification together"
 docs/archive/repo-completeness-checklist.md,docs,markdown,238,7450,Archived completeness snapshot kept for workflow and lockfile policy context
 docs/audit/2026-03-15-repo-state.md,docs,markdown,151,5989,Repository audit note for 2026 03 15 repo state
 docs/audit/2026-03-17-docs-and-uv-refresh.md,docs,markdown,79,3977,Repository audit note for 2026 03 17 docs and uv refresh
@@ -140,7 +140,7 @@ docs/audit/2026-05-01-versioned-trainer-lineage-bundles.md,docs,markdown,123,582
 docs/audit/2026-05-02-hybrid-vector-retrieval-default.md,docs,markdown,385,18302,Repository audit note for 2026 05 02 hybrid vector retrieval default
 docs/audit/2026-05-02-live-trainer-still-not-publishing-bundles.md,docs,markdown,162,6657,Repository audit note for 2026 05 02 live trainer still not publishing bundles
 docs/audit/2026-05-02-trainer-context-group-champion-index-stage1.md,docs,markdown,330,18201,Repository audit note for 2026 05 02 trainer context group champion index stage1
-docs/audit/2026-05-02-zz-codex-exec-resume-session-state-stage0.md,docs,markdown,861,43150,Repository audit note for 2026 05 02 zz codex exec resume session state stage0
+docs/audit/2026-05-02-zz-codex-exec-resume-session-state-stage0.md,docs,markdown,1018,49319,Repository audit note for 2026 05 02 zz codex exec resume session state stage0
 docs/audit/README.md,docs,markdown,14,426,Repository audit note for README
 docs/guides/hushwheel-fixture-rag-guide.md,docs,markdown,138,5169,RAG Guide For The Hushwheel Fixture
 docs/operations/azure-deployment.md,docs,markdown,111,4901,Azure Deployment Notes
@@ -149,7 +149,7 @@ docs/operations/runtime-image.md,docs,markdown,46,1989,Runtime Image Notes
 docs/operations/simple-end-to-end-verification-guide.md,docs,markdown,105,4111,Simple End-To-End Verification Guide
 docs/operations/trainer-deployment.md,docs,markdown,152,6047,Trainer Deployment Notes
 docs/planning/codex-exec-resume-plan.md,docs,markdown,187,10163,Codex Exec Resume Plan
-docs/planning/dataset-integration-plan.md,docs,markdown,385,27264,Dataset Integration Plan
+docs/planning/dataset-integration-plan.md,docs,markdown,392,27869,Dataset Integration Plan
 docs/planning/repo-hardening-plan.md,docs,markdown,71,4545,Repository Hardening Plan
 docs/planning/trainer-context-group-champion-plan.md,docs,markdown,62,4058,Trainer Context-Group Champion Plan
 mkdocs.yml,mkdocs.yml,yaml,37,843,site_name: Repository RAG Lab
@@ -246,6 +246,7 @@ samples/logs/20260502T165750Z-gh-runs-develop-no-new-run-after-trainer-champion-
 samples/logs/20260503T080503Z-gh-runs-develop-no-new-run-after-codex-resume-lane-telemetry-push.md,samples,markdown,37,1782,GitHub Run Inspection
 samples/logs/20260503T153706Z-gh-runs-develop-no-new-run-after-staged-bundle-mirror-push.md,samples,markdown,27,1171,GitHub Runs After `Support staged bundle mirrors and stale queue skips`
 samples/logs/20260503T160232Z-gh-runs-develop-no-new-run-after-no-op-trainer-promotion-fix-push.md,samples,markdown,32,1482,GitHub Run Inspection
+samples/logs/20260504T090704Z-gh-runs-develop-no-new-run-after-fix-codex-resume-pvc-session-path-push.md,samples,markdown,46,1689,GitHub Run Check After `Fix Codex resume PVC session path`
 samples/logs/README.md,samples,markdown,11,331,GitHub Run Logs
 samples/population/hushwheel_fixture_population_candidates.yaml,samples,yaml,22,955,- source: README.md
 samples/population/repository_population_candidates.yaml,samples,yaml,16,690,- source: README.md
