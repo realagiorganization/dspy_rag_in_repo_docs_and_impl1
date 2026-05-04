@@ -201,10 +201,12 @@ That evidence now motivates a separate execution-memory track based on persisten
 the global DSPy bundle stays immutable and universal, while Codex session continuity becomes a
 local worker concern. The first dataset-side implementation slice now exists: worker temp
 `CODEX_HOME` instances restore persisted non-credential Codex state, regenerate fresh
-`auth.json` / `config.toml`, rerun guard preflight, and can switch to `codex exec resume --last`
-when restored state is present. That slice also writes a PVC-root `session-index.json` plus a
-per-run `codex_session_state.json`, so later validation can tell which lane resumed and which
-latest Codex session-file hint was preserved. The same slice now refuses to resume when the
+`auth.json` / `config.toml`, rerun guard preflight, and can switch to `codex exec resume` when
+restored state is present, preferring a persisted explicit `latest_session_id` and only falling
+back to `--last --all` when the snapshot lacks a usable id. That slice also writes a PVC-root
+`session-index.json` plus a per-run `codex_session_state.json`, so later validation can tell
+which lane resumed and which latest Codex session-file hint was preserved. The same slice now
+refuses to resume when the
 persisted working-directory, repo-root / branch, model-profile, or auth/config digest contract no
 longer matches the current worker, and the AKS worker manifest now pins
 `DATASET_CODEX_SESSION_STATE_DIR` explicitly to `/app/artifacts/_codex_sessions` on the artifacts
@@ -453,7 +455,16 @@ At the time of this document:
   `/tmp/artifacts/_codex_sessions` and the durable `/app/artifacts` PVC mount; the rebuilt worker
   image now reports `persistent_root=/app/artifacts/_codex_sessions` live, so the path fix itself
   is present in AKS, but the first run on that corrected root still started as `fresh` and only
-  seeded the durable snapshot. Actual `resumed` proof now depends on the next run on the same lane
+  seeded the durable snapshot. The newest local hardening pass now also reloads
+  `latest_session_id` from persisted lane metadata before command assembly and adds a safer
+  `--last --all` fallback only when older snapshots do not carry a usable id. The same pass
+  finally explains the long-lived `artifacts-sync-run` pods seen beside the artifacts PVC:
+  `tools/pvc_artifact_sync.sh` created helper pods with `guild=unknown` whenever callers passed an
+  explicit claim but no `--guild-id`, while explicit `cleanup` only deleted one derived pod name.
+  The script now auto-cleans helper pods on exit and explicit cleanup also deletes by
+  `app=artifacts-sync,claim=<claim>` label, so future PVC helper pods should not linger after
+  deploy/workflow sync steps complete. Actual `resumed` proof still depends on the next same-lane
+  run
 - notebook batch execution and reporting are implemented and exposed through
   `make notebook-report`
 - TODO and publication backlog synchronization are implemented and exposed through

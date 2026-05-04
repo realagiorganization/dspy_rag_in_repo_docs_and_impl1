@@ -1264,3 +1264,207 @@ The next worker run is now expected to answer one narrower question:
 
 - does startup still see an actually empty `/app/artifacts/_codex_sessions`, or was the remaining
   blocker only the unstable localhost-proxy compatibility guard?
+
+## 2026-05-04 latest live artifact review after the restore-guard hardening push
+
+The newest uploaded worker artifacts still show a `fresh` Codex session, but the run is otherwise
+healthier than the earlier multi-hundred-thousand to multi-million token outliers.
+
+### What worked in the newest run
+
+- live `RAG` isolation: `pass`
+  - retrieval sources stayed limited to:
+    - `docs/AGENTS.md`
+    - `docs/ASSUMPTIONS.md`
+    - `README.md`
+    - `docs/USAGE.md`
+  - `repo_rag_codex_proxy_last.json` reported:
+    - `mediation_mode = dspy_rag`
+    - `rag_status = success`
+    - `dspy_status = success`
+    - `bundle_version = 20260502T122127191445Z`
+    - `summary_len = 2821`
+    - `question_len = 2766`
+- live `DSPy` mediation: `pass`
+  - `repo_rag_backend.json` again reported:
+    - `bundle_resolved = true`
+    - `program_loaded = true`
+    - `dspy_status = success`
+- live trainer handoff: `pass`
+  - `trusted_trace_handoff_summary.json` reported:
+    - `attempted = 1`
+    - `queued = 1`
+    - `failed = 0`
+    - blob:
+      `queued/repo-rag-training/20260504T152730Z-prompts_shards_of_lokar_game-p00000-355cca.json`
+
+### What still failed
+
+- live `codex exec resume`: `fail`
+  - `codex_session_mode = fresh`
+  - `restore_status = fresh-no-snapshot`
+  - `resume_candidate_present = false`
+  - `resume_attempted = false`
+  - `resume_used = false`
+  - `restored_files = 0`
+  - `persisted_files = 4`
+- the latest `restore_probe` still shows no visible durable session root at worker startup:
+  - `persistent_root_exists = false`
+  - `lane_dir_exists = false`
+  - `metadata_path_exists = false`
+  - `index_path_exists = false`
+  - `nested_session_root_count = 0`
+  - `nested_session_metadata_count = 0`
+  - `persistent_root_parent_entries = [\"runs\", \"worker_execution.log\"]`
+
+This means the guard-hardening fix did not yet produce a live resumed run. The worker still starts
+with no visible `_codex_sessions` subtree and seeds a new fresh snapshot by the end of the run.
+
+### Token cost in the newest run
+
+The newest run consumed much less input than the previous documented outliers, but the reduction
+did **not** come from session resume reuse:
+
+- `prompt_tokens = 144135`
+- `completion_tokens = 0`
+- `total_tokens = 144135`
+- `codex_response.txt` size = `1611976` bytes
+
+Transcript-level path telemetry and direct transcript counts both show a much shorter,
+documentation-aware session than earlier runs:
+
+- `codex_session_state.json`
+  - `path_mention_count = 13`
+  - `documentation_mention_count = 12`
+  - `read_like_command_count = 0`
+  - `diff_command_count = 1`
+- `codex_response.txt` direct counts
+  - `README.md`: `70`
+  - `docs/DEVPLAN.md`: `59`
+  - `docs/ENVS.md`: `59`
+  - `docs/USAGE.md`: `65`
+  - `docs/AGENTS.md`: `60`
+  - `docs/ASSUMPTIONS.md`: `68`
+  - `diff --git`: `165`
+  - `sed -n`: `33`
+  - `prompt_artifacts`: absent
+
+The run therefore improved token usage primarily because the worker session itself was shorter and
+less repetitive, not because `resume` finally engaged.
+
+### Verification executed in this turn
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+
+### Additional local/live diagnosis after the newest artifact review
+
+Local inspection of the workstation Codex CLI home and live inspection of the shared artifacts PVC
+now narrow the remaining `resume` problem further:
+
+- local `~/.codex` layout contains the same top-level surfaces we attempt to persist:
+  - `history.jsonl`
+  - `sessions/`
+  - `state_5.sqlite`
+  - `logs_2.sqlite`
+  - `installation_id`
+  - `models_cache.json`
+  - `memories/`
+  - `shell_snapshots/`
+- the current live PVC helper pod (`artifacts-sync-run` mounting
+  `artifacts-g1353735964635435100`) now shows that `_codex_sessions` is really being written into
+  the root of the claim:
+  - `/artifacts/_codex_sessions/session-index.json`
+  - `/artifacts/_codex_sessions/realagiorganization_shards_of_lokar_game-a3fbd616bb4892c8/session_state.json`
+  - `/artifacts/_codex_sessions/.../home_snapshot/{installation_id,logs_2.sqlite,state_5.sqlite}`
+  - `/artifacts/_codex_sessions/.../home_snapshot/sessions/2026/05/04/rollout-2026-05-04T15-10-27-019df38a-6681-7761-bc5b-4f2525fe200a.jsonl`
+- `snapshot_manifest.json` for that lane reports exactly four persisted files:
+  - `installation_id`
+  - `logs_2.sqlite`
+  - `sessions/2026/05/04/rollout-2026-05-04T15-10-27-019df38a-6681-7761-bc5b-4f2525fe200a.jsonl`
+  - `state_5.sqlite`
+
+So the remaining live blocker is **not** “Codex session files are being written under the wrong
+relative directory inside `CODEX_HOME`”. The persisted layout already matches the normal
+Codex-on-disk shape closely enough to include the session JSONL plus the two SQLite databases.
+
+The live blocker is now narrower:
+
+- the worker still begins startup with `restore_probe` reporting no visible `_codex_sessions`
+  subtree at `/app/artifacts`
+- yet after the run, the same PVC root clearly contains `_codex_sessions`
+
+That means the failure is currently between:
+
+1. visibility of the previously persisted root snapshot to the new worker at startup, and/or
+2. the worker's decision logic for selecting and restoring that snapshot once visible
+
+One additional implementation weakness also remains:
+
+- the worker currently resumes via `codex exec resume --last`
+- local Codex CLI help confirms that `--last` picks the most recent recorded session and exposes
+  `--all` specifically to disable cwd filtering
+- once startup restore is stable, the worker should prefer the persisted explicit
+  `latest_session_id` over `--last` so resume selection does not depend on Codex's own
+  most-recent/cwd heuristics
+
+### Latest local follow-up on resume command selection and helper-pod cleanup
+
+The newest local hardening pass in `../dataset` closed two concrete implementation gaps that were
+still visible after the live artifact review:
+
+- `worker_codex_cli_exec.py`
+  - restore now reloads `latest_session_file` / `latest_session_id` from persisted lane metadata
+    before command assembly
+  - if metadata does not carry those fields but the restored snapshot contains `sessions/*.jsonl`,
+    the worker now redetects the latest session file from the restored temp `CODEX_HOME`
+  - the worker now prefers `codex exec resume <latest_session_id>` when a usable session id exists
+  - only older snapshots that still lack a usable session id fall back to
+    `codex exec resume --last --all`
+  - per-run `codex_session_state.json` now records:
+    - `resume_target_session_id`
+    - `resume_command_mode`
+- `tools/pvc_artifact_sync.sh`
+  - helper pods now self-clean on script exit through an `EXIT` trap
+  - explicit `cleanup` also deletes helper pods by
+    `app=artifacts-sync,claim=<claim>` label instead of only by one derived pod name
+  - the helper suffix now falls back to the PVC claim when no real run slug is present, avoiding
+    generic long-lived names like `artifacts-sync-run` during deploy-time artifact sync
+
+The live `artifacts-sync-run` pod attached to `artifacts-g1353735964635435100` now has a clear
+postmortem:
+
+- it carried labels:
+  - `app=artifacts-sync`
+  - `claim=artifacts-g1353735964635435100`
+  - `guild=unknown`
+- its age substantially exceeded the latest worker job age
+- that combination matches a helper created by a claim-based sync path without `--guild-id`,
+  which meant the workflow cleanup step deriving the helper pod name from `--guild-id` /
+  `--run-slug` could miss it even after the pipeline completed
+- a direct cleanup check using
+  `bash tools/pvc_artifact_sync.sh cleanup --claim artifacts-g1353735964635435100 --namespace prompt-exec-1353735964635435100`
+  removed the lingering helper, and a follow-up
+  `kubectl -n prompt-exec-1353735964635435100 get pods -l app=artifacts-sync`
+  returned no remaining helper pods
+
+### Verification executed in this turn
+
+- `python -m compileall /home/standard/Desktop/realagi_work/dataset/docker/prompt-executor/worker_codex_cli_exec.py /home/standard/Desktop/realagi_work/dataset/tests/unit/test_worker_codex_cli_exec_small.py /home/standard/Desktop/realagi_work/dataset/tests/unit/test_pvc_artifact_sync_small.py`
+  - `pass`
+- `cd /home/standard/Desktop/realagi_work/dataset && uv run pytest tests/unit/test_worker_codex_cli_exec_small.py tests/unit/test_pvc_artifact_sync_small.py -q`
+  - `pass` (`48 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`

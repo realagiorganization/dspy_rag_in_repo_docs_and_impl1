@@ -71,8 +71,9 @@ session files.
 - [x] Copy Codex session files and metadata out of the worker-local runtime directory after each
       successful run into the PVC-backed cache root.
 - [x] Restore those files into the exact runtime path expected by Codex before the next worker run.
-- [x] Keep the restore path deterministic so `codex exec resume --last` sees the prior
-      session without additional user interaction.
+- [x] Keep the restore path deterministic so workers can prefer an explicit persisted
+      `latest_session_id` and only fall back to `codex exec resume --last --all` when the
+      snapshot lacks a usable session id.
 - [x] Preserve only the current minimal durable Codex state needed for resume instead of copying
       unrelated temp files.
 - [x] Add initial restore-compatibility guards for unreadable metadata and working-directory /
