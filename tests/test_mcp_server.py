@@ -584,6 +584,32 @@ def test_read_json_rpc_message_handles_header_and_payload_edge_cases() -> None:
         mcp_server.read_json_rpc_message(io.BytesIO(b"Content-Length: 2\r\n\r\n[]"))
 
 
+def test_read_json_rpc_message_does_not_reselect_after_first_header(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _SelectableBytesIO(io.BytesIO):
+        def fileno(self) -> int:
+            return 123
+
+    payload = {"jsonrpc": "2.0", "id": 1, "method": "initialize"}
+    buffer = _SelectableBytesIO()
+    mcp_server.write_json_rpc_message(buffer, payload)
+    buffer.seek(0)
+    select_calls = 0
+
+    def fake_select(read_fds, write_fds, error_fds, timeout):
+        nonlocal select_calls
+        select_calls += 1
+        if select_calls == 1:
+            return read_fds, write_fds, error_fds
+        raise AssertionError("select() should not run again after the first header line")
+
+    monkeypatch.setattr(mcp_server.select, "select", fake_select)
+
+    assert mcp_server.read_json_rpc_message(buffer) == payload
+    assert select_calls == 1
+
+
 def test_serve_repo_rag_mcp_handles_initialize_and_ping(tmp_path: Path) -> None:
     input_stream = io.BytesIO()
     output_stream = io.BytesIO()

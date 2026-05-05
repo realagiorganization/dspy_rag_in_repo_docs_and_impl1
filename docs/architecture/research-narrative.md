@@ -284,7 +284,16 @@ surface. The worker defaults its MCP launcher to that module entrypoint, writes 
 `initialize -> resources/list` exchange before handing the config to Codex. If that preflight
 fails, the worker omits MCP from the generated config for that run instead of letting a resumed
 lane spend multiple turns retrying `resources/list` and then falling back into shell-only
-exploration. The newest
+exploration. The newest transport root-cause fix then identified one deeper protocol bug inside
+`read_json_rpc_message()`: the old reader mixed `select()` against the raw stdin file descriptor
+with `readline()` / `read()` on Python's buffered `sys.stdin.buffer`. After the first
+`Content-Length` header line, Python could already hold the remaining blank line and body in its
+internal buffer while the underlying pipe fd appeared empty, which produced the live debug pattern
+`header-line Content-Length: ...` followed by `waiting-for-headers no-bytes-yet`. The reader now
+uses `select()` only before the very first header byte and consumes remaining headers/body directly
+from the buffered stream, which restores normal framed `initialize` responses for raw local stdio
+clients and removes the false worker-side MCP startup timeout caused by Python buffering rather
+than actual server complexity. The newest
 bundle-resolution follow-up also tightens the DSPy
 handoff path itself: `repo-rag` local bundle lookup now understands both the repo-local
 `artifacts/dspy/...` layout and the staged worker mirror layout `channels/...` + `versions/...`,
