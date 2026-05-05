@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import json
 import threading
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Callable, NoReturn, cast
+from typing import NoReturn, cast
 
 import httpx
 import pytest
@@ -37,7 +37,7 @@ def _resolve_program_path_and_bundle_version(
 ) -> tuple[Path | None, str | None]:
     resolver = cast(
         Callable[..., tuple[Path | None, str | None]],
-        getattr(codex_proxy_module, "_resolve_program_path_and_bundle_version"),
+        codex_proxy_module._resolve_program_path_and_bundle_version,
     )
     return resolver(
         repository_root=repository_root,
@@ -276,7 +276,6 @@ def test_resolve_program_path_and_bundle_version_uses_local_bundle_root_without_
 
     def fake_fetch_remote_bundle(*args: object, **kwargs: object) -> None:
         del args, kwargs
-        return None
 
     def fake_inspect_bundle_channel(root: Path, channel: str) -> dict[str, object]:
         del root, channel
