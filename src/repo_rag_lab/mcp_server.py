@@ -618,9 +618,9 @@ def _discovery_guide_resource_text(server_root: Path) -> str:
         f"- Default retrieval mode: `{profile.retrieval_mode}`",
         "",
         "Use these exact patterns:",
-        "- `read_mcp_resource(\"repo-rag://startup-context\")` for one bounded startup working set.",
-        "- `read_mcp_resource(\"repo-rag://search?question=<your question>&top_k=4\")` for repository discovery.",
-        "- `read_mcp_resource(\"repo-rag://ask?question=<your question>\")` for one concise repo-grounded answer.",
+        '- `read_mcp_resource("repo-rag://startup-context")` for one bounded startup working set.',
+        '- `read_mcp_resource("repo-rag://search?question=<your question>&top_k=4")` for repository discovery.',
+        '- `read_mcp_resource("repo-rag://ask?question=<your question>")` for one concise repo-grounded answer.',
         "",
         "Do not interpret a template-only MCP listing as absence of repo resources. The repo-rag search/ask surfaces are intentionally exposed as resource templates that must be instantiated with a concrete question.",
     ]
@@ -695,7 +695,9 @@ def read_mcp_resource(uri: str, *, server_root: Path) -> dict[str, object]:
         )
         mcp_candidates = [candidate.__dict__ for candidate in discover_mcp_servers(server_root)]
         serialized_context = [serialize_chunk(chunk, root=server_root) for chunk in context[:top_k]]
-        sources = list(dict.fromkeys(item["source"] for item in serialized_context if "source" in item))
+        sources = list(
+            dict.fromkeys(item["source"] for item in serialized_context if "source" in item)
+        )
         payload = {
             "command": "search-repo-resource",
             "command_status": "success",
@@ -835,9 +837,7 @@ def call_mcp_tool(
             question=question,
             retrieval_mode=str(payload.get("retrieval_mode") or "lexical"),
             sources=_string_list_field(payload, "sources"),
-            context_items=[
-                item for item in normalized_context_items if isinstance(item, dict)
-            ],
+            context_items=[item for item in normalized_context_items if isinstance(item, dict)],
             bundle_version=bundle_version_value,
             overlay_path=overlay_path_value,
             mcp_candidate_count=len(normalized_mcp_candidates),
@@ -1054,15 +1054,11 @@ def read_json_rpc_message(stream: BinaryIO) -> dict[str, object] | None:
         if fileno is not None:
             ready, _, _ = select.select([fileno], [], [], 5.0)
             if not ready:
-                _log_mcp_debug(
-                    f"waiting-for-body received={len(body)} expected={content_length}"
-                )
+                _log_mcp_debug(f"waiting-for-body received={len(body)} expected={content_length}")
                 continue
         chunk = stream.read(content_length - len(body))
         if not chunk:
-            _log_mcp_debug(
-                f"eof-during-body received={len(body)} expected={content_length}"
-            )
+            _log_mcp_debug(f"eof-during-body received={len(body)} expected={content_length}")
             raise ValueError("Incomplete JSON-RPC message body.")
         body.extend(chunk)
     _log_mcp_debug(f"body-bytes {content_length}")

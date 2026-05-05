@@ -344,7 +344,10 @@ def test_handle_mcp_message_lists_resources_and_templates(tmp_path: Path) -> Non
     resource_templates = cast(list[dict[str, Any]], templates_result["resourceTemplates"])
     assert any(item["uri"] == "repo-rag://overview" for item in resources)
     assert any(item["uri"] == "repo-rag://startup-context" for item in resources)
-    assert any(item["uriTemplate"] == "repo-rag://search{?question,top_k,retrieval_mode}" for item in resource_templates)
+    assert any(
+        item["uriTemplate"] == "repo-rag://search{?question,top_k,retrieval_mode}"
+        for item in resource_templates
+    )
 
 
 def test_handle_mcp_message_reads_overview_resource(
@@ -430,7 +433,10 @@ def test_handle_mcp_message_reads_startup_context_resource(
     assert payload["command"] == "startup-context-resource"
     assert payload["retrieval_mode"] == "hybrid-vector"
     assert payload["sources"] == ["README.md"]
-    assert "repo-rag://search?question=transmutation+preview+flow&top_k=4" in payload["examples"]["search"]
+    assert (
+        "repo-rag://search?question=transmutation+preview+flow&top_k=4"
+        in payload["examples"]["search"]
+    )
 
 
 def test_handle_mcp_message_reads_search_resource(
@@ -470,9 +476,7 @@ def test_handle_mcp_message_reads_search_resource(
             "jsonrpc": "2.0",
             "id": 23,
             "method": "resources/read",
-            "params": {
-                "uri": "repo-rag://search?question=Where+should+I+start%3F&top_k=3"
-            },
+            "params": {"uri": "repo-rag://search?question=Where+should+I+start%3F&top_k=3"},
         },
         server_root=tmp_path,
     )

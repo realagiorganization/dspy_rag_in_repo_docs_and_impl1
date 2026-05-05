@@ -472,9 +472,7 @@ def run_trainer_k8s_manifest_generation(
     minimum_source_recall: float | None = DEFAULT_TRAINER_K8S_MINIMUM_SOURCE_RECALL,
     minimum_bundle_pass_rate: float | None = DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE,
     recompile_run_name: str | None = DEFAULT_TRAINER_K8S_RECOMPILE_RUN_NAME,
-    min_new_candidates_for_recompile: int = (
-        DEFAULT_TRAINER_K8S_MIN_NEW_CANDIDATES_FOR_RECOMPILE
-    ),
+    min_new_candidates_for_recompile: int = (DEFAULT_TRAINER_K8S_MIN_NEW_CANDIDATES_FOR_RECOMPILE),
     recompile_base_training_path: Path = DEFAULT_TRAINING_PATH,
 ) -> str:
     """Materialize Kubernetes manifests for trainer-service and trainer-cycle roles."""
@@ -1419,7 +1417,9 @@ def run_trainer_cycle(
                     "type": type(exc).__name__,
                     "message": str(exc),
                 }
-                cycle_warnings.append("Trainer-side bundle recompilation failed during trainer cycle.")
+                cycle_warnings.append(
+                    "Trainer-side bundle recompilation failed during trainer cycle."
+                )
 
     effective_publish_run_name = run_name
     if effective_publish_run_name is None and isinstance(recompile_payload, Mapping):

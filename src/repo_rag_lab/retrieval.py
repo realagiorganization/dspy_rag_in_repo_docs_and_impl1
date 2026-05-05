@@ -194,7 +194,9 @@ def retrieve_with_metadata(
         chunk_records=[
             (_semantic_source_key(chunk.source, root=root), chunk.text) for chunk in eligible_chunks
         ],
-        max_candidates=max(top_k, profile.rerank_candidate_pool_size * _SEMANTIC_CANDIDATE_MULTIPLIER),
+        max_candidates=max(
+            top_k, profile.rerank_candidate_pool_size * _SEMANTIC_CANDIDATE_MULTIPLIER
+        ),
     )
     if not semantic_rankings:
         fallback_ranked = lexical_ranked
@@ -303,8 +305,7 @@ def _hybrid_ranked_chunks(
 ) -> list[Chunk]:
     lexical_pool = lexical_ranked[: max(top_k, candidate_pool_size)]
     semantic_pool = [
-        semantic_chunks[index]
-        for index, _ in semantic_rankings[: max(top_k, candidate_pool_size)]
+        semantic_chunks[index] for index, _ in semantic_rankings[: max(top_k, candidate_pool_size)]
     ]
     lexical_positions = {chunk: position for position, chunk in enumerate(lexical_pool, start=1)}
     semantic_positions = {chunk: position for position, chunk in enumerate(semantic_pool, start=1)}
@@ -325,12 +326,16 @@ def _hybrid_ranked_chunks(
     return sorted(
         candidates,
         key=lambda chunk: (
-            (_rrf(lexical_positions[chunk], weight=_HYBRID_LEXICAL_WEIGHT)
-            if chunk in lexical_positions
-            else 0.0)
-            + (_rrf(semantic_positions[chunk], weight=_HYBRID_SEMANTIC_WEIGHT)
-            if chunk in semantic_positions
-            else 0.0)
+            (
+                _rrf(lexical_positions[chunk], weight=_HYBRID_LEXICAL_WEIGHT)
+                if chunk in lexical_positions
+                else 0.0
+            )
+            + (
+                _rrf(semantic_positions[chunk], weight=_HYBRID_SEMANTIC_WEIGHT)
+                if chunk in semantic_positions
+                else 0.0
+            )
             + (semantic_scores.get(chunk, 0.0) * 0.05)
         ),
         reverse=True,

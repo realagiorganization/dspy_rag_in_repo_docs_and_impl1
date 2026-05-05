@@ -252,17 +252,11 @@ def _result_from_payload(payload: dict[str, object]) -> CodexMediationResult | N
             dspy_status=str(payload.get("dspy_status") or "disabled"),
             summary=str(payload.get("summary") or ""),
             retrieval_mode=str(payload.get("retrieval_mode") or "lexical"),
-            sources=[
-                str(item).strip()
-                for item in payload.get("sources", [])
-                if str(item).strip()
-            ]
+            sources=[str(item).strip() for item in payload.get("sources", []) if str(item).strip()]
             if isinstance(payload.get("sources"), list)
             else [],
             warnings=[
-                str(item).strip()
-                for item in payload.get("warnings", [])
-                if str(item).strip()
+                str(item).strip() for item in payload.get("warnings", []) if str(item).strip()
             ]
             if isinstance(payload.get("warnings"), list)
             else [],
@@ -395,9 +389,9 @@ def _resolve_program_path_and_bundle_version(
         program_path_text = remote_bundle.get("program_path")
         if isinstance(program_path_text, str) and program_path_text.strip():
             program_path = (bundle_root / program_path_text).resolve()
-            resolved_version = str(
-                remote_bundle.get("bundle_version") or bundle_version or ""
-            ).strip() or None
+            resolved_version = (
+                str(remote_bundle.get("bundle_version") or bundle_version or "").strip() or None
+            )
             return program_path, resolved_version
     if bundle_version is not None:
         try:
@@ -408,9 +402,7 @@ def _resolve_program_path_and_bundle_version(
         except ValueError:
             local_bundle = None
         local_program_path_text = (
-            local_bundle.get("program_path")
-            if isinstance(local_bundle, dict)
-            else None
+            local_bundle.get("program_path") if isinstance(local_bundle, dict) else None
         )
         if isinstance(local_program_path_text, str) and local_program_path_text.strip():
             local_program_path = (bundle_root / local_program_path_text).resolve()
@@ -426,9 +418,9 @@ def _resolve_program_path_and_bundle_version(
         if isinstance(local_program_path_text, str) and local_program_path_text.strip():
             local_program_path = (bundle_root / local_program_path_text).resolve()
             if local_program_path.is_file():
-                resolved_version = str(
-                    channel_state.get("current_bundle_version") or ""
-                ).strip() or None
+                resolved_version = (
+                    str(channel_state.get("current_bundle_version") or "").strip() or None
+                )
                 return local_program_path, resolved_version
     runner = RepositoryRAG(repository_root, top_k=4)
     local_program_path = runner.program_path
@@ -584,7 +576,9 @@ def build_codex_mediation(
         )
         injected = bool(developer_message)
     else:
-        warnings.append("Mediation block was suppressed because the repo-grounded signal was too weak.")
+        warnings.append(
+            "Mediation block was suppressed because the repo-grounded signal was too weak."
+        )
 
     return CodexMediationResult(
         question=question,
@@ -787,9 +781,7 @@ class _CodexProxyRuntime:
         self.corpus_manifest_path = self.cache_dir / "retrieval-corpus-manifest.json"
         self.corpus_manifest = build_corpus_manifest(self.config.repository_root)
         write_corpus_manifest(self.corpus_manifest_path, self.corpus_manifest)
-        self.corpus_fingerprint = str(
-            self.corpus_manifest.get("corpus_fingerprint") or ""
-        ).strip()
+        self.corpus_fingerprint = str(self.corpus_manifest.get("corpus_fingerprint") or "").strip()
         self.retrieval_profile_fingerprint = self._compute_retrieval_profile_fingerprint()
 
     def _compute_retrieval_profile_fingerprint(self) -> str:

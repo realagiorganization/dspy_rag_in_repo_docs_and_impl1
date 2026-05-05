@@ -405,7 +405,9 @@ def test_materialize_training_candidates_tracks_context_groups_but_materializes_
     assert summary["context_group_count"] == 2
     assert summary["new_context_group_count"] == 2
 
-    materialized = load_training_examples(tmp_path / "artifacts" / "trainer" / "training-candidates.yaml")
+    materialized = load_training_examples(
+        tmp_path / "artifacts" / "trainer" / "training-candidates.yaml"
+    )
     assert len(materialized) == 1
     assert "core gameplay loop" in materialized[0].expected_answer
 

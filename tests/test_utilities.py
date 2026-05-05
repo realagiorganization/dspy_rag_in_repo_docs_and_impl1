@@ -1317,9 +1317,7 @@ def test_run_trainer_cycle_does_not_fail_promotion_without_new_bundle_candidate(
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.check_retrieval_quality_thresholds",
-        lambda summary, minimum_pass_rate=None, minimum_source_recall=None: [
-            "below-threshold"
-        ],
+        lambda summary, minimum_pass_rate=None, minimum_source_recall=None: ["below-threshold"],
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.materialize_training_candidates",
@@ -1369,7 +1367,9 @@ def test_run_trainer_cycle_does_not_fail_promotion_without_new_bundle_candidate(
     assert payload["promotion_requested"] is False
     assert payload["promotion_status"] == "not-requested"
     assert payload["bundle_gate"]["status"] == "not-requested"
-    assert not any("Promotion to `stable` was blocked" in warning for warning in payload["warnings"])
+    assert not any(
+        "Promotion to `stable` was blocked" in warning for warning in payload["warnings"]
+    )
 
 
 def test_run_trainer_cycle_skips_recompile_below_new_candidate_threshold(

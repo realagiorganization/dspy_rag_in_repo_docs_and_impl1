@@ -834,15 +834,9 @@ def main() -> int:
             essentials_count=args.essentials_count,
             low_signal_min_sources=args.low_signal_min_sources,
             retrieval_mode=getattr(args, "retrieval_mode", None),
-            cache_dir=(
-                Path(args.cache_dir).expanduser().resolve() if args.cache_dir else None
-            ),
+            cache_dir=(Path(args.cache_dir).expanduser().resolve() if args.cache_dir else None),
             cache_ttl_seconds=args.cache_ttl_seconds,
-            ready_file=(
-                Path(args.ready_file).expanduser().resolve()
-                if args.ready_file
-                else None
-            ),
+            ready_file=(Path(args.ready_file).expanduser().resolve() if args.ready_file else None),
         )
 
     if args.command == "azure-manifest":

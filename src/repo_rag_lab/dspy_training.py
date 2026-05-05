@@ -556,9 +556,7 @@ def retrieve_repository_context(
     return context, context_sources
 
 
-def _format_generation_context(
-    context: Sequence[str], context_sources: Sequence[str]
-) -> list[str]:
+def _format_generation_context(context: Sequence[str], context_sources: Sequence[str]) -> list[str]:
     """Attach source paths to DSPy generation context so file/path answers stay grounded."""
 
     formatted: list[str] = []
@@ -572,7 +570,9 @@ def _format_generation_context(
         elif normalized_text:
             formatted.append(normalized_text)
     if len(context) > len(formatted):
-        formatted.extend(str(text).strip() for text in context[len(formatted) :] if str(text).strip())
+        formatted.extend(
+            str(text).strip() for text in context[len(formatted) :] if str(text).strip()
+        )
     return formatted
 
 

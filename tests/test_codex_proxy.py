@@ -217,7 +217,9 @@ def test_resolve_program_path_and_bundle_version_uses_local_bundle_root_without_
     program_path = program_dir / "program.json"
     program_path.write_text('{"program":"demo"}\n', encoding="utf-8")
 
-    monkeypatch.setattr("repo_rag_lab.codex_proxy.fetch_remote_bundle", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.fetch_remote_bundle", lambda *args, **kwargs: None
+    )
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy.inspect_bundle_channel",
         lambda root, channel: {

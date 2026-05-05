@@ -56,7 +56,7 @@ def rank_semantic_chunks(
         reverse=True,
     )
     if max_candidates is not None:
-        ranked = ranked[:max(1, max_candidates)]
+        ranked = ranked[: max(1, max_candidates)]
     return ranked, []
 
 
@@ -208,4 +208,6 @@ def _normalize_vector(vector: Sequence[float]) -> list[float]:
 def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
     if len(left) != len(right):
         raise RuntimeError("Semantic retrieval vectors must share one common dimensionality.")
-    return sum(left_value * right_value for left_value, right_value in zip(left, right, strict=True))
+    return sum(
+        left_value * right_value for left_value, right_value in zip(left, right, strict=True)
+    )

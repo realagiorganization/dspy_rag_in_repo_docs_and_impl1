@@ -326,11 +326,7 @@ def _trace_context_snapshot(
 
     observed_sources = _normalized_source_tokens(
         [
-            *(
-                str(source).strip()
-                for source in payload.get("sources", [])
-                if str(source).strip()
-            ),
+            *(str(source).strip() for source in payload.get("sources", []) if str(source).strip()),
             *(
                 str(source).strip()
                 for source in trace_mapping.get("sources", [])
@@ -342,15 +338,9 @@ def _trace_context_snapshot(
     mode = str(trace_mapping.get("mode") or "").strip()
     context_field = str(trace_mapping.get("context_field") or "").strip()
     evidence_rows = [
-        row
-        for row in payload.get("retrieved_context", [])
-        if isinstance(row, Mapping)
+        row for row in payload.get("retrieved_context", []) if isinstance(row, Mapping)
     ]
-    evidence_rows.extend(
-        row
-        for row in payload.get("context", [])
-        if isinstance(row, Mapping)
-    )
+    evidence_rows.extend(row for row in payload.get("context", []) if isinstance(row, Mapping))
     evidence_fingerprints = _normalized_source_tokens(
         [
             *_evidence_fingerprint_tokens_from_rows(evidence_rows),
@@ -366,7 +356,9 @@ def _trace_context_snapshot(
     top_k_raw = trace_mapping.get("top_k")
     top_k = int(top_k_raw) if isinstance(top_k_raw, int) else None
     return {
-        "question": _normalize_question_text(payload.get("question") or trace_mapping.get("question")),
+        "question": _normalize_question_text(
+            payload.get("question") or trace_mapping.get("question")
+        ),
         "retrieval_mode": retrieval_mode,
         "mode": mode,
         "context_field": context_field,
@@ -440,13 +432,17 @@ def _trace_quality_score(
     return round(score, 6)
 
 
-def _context_similarity(candidate_snapshot: Mapping[str, Any], group_payload: Mapping[str, Any]) -> float:
+def _context_similarity(
+    candidate_snapshot: Mapping[str, Any], group_payload: Mapping[str, Any]
+) -> float:
     """Return a soft similarity score between one trace snapshot and one stored context group."""
 
     candidate_sources = _normalized_source_tokens(candidate_snapshot.get("sources", []))
     group_sources = _normalized_source_tokens(group_payload.get("sources", []))
     source_overlap = _jaccard_similarity(candidate_sources, group_sources)
-    candidate_evidence = _normalized_source_tokens(candidate_snapshot.get("evidence_fingerprints", []))
+    candidate_evidence = _normalized_source_tokens(
+        candidate_snapshot.get("evidence_fingerprints", [])
+    )
     group_evidence = _normalized_source_tokens(group_payload.get("evidence_fingerprints", []))
     evidence_overlap = _jaccard_similarity(candidate_evidence, group_evidence)
     retrieval_mode_score = _string_match_similarity(
@@ -485,7 +481,9 @@ def _context_similarity(candidate_snapshot: Mapping[str, Any], group_payload: Ma
     )
 
 
-def _matches_context_group(candidate_snapshot: Mapping[str, Any], group_payload: Mapping[str, Any]) -> bool:
+def _matches_context_group(
+    candidate_snapshot: Mapping[str, Any], group_payload: Mapping[str, Any]
+) -> bool:
     """Return whether a trace snapshot should join an existing context group."""
 
     similarity = _context_similarity(candidate_snapshot, group_payload)
@@ -497,7 +495,9 @@ def _matches_context_group(candidate_snapshot: Mapping[str, Any], group_payload:
         _normalized_source_tokens(candidate_snapshot.get("sources", [])),
         _normalized_source_tokens(group_payload.get("sources", [])),
     )
-    candidate_evidence = _normalized_source_tokens(candidate_snapshot.get("evidence_fingerprints", []))
+    candidate_evidence = _normalized_source_tokens(
+        candidate_snapshot.get("evidence_fingerprints", [])
+    )
     group_evidence = _normalized_source_tokens(group_payload.get("evidence_fingerprints", []))
     if candidate_evidence and group_evidence:
         evidence_overlap = _jaccard_similarity(candidate_evidence, group_evidence)
@@ -549,7 +549,9 @@ def _load_champion_index(path: Path) -> dict[str, Any]:
     return payload
 
 
-def _seed_champion_index_from_existing_records(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+def _seed_champion_index_from_existing_records(
+    records: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
     """Build a first champion index from legacy materialized candidate rows."""
 
     index_payload = _fresh_champion_index()
@@ -788,7 +790,9 @@ def _find_or_create_context_group(
     for group in groups:
         if isinstance(group, dict) and _matches_context_group(context_snapshot, group):
             return group, False
-    context_group_id = f"cg-{_stable_hash(prompt_family_id, question, context_snapshot, exact_snapshot_id)}"
+    context_group_id = (
+        f"cg-{_stable_hash(prompt_family_id, question, context_snapshot, exact_snapshot_id)}"
+    )
     group_payload = {
         "context_group_id": context_group_id,
         "sources": list(context_snapshot.get("sources", [])),
@@ -870,9 +874,7 @@ def _normalize_materialized_candidate_record(record: Mapping[str, Any]) -> dict[
     tags = _dedupe_tags(record.get("tags", []))
     tag_set = {tag.casefold() for tag in tags}
     expected_sources = [
-        str(source).strip()
-        for source in record.get("expected_sources", [])
-        if str(source).strip()
+        str(source).strip() for source in record.get("expected_sources", []) if str(source).strip()
     ]
     if "trainer-candidate" in tag_set:
         # Imported worker traces are global candidates, not repo-local retrieval benchmarks.
@@ -1178,7 +1180,9 @@ def materialize_training_candidates(
         replace_group_champion = False
         if not isinstance(current_group_record, Mapping):
             replace_group_champion = True
-        elif _candidate_record_key(current_group_record) == _candidate_record_key(serialized_record):
+        elif _candidate_record_key(current_group_record) == _candidate_record_key(
+            serialized_record
+        ):
             current_group_record = dict(current_group_record)
             current_group_record["support_count"] = candidate_support
             context_group["champion_record"] = current_group_record
@@ -1211,7 +1215,11 @@ def materialize_training_candidates(
         )
         if previous_family_record is None and current_family_record is not None:
             new_candidate_count += 1
-        elif previous_family_key is not None and current_family_key is not None and previous_family_key != current_family_key:
+        elif (
+            previous_family_key is not None
+            and current_family_key is not None
+            and previous_family_key != current_family_key
+        ):
             new_candidate_count += 1
             replaced_count += 1
         elif family_changed and current_family_record is not None and previous_family_key is None:
