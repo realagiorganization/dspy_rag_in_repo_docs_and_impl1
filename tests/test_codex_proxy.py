@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+from collections.abc import Mapping
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from types import SimpleNamespace
@@ -19,6 +20,11 @@ from repo_rag_lab.codex_proxy import (
     running_codex_proxy,
 )
 from repo_rag_lab.retrieval import Chunk
+
+
+def _payload_mapping(value: object) -> Mapping[str, object]:
+    assert isinstance(value, dict)
+    return value
 
 
 def test_extract_codex_task_text_prefers_latest_user_message() -> None:
@@ -47,7 +53,7 @@ def test_extract_codex_task_text_prefers_latest_user_message() -> None:
         ]
     }
 
-    assert extract_codex_task_text(payload) == "second task"
+    assert extract_codex_task_text(_payload_mapping(payload)) == "second task"
 
 
 def test_augment_responses_payload_inserts_developer_message_after_existing_developers() -> None:
@@ -67,7 +73,7 @@ def test_augment_responses_payload_inserts_developer_message_after_existing_deve
     }
 
     updated = augment_responses_payload(
-        payload,
+        _payload_mapping(payload),
         developer_message="repo-rag mediation",
     )
 

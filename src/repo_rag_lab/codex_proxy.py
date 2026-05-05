@@ -7,7 +7,7 @@ import json
 import os
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from http import HTTPStatus
@@ -245,6 +245,45 @@ def _build_budgeted_message(
 
 def _result_from_payload(payload: dict[str, object]) -> CodexMediationResult | None:
     try:
+        raw_sources = payload.get("sources")
+        sources = (
+            [str(item).strip() for item in raw_sources if str(item).strip()]
+            if isinstance(raw_sources, list)
+            else []
+        )
+        raw_warnings = payload.get("warnings")
+        warnings = (
+            [str(item).strip() for item in raw_warnings if str(item).strip()]
+            if isinstance(raw_warnings, list)
+            else []
+        )
+        raw_evidence_previews = payload.get("evidence_previews")
+        evidence_previews = (
+            [
+                {
+                    "source": str(item.get("source") or ""),
+                    "text": str(item.get("text") or ""),
+                }
+                for item in raw_evidence_previews
+                if isinstance(item, dict)
+                and str(item.get("source") or "").strip()
+                and str(item.get("text") or "").strip()
+            ]
+            if isinstance(raw_evidence_previews, list)
+            else []
+        )
+        raw_budget_tokens = payload.get("budget_tokens")
+        budget_tokens = (
+            int(raw_budget_tokens)
+            if isinstance(raw_budget_tokens, (bool, int, float, str))
+            else _DEFAULT_TOKEN_BUDGET
+        )
+        raw_estimated_tokens = payload.get("estimated_tokens")
+        estimated_tokens = (
+            int(raw_estimated_tokens)
+            if isinstance(raw_estimated_tokens, (bool, int, float, str))
+            else 0
+        )
         return CodexMediationResult(
             question=str(payload.get("question") or ""),
             mediation_mode=str(payload.get("mediation_mode") or "heuristic"),
@@ -252,14 +291,8 @@ def _result_from_payload(payload: dict[str, object]) -> CodexMediationResult | N
             dspy_status=str(payload.get("dspy_status") or "disabled"),
             summary=str(payload.get("summary") or ""),
             retrieval_mode=str(payload.get("retrieval_mode") or "lexical"),
-            sources=[str(item).strip() for item in payload.get("sources", []) if str(item).strip()]
-            if isinstance(payload.get("sources"), list)
-            else [],
-            warnings=[
-                str(item).strip() for item in payload.get("warnings", []) if str(item).strip()
-            ]
-            if isinstance(payload.get("warnings"), list)
-            else [],
+            sources=sources,
+            warnings=warnings,
             bundle_version=(
                 str(payload.get("bundle_version")).strip()
                 if payload.get("bundle_version") is not None
@@ -272,22 +305,11 @@ def _result_from_payload(payload: dict[str, object]) -> CodexMediationResult | N
                 else None
             )
             or None,
-            evidence_previews=[
-                {
-                    "source": str(item.get("source") or ""),
-                    "text": str(item.get("text") or ""),
-                }
-                for item in payload.get("evidence_previews", [])
-                if isinstance(item, dict)
-                and str(item.get("source") or "").strip()
-                and str(item.get("text") or "").strip()
-            ]
-            if isinstance(payload.get("evidence_previews"), list)
-            else [],
+            evidence_previews=evidence_previews,
             developer_message=str(payload.get("developer_message") or ""),
             task_classification=str(payload.get("task_classification") or "deep"),
-            budget_tokens=int(payload.get("budget_tokens") or _DEFAULT_TOKEN_BUDGET),
-            estimated_tokens=int(payload.get("estimated_tokens") or 0),
+            budget_tokens=budget_tokens,
+            estimated_tokens=estimated_tokens,
             injected=bool(payload.get("injected", True)),
             cache_hit=bool(payload.get("cache_hit", False)),
         )
@@ -309,7 +331,7 @@ def _extract_text_from_content(content: object) -> str:
     return "\n".join(parts).strip()
 
 
-def extract_codex_task_text(payload: dict[str, object]) -> str:
+def extract_codex_task_text(payload: Mapping[str, object]) -> str:
     """Extract the latest user-facing task text from one Responses payload."""
 
     raw_input = payload.get("input")
@@ -423,10 +445,10 @@ def _resolve_program_path_and_bundle_version(
                 )
                 return local_program_path, resolved_version
     runner = RepositoryRAG(repository_root, top_k=4)
-    local_program_path = runner.program_path
-    if local_program_path is None:
+    runner_program_path: Path | None = runner.program_path
+    if runner_program_path is None:
         return None, None
-    return local_program_path, resolve_bundle_version_for_program(bundle_root, local_program_path)
+    return runner_program_path, resolve_bundle_version_for_program(bundle_root, runner_program_path)
 
 
 def build_codex_mediation(
@@ -601,7 +623,7 @@ def build_codex_mediation(
 
 
 def augment_responses_payload(
-    payload: dict[str, object],
+    payload: Mapping[str, object],
     *,
     developer_message: str,
 ) -> dict[str, object]:
@@ -910,10 +932,11 @@ def running_codex_proxy(config: CodexProxyConfig) -> Iterator[RunningCodexProxy]
     thread.start()
     try:
         host, port = server.server_address[:2]
+        host_text = host.decode("utf-8", errors="ignore") if isinstance(host, bytes) else str(host)
         yield RunningCodexProxy(
             server=server,
             thread=thread,
-            base_url=f"http://{host}:{port}/openai",
+            base_url=f"http://{host_text}:{port}/openai",
             status_path=runtime.status_path,
         )
     finally:

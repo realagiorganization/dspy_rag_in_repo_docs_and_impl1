@@ -410,7 +410,10 @@ def test_drain_trace_queue_skips_stale_failed_blob_messages(
     assert drained["failed_count"] == 0
     assert drained["skipped_count"] == 1
     assert drained["status"] == "success"
-    assert drained["skipped_items"][0]["skip_reason"] == "stale-failed-blob"
+    skipped_items = drained["skipped_items"]
+    assert isinstance(skipped_items, list)
+    assert isinstance(skipped_items[0], dict)
+    assert skipped_items[0]["skip_reason"] == "stale-failed-blob"
     assert store.deleted_messages == ["msg-stale"]
 
 
@@ -466,7 +469,10 @@ def test_drain_trace_queue_skips_stale_missing_queued_blob_messages(
     assert drained["failed_count"] == 0
     assert drained["skipped_count"] == 1
     assert drained["status"] == "success"
-    assert drained["skipped_items"][0]["skip_reason"] == "stale-queue-blob"
+    skipped_items = drained["skipped_items"]
+    assert isinstance(skipped_items, list)
+    assert isinstance(skipped_items[0], dict)
+    assert skipped_items[0]["skip_reason"] == "stale-queue-blob"
     assert store.deleted_messages == ["msg-stale-queued"]
 
 

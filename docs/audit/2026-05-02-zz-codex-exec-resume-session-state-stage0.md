@@ -228,6 +228,57 @@ session subtree was being deleted upstream before the execution workflow began.
 - `cargo build --manifest-path rust-cli/Cargo.toml`
   - `pass`
 
+## 2026-05-05 Follow-up: mypy parity repair after CI advanced past Ruff and Pages
+
+### What failed remotely
+
+- After `454a304` repaired the accumulated `ruff` and Pages strict-mode breakage, the next
+  `CI` run advanced to `Run mypy` and failed there instead.
+- The failure was not a single new MCP bug. It was a mixed type-contract backlog spread across:
+  - repo-RAG wrapper surfaces
+  - MCP payload assembly
+  - Codex proxy payload parsing
+  - trainer-cycle helper coercions
+  - a small set of tests that were relying on broader `dict[str, object]` assumptions than mypy
+    would accept.
+
+### What changed locally
+
+- Narrowed public wrapper signatures so repo-local `RetrievalMode` / live-provider literals line
+  up with the workflow layer instead of widening back to plain `str`.
+- Repaired JSON/payload typing at the MCP and Codex proxy boundaries:
+  - explicit `dict[str, object]` annotations where mutable payloads are intentionally widened
+  - safer list extraction before iterating over `payload.get(...)`
+  - safer integer coercion for trainer/MCP helper fields
+  - `Mapping[str, object]` for read-only Responses payload inputs
+- Fixed a few mypy-only shadowing/redefinition issues uncovered by the stricter pass:
+  - embedded trace snapshot naming in `runtime_artifacts.py`
+  - final recompile-status naming in `utilities.py`
+  - runner-program path naming in `codex_proxy.py`
+- Tightened the affected tests with explicit `dict`/`list` assertions and narrow casts where the
+  runtime contract is intentionally dynamic.
+
+### Verification executed in this turn
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run mypy src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run ruff check src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run ruff format --check src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py tests/test_mcp_server.py tests/test_mcp_stdio.py tests/test_codex_proxy.py tests/test_retrieval.py tests/test_runtime_artifacts_azure.py tests/test_training_samples.py tests/test_dspy_training.py -q`
+  - `pass` (`134 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache make pages-build`
+  - `pass`
+- `make verify-surfaces`
+  - `pass`
+
 ## 2026-05-05 Follow-up: CI parity repair after MCP transport debug push
 
 ### What failed remotely

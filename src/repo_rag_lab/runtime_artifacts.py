@@ -1165,14 +1165,14 @@ def normalize_trace_record_payload(payload: Mapping[str, object]) -> dict[str, o
     embedded_trace = _mapping_or_none(payload.get("trace"))
     if embedded_trace is not None:
         outcome_payload = _mapping_or_none(payload.get("outcome"))
-        snapshot = _trace_record_snapshot(payload)
+        embedded_snapshot: dict[str, object] = _trace_record_snapshot(payload)
         return {
             "source_command": _string_or_none(payload.get("command")) or "unknown-command",
             "source_command_status": _string_or_none(payload.get("command_status")) or "success",
             "source_root": _string_or_none(payload.get("root")),
-            "snapshot": snapshot,
+            "snapshot": embedded_snapshot,
             "trace": _normalize_runtime_trace(
-                _backfill_runtime_trace_evidence(embedded_trace, snapshot)
+                _backfill_runtime_trace_evidence(embedded_trace, embedded_snapshot)
             ),
             "outcome": _normalize_outcome_payload(outcome_payload)
             if outcome_payload is not None

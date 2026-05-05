@@ -35,6 +35,28 @@ CONTEXT_GROUP_SOFT_THRESHOLD = 0.6
 CHAMPION_REPLACEMENT_DELTA = 0.05
 
 
+def _coerce_int(value: object) -> int | None:
+    """Return one best-effort integer conversion for optional scalar values."""
+
+    if value in (None, ""):
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            return int(stripped)
+        except ValueError:
+            return None
+    return None
+
+
 def normalize_training_examples(records: list[dict[str, Any]]) -> list[TrainingExample]:
     """
     Normalize raw YAML records into immutable training examples.
@@ -297,14 +319,8 @@ def _string_match_similarity(left: object, right: object) -> float:
 def _count_similarity(left: object, right: object) -> float:
     """Return a bounded similarity score for two optional integer-like values."""
 
-    try:
-        left_value = int(left) if left not in (None, "") else None
-    except (TypeError, ValueError):
-        left_value = None
-    try:
-        right_value = int(right) if right not in (None, "") else None
-    except (TypeError, ValueError):
-        right_value = None
+    left_value = _coerce_int(left)
+    right_value = _coerce_int(right)
     if left_value is None and right_value is None:
         return 1.0
     if left_value is None or right_value is None:
@@ -800,7 +816,7 @@ def _find_or_create_context_group(
     context_group_id = (
         f"cg-{_stable_hash(prompt_family_id, question, context_snapshot, exact_snapshot_id)}"
     )
-    group_payload = {
+    group_payload: dict[str, Any] = {
         "context_group_id": context_group_id,
         "sources": list(context_snapshot.get("sources", [])),
         "evidence_fingerprints": list(context_snapshot.get("evidence_fingerprints", [])),
@@ -959,11 +975,7 @@ def _training_candidate_from_trace_record(
         execution_status=str(outcome_mapping.get("execution_status") or ""),
         used_baseline_fallback=bool(outcome_mapping.get("used_baseline_fallback")),
         source_count=int(context_snapshot.get("source_count") or 0),
-        top_k=(
-            int(context_snapshot.get("top_k"))
-            if isinstance(context_snapshot.get("top_k"), int)
-            else None
-        ),
+        top_k=_coerce_int(context_snapshot.get("top_k")),
         program_loaded=bool(context_snapshot.get("program_loaded")),
     )
     tags = _dedupe_tags(

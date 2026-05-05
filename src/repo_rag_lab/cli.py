@@ -689,6 +689,12 @@ def main() -> int:
                         runner.program_path,
                     )
                     overlay_path = getattr(args, "overlay_path", None)
+                    retrieved_context = result.get("retrieved_context")
+                    evidence_items = (
+                        [item for item in retrieved_context if isinstance(item, dict)]
+                        if isinstance(retrieved_context, list)
+                        else []
+                    )
                     result["bundle_version"] = bundle_version
                     result["overlay_path"] = overlay_path
                     result["trace"] = build_runtime_trace(
@@ -706,11 +712,7 @@ def main() -> int:
                             mcp_candidate_count=0,
                             answer_length=len(str(result.get("answer") or "")),
                             context_field="retrieved_context",
-                            evidence_items=[
-                                item
-                                for item in result.get("retrieved_context", [])
-                                if isinstance(item, dict)
-                            ],
+                            evidence_items=evidence_items,
                         )
                     )
                     _print_json(_command_payload("ask", root=root, result=result))
@@ -728,6 +730,12 @@ def main() -> int:
                 result["top_k"] = 4
                 bundle_version = getattr(args, "bundle_version", None)
                 overlay_path = getattr(args, "overlay_path", None)
+                context_items = result.get("context")
+                evidence_items = (
+                    [item for item in context_items if isinstance(item, dict)]
+                    if isinstance(context_items, list)
+                    else []
+                )
                 result["bundle_version"] = bundle_version
                 result["overlay_path"] = overlay_path
                 result["trace"] = build_runtime_trace(
@@ -743,9 +751,7 @@ def main() -> int:
                         mcp_candidate_count=_list_length_field(result, "mcp_candidates"),
                         answer_length=len(str(result.get("answer") or "")),
                         context_field="context",
-                        evidence_items=[
-                            item for item in result.get("context", []) if isinstance(item, dict)
-                        ],
+                        evidence_items=evidence_items,
                     )
                 )
                 _print_json(_command_payload("ask", root=root, result=result))
@@ -775,6 +781,12 @@ def main() -> int:
                 result["load_env_file"] = args.load_env_file
                 bundle_version = getattr(args, "bundle_version", None)
                 overlay_path = getattr(args, "overlay_path", None)
+                context_items = result.get("context")
+                evidence_items = (
+                    [item for item in context_items if isinstance(item, dict)]
+                    if isinstance(context_items, list)
+                    else []
+                )
                 result["bundle_version"] = bundle_version
                 result["overlay_path"] = overlay_path
                 result["trace"] = build_runtime_trace(
@@ -791,9 +803,7 @@ def main() -> int:
                         mcp_candidate_count=_list_length_field(result, "mcp_candidates"),
                         answer_length=len(str(result.get("answer") or "")),
                         context_field="context",
-                        evidence_items=[
-                            item for item in result.get("context", []) if isinstance(item, dict)
-                        ],
+                        evidence_items=evidence_items,
                     )
                 )
                 _print_json(_command_payload("ask-live", root=root, result=result))

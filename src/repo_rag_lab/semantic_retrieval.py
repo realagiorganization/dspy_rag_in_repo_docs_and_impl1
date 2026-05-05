@@ -82,7 +82,7 @@ def _load_or_build_document_vectors(
         text_sha256 = hashlib.sha256(text.encode("utf-8")).hexdigest()
         record_key = _record_key(source, text_sha256)
         vector = existing_vectors.get(record_key)
-        current_record = {
+        current_record: dict[str, object] = {
             "source": source,
             "text_sha256": text_sha256,
             "vector": None,

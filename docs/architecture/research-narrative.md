@@ -543,8 +543,9 @@ The narrative is coherent, but not complete. The main open tensions are:
 - deployment handoff is documented, but live remote deployment is intentionally outside repo scope
 - verification evidence is strong, but the index docs must be kept synchronized so the narrative
   does not drift behind the latest audit and CI state; the current CI contract is stricter than
-  the local MCP/debug loop alone and now explicitly depends on `uv run ruff check src tests` plus
-  `make pages-build` staying green after each repo-sync or audit-surface change
+  the local MCP/debug loop alone and now explicitly depends on `uv run mypy src tests`,
+  `uv run ruff check src tests`, and `make pages-build` staying green after each repo-sync or
+  audit-surface change
 
 ## Maintenance Contract
 

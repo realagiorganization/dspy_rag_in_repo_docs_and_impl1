@@ -14,13 +14,15 @@ from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import TYPE_CHECKING, BinaryIO
+from typing import TYPE_CHECKING, BinaryIO, Literal, cast
 from urllib.parse import parse_qs, urlsplit
 
 if TYPE_CHECKING:
     from .mcp import MCPServerCandidate
     from .retrieval_profile import RetrievalProfile
     from .workflow import Chunk, RAGAnswer
+
+RetrievalMode = Literal["lexical", "idf-rerank", "vector", "hybrid-vector"]
 
 MCP_PROTOCOL_VERSION = "2024-11-05"
 MCP_SERVER_NAME = "repo-rag-mcp"
@@ -143,7 +145,7 @@ def collect_repository_context(
     question: str,
     root: Path,
     top_k: int = 4,
-    retrieval_mode: str | None = None,
+    retrieval_mode: RetrievalMode | None = None,
     profile: RetrievalProfile | None = None,
 ) -> list[Chunk]:
     from .workflow import collect_repository_context
@@ -157,7 +159,7 @@ def collect_repository_context(
     )
 
 
-def serialize_chunk(chunk: object, *, root: Path) -> dict[str, object]:
+def serialize_chunk(chunk: Chunk, *, root: Path) -> dict[str, str]:
     from .workflow import serialize_chunk
 
     return serialize_chunk(chunk, root=root)
@@ -169,7 +171,12 @@ def discover_mcp_servers(root: Path) -> list[MCPServerCandidate]:
     return _discover_mcp_servers(root)
 
 
-def ask_repository(*, question: str, root: Path, retrieval_mode: str | None = None) -> RAGAnswer:
+def ask_repository(
+    *,
+    question: str,
+    root: Path,
+    retrieval_mode: RetrievalMode | None = None,
+) -> RAGAnswer:
     from .workflow import ask_repository
 
     return ask_repository(
@@ -330,7 +337,10 @@ def _jsonify(value: object) -> object:
     if isinstance(value, (list, tuple)):
         return [_jsonify(item) for item in value]
     if isinstance(value, (set, frozenset)):
-        return sorted(_jsonify(item) for item in value)
+        return sorted(
+            (_jsonify(item) for item in value),
+            key=lambda item: json.dumps(item, sort_keys=True, default=str),
+        )
     return value
 
 
@@ -540,7 +550,7 @@ def _resource_query_value(parsed: object, key: str) -> str | None:
     return text or None
 
 
-def _resource_retrieval_mode_from_uri(parsed: object) -> str | None:
+def _resource_retrieval_mode_from_uri(parsed: object) -> RetrievalMode | None:
     """Return the requested retrieval mode from one resource URI when provided."""
 
     raw_value = _resource_query_value(parsed, "retrieval_mode")
@@ -552,7 +562,7 @@ def _resource_retrieval_mode_from_uri(parsed: object) -> str | None:
     if raw_value not in SUPPORTED_RETRIEVAL_MODES:
         supported = ", ".join(sorted(SUPPORTED_RETRIEVAL_MODES))
         raise ValueError(f"`retrieval_mode` must be one of: {supported}")
-    return raw_value  # type: ignore[return-value]
+    return cast(RetrievalMode, raw_value)
 
 
 def _overview_resource_text(server_root: Path) -> str:
@@ -588,7 +598,7 @@ def _startup_context_resource_text(server_root: Path) -> str:
         question=MCP_STARTUP_CONTEXT_QUESTION,
         root=server_root,
         top_k=4,
-        retrieval_mode=profile.retrieval_mode,  # type: ignore[arg-type]
+        retrieval_mode=cast(RetrievalMode, profile.retrieval_mode),
     )
     serialized = [serialize_chunk(chunk, root=server_root) for chunk in context]
     payload = {
@@ -780,7 +790,7 @@ def call_mcp_tool(
     root = _resolve_root(server_root, params.get("root"))
     default_retrieval_mode = os.getenv(MCP_DEFAULT_RETRIEVAL_MODE_ENV)
 
-    def _resolve_tool_retrieval_mode() -> str | None:
+    def _resolve_tool_retrieval_mode() -> RetrievalMode | None:
         retrieval_mode = params.get("retrieval_mode")
         selected = retrieval_mode if retrieval_mode is not None else default_retrieval_mode
         if selected is None:
@@ -789,7 +799,7 @@ def call_mcp_tool(
             raise ValueError(
                 "`retrieval_mode` must be one of: " + ", ".join(sorted(SUPPORTED_RETRIEVAL_MODES))
             )
-        return selected  # type: ignore[return-value]
+        return cast(RetrievalMode, selected)
 
     if tool_name == "search_repo":
         question = params.get("question")
@@ -797,10 +807,20 @@ def call_mcp_tool(
             raise ValueError("`search_repo` requires a non-empty `question`.")
         retrieval_mode_value = _resolve_tool_retrieval_mode()
         raw_top_k = params.get("top_k", 4)
-        try:
-            top_k = max(1, min(12, int(raw_top_k)))
-        except (TypeError, ValueError):
+        if isinstance(raw_top_k, bool):
+            top_k = int(raw_top_k)
+        elif isinstance(raw_top_k, int):
+            top_k = raw_top_k
+        elif isinstance(raw_top_k, float):
+            top_k = int(raw_top_k)
+        elif isinstance(raw_top_k, str):
+            try:
+                top_k = int(raw_top_k.strip())
+            except ValueError:
+                raise ValueError("`top_k` must be an integer between 1 and 12.") from None
+        else:
             raise ValueError("`top_k` must be an integer between 1 and 12.") from None
+        top_k = max(1, min(12, top_k))
         context = collect_repository_context(
             question=question,
             root=root,
@@ -810,7 +830,7 @@ def call_mcp_tool(
         sources = list(
             dict.fromkeys(serialize_chunk(chunk, root=root)["source"] for chunk in context)
         )
-        payload = {
+        search_payload: dict[str, object] = {
             "command": "search-repo",
             "command_status": "success",
             "root": str(root),
@@ -822,7 +842,7 @@ def call_mcp_tool(
             "artifact_metadata": _artifact_metadata(),
             "mcp_candidates": [candidate.__dict__ for candidate in discover_mcp_servers(root)],
         }
-        return _json_content(payload)
+        return _json_content(search_payload)
 
     if tool_name == "ask_repo":
         question = params.get("question")
@@ -834,7 +854,7 @@ def call_mcp_tool(
             root=root,
             retrieval_mode=retrieval_mode_value,
         )
-        payload = rag_result.to_payload(root=root)
+        payload: dict[str, object] = rag_result.to_payload(root=root)
         bundle_version = params.get("bundle_version")
         overlay_path = params.get("overlay_path")
         bundle_version_value = bundle_version if isinstance(bundle_version, str) else None
@@ -849,9 +869,9 @@ def call_mcp_tool(
         payload["warnings"] = []
         payload["artifact_metadata"] = _artifact_metadata()
         payload["mode"] = "baseline"
-        payload["top_k"] = 4
-        payload["bundle_version"] = bundle_version_value
-        payload["overlay_path"] = overlay_path_value
+        payload["top_k"] = cast(object, 4)
+        payload["bundle_version"] = cast(object, bundle_version_value)
+        payload["overlay_path"] = cast(object, overlay_path_value)
         payload["trace"] = build_runtime_trace_payload(
             question=question,
             retrieval_mode=str(payload.get("retrieval_mode") or "lexical"),
