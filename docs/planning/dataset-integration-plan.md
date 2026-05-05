@@ -352,9 +352,12 @@ Current implementation note:
     the autonomous execution contract toward MCP-first discovery plus shell-only exact
     verification, with `repo_rag_mcp_usage_summary.json` emitted per run to measure actual MCP use
   - harden the Codex-side MCP launch path itself by generating one launcher script per run,
-    resolving `repo-rag` to an absolute executable path when possible, raising Codex MCP startup
-    and tool timeouts, and exporting `repo_rag_mcp_stderr.log` diagnostics so an empty
-    `list_mcp_resources` result can be distinguished from a real “no resources defined” condition
+    exporting `repo_rag_mcp_stderr.log` diagnostics, and defaulting that launcher to the dedicated
+    lightweight module entrypoint `python -m repo_rag_lab.mcp_stdio --root ...` instead of routing
+    through the heavyweight shared `repo-rag` CLI dispatch path
+  - preflight the generated MCP launcher with one bounded `initialize -> resources/list` exchange
+    before handing the config to Codex; if preflight fails, omit MCP from the generated config for
+    that run so resumed lanes do not burn turns retrying broken startup handshakes
   - confirm whether the new default `TRAINER_PROMOTE_CHANNEL=stable` should remain enabled in live
     AKS or be overridden explicitly for manual-only promotion
   - validate that later worker runs can resolve and consume a trainer-published bundle via `DSPY_BUNDLE_VERSION`
@@ -412,6 +415,9 @@ Current implementation note:
   - parameterized discovery resources:
     - `repo-rag://search{?question,top_k,retrieval_mode}`
     - `repo-rag://ask{?question,retrieval_mode}`
+- For worker-side Codex integration the preferred spawn path is now the lighter
+  `python -m repo_rag_lab.mcp_stdio --root ...` entrypoint rather than `repo-rag serve-mcp`,
+  because the generic CLI imports far more of the repo-RAG stack before it reaches the MCP branch.
 - The MCP surface deliberately excludes `dspy-train`, `trainer-recompile`, `trainer-cycle`,
   `trainer-service`, `retrieval-eval`, and notebook execution, so the primary integration path for
   `dataset` remains direct CLI execution with JSON envelopes rather than long-lived work tunneled
