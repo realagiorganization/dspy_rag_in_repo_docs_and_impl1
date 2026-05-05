@@ -1061,7 +1061,7 @@ def read_json_rpc_message(stream: BinaryIO) -> dict[str, object] | None:
     waiting_logged = False
 
     while True:
-        if fileno is not None:
+        if fileno is not None and not headers:
             ready, _, _ = select.select([fileno], [], [], 5.0)
             if not ready:
                 if not waiting_logged:
@@ -1089,11 +1089,6 @@ def read_json_rpc_message(stream: BinaryIO) -> dict[str, object] | None:
     content_length = int(headers["content-length"])
     body = bytearray()
     while len(body) < content_length:
-        if fileno is not None:
-            ready, _, _ = select.select([fileno], [], [], 5.0)
-            if not ready:
-                _log_mcp_debug(f"waiting-for-body received={len(body)} expected={content_length}")
-                continue
         chunk = stream.read(content_length - len(body))
         if not chunk:
             _log_mcp_debug(f"eof-during-body received={len(body)} expected={content_length}")

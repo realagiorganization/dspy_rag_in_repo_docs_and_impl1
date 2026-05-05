@@ -228,6 +228,210 @@ session subtree was being deleted upstream before the execution workflow began.
 - `cargo build --manifest-path rust-cli/Cargo.toml`
   - `pass`
 
+## 2026-05-05 Root-cause fix: MCP stdio reader was fighting Python's internal buffering
+
+Deep local reproduction finally identified the concrete MCP transport bug that kept making the
+worker preflight report `Timed out waiting for MCP response headers.` even after the server process
+itself started correctly.
+
+### Root cause
+
+The bug was inside `src/repo_rag_lab/mcp_server.py:read_json_rpc_message()`, not in Codex, not in
+the worker launcher, and not in the resource catalog.
+
+The old implementation performed:
+
+1. `select.select([fileno], ..., 5.0)` before reading each header line
+2. `stream.readline()` to consume one line
+3. another `select.select(...)` before the next header line
+4. another `select.select(...)` before each body read
+
+On `sys.stdin.buffer` this is incorrect once the first `readline()` has already pulled additional
+frame bytes into Python's internal buffer. After the first header line, the OS pipe may already be
+empty even though the blank line and body are still buffered in user space. That exact mismatch
+produced the live debug sequence:
+
+- `header-line Content-Length: 185`
+- `waiting-for-headers no-bytes-yet`
+
+So the server had already consumed the first header line, but then waited on the raw fd again and
+never reached the buffered blank line/body.
+
+### Fix
+
+`read_json_rpc_message()` now only uses `select()` before the very first header byte. After the
+first header line is seen, it reads remaining headers and body directly from the buffered stream
+instead of re-selecting the raw file descriptor between lines.
+
+That change removes the false “no bytes yet” state caused by the interaction between `select()` and
+Python's buffered pipe reader.
+
+### Local proof
+
+A raw local `stdio` probe that previously reproduced the failure now succeeds:
+
+- client sends one framed `initialize` request
+- server immediately returns one framed `initialize` response
+- debug log now shows:
+  - `header-line Content-Length: ...`
+  - `body-bytes ...`
+  - `message method=initialize id=1`
+  - `response method=initialize id=1`
+
+### Verification executed in this turn
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_mcp_server.py tests/test_mcp_stdio.py -q`
+  - `pass` (`26 passed`)
+- local raw stdio probe against `python -m repo_rag_lab.mcp_stdio --root .`
+  - `pass`
+  - returned one framed `initialize` response
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+
+## 2026-05-05 Local Artifact Review: resumed lane still burns 6.04M input tokens and MCP is now failing closed
+
+The latest locally exported worker artifacts from `../dataset/artifacts/` show that Codex session
+continuity is still working, but the repo-RAG MCP path did not activate in-run. This time the
+failure mode is different from the earlier handshake-retry explosion: the worker-side MCP preflight
+timed out and the run fell back to a resumed shell-only lane.
+
+### What worked
+
+- live `codex exec resume`: `pass`
+  - `redis_results.json`
+    - `result.success = true`
+  - `codex_session_state.json`
+    - `session_mode = resumed`
+    - `restore_status = restored`
+    - `resume_candidate_present = true`
+    - `resume_attempted = true`
+    - `resume_used = true`
+    - `resume_command_mode = explicit-session-id`
+    - `restored_files = 10`
+    - `persist_status = persisted`
+    - `persisted_files = 9`
+    - `pvc_sync_health = healthy`
+    - `total_run_count = 6`
+    - `fresh_run_count = 1`
+    - `resumed_run_count = 5`
+  - `repo_rag_trace.json`
+    - `codex_session_mode = resumed`
+- live `RAG`: `pass`
+  - `repo_rag_backend.json`
+    - `rag_status = success`
+    - `mediation_mode = dspy_rag`
+  - `repo_rag_codex_proxy_last.json`
+    - `sources = [docs/AGENTS.md, README.md, docs/ASSUMPTIONS.md, docs/USAGE.md]`
+    - `warnings = []`
+- live `DSPy` mediation: `pass`
+  - `repo_rag_backend.json`
+    - `dspy_status = success`
+    - `bundle_resolved = true`
+    - `bundle_version = 20260502T122127191445Z`
+  - `repo_rag_trace.json`
+    - `program_loaded = true`
+- live trainer handoff: `pass`
+  - `trusted_trace_handoff_summary.json`
+    - `attempted = 1`
+    - `queued = 1`
+    - `failed = 0`
+
+### What failed
+
+- live repo-RAG MCP startup in the worker path: `fail`
+  - `repo_rag_mcp_usage_summary.json`
+    - `launcher_exists = true`
+    - `resolved_command = /usr/local/bin/python`
+    - `stderr_log_exists = true`
+    - `debug_log_exists = true`
+    - `preflight_status = error`
+    - `preflight_timeout_seconds = 10.0`
+    - `preflight_error = Timed out waiting for MCP response headers.`
+  - `debug_tail` shows the server process started but never completed the first frame:
+    - `server-start ... stdin=pipe ... stdout=pipe`
+    - `header-line Content-Length: 185`
+    - `waiting-for-headers no-bytes-yet`
+- live MCP-first discovery therefore did not happen in the actual run
+  - `repo_rag_mcp_usage_summary.json`
+    - no successful discovery/resource-read activity was recorded
+  - raw transcript inspection shows no MCP calls at all:
+    - `mcp: codex/list_mcp_resources = 0`
+    - `mcp: codex/list_mcp_resource_templates = 0`
+    - `mcp: codex/read_mcp_resource = 0`
+    - `mcp: codex/call_mcp_tool = 0`
+    - `search_repo = 0`
+    - `ask_repo = 0`
+  - the only repo-RAG MCP URI mentions in `codex_response.txt` are prompt-level references:
+    - `repo-rag://search = 4`
+    - `repo-rag://ask = 0`
+- low-level retrieval mode remained `lexical`
+  - `repo_rag_trace.json`
+    - `retrieval_mode = lexical`
+  - `repo_rag_codex_proxy_last.json`
+    - `retrieval_mode = lexical`
+
+### Token and churn outcome
+
+- `redis_results.json`
+  - `prompt_tokens = 6043293`
+  - `completion_tokens = 0`
+  - `total_tokens = 6043293`
+- compared with the lane's previous run:
+  - `codex_session_state.json`
+    - `usage_delta_vs_previous.baseline_prompt_tokens = 9455404`
+    - `prompt_tokens_delta = -3412111`
+    - `prompt_tokens_delta_ratio = -0.360864`
+- compared with the lane's last fresh baseline:
+  - `codex_session_state.json`
+    - `usage_delta_vs_last_fresh.baseline_prompt_tokens = 2568062`
+    - `prompt_tokens_delta = 3475231`
+    - `prompt_tokens_delta_ratio = 1.35325`
+- shell/doc churn in `codex_response.txt` is still very high:
+  - `diff --git = 381`
+  - `sed -n = 56`
+  - `README.md = 75`
+  - `docs/USAGE.md = 73`
+  - `docs/ASSUMPTIONS.md = 73`
+  - `docs/DEVPLAN.md = 33`
+- transcript-path telemetry is still undercounting that churn:
+  - `codex_session_state.json`
+    - `transcript_path_summary.read_like_command_count = 0`
+    - `transcript_path_summary.diff_command_count = 0`
+  - but raw transcript inspection contradicts this with the `sed -n` and `diff --git` counts above
+
+### Current interpretation
+
+The worker-side preflight and fail-closed contract did partially work: this run no longer shows the
+earlier endless MCP retry loop inside Codex itself. Instead, the MCP path failed before Codex
+adopted it, so the resumed lane fell back immediately to shell-heavy execution. That reduced cost
+relative to the prior `9.45M` token run, but it still left the run far above the `2.57M` fresh
+baseline and far above the earlier best resumed slice (`103760` prompt tokens).
+
+The active blocker is now narrower:
+
+- resume continuity works
+- repo-RAG and DSPy both work
+- the worker launcher reaches the MCP server process
+- but the worker-side MCP preflight is not completing its first response-header round-trip, so the
+  bounded MCP surface is disabled before Codex can use it
+
+### Verification executed in this turn
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+
 ## 2026-05-05 Follow-up: mypy parity repair after CI advanced past Ruff and Pages
 
 ### What failed remotely
