@@ -228,6 +228,57 @@ session subtree was being deleted upstream before the execution workflow began.
 - `cargo build --manifest-path rust-cli/Cargo.toml`
   - `pass`
 
+## 2026-05-05 Local MCP Startup Hardening: empty Codex MCP listings can be launcher failures
+
+The next local investigation after the successful resumed runs targeted the still-empty
+`repo_rag_mcp_usage_summary.json` artifacts. The important result is that an empty Codex-side MCP
+listing is not yet safe to interpret as “repo-rag exposed no resources”.
+
+### What the local reproduction showed
+
+- A direct local `uv run repo-rag serve-mcp --root .` probe answered `initialize` in ~2.8 seconds
+  and returned the expected MCP capabilities plus server info, so the repo-rag MCP server itself
+  is protocol-capable.
+- A minimal local `codex exec` reproduction using a temp `CODEX_HOME` and an injected repo-rag MCP
+  server showed a different failure mode:
+  - `mcp: repo-rag/list_mcp_resources`
+  - error: `resources/list failed: failed to get client: MCP startup failed: timed out handshaking with MCP server after 30s`
+- A second local reproduction using a direct bare `repo-rag` launcher failed even earlier:
+  - `resources/list failed: failed to get client: MCP startup failed: No such file or directory (os error 2)`
+  - the fallback `codex/list_mcp_resources` and `codex/list_mcp_resource_templates` tools then
+    reported empty arrays (`{"resources":[]}`, `{"resourceTemplates":[]}`)
+
+### Interpretation
+
+The current live blocker is not only “Codex still prefers shell”. There is also a worker-side MCP
+launch compatibility risk:
+
+- Codex can surface empty meta listings when the child repo-rag MCP process never started
+  successfully.
+- That makes empty `list_mcp_resources` output ambiguous unless the worker also captures launcher
+  diagnostics.
+
+### Local hardening added in this turn
+
+- `../dataset/docker/prompt-executor/worker_codex_cli_exec.py`
+  - generate one `repo_rag_mcp_launcher.sh` per run instead of pointing Codex at a bare
+    `repo-rag` token
+  - resolve the first repo-rag command token to an absolute executable path when possible
+  - configure Codex MCP `startup_timeout_sec = 60` and `tool_timeout_sec = 120`
+  - persist `repo_rag_mcp_stderr.log` diagnostics and thread their tail into
+    `repo_rag_mcp_usage_summary.json`
+- `../dataset/tests/unit/test_worker_codex_cli_exec_small.py`
+  - cover launcher generation and timeout/config serialization
+
+### Verification executed in this turn
+
+- `python -m compileall /home/standard/Desktop/realagi_work/dataset/docker/prompt-executor/worker_codex_cli_exec.py /home/standard/Desktop/realagi_work/dataset/tests/unit/test_worker_codex_cli_exec_small.py /home/standard/Desktop/realagi_work/dataset/docker/prompt-executor/worker_execution.py /home/standard/Desktop/realagi_work/dataset/tests/unit/test_worker_execution_mixins_small.py`
+  - `pass`
+- `cd /home/standard/Desktop/realagi_work/dataset && uv run pytest tests/unit/test_worker_codex_cli_exec_small.py tests/unit/test_worker_execution_mixins_small.py -q`
+  - `pass` (`48 passed`)
+- `cd /home/standard/Desktop/realagi_work/dataset && uv run pytest tests/test_aks_module_generator_generate_modules.py tests/unit/test_worker_codex_cli_exec_small.py tests/unit/test_worker_execution_mixins_small.py -q`
+  - `pass` (`86 passed`)
+
 ### Deep live root-cause analysis after the latest failed `resume` run
 
 The newest uploaded artifacts plus direct cluster inspection finally narrow the remaining failure
@@ -1222,6 +1273,113 @@ This follow-up also removes one likely retrieval-mode skew for future MCP use:
   - `pass` (`43 passed`)
 - `cd /home/standard/Desktop/realagi_work/dataset && uv run pytest tests/test_aks_module_generator_generate_modules.py tests/unit/test_worker_codex_cli_exec_small.py -q`
   - `pass` (`81 passed`)
+
+## 2026-05-05 Local Artifact Review: resumed again, MCP discovery still unused
+
+The newest locally exported worker artifacts from `../dataset/artifacts/` show a second resumed
+lane run. Session continuity is no longer the active blocker.
+
+### What worked
+
+- live `codex exec resume`: `pass`
+  - `codex_session_state.json`
+    - `session_mode = resumed`
+    - `restore_status = restored`
+    - `resume_candidate_present = true`
+    - `resume_attempted = true`
+    - `resume_used = true`
+    - `resume_command_mode = explicit-session-id`
+    - `restored_files = 5`
+    - `persisted_files = 6`
+    - `total_run_count = 3`
+    - `fresh_run_count = 1`
+    - `resumed_run_count = 2`
+  - `repo_rag_trace.json`
+    - `codex_session_mode = resumed`
+- live `RAG` + `DSPy`: `pass`
+  - `repo_rag_backend.json`
+    - `rag_status = success`
+    - `dspy_status = success`
+    - `bundle_resolved = true`
+    - `bundle_version = 20260502T122127191445Z`
+  - `repo_rag_trace.json`
+    - `program_loaded = true`
+- live trainer handoff: `pass`
+  - `trusted_trace_handoff_summary.json`
+    - `attempted = 1`
+    - `queued = 1`
+    - `failed = 0`
+
+### What still failed
+
+- live `MCP-first discovery`: `fail`
+  - no `repo_rag_mcp_usage_summary.json` artifact was emitted
+  - `codex_session_state.json`
+    - `repo_rag_mcp_usage_summary = {}`
+  - direct transcript inspection shows:
+    - `mcp: codex/list_mcp_resources` = `2`
+    - `mcp: codex/list_mcp_resource_templates` = `2`
+    - `mcp: codex/read_mcp_resource` = `0`
+    - `mcp: codex/call_mcp_tool` = `0`
+    - `repo-rag://overview` = `0`
+    - `repo-rag://search` = `0`
+    - `search_repo` = `0`
+    - `ask_repo` = `0`
+  - Codex again states in the transcript:
+    - `Repo-RAG resources are not exposed through the MCP listing in this session, so I’m falling back to targeted local reads.`
+- low-level retrieval mode stayed `lexical`
+  - `repo_rag_trace.json`
+    - `retrieval_mode = lexical`
+  - `repo_rag_codex_proxy_last.json`
+    - `retrieval_mode = lexical`
+
+### Token and churn behavior
+
+- this run stayed far cheaper than the fresh baseline, but regressed sharply relative to the first
+  resumed run:
+  - `codex_session_state.json`
+    - `latest_usage.prompt_tokens = 355938`
+    - `usage_delta_vs_previous.prompt_tokens_delta = 252178`
+    - `usage_delta_vs_previous.prompt_tokens_delta_ratio = 2.430397`
+    - `usage_delta_vs_last_fresh.prompt_tokens_delta = -2212124`
+    - `usage_delta_vs_last_fresh.prompt_tokens_delta_ratio = -0.861398`
+- raw transcript counts still show heavy shell/doc churn:
+  - `codex_response.txt`
+    - `README.md`: `70`
+    - `docs/DEVPLAN.md`: `61`
+    - `docs/USAGE.md`: `61`
+    - `docs/ASSUMPTIONS.md`: `60`
+    - `docs/ENVS.md`: `5`
+    - `docs/AGENTS.md`: `3`
+    - `diff --git`: `207`
+    - `sed -n`: `51`
+    - `prompt_artifacts`: absent
+- worker-side transcript summary still under-reports those reads:
+  - `codex_session_state.json`
+    - `transcript_path_summary.read_like_command_count = 0`
+    - `transcript_path_summary.diff_command_count = 1`
+  - so shell/doc churn remains more visible in the raw transcript than in the summarized session
+    telemetry
+
+### Current interpretation
+
+The preserve-list reset fix and explicit-session-id resume path are now working: the lane has
+advanced from one fresh seed run to two consecutive resumed runs. The dominant remaining blocker is
+MCP-side discovery adoption. Even after the resource-surface work, Codex still only probes MCP
+listings and then concludes that repository resources are not exposed for actual reading, so it
+falls back to shell-based discovery and exact reads. That fallback is what drove the resumed run
+back up to `355938` prompt tokens.
+
+### Verification executed in this turn
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
 
 ### Token cost and transcript behavior
 

@@ -343,6 +343,7 @@ def test_handle_mcp_message_lists_resources_and_templates(tmp_path: Path) -> Non
     resources = cast(list[dict[str, Any]], resources_result["resources"])
     resource_templates = cast(list[dict[str, Any]], templates_result["resourceTemplates"])
     assert any(item["uri"] == "repo-rag://overview" for item in resources)
+    assert any(item["uri"] == "repo-rag://startup-context" for item in resources)
     assert any(item["uriTemplate"] == "repo-rag://search{?question,top_k,retrieval_mode}" for item in resource_templates)
 
 
@@ -381,7 +382,55 @@ def test_handle_mcp_message_reads_overview_resource(
     contents = cast(list[dict[str, Any]], result["contents"])
     assert contents[0]["mimeType"] == "text/markdown"
     assert "demo-profile" in contents[0]["text"]
-    assert "repo-rag://search{?question,top_k,retrieval_mode}" in contents[0]["text"]
+    assert "repo-rag://startup-context" in contents[0]["text"]
+    assert "repo-rag://search?question=transmutation&top_k=4" in contents[0]["text"]
+
+
+def test_handle_mcp_message_reads_startup_context_resource(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class FakeChunk:
+        source = tmp_path / "README.md"
+        text = "Repository research context."
+
+    monkeypatch.setattr(
+        mcp_server,
+        "collect_repository_context",
+        lambda **kwargs: [FakeChunk()],
+    )
+    monkeypatch.setattr(
+        mcp_server,
+        "serialize_chunk",
+        lambda chunk, *, root: {
+            "source": "README.md",
+            "preview": "Repository research context.",
+            "text": chunk.text,
+        },
+    )
+    monkeypatch.setattr(
+        mcp_server,
+        "load_retrieval_profile",
+        lambda root: RetrievalProfile(name="demo-profile", retrieval_mode="hybrid-vector"),
+    )
+
+    response = mcp_server.handle_mcp_message(
+        {
+            "jsonrpc": "2.0",
+            "id": 24,
+            "method": "resources/read",
+            "params": {"uri": "repo-rag://startup-context"},
+        },
+        server_root=tmp_path,
+    )
+
+    assert response is not None
+    result = cast(dict[str, Any], response["result"])
+    contents = cast(list[dict[str, Any]], result["contents"])
+    payload = json.loads(contents[0]["text"])
+    assert payload["command"] == "startup-context-resource"
+    assert payload["retrieval_mode"] == "hybrid-vector"
+    assert payload["sources"] == ["README.md"]
+    assert "repo-rag://search?question=transmutation+preview+flow&top_k=4" in payload["examples"]["search"]
 
 
 def test_handle_mcp_message_reads_search_resource(

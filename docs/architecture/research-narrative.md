@@ -267,7 +267,14 @@ repo-rag invalidates stale mediation entries when indexed files change, and inje
 local `repo-rag` MCP server into the generated Codex config so discovery/search can prefer MCP
 while exact verification still falls back to shell. Worker-side artifacts now also include a
 `repo_rag_mcp_usage_summary.json` summary so later live runs can measure whether Codex actually
-used `search_repo` before broad shell exploration. The newest
+used `search_repo` before broad shell exploration. The newest MCP follow-up now also treats
+Codex-side MCP launch as a first-class failure surface: the worker no longer points Codex at a
+bare `repo-rag` token only, but writes a generated MCP launcher script under `execution_artifacts/`,
+resolves the first command token to an absolute executable path when possible, raises the Codex MCP
+startup/tool timeouts, and persists a dedicated `repo_rag_mcp_stderr.log` tail into the MCP usage
+summary. That local hardening follows a direct Codex reproduction where `list_mcp_resources`
+returned empty arrays only because the child MCP server never finished startup or was not found on
+the subprocess PATH, not because `repo-rag` lacked resource definitions. The newest
 bundle-resolution follow-up also tightens the DSPy
 handoff path itself: `repo-rag` local bundle lookup now understands both the repo-local
 `artifacts/dspy/...` layout and the staged worker mirror layout `channels/...` + `versions/...`,

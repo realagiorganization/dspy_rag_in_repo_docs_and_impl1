@@ -38,6 +38,10 @@ RETRIEVAL_MODE_ENUM = sorted(SUPPORTED_RETRIEVAL_MODES)
 MCP_USAGE_LOG_ENV = "REPO_RAG_MCP_USAGE_LOG"
 MCP_DEFAULT_RETRIEVAL_MODE_ENV = "REPO_RAG_MCP_DEFAULT_RETRIEVAL_MODE"
 MCP_RESOURCE_SCHEME = "repo-rag"
+MCP_STARTUP_CONTEXT_QUESTION = (
+    "repository guidance current gameplay slice transmutation alchemy assumptions "
+    "environment usage readme agents devplan"
+)
 
 
 @dataclass(frozen=True)
@@ -289,7 +293,30 @@ def build_mcp_resource_definitions() -> list[MCPResourceDefinition]:
             title="repo-rag repository overview",
             description=(
                 "Start here. Summarizes the repository root, active retrieval profile, "
-                "and the preferred repo-RAG discovery workflow."
+                "and the preferred repo-RAG discovery workflow. If templates are also listed, "
+                "that is expected: instantiate them via read_mcp_resource."
+            ),
+            mime_type="text/markdown",
+        ),
+        MCPResourceDefinition(
+            uri=f"{MCP_RESOURCE_SCHEME}://startup-context",
+            name="Repository Startup Context",
+            title="repo-rag bounded startup context",
+            description=(
+                "Read this first for one bounded repository working set. It returns a small "
+                "startup shortlist for the current repo plus example `repo-rag://search?...` "
+                "URIs to continue discovery without broad shell exploration."
+            ),
+            mime_type="text/markdown",
+        ),
+        MCPResourceDefinition(
+            uri=f"{MCP_RESOURCE_SCHEME}://discovery-guide",
+            name="Repository Discovery Guide",
+            title="repo-rag MCP discovery guide",
+            description=(
+                "Explains exactly how to use read_mcp_resource with repo-rag search and ask "
+                "templates. Use this if only templates are listed and you need a concrete MCP "
+                "search pattern."
             ),
             mime_type="text/markdown",
         ),
@@ -325,8 +352,9 @@ def build_mcp_resource_template_definitions() -> list[MCPResourceTemplateDefinit
             name="Repository Discovery Search",
             title="repo-rag bounded discovery search",
             description=(
-                "Use this first for repository discovery. Provide a natural-language `question` "
-                "and optional `top_k` before resorting to broad shell exploration."
+                "Use this first for repository discovery by calling read_mcp_resource with a "
+                "concrete URI such as `repo-rag://search?question=transmutation&top_k=4` before "
+                "resorting to broad shell exploration."
             ),
             mime_type="application/json",
         ),
@@ -336,7 +364,9 @@ def build_mcp_resource_template_definitions() -> list[MCPResourceTemplateDefinit
             title="repo-rag bounded ask",
             description=(
                 "Returns a bounded repo-grounded answer with sources and retrieved context. "
-                "Use after discovery when a concise repository answer is enough."
+                "Call read_mcp_resource with a concrete URI such as "
+                "`repo-rag://ask?question=current+transmutation+flow` after discovery when a "
+                "concise repository answer is enough."
             ),
             mime_type="application/json",
         ),
@@ -397,9 +427,61 @@ def _overview_resource_text(server_root: Path) -> str:
         f"- Corpus fingerprint: `{manifest['corpus_fingerprint']}`",
         "",
         "Preferred workflow:",
-        "1. Use `repo-rag://search{?question,top_k,retrieval_mode}` for repository discovery.",
-        "2. Use `repo-rag://ask{?question,retrieval_mode}` for bounded repo-grounded answers.",
-        "3. Use shell reads only for exact file verification and post-edit validation.",
+        "1. Read `repo-rag://startup-context` first for one bounded working set.",
+        "2. If only templates are listed, that is still a usable MCP discovery surface.",
+        "3. Call `read_mcp_resource` on a concrete URI such as `repo-rag://search?question=transmutation&top_k=4` for repository discovery.",
+        "4. Use `repo-rag://ask{?question,retrieval_mode}` for bounded repo-grounded answers.",
+        "5. Use shell reads only for exact file verification and post-edit validation.",
+    ]
+    return "\n".join(lines)
+
+
+def _startup_context_resource_text(server_root: Path) -> str:
+    """Return one bounded startup working set resource."""
+
+    profile = load_retrieval_profile(server_root)
+    context = collect_repository_context(
+        question=MCP_STARTUP_CONTEXT_QUESTION,
+        root=server_root,
+        top_k=4,
+        retrieval_mode=profile.retrieval_mode,  # type: ignore[arg-type]
+    )
+    serialized = [serialize_chunk(chunk, root=server_root) for chunk in context]
+    payload = {
+        "command": "startup-context-resource",
+        "root": str(server_root),
+        "question": MCP_STARTUP_CONTEXT_QUESTION,
+        "retrieval_mode": profile.retrieval_mode,
+        "sources": [item.get("source") for item in serialized if isinstance(item, dict)],
+        "context": serialized,
+        "next_actions": [
+            "If you need repository discovery, call read_mcp_resource on repo-rag://search?question=<your question>&top_k=4",
+            "Use shell reads only after MCP narrowed the file set or when exact post-edit verification is required.",
+        ],
+        "examples": {
+            "search": "repo-rag://search?question=transmutation+preview+flow&top_k=4",
+            "ask": "repo-rag://ask?question=current+transmutation+entry+points",
+        },
+    }
+    return json.dumps(payload, indent=2)
+
+
+def _discovery_guide_resource_text(server_root: Path) -> str:
+    """Return one explicit guide for MCP-first repository discovery."""
+
+    profile = load_retrieval_profile(server_root)
+    lines = [
+        "# repo-rag MCP Discovery Guide",
+        "",
+        f"- Root: `{server_root}`",
+        f"- Default retrieval mode: `{profile.retrieval_mode}`",
+        "",
+        "Use these exact patterns:",
+        "- `read_mcp_resource(\"repo-rag://startup-context\")` for one bounded startup working set.",
+        "- `read_mcp_resource(\"repo-rag://search?question=<your question>&top_k=4\")` for repository discovery.",
+        "- `read_mcp_resource(\"repo-rag://ask?question=<your question>\")` for one concise repo-grounded answer.",
+        "",
+        "Do not interpret a template-only MCP listing as absence of repo resources. The repo-rag search/ask surfaces are intentionally exposed as resource templates that must be instantiated with a concrete question.",
     ]
     return "\n".join(lines)
 
@@ -415,6 +497,20 @@ def read_mcp_resource(uri: str, *, server_root: Path) -> dict[str, object]:
         return _resource_read_result(
             uri,
             text=_overview_resource_text(server_root),
+            mime_type="text/markdown",
+        )
+
+    if parsed.netloc == "startup-context":
+        return _resource_read_result(
+            uri,
+            text=f"{_startup_context_resource_text(server_root)}\n",
+            mime_type="application/json",
+        )
+
+    if parsed.netloc == "discovery-guide":
+        return _resource_read_result(
+            uri,
+            text=_discovery_guide_resource_text(server_root),
             mime_type="text/markdown",
         )
 
