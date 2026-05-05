@@ -274,7 +274,17 @@ resolves the first command token to an absolute executable path when possible, r
 startup/tool timeouts, and persists a dedicated `repo_rag_mcp_stderr.log` tail into the MCP usage
 summary. That local hardening follows a direct Codex reproduction where `list_mcp_resources`
 returned empty arrays only because the child MCP server never finished startup or was not found on
-the subprocess PATH, not because `repo-rag` lacked resource definitions. The newest
+the subprocess PATH, not because `repo-rag` lacked resource definitions. The newest root-cause pass
+then narrowed the remaining regression further: the bounded MCP server itself had become fast, but
+the worker still launched it through the heavyweight `repo_rag_lab.cli:main` graph via
+`repo-rag serve-mcp`. The repository therefore now exposes one dedicated lightweight stdio module
+entrypoint (`python -m repo_rag_lab.mcp_stdio --root ...`) that imports only the bounded MCP
+surface. The worker defaults its MCP launcher to that module entrypoint, writes `transport =
+"stdio"` explicitly into the generated Codex config, and preflights the launcher with one bounded
+`initialize -> resources/list` exchange before handing the config to Codex. If that preflight
+fails, the worker omits MCP from the generated config for that run instead of letting a resumed
+lane spend multiple turns retrying `resources/list` and then falling back into shell-only
+exploration. The newest
 bundle-resolution follow-up also tightens the DSPy
 handoff path itself: `repo-rag` local bundle lookup now understands both the repo-local
 `artifacts/dspy/...` layout and the staged worker mirror layout `channels/...` + `versions/...`,

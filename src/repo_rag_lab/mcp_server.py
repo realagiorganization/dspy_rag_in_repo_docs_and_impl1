@@ -13,26 +13,26 @@ from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import BinaryIO
+from typing import TYPE_CHECKING, BinaryIO
 from urllib.parse import parse_qs, urlsplit
 
-from .retrieval import RetrievalMode
-from .retrieval_profile import SUPPORTED_RETRIEVAL_MODES, load_retrieval_profile
-from .runtime_artifacts import RuntimeTraceContext, build_runtime_trace
-from .utilities import run_bundle_inspection, run_dspy_artifacts, run_trace_enqueue
-from .mcp import discover_mcp_servers
-from .corpus import build_corpus_manifest
-from .workflow import (
-    ask_repository,
-    collect_repository_context,
-    serialize_chunk,
-)
+if TYPE_CHECKING:
+    from .retrieval import RetrievalMode
+    from .retrieval_profile import RetrievalProfile
 
 MCP_PROTOCOL_VERSION = "2024-11-05"
 MCP_SERVER_NAME = "repo-rag-mcp"
 MCP_SERVER_INSTRUCTIONS = (
     "Use these tools only for bounded repo-RAG operations. Do not route long DSPy training, "
     "full retrieval-eval sweeps, or notebook execution through this MCP surface."
+)
+SUPPORTED_RETRIEVAL_MODES = frozenset(
+    {
+        "lexical",
+        "idf-rerank",
+        "vector",
+        "hybrid-vector",
+    }
 )
 RETRIEVAL_MODE_ENUM = sorted(SUPPORTED_RETRIEVAL_MODES)
 MCP_USAGE_LOG_ENV = "REPO_RAG_MCP_USAGE_LOG"
@@ -121,6 +121,121 @@ def _artifact_metadata() -> dict[str, list[str]]:
     """Return an empty artifact metadata payload."""
 
     return {"input_paths": [], "generated_paths": [], "related_paths": []}
+
+
+def load_retrieval_profile(server_root: Path) -> "RetrievalProfile":
+    from .retrieval_profile import load_retrieval_profile
+
+    return load_retrieval_profile(server_root)
+
+
+def build_corpus_manifest(server_root: Path) -> dict[str, object]:
+    from .corpus import build_corpus_manifest
+
+    return build_corpus_manifest(server_root)
+
+
+def collect_repository_context(
+    *,
+    question: str,
+    root: Path,
+    top_k: int = 4,
+    retrieval_mode: str | None = None,
+    profile: "RetrievalProfile | None" = None,
+):
+    from .workflow import collect_repository_context
+
+    return collect_repository_context(
+        question=question,
+        root=root,
+        top_k=top_k,
+        retrieval_mode=retrieval_mode,
+        profile=profile,
+    )
+
+
+def serialize_chunk(chunk: object, *, root: Path) -> dict[str, object]:
+    from .workflow import serialize_chunk
+
+    return serialize_chunk(chunk, root=root)
+
+
+def discover_mcp_servers(root: Path):
+    from .mcp import discover_mcp_servers as _discover_mcp_servers
+
+    return _discover_mcp_servers(root)
+
+
+def ask_repository(*, question: str, root: Path, retrieval_mode: str | None = None):
+    from .workflow import ask_repository
+
+    return ask_repository(
+        question=question,
+        root=root,
+        retrieval_mode=retrieval_mode,
+    )
+
+
+def build_runtime_trace_payload(
+    *,
+    question: str,
+    retrieval_mode: str,
+    sources: list[str],
+    context_items: list[dict[str, object]],
+    bundle_version: str | None,
+    overlay_path: str | None,
+    mcp_candidate_count: int,
+    answer_length: int,
+) -> dict[str, object]:
+    from .runtime_artifacts import RuntimeTraceContext, build_runtime_trace
+
+    return build_runtime_trace(
+        RuntimeTraceContext(
+            question=question,
+            mode="baseline",
+            retrieval_mode=retrieval_mode,
+            sources=sources,
+            context_count=len(context_items),
+            top_k=4,
+            bundle_version=bundle_version,
+            overlay_path=overlay_path,
+            mcp_candidate_count=mcp_candidate_count,
+            answer_length=answer_length,
+            context_field="context",
+            evidence_items=context_items,
+        )
+    )
+
+
+def run_bundle_inspection(root: Path, *, run_name: str | None, channel: str | None) -> str:
+    from .utilities import run_bundle_inspection
+
+    return run_bundle_inspection(root, run_name=run_name, channel=channel)
+
+
+def run_dspy_artifacts(root: Path) -> str:
+    from .utilities import run_dspy_artifacts
+
+    return run_dspy_artifacts(root)
+
+
+def run_trace_enqueue(
+    root: Path,
+    *,
+    trace_path: Path,
+    trace_name: str | None,
+    queue_name: str,
+    outcome_path: Path | None,
+) -> str:
+    from .utilities import run_trace_enqueue
+
+    return run_trace_enqueue(
+        root,
+        trace_path=trace_path,
+        trace_name=trace_name,
+        queue_name=queue_name,
+        outcome_path=outcome_path,
+    )
 
 
 def _log_usage_event(
@@ -397,7 +512,7 @@ def _resource_query_value(parsed: object, key: str) -> str | None:
     return text or None
 
 
-def _resource_retrieval_mode_from_uri(parsed: object) -> RetrievalMode | None:
+def _resource_retrieval_mode_from_uri(parsed: object) -> str | None:
     """Return the requested retrieval mode from one resource URI when provided."""
 
     raw_value = _resource_query_value(parsed, "retrieval_mode")
@@ -618,7 +733,7 @@ def call_mcp_tool(
     root = _resolve_root(server_root, params.get("root"))
     default_retrieval_mode = os.getenv(MCP_DEFAULT_RETRIEVAL_MODE_ENV)
 
-    def _resolve_tool_retrieval_mode() -> RetrievalMode | None:
+    def _resolve_tool_retrieval_mode() -> str | None:
         retrieval_mode = params.get("retrieval_mode")
         selected = retrieval_mode if retrieval_mode is not None else default_retrieval_mode
         if selected is None:
@@ -645,7 +760,9 @@ def call_mcp_tool(
             top_k=top_k,
             retrieval_mode=retrieval_mode_value,
         )
-        sources = list(dict.fromkeys(serialize_chunk(chunk, root=root)["source"] for chunk in context))
+        sources = list(
+            dict.fromkeys(serialize_chunk(chunk, root=root)["source"] for chunk in context)
+        )
         payload = {
             "command": "search-repo",
             "command_status": "success",
@@ -688,23 +805,17 @@ def call_mcp_tool(
         payload["top_k"] = 4
         payload["bundle_version"] = bundle_version_value
         payload["overlay_path"] = overlay_path_value
-        payload["trace"] = build_runtime_trace(
-            RuntimeTraceContext(
-                question=question,
-                mode="baseline",
-                retrieval_mode=str(payload.get("retrieval_mode") or "lexical"),
-                sources=_string_list_field(payload, "sources"),
-                context_count=len(normalized_context_items),
-                top_k=4,
-                bundle_version=bundle_version_value,
-                overlay_path=overlay_path_value,
-                mcp_candidate_count=len(normalized_mcp_candidates),
-                answer_length=len(str(payload.get("answer") or "")),
-                context_field="context",
-                evidence_items=[
-                    item for item in normalized_context_items if isinstance(item, dict)
-                ],
-            )
+        payload["trace"] = build_runtime_trace_payload(
+            question=question,
+            retrieval_mode=str(payload.get("retrieval_mode") or "lexical"),
+            sources=_string_list_field(payload, "sources"),
+            context_items=[
+                item for item in normalized_context_items if isinstance(item, dict)
+            ],
+            bundle_version=bundle_version_value,
+            overlay_path=overlay_path_value,
+            mcp_candidate_count=len(normalized_mcp_candidates),
+            answer_length=len(str(payload.get("answer") or "")),
         )
         return _json_content(payload)
 
