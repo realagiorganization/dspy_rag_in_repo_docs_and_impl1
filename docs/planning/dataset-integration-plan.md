@@ -342,6 +342,15 @@ Current implementation note:
     `tools/pvc_artifact_sync.sh` now auto-cleans helper pods on script exit while explicit
     `cleanup` also deletes by `app=artifacts-sync,claim=<claim>` label so older `artifacts-sync-run`
     pods created without `--guild-id` no longer linger indefinitely
+  - preserve durable Codex and repo-RAG subtrees during guild-level artifact resets instead of
+    wiping the entire PVC root; the current allowlist now explicitly keeps `_codex_sessions`,
+    `.repo_rag_cache`, and `.repo_rag_bundle_store`
+  - add retrieval-corpus manifests plus retrieval-profile fingerprints to the Codex proxy cache so
+    changed indexed files invalidate stale mediation entries automatically instead of relying only
+    on TTL
+  - inject a bounded local `repo-rag` MCP server into the worker-generated Codex config and steer
+    the autonomous execution contract toward MCP-first discovery plus shell-only exact
+    verification, with `repo_rag_mcp_usage_summary.json` emitted per run to measure actual MCP use
   - confirm whether the new default `TRAINER_PROMOTE_CHANNEL=stable` should remain enabled in live
     AKS or be overridden explicitly for manual-only promotion
   - validate that later worker runs can resolve and consume a trainer-published bundle via `DSPY_BUNDLE_VERSION`

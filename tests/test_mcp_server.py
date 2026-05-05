@@ -17,12 +17,53 @@ def test_build_mcp_tool_definitions_exposes_only_bounded_tools() -> None:
     tools = mcp_server.build_mcp_tool_definitions()
 
     assert [tool.name for tool in tools] == [
+        "search_repo",
         "ask_repo",
         "bundle_status",
         "dspy_artifacts",
         "publish_trace",
     ]
     assert all("trainer" not in tool.name for tool in tools)
+
+
+def test_call_mcp_tool_search_repo_returns_structured_shortlist(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class FakeChunk:
+        source = tmp_path / "README.md"
+        text = "Repository research context."
+
+    monkeypatch.setattr(
+        mcp_server,
+        "collect_repository_context",
+        lambda **kwargs: [FakeChunk()],
+    )
+    monkeypatch.setattr(
+        mcp_server,
+        "serialize_chunk",
+        lambda chunk, *, root: {
+            "source": "README.md",
+            "preview": "Repository research context.",
+            "text": chunk.text,
+        },
+    )
+    monkeypatch.setattr(
+        mcp_server,
+        "discover_mcp_servers",
+        lambda root: [],
+    )
+
+    payload = mcp_server.call_mcp_tool(
+        "search_repo",
+        {"question": "Where should I start?", "retrieval_mode": "hybrid-vector", "top_k": 3},
+        server_root=tmp_path,
+    )
+
+    assert payload["isError"] is False
+    structured = cast(dict[str, Any], payload["structuredContent"])
+    assert structured["command"] == "search-repo"
+    assert structured["retrieval_mode"] == "hybrid-vector"
+    assert structured["sources"] == ["README.md"]
 
 
 def test_server_version_falls_back_when_package_metadata_is_unavailable(
@@ -281,7 +322,7 @@ def test_handle_mcp_message_lists_tools(tmp_path: Path) -> None:
     assert response is not None
     result = cast(dict[str, Any], response["result"])
     tools = cast(list[dict[str, Any]], result["tools"])
-    assert tools[0]["name"] == "ask_repo"
+    assert tools[0]["name"] == "search_repo"
 
 
 def test_handle_mcp_message_wraps_tool_errors(tmp_path: Path) -> None:

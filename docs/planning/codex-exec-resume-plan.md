@@ -80,6 +80,8 @@ session files.
       auth-config mismatches before attempting resume.
 - [x] Add a snapshot-manifest guard so partial-copy corruption falls back to reset instead of
       silently attempting resume.
+- [x] Preserve `_codex_sessions` across guild-level artifact resets instead of letting the
+      workflow root-wipe the entire artifacts PVC before the next worker run.
 - [x] Add a deeper repo-state drift guard beyond repo-root / branch mismatch, so large repository
       drift can force a controlled reset without blocking ordinary same-branch development.
 - [x] Add an explicitly parsed model/profile mismatch guard beyond config-digest checks.

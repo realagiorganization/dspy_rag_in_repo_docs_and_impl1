@@ -257,6 +257,14 @@ dedicated `codex_restore_probe.json` artifact, so later live runs can distinguis
 saw `_codex_sessions`” from “worker saw it and still rejected resume”; the same follow-up also
 suspends `_active_codex_session_spec` during guard preflight so `codex --version` checks cannot
 mutate the PVC-backed session lane before the real worker run begins. The newest
+storage/runtime follow-up now also preserves `_codex_sessions`, `.repo_rag_cache`, and
+`.repo_rag_bundle_store` during artifacts-PVC reset operations instead of root-wiping the whole
+claim, adds retrieval-corpus manifests plus retrieval-profile fingerprints to proxy cache keys so
+repo-rag invalidates stale mediation entries when indexed files change, and injects a bounded
+local `repo-rag` MCP server into the generated Codex config so discovery/search can prefer MCP
+while exact verification still falls back to shell. Worker-side artifacts now also include a
+`repo_rag_mcp_usage_summary.json` summary so later live runs can measure whether Codex actually
+used `search_repo` before broad shell exploration. The newest
 bundle-resolution follow-up also tightens the DSPy
 handoff path itself: `repo-rag` local bundle lookup now understands both the repo-local
 `artifacts/dspy/...` layout and the staged worker mirror layout `channels/...` + `versions/...`,

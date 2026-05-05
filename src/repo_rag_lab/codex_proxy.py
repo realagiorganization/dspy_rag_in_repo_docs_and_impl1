@@ -18,8 +18,10 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import httpx
 
 from .azure_runtime import resolve_azure_openai_runtime
+from .corpus import build_corpus_manifest, write_corpus_manifest
 from .dspy_training import resolve_dspy_lm_config
 from .dspy_workflow import RepositoryRAG
+from .retrieval import RetrievalMode
 from .runtime_artifacts import (
     fetch_remote_bundle,
     inspect_bundle_channel,
@@ -66,6 +68,7 @@ class CodexMediationResult:
     rag_status: str
     dspy_status: str
     summary: str
+    retrieval_mode: str
     sources: list[str]
     warnings: list[str]
     bundle_version: str | None
@@ -102,6 +105,7 @@ class CodexProxyConfig:
     trivial_token_budget: int = _DEFAULT_TRIVIAL_TOKEN_BUDGET
     essentials_count: int = _DEFAULT_ESSENTIAL_COUNT
     low_signal_min_sources: int = 1
+    retrieval_mode: RetrievalMode | None = None
     cache_dir: Path | None = None
     cache_ttl_seconds: int = _DEFAULT_CACHE_TTL_SECONDS
 
@@ -247,6 +251,7 @@ def _result_from_payload(payload: dict[str, object]) -> CodexMediationResult | N
             rag_status=str(payload.get("rag_status") or "failed"),
             dspy_status=str(payload.get("dspy_status") or "disabled"),
             summary=str(payload.get("summary") or ""),
+            retrieval_mode=str(payload.get("retrieval_mode") or "lexical"),
             sources=[
                 str(item).strip()
                 for item in payload.get("sources", [])
@@ -445,6 +450,7 @@ def build_codex_mediation(
     trivial_token_budget: int = _DEFAULT_TRIVIAL_TOKEN_BUDGET,
     essentials_count: int = _DEFAULT_ESSENTIAL_COUNT,
     low_signal_min_sources: int = 1,
+    retrieval_mode: RetrievalMode | None = None,
 ) -> CodexMediationResult:
     """Build one combined repo-grounded mediation block for Codex."""
 
@@ -458,8 +464,13 @@ def build_codex_mediation(
     effective_essentials = 1 if task_classification == "trivial" else max(1, essentials_count)
 
     warnings: list[str] = []
-    rag_answer = ask_repository(question=question, root=resolved_root)
+    rag_answer = ask_repository(
+        question=question,
+        root=resolved_root,
+        retrieval_mode=retrieval_mode,
+    )
     warnings.extend(getattr(rag_answer, "retrieval_warnings", ()) or ())
+    effective_retrieval_mode = str(getattr(rag_answer, "retrieval_mode", "lexical") or "lexical")
     previews: list[dict[str, str]] = []
     sources: list[str] = []
     if rag_answer.context:
@@ -515,12 +526,17 @@ def build_codex_mediation(
                 program_path=program_path,
                 lm_config=lm_config,
                 require_configured_lm=True,
+                retrieval_mode=retrieval_mode,
             )
             dspy_result = runner(question)
             if not dspy_result.answer.strip():
                 raise RuntimeError("DSPy produced an empty answer.")
             dspy_status = "success"
             summary = dspy_result.answer.strip()
+            effective_retrieval_mode = str(
+                getattr(dspy_result, "retrieval_mode", effective_retrieval_mode)
+                or effective_retrieval_mode
+            )
             program_path_text = (
                 program_path.relative_to(bundle_root.resolve()).as_posix()
                 if program_path.is_relative_to(bundle_root.resolve())
@@ -576,6 +592,7 @@ def build_codex_mediation(
         rag_status=rag_status,
         dspy_status=dspy_status,
         summary=summary,
+        retrieval_mode=effective_retrieval_mode,
         sources=sources[: max(1, effective_essentials + 1)],
         warnings=warnings,
         bundle_version=resolved_bundle_version,
@@ -767,6 +784,22 @@ class _CodexProxyRuntime:
         )
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_ttl_seconds = max(0, int(config.cache_ttl_seconds))
+        self.corpus_manifest_path = self.cache_dir / "retrieval-corpus-manifest.json"
+        self.corpus_manifest = build_corpus_manifest(self.config.repository_root)
+        write_corpus_manifest(self.corpus_manifest_path, self.corpus_manifest)
+        self.corpus_fingerprint = str(
+            self.corpus_manifest.get("corpus_fingerprint") or ""
+        ).strip()
+        self.retrieval_profile_fingerprint = self._compute_retrieval_profile_fingerprint()
+
+    def _compute_retrieval_profile_fingerprint(self) -> str:
+        profile_path = self.config.repository_root / "config" / "retrieval-profile.json"
+        if not profile_path.is_file():
+            return "default-profile"
+        try:
+            return hashlib.sha256(profile_path.read_bytes()).hexdigest()
+        except OSError:
+            return "unreadable-profile"
 
     def _cache_key(self, task: str) -> str:
         identity = "|".join(
@@ -777,8 +810,11 @@ class _CodexProxyRuntime:
                 str(self.config.bundle_channel),
                 str(self.config.prefer_dspy),
                 str(self.config.dspy_top_k),
+                str(self.config.retrieval_mode or ""),
                 str(self.config.token_budget),
                 str(self.config.trivial_token_budget),
+                self.corpus_fingerprint,
+                self.retrieval_profile_fingerprint,
                 task.strip(),
             ]
         )
@@ -810,6 +846,7 @@ class _CodexProxyRuntime:
             rag_status=cached.rag_status,
             dspy_status=cached.dspy_status,
             summary=cached.summary,
+            retrieval_mode=cached.retrieval_mode,
             sources=cached.sources,
             warnings=cached.warnings,
             bundle_version=cached.bundle_version,
@@ -854,6 +891,7 @@ class _CodexProxyRuntime:
             trivial_token_budget=self.config.trivial_token_budget,
             essentials_count=self.config.essentials_count,
             low_signal_min_sources=self.config.low_signal_min_sources,
+            retrieval_mode=self.config.retrieval_mode,
         )
         self._mediation_cache[task] = mediation
         self._store_cached_mediation(task, mediation)
@@ -908,6 +946,7 @@ def serve_codex_proxy(
     trivial_token_budget: int = _DEFAULT_TRIVIAL_TOKEN_BUDGET,
     essentials_count: int = _DEFAULT_ESSENTIAL_COUNT,
     low_signal_min_sources: int = 1,
+    retrieval_mode: RetrievalMode | None = None,
     cache_dir: Path | None = None,
     cache_ttl_seconds: int = _DEFAULT_CACHE_TTL_SECONDS,
     ready_file: Path | None = None,
@@ -928,6 +967,7 @@ def serve_codex_proxy(
         trivial_token_budget=trivial_token_budget,
         essentials_count=essentials_count,
         low_signal_min_sources=low_signal_min_sources,
+        retrieval_mode=retrieval_mode,
         cache_dir=cache_dir.resolve() if cache_dir is not None else None,
         cache_ttl_seconds=cache_ttl_seconds,
     )

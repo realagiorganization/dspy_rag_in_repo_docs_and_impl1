@@ -7,6 +7,8 @@ trainer-side recompilation, long retrieval evaluations, or notebook execution th
 from __future__ import annotations
 
 import json
+import os
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
@@ -17,7 +19,8 @@ from .retrieval import RetrievalMode
 from .retrieval_profile import SUPPORTED_RETRIEVAL_MODES
 from .runtime_artifacts import RuntimeTraceContext, build_runtime_trace
 from .utilities import run_bundle_inspection, run_dspy_artifacts, run_trace_enqueue
-from .workflow import ask_repository
+from .mcp import discover_mcp_servers
+from .workflow import ask_repository, collect_repository_context, serialize_chunk
 
 MCP_PROTOCOL_VERSION = "2024-11-05"
 MCP_SERVER_NAME = "repo-rag-mcp"
@@ -26,6 +29,8 @@ MCP_SERVER_INSTRUCTIONS = (
     "full retrieval-eval sweeps, or notebook execution through this MCP surface."
 )
 RETRIEVAL_MODE_ENUM = sorted(SUPPORTED_RETRIEVAL_MODES)
+MCP_USAGE_LOG_ENV = "REPO_RAG_MCP_USAGE_LOG"
+MCP_DEFAULT_RETRIEVAL_MODE_ENV = "REPO_RAG_MCP_DEFAULT_RETRIEVAL_MODE"
 
 
 @dataclass(frozen=True)
@@ -59,6 +64,32 @@ def _artifact_metadata() -> dict[str, list[str]]:
     """Return an empty artifact metadata payload."""
 
     return {"input_paths": [], "generated_paths": [], "related_paths": []}
+
+
+def _log_usage_event(
+    *,
+    method: str,
+    tool_name: str | None = None,
+    server_root: Path,
+    details: Mapping[str, object] | None = None,
+) -> None:
+    log_path_text = str(os.getenv(MCP_USAGE_LOG_ENV) or "").strip()
+    if not log_path_text:
+        return
+    log_path = Path(log_path_text)
+    payload = {
+        "timestamp_epoch": time.time(),
+        "method": method,
+        "tool_name": tool_name,
+        "server_root": str(server_root),
+        "details": dict(details or {}),
+    }
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload) + "\n")
+    except OSError:
+        return
 
 
 def _resolve_root(server_root: Path, requested_root: object) -> Path:
@@ -96,6 +127,24 @@ def build_mcp_tool_definitions() -> list[MCPToolDefinition]:
     """Return the bounded MCP tool catalog exposed by this repository."""
 
     return [
+        MCPToolDefinition(
+            name="search_repo",
+            description=(
+                "Search the repository corpus and return a bounded shortlist of relevant files "
+                "plus matching text previews. Prefer this for repository discovery before shell reads."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "question": {"type": "string"},
+                    "root": {"type": "string"},
+                    "retrieval_mode": {"type": "string", "enum": RETRIEVAL_MODE_ENUM},
+                    "top_k": {"type": "integer", "minimum": 1, "maximum": 12},
+                },
+                "required": ["question"],
+                "additionalProperties": False,
+            },
+        ),
         MCPToolDefinition(
             name="ask_repo",
             description=(
@@ -186,25 +235,55 @@ def call_mcp_tool(
 
     params = dict(arguments or {})
     root = _resolve_root(server_root, params.get("root"))
+    default_retrieval_mode = os.getenv(MCP_DEFAULT_RETRIEVAL_MODE_ENV)
+
+    def _resolve_tool_retrieval_mode() -> RetrievalMode | None:
+        retrieval_mode = params.get("retrieval_mode")
+        selected = retrieval_mode if retrieval_mode is not None else default_retrieval_mode
+        if selected is None:
+            return None
+        if selected not in SUPPORTED_RETRIEVAL_MODES:
+            raise ValueError(
+                "`retrieval_mode` must be one of: " + ", ".join(sorted(SUPPORTED_RETRIEVAL_MODES))
+            )
+        return selected  # type: ignore[return-value]
+
+    if tool_name == "search_repo":
+        question = params.get("question")
+        if not isinstance(question, str) or not question.strip():
+            raise ValueError("`search_repo` requires a non-empty `question`.")
+        retrieval_mode_value = _resolve_tool_retrieval_mode()
+        raw_top_k = params.get("top_k", 4)
+        try:
+            top_k = max(1, min(12, int(raw_top_k)))
+        except (TypeError, ValueError):
+            raise ValueError("`top_k` must be an integer between 1 and 12.") from None
+        context = collect_repository_context(
+            question=question,
+            root=root,
+            top_k=top_k,
+            retrieval_mode=retrieval_mode_value,
+        )
+        sources = list(dict.fromkeys(serialize_chunk(chunk, root=root)["source"] for chunk in context))
+        payload = {
+            "command": "search-repo",
+            "command_status": "success",
+            "root": str(root),
+            "question": question,
+            "sources": sources,
+            "context": [serialize_chunk(chunk, root=root) for chunk in context],
+            "retrieval_mode": retrieval_mode_value or "default-profile",
+            "warnings": [],
+            "artifact_metadata": _artifact_metadata(),
+            "mcp_candidates": [candidate.__dict__ for candidate in discover_mcp_servers(root)],
+        }
+        return _json_content(payload)
 
     if tool_name == "ask_repo":
         question = params.get("question")
         if not isinstance(question, str) or not question.strip():
             raise ValueError("`ask_repo` requires a non-empty `question`.")
-        retrieval_mode = params.get("retrieval_mode")
-        if retrieval_mode is not None and retrieval_mode not in SUPPORTED_RETRIEVAL_MODES:
-            raise ValueError(
-                "`retrieval_mode` must be one of: " + ", ".join(sorted(SUPPORTED_RETRIEVAL_MODES))
-            )
-        retrieval_mode_value: RetrievalMode | None = None
-        if retrieval_mode == "lexical":
-            retrieval_mode_value = "lexical"
-        elif retrieval_mode == "idf-rerank":
-            retrieval_mode_value = "idf-rerank"
-        elif retrieval_mode == "vector":
-            retrieval_mode_value = "vector"
-        elif retrieval_mode == "hybrid-vector":
-            retrieval_mode_value = "hybrid-vector"
+        retrieval_mode_value = _resolve_tool_retrieval_mode()
         rag_result = ask_repository(
             question=question,
             root=root,
@@ -322,6 +401,7 @@ def handle_mcp_message(
     param_mapping = params if isinstance(params, Mapping) else {}
 
     if method == "initialize":
+        _log_usage_event(method=method, server_root=server_root)
         return _json_rpc_success(
             message_id,
             {
@@ -342,6 +422,7 @@ def handle_mcp_message(
         return _json_rpc_success(message_id, {})
 
     if method == "tools/list":
+        _log_usage_event(method=method, server_root=server_root)
         return _json_rpc_success(
             message_id,
             {"tools": [tool.to_payload() for tool in build_mcp_tool_definitions()]},
@@ -353,9 +434,18 @@ def handle_mcp_message(
             return _json_rpc_error(message_id, -32602, "Tool calls require a non-empty `name`.")
         arguments = param_mapping.get("arguments")
         try:
+            arguments_mapping = arguments if isinstance(arguments, Mapping) else None
+            _log_usage_event(
+                method=method,
+                tool_name=tool_name,
+                server_root=server_root,
+                details={
+                    "argument_keys": sorted(arguments_mapping.keys()) if arguments_mapping else [],
+                },
+            )
             result = call_mcp_tool(
                 tool_name,
-                arguments if isinstance(arguments, Mapping) else None,
+                arguments_mapping,
                 server_root=server_root,
             )
         except Exception as exc:

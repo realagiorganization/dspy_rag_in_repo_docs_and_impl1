@@ -40,7 +40,7 @@ docs/architecture/inspired/dspy-rag-tutorial.md,docs,markdown,35,1474,DSPy Tutor
 docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md,docs,markdown,38,1555,Implementing RAG with DSPy: Technical Guide
 docs/architecture/mcp-discovery.md,docs,markdown,54,1757,MCP Discovery Notes
 docs/architecture/package-api.md,docs,markdown,127,9186,Package API Notes
-docs/architecture/research-narrative.md,docs,markdown,506,37523,"Repository research narrative tying code, docs, and verification together"
+docs/architecture/research-narrative.md,docs,markdown,534,39942,"Repository research narrative tying code, docs, and verification together"
 docs/archive/repo-completeness-checklist.md,docs,markdown,238,7450,Archived completeness snapshot kept for workflow and lockfile policy context
 docs/audit/2026-03-15-repo-state.md,docs,markdown,151,5989,Repository audit note for 2026 03 15 repo state
 docs/audit/2026-03-17-docs-and-uv-refresh.md,docs,markdown,79,3977,Repository audit note for 2026 03 17 docs and uv refresh
@@ -140,7 +140,7 @@ docs/audit/2026-05-01-versioned-trainer-lineage-bundles.md,docs,markdown,123,582
 docs/audit/2026-05-02-hybrid-vector-retrieval-default.md,docs,markdown,385,18302,Repository audit note for 2026 05 02 hybrid vector retrieval default
 docs/audit/2026-05-02-live-trainer-still-not-publishing-bundles.md,docs,markdown,162,6657,Repository audit note for 2026 05 02 live trainer still not publishing bundles
 docs/audit/2026-05-02-trainer-context-group-champion-index-stage1.md,docs,markdown,330,18201,Repository audit note for 2026 05 02 trainer context group champion index stage1
-docs/audit/2026-05-02-zz-codex-exec-resume-session-state-stage0.md,docs,markdown,1018,49319,Repository audit note for 2026 05 02 zz codex exec resume session state stage0
+docs/audit/2026-05-02-zz-codex-exec-resume-session-state-stage0.md,docs,markdown,1740,81017,Repository audit note for 2026 05 02 zz codex exec resume session state stage0
 docs/audit/README.md,docs,markdown,14,426,Repository audit note for README
 docs/guides/hushwheel-fixture-rag-guide.md,docs,markdown,138,5169,RAG Guide For The Hushwheel Fixture
 docs/operations/azure-deployment.md,docs,markdown,111,4901,Azure Deployment Notes
@@ -148,8 +148,8 @@ docs/operations/environment.md,docs,markdown,130,7589,Environment and secret ref
 docs/operations/runtime-image.md,docs,markdown,46,1989,Runtime Image Notes
 docs/operations/simple-end-to-end-verification-guide.md,docs,markdown,105,4111,Simple End-To-End Verification Guide
 docs/operations/trainer-deployment.md,docs,markdown,152,6047,Trainer Deployment Notes
-docs/planning/codex-exec-resume-plan.md,docs,markdown,187,10163,Codex Exec Resume Plan
-docs/planning/dataset-integration-plan.md,docs,markdown,392,27869,Dataset Integration Plan
+docs/planning/codex-exec-resume-plan.md,docs,markdown,195,10803,Codex Exec Resume Plan
+docs/planning/dataset-integration-plan.md,docs,markdown,416,30048,Dataset Integration Plan
 docs/planning/repo-hardening-plan.md,docs,markdown,71,4545,Repository Hardening Plan
 docs/planning/trainer-context-group-champion-plan.md,docs,markdown,62,4058,Trainer Context-Group Champion Plan
 mkdocs.yml,mkdocs.yml,yaml,37,843,site_name: Repository RAG Lab
@@ -247,6 +247,10 @@ samples/logs/20260503T080503Z-gh-runs-develop-no-new-run-after-codex-resume-lane
 samples/logs/20260503T153706Z-gh-runs-develop-no-new-run-after-staged-bundle-mirror-push.md,samples,markdown,27,1171,GitHub Runs After `Support staged bundle mirrors and stale queue skips`
 samples/logs/20260503T160232Z-gh-runs-develop-no-new-run-after-no-op-trainer-promotion-fix-push.md,samples,markdown,32,1482,GitHub Run Inspection
 samples/logs/20260504T090704Z-gh-runs-develop-no-new-run-after-fix-codex-resume-pvc-session-path-push.md,samples,markdown,46,1689,GitHub Run Check After `Fix Codex resume PVC session path`
+samples/logs/20260504T111427Z-gh-runs-develop-no-new-run-after-codex-resume-restore-fallback-debug-push.md,samples,markdown,72,3370,GitHub Run Check After `Document Codex resume restore fallback debug`
+samples/logs/20260504T141246Z-gh-runs-develop-no-new-run-after-codex-resume-guard-hardening-push.md,samples,markdown,67,2837,GitHub Run Check After `Harden Codex resume restore guards`
+samples/logs/20260504T161106Z-gh-runs-develop-no-new-run-after-explicit-codex-resume-targeting-push.md,samples,markdown,27,1175,GitHub Actions inspection after `464e16b` push
+samples/logs/20260504T180441Z-gh-runs-develop-no-new-run-after-codex-session-continuity-markers-push.md,samples,markdown,28,986,GitHub Actions inspection after `490fe41` push
 samples/logs/README.md,samples,markdown,11,331,GitHub Run Logs
 samples/population/hushwheel_fixture_population_candidates.yaml,samples,yaml,22,955,- source: README.md
 samples/population/repository_population_candidates.yaml,samples,yaml,16,690,- source: README.md
@@ -257,16 +261,16 @@ src/repo_rag_lab/azure.py,src,python,76,2592,Azure deployment manifest helpers f
 src/repo_rag_lab/azure_artifacts.py,src,python,378,14666,Azure Blob + Queue helpers for trainer-side traces and global bundle storage.
 src/repo_rag_lab/azure_runtime.py,src,python,577,20129,"Azure runtime normalization, live probes, and cloud-completion helpers."
 src/repo_rag_lab/benchmarks.py,src,python,484,16524,Retrieval benchmark helpers for notebook assertions and logging.
-src/repo_rag_lab/cli.py,src,python,1331,58263,Command-line entrypoints for the shared repository RAG workflows.
-src/repo_rag_lab/codex_proxy.py,src,python,965,34195,Local streaming proxy that injects repo-RAG + DSPy mediation for Codex.
-src/repo_rag_lab/corpus.py,src,python,112,2866,Repository file loading helpers for the baseline text corpus.
+src/repo_rag_lab/cli.py,src,python,1333,58423,Command-line entrypoints for the shared repository RAG workflows.
+src/repo_rag_lab/codex_proxy.py,src,python,1005,36111,Local streaming proxy that injects repo-RAG + DSPy mediation for Codex.
+src/repo_rag_lab/corpus.py,src,python,183,5267,Repository file loading helpers for the baseline text corpus.
 src/repo_rag_lab/dspy_training.py,src,python,885,32123,DSPy training and artifact helpers for repository-grounded RAG.
 src/repo_rag_lab/dspy_workflow.py,src,python,163,5888,DSPy-backed runtime wrappers around the repository retrieval workflow.
 src/repo_rag_lab/exploratorium_translation.py,src,python,1009,38049,Generate the bilingual exploratorium translation publication surfaces.
 src/repo_rag_lab/file_summaries.py,src,python,327,10564,Generate tracked repository file-summary surfaces.
 src/repo_rag_lab/github_pr_gates.py,src,python,140,3979,GitHub branch-protection helpers for required pull-request gate checks.
 src/repo_rag_lab/mcp.py,src,python,84,2947,Discovery helpers for MCP-related repository artifacts.
-src/repo_rag_lab/mcp_server.py,src,python,424,15861,Minimal stdio MCP server for bounded repo-RAG operations.
+src/repo_rag_lab/mcp_server.py,src,python,514,19406,Minimal stdio MCP server for bounded repo-RAG operations.
 src/repo_rag_lab/notebook_runner.py,src,python,491,16433,Monitored batch execution helpers for repository notebooks.
 src/repo_rag_lab/notebook_scaffolding.py,src,python,258,10965,High-level notebook scaffolds built from tested repository helpers.
 src/repo_rag_lab/notebook_support.py,src,python,89,2843,Helpers shared by notebooks so their setup logic stays in tested Python code.
@@ -326,7 +330,7 @@ tests/fixtures/hushwheel_lexiconarium/tools/regenerate_hushwheel_fixture.py,test
 tests/test_azure_runtime.py,tests,python,208,7540,Python module for test azure runtime
 tests/test_benchmarks_and_notebook_scaffolding.py,tests,python,274,11859,Python module for test benchmarks and notebook scaffolding
 tests/test_cli_and_dspy.py,tests,python,1872,68435,Python module for test cli and dspy
-tests/test_codex_proxy.py,tests,python,344,12184,Python module for test codex proxy
+tests/test_codex_proxy.py,tests,python,352,12532,Python module for test codex proxy
 tests/test_dspy_training.py,tests,python,598,21722,Python module for test dspy training
 tests/test_exploratorium_translation.py,tests,python,138,5239,Python module for test exploratorium translation
 tests/test_file_summaries.py,tests,python,230,9110,Python module for test file summaries
@@ -336,7 +340,7 @@ tests/test_hushwheel_program_surface.py,tests,python,125,4626,Python module for 
 tests/test_live_azure_integration.py,tests,python,83,2634,Python module for test live azure integration
 tests/test_lookup_first.py,tests,python,108,3559,Python module for test lookup first
 tests/test_mcp_branches.py,tests,python,31,1077,Python module for test mcp branches
-tests/test_mcp_server.py,tests,python,444,14725,Python module for test mcp server
+tests/test_mcp_server.py,tests,python,485,15931,Python module for test mcp server
 tests/test_notebook_runner.py,tests,python,84,3088,Python module for test notebook runner
 tests/test_pages_site.py,tests,python,225,9045,Python module for test pages site
 tests/test_population_samples.py,tests,python,76,3144,Python module for test population samples

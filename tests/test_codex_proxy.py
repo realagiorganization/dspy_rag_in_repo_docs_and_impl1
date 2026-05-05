@@ -115,6 +115,7 @@ def test_running_codex_proxy_forwards_sse_and_injects_mediation(
         rag_status="success",
         dspy_status="success",
         summary="use README first",
+        retrieval_mode="hybrid-vector",
         sources=["README.md"],
         warnings=[],
         bundle_version="stable",
@@ -180,7 +181,11 @@ def test_build_codex_mediation_suppresses_low_signal(
     repo.mkdir()
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy.ask_repository",
-        lambda question, root: SimpleNamespace(context=[], summary="thin"),
+        lambda question, root, retrieval_mode=None: SimpleNamespace(
+            context=[],
+            summary="thin",
+            retrieval_mode=retrieval_mode or "lexical",
+        ),
     )
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy._build_heuristic_previews",
@@ -276,7 +281,7 @@ def test_running_codex_proxy_uses_budgeted_disk_cache(
     repo.mkdir()
     (repo / "README.md").write_text("repo summary\n" * 40, encoding="utf-8")
 
-    def fake_ask_repository(question, root):
+    def fake_ask_repository(question, root, retrieval_mode=None):
         calls["ask_repository"] += 1
         return SimpleNamespace(
             context=[
@@ -284,6 +289,7 @@ def test_running_codex_proxy_uses_budgeted_disk_cache(
                 Chunk(source=repo / "README.md", text="more summary " * 120),
             ],
             summary="Repository summary " * 40,
+            retrieval_mode=retrieval_mode or "lexical",
         )
 
     monkeypatch.setattr("repo_rag_lab.codex_proxy.ask_repository", fake_ask_repository)
@@ -323,6 +329,7 @@ def test_running_codex_proxy_uses_budgeted_disk_cache(
         assert status_first["cache_hit"] is False
         assert status_first["injected"] is True
         assert status_first["estimated_tokens"] <= status_first["budget_tokens"]
+        assert status_first["retrieval_mode"] == "lexical"
 
     with running_codex_proxy(config) as proxy:
         second = httpx.post(
@@ -335,6 +342,7 @@ def test_running_codex_proxy_uses_budgeted_disk_cache(
         status_second = json.loads(proxy.status_path.read_text(encoding="utf-8"))
         assert status_second["cache_hit"] is True
         assert status_second["estimated_tokens"] <= status_second["budget_tokens"]
+        assert status_second["retrieval_mode"] == "lexical"
 
     upstream.shutdown()
     upstream_thread.join(timeout=5)

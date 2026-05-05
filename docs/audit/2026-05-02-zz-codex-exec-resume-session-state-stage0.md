@@ -168,6 +168,66 @@
 - `cargo build --manifest-path rust-cli/Cargo.toml`
   - `pass`
 
+### Exact destructive pipeline stage that wipes the guild artifacts PVC
+
+Deep workflow inspection plus the live worker snapshot now identify the exact destructive path
+that invalidates persisted Codex session continuity.
+
+The wipe does **not** come from `parallel-prompt-execution-aks.yml`. The destructive stage lives in
+`../dataset/.github/workflows/export-prompts.yml`:
+
+- step: `Early reset artifact PVC per guild`
+  - file: `../dataset/.github/workflows/export-prompts.yml:686-707`
+  - condition: `if: steps.sync-channels.outputs.changed == 'true'`
+  - action per guild:
+    - `bash tools/pvc_artifact_sync.sh ensure --guild-id "$gid" ...`
+    - `bash tools/pvc_artifact_sync.sh reset --guild-id "$gid" --run-slug "${PIPELINE_RUN_ID}"`
+
+That `reset` command is not scoped to `DUMPS/`, `runs/`, or any other subtree. It wipes the root of
+the guild claim:
+
+- file: `../dataset/tools/pvc_artifact_sync.sh:220-225`
+- implementation:
+  - `reset_pvc()`
+  - `kubectl -n "$NAMESPACE" exec "$pod" -- sh -c "rm -rf /artifacts/*"`
+
+Because `_codex_sessions` lives directly under the claim root at `/app/artifacts/_codex_sessions`,
+this workflow step deletes it together with every other root-level artifact subtree before the
+execution workflow starts. That matches the live worker evidence exactly:
+
+- startup `restore_probe` sees only `runs/` and `worker_execution.log`
+- `_codex_sessions` is absent at worker startup
+- the worker therefore reports `restore_status = fresh-no-snapshot`
+- a new `_codex_sessions` tree is created again only after the run completes
+
+The same export workflow then dispatches the AKS execution workflow:
+
+- step: `Trigger parallel prompt execution workflow`
+  - file: `../dataset/.github/workflows/export-prompts.yml:1143-1160`
+  - target workflow: `parallel-prompt-execution-aks.yml`
+
+So the current end-to-end path is:
+
+1. `export-prompts.yml` detects changed channels
+2. `export-prompts.yml` wipes the entire guild artifacts PVC via `reset`
+3. `export-prompts.yml` dispatches `parallel-prompt-execution-aks.yml`
+4. workers start against a PVC whose root-level `_codex_sessions` was just deleted
+5. workers must start `fresh`
+
+This explains why all worker-side `resume` fixes were ineffective in live runs: the persisted
+session subtree was being deleted upstream before the execution workflow began.
+
+### Verification executed in this turn
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+
 ### Deep live root-cause analysis after the latest failed `resume` run
 
 The newest uploaded artifacts plus direct cluster inspection finally narrow the remaining failure
@@ -1626,6 +1686,42 @@ postmortem:
   removed the lingering helper, and a follow-up
   `kubectl -n prompt-exec-1353735964635435100 get pods -l app=artifacts-sync`
   returned no remaining helper pods
+
+### Latest local follow-up on reset preservation, corpus manifests, and MCP-first discovery
+
+The newest local implementation pass closes four adjacent gaps across `repo-rag` and `dataset`:
+
+- `tools/pvc_artifact_sync.sh reset` no longer wipes the entire guild-level artifacts PVC blindly.
+  It now preserves the three durable state roots that must survive between runs:
+  - `_codex_sessions`
+  - `.repo_rag_cache`
+  - `.repo_rag_bundle_store`
+- `repo-rag` now writes a retrieval-corpus manifest (`retrieval-corpus-manifest.json`) into the
+  mediation cache root and folds both the corpus fingerprint and the repository retrieval-profile
+  fingerprint into proxy cache keys. That means changed indexed files or a changed
+  `config/retrieval-profile.json` invalidate cached mediation responses immediately instead of
+  waiting only for TTL.
+- `repo-rag serve-codex-proxy` now exposes the actual low-level retrieval engine in its status
+  payload (`lexical`, `idf-rerank`, `vector`, or `hybrid-vector`) instead of overloading
+  `retrieval_mode` with the broader `dspy_rag` mediation label.
+- the worker-side Codex proxy path now injects a bounded local `repo-rag` MCP server into the
+  generated Codex config and the autonomous execution contract now explicitly separates:
+  - repository discovery/search -> repo-RAG MCP first
+  - exact file verification and post-edit checks -> shell fallback
+
+The worker also now persists one dedicated `repo_rag_mcp_usage_summary.json` artifact plus the
+same summary inside `codex_session_state.json`, so later live artifact reviews can distinguish:
+
+- “Codex never used MCP at all”
+- “Codex used MCP but only for narrow follow-up calls”
+- “Codex used `search_repo` for discovery before exact shell reads”
+
+These changes are local verification wins only so far. They do not yet prove live `resume`, but
+they remove two real sources of false-negative diagnosis:
+
+1. root-level artifact-PVC resets silently deleting `_codex_sessions` before the next worker run
+2. stale proxy-cache reuse across changed retrieval corpora making it harder to reason about
+   whether Codex and repo-RAG were seeing the same repository state
 
 ### Verification executed in this turn
 
