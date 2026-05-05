@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Iterable
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 TEXT_SUFFIXES = {
     ".c",
@@ -48,6 +51,10 @@ class RepoDocument:
 
     path: Path
     text: str
+
+
+def _text_sha256(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def iter_text_files(root: Path) -> Iterable[Path]:
@@ -109,3 +116,67 @@ def _read_document(path: Path, *, root: Path | None = None) -> RepoDocument:
         with suppress(ValueError):
             path = path.relative_to(root)
     return RepoDocument(path=path, text=text)
+
+
+def build_corpus_manifest(
+    root: Path,
+    *,
+    documents: Iterable[RepoDocument] | None = None,
+) -> dict[str, Any]:
+    """Return a stable retrieval-corpus manifest for the current repository text set."""
+
+    resolved_root = root.resolve()
+    manifest_entries: list[dict[str, Any]] = []
+
+    if documents is None:
+        for path in iter_text_files(resolved_root):
+            stat = path.stat()
+            document = _read_document(path, root=resolved_root)
+            manifest_entries.append(
+                {
+                    "path": document.path.as_posix(),
+                    "size_bytes": int(stat.st_size),
+                    "mtime_ns": int(stat.st_mtime_ns),
+                    "text_sha256": _text_sha256(document.text),
+                }
+            )
+    else:
+        for document in documents:
+            relative_path = document.path
+            absolute_path = (
+                relative_path
+                if relative_path.is_absolute()
+                else (resolved_root / relative_path).resolve()
+            )
+            stat = absolute_path.stat()
+            manifest_entries.append(
+                {
+                    "path": relative_path.as_posix(),
+                    "size_bytes": int(stat.st_size),
+                    "mtime_ns": int(stat.st_mtime_ns),
+                    "text_sha256": _text_sha256(document.text),
+                }
+            )
+
+    manifest_entries.sort(key=lambda entry: str(entry["path"]))
+    fingerprint_material = "\n".join(
+        f'{entry["path"]}\t{entry["text_sha256"]}\t{entry["size_bytes"]}\t{entry["mtime_ns"]}'
+        for entry in manifest_entries
+    )
+    return {
+        "schema_version": 1,
+        "root": str(resolved_root),
+        "document_count": len(manifest_entries),
+        "entries": manifest_entries,
+        "corpus_fingerprint": hashlib.sha256(
+            fingerprint_material.encode("utf-8")
+        ).hexdigest(),
+    }
+
+
+def write_corpus_manifest(manifest_path: Path, manifest: dict[str, Any]) -> Path:
+    """Persist one retrieval-corpus manifest to disk."""
+
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(f"{json.dumps(manifest, indent=2)}\n", encoding="utf-8")
+    return manifest_path
