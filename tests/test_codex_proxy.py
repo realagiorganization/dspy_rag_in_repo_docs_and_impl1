@@ -226,6 +226,7 @@ def test_build_codex_mediation_suppresses_low_signal(
 ) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
+
     def fake_ask_repository(
         question: str,
         root: Path,

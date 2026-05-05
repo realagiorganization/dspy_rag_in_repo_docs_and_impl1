@@ -68,6 +68,7 @@ def test_ask_repository_live_uses_openai_completion(
         "repo_rag_lab.workflow._collect_repository_context_execution",
         fake_collect_repository_context_execution,
     )
+
     def fake_discover_mcp_servers(root: Path) -> list[Candidate]:
         del root
         return [Candidate()]
@@ -108,6 +109,7 @@ def test_ask_repository_live_falls_back_without_context(
         "repo_rag_lab.workflow._collect_repository_context_execution",
         fake_collect_repository_context_execution,
     )
+
     def fake_discover_no_mcp(root: Path) -> list[object]:
         del root
         return []
