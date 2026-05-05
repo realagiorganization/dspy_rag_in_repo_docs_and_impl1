@@ -160,7 +160,7 @@ def build_corpus_manifest(
 
     manifest_entries.sort(key=lambda entry: str(entry["path"]))
     fingerprint_material = "\n".join(
-        f'{entry["path"]}\t{entry["text_sha256"]}\t{entry["size_bytes"]}\t{entry["mtime_ns"]}'
+        f"{entry['path']}\t{entry['text_sha256']}\t{entry['size_bytes']}\t{entry['mtime_ns']}"
         for entry in manifest_entries
     )
     return {
@@ -168,9 +168,7 @@ def build_corpus_manifest(
         "root": str(resolved_root),
         "document_count": len(manifest_entries),
         "entries": manifest_entries,
-        "corpus_fingerprint": hashlib.sha256(
-            fingerprint_material.encode("utf-8")
-        ).hexdigest(),
+        "corpus_fingerprint": hashlib.sha256(fingerprint_material.encode("utf-8")).hexdigest(),
     }
 
 

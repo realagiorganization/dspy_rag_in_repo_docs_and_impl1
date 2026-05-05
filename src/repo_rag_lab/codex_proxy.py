@@ -7,12 +7,12 @@ import json
 import os
 import threading
 import time
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx
@@ -197,7 +197,7 @@ def _build_budgeted_message(
     if sources:
         section = ["", "Inspect first:"]
         for source in sources[: max(1, essentials_count + 1)]:
-            trial = section + [f"- {source}"]
+            trial = [*section, f"- {source}"]
             if _estimate_token_count(_candidate_text(trial)) > budget_tokens:
                 break
             section = trial
@@ -208,7 +208,7 @@ def _build_budgeted_message(
         section = ["", "Evidence:"]
         for preview in trimmed_previews:
             candidate_line = f"- {preview['source']}: {preview['text']}"
-            trial = section + [candidate_line]
+            trial = [*section, candidate_line]
             if _estimate_token_count(_candidate_text(trial)) > budget_tokens:
                 break
             section = trial
@@ -219,7 +219,7 @@ def _build_budgeted_message(
         section = ["", "Notes:"]
         for warning in warnings[:2]:
             candidate_line = f"- {_truncate_text(warning, limit=160)}"
-            trial = section + [candidate_line]
+            trial = [*section, candidate_line]
             if _estimate_token_count(_candidate_text(trial)) > budget_tokens:
                 break
             section = trial
@@ -245,6 +245,45 @@ def _build_budgeted_message(
 
 def _result_from_payload(payload: dict[str, object]) -> CodexMediationResult | None:
     try:
+        raw_sources = payload.get("sources")
+        sources = (
+            [str(item).strip() for item in raw_sources if str(item).strip()]
+            if isinstance(raw_sources, list)
+            else []
+        )
+        raw_warnings = payload.get("warnings")
+        warnings = (
+            [str(item).strip() for item in raw_warnings if str(item).strip()]
+            if isinstance(raw_warnings, list)
+            else []
+        )
+        raw_evidence_previews = payload.get("evidence_previews")
+        evidence_previews = (
+            [
+                {
+                    "source": str(item.get("source") or ""),
+                    "text": str(item.get("text") or ""),
+                }
+                for item in raw_evidence_previews
+                if isinstance(item, dict)
+                and str(item.get("source") or "").strip()
+                and str(item.get("text") or "").strip()
+            ]
+            if isinstance(raw_evidence_previews, list)
+            else []
+        )
+        raw_budget_tokens = payload.get("budget_tokens")
+        budget_tokens = (
+            int(raw_budget_tokens)
+            if isinstance(raw_budget_tokens, (bool, int, float, str))
+            else _DEFAULT_TOKEN_BUDGET
+        )
+        raw_estimated_tokens = payload.get("estimated_tokens")
+        estimated_tokens = (
+            int(raw_estimated_tokens)
+            if isinstance(raw_estimated_tokens, (bool, int, float, str))
+            else 0
+        )
         return CodexMediationResult(
             question=str(payload.get("question") or ""),
             mediation_mode=str(payload.get("mediation_mode") or "heuristic"),
@@ -252,20 +291,8 @@ def _result_from_payload(payload: dict[str, object]) -> CodexMediationResult | N
             dspy_status=str(payload.get("dspy_status") or "disabled"),
             summary=str(payload.get("summary") or ""),
             retrieval_mode=str(payload.get("retrieval_mode") or "lexical"),
-            sources=[
-                str(item).strip()
-                for item in payload.get("sources", [])
-                if str(item).strip()
-            ]
-            if isinstance(payload.get("sources"), list)
-            else [],
-            warnings=[
-                str(item).strip()
-                for item in payload.get("warnings", [])
-                if str(item).strip()
-            ]
-            if isinstance(payload.get("warnings"), list)
-            else [],
+            sources=sources,
+            warnings=warnings,
             bundle_version=(
                 str(payload.get("bundle_version")).strip()
                 if payload.get("bundle_version") is not None
@@ -278,22 +305,11 @@ def _result_from_payload(payload: dict[str, object]) -> CodexMediationResult | N
                 else None
             )
             or None,
-            evidence_previews=[
-                {
-                    "source": str(item.get("source") or ""),
-                    "text": str(item.get("text") or ""),
-                }
-                for item in payload.get("evidence_previews", [])
-                if isinstance(item, dict)
-                and str(item.get("source") or "").strip()
-                and str(item.get("text") or "").strip()
-            ]
-            if isinstance(payload.get("evidence_previews"), list)
-            else [],
+            evidence_previews=evidence_previews,
             developer_message=str(payload.get("developer_message") or ""),
             task_classification=str(payload.get("task_classification") or "deep"),
-            budget_tokens=int(payload.get("budget_tokens") or _DEFAULT_TOKEN_BUDGET),
-            estimated_tokens=int(payload.get("estimated_tokens") or 0),
+            budget_tokens=budget_tokens,
+            estimated_tokens=estimated_tokens,
             injected=bool(payload.get("injected", True)),
             cache_hit=bool(payload.get("cache_hit", False)),
         )
@@ -315,7 +331,7 @@ def _extract_text_from_content(content: object) -> str:
     return "\n".join(parts).strip()
 
 
-def extract_codex_task_text(payload: dict[str, object]) -> str:
+def extract_codex_task_text(payload: Mapping[str, object]) -> str:
     """Extract the latest user-facing task text from one Responses payload."""
 
     raw_input = payload.get("input")
@@ -395,9 +411,9 @@ def _resolve_program_path_and_bundle_version(
         program_path_text = remote_bundle.get("program_path")
         if isinstance(program_path_text, str) and program_path_text.strip():
             program_path = (bundle_root / program_path_text).resolve()
-            resolved_version = str(
-                remote_bundle.get("bundle_version") or bundle_version or ""
-            ).strip() or None
+            resolved_version = (
+                str(remote_bundle.get("bundle_version") or bundle_version or "").strip() or None
+            )
             return program_path, resolved_version
     if bundle_version is not None:
         try:
@@ -408,9 +424,7 @@ def _resolve_program_path_and_bundle_version(
         except ValueError:
             local_bundle = None
         local_program_path_text = (
-            local_bundle.get("program_path")
-            if isinstance(local_bundle, dict)
-            else None
+            local_bundle.get("program_path") if isinstance(local_bundle, dict) else None
         )
         if isinstance(local_program_path_text, str) and local_program_path_text.strip():
             local_program_path = (bundle_root / local_program_path_text).resolve()
@@ -426,15 +440,15 @@ def _resolve_program_path_and_bundle_version(
         if isinstance(local_program_path_text, str) and local_program_path_text.strip():
             local_program_path = (bundle_root / local_program_path_text).resolve()
             if local_program_path.is_file():
-                resolved_version = str(
-                    channel_state.get("current_bundle_version") or ""
-                ).strip() or None
+                resolved_version = (
+                    str(channel_state.get("current_bundle_version") or "").strip() or None
+                )
                 return local_program_path, resolved_version
     runner = RepositoryRAG(repository_root, top_k=4)
-    local_program_path = runner.program_path
-    if local_program_path is None:
+    runner_program_path: Path | None = runner.program_path
+    if runner_program_path is None:
         return None, None
-    return local_program_path, resolve_bundle_version_for_program(bundle_root, local_program_path)
+    return runner_program_path, resolve_bundle_version_for_program(bundle_root, runner_program_path)
 
 
 def build_codex_mediation(
@@ -584,7 +598,9 @@ def build_codex_mediation(
         )
         injected = bool(developer_message)
     else:
-        warnings.append("Mediation block was suppressed because the repo-grounded signal was too weak.")
+        warnings.append(
+            "Mediation block was suppressed because the repo-grounded signal was too weak."
+        )
 
     return CodexMediationResult(
         question=question,
@@ -607,7 +623,7 @@ def build_codex_mediation(
 
 
 def augment_responses_payload(
-    payload: dict[str, object],
+    payload: Mapping[str, object],
     *,
     developer_message: str,
 ) -> dict[str, object]:
@@ -658,10 +674,10 @@ class _CodexProxyHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     @property
-    def runtime(self) -> "_CodexProxyRuntime":
+    def runtime(self) -> _CodexProxyRuntime:
         return self.server.runtime  # type: ignore[attr-defined]
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
         if self.path.rstrip("/") != "/healthz":
             self.send_error(HTTPStatus.NOT_FOUND)
             return
@@ -677,7 +693,7 @@ class _CodexProxyHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def do_POST(self) -> None:  # noqa: N802
+    def do_POST(self) -> None:
         runtime = self.runtime
         split = urlsplit(self.path)
         if split.path.rstrip("/") != "/openai/responses":
@@ -758,7 +774,7 @@ class _CodexProxyHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
 
-    def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+    def log_message(self, format: str, *args: object) -> None:
         del format, args
 
 
@@ -787,9 +803,7 @@ class _CodexProxyRuntime:
         self.corpus_manifest_path = self.cache_dir / "retrieval-corpus-manifest.json"
         self.corpus_manifest = build_corpus_manifest(self.config.repository_root)
         write_corpus_manifest(self.corpus_manifest_path, self.corpus_manifest)
-        self.corpus_fingerprint = str(
-            self.corpus_manifest.get("corpus_fingerprint") or ""
-        ).strip()
+        self.corpus_fingerprint = str(self.corpus_manifest.get("corpus_fingerprint") or "").strip()
         self.retrieval_profile_fingerprint = self._compute_retrieval_profile_fingerprint()
 
     def _compute_retrieval_profile_fingerprint(self) -> str:
@@ -908,7 +922,7 @@ class _CodexProxyRuntime:
 
 
 @contextmanager
-def running_codex_proxy(config: CodexProxyConfig):
+def running_codex_proxy(config: CodexProxyConfig) -> Iterator[RunningCodexProxy]:
     """Run one local ThreadingHTTPServer that mediates Codex responses requests."""
 
     runtime = _CodexProxyRuntime(config)
@@ -918,10 +932,11 @@ def running_codex_proxy(config: CodexProxyConfig):
     thread.start()
     try:
         host, port = server.server_address[:2]
+        host_text = host.decode("utf-8", errors="ignore") if isinstance(host, bytes) else str(host)
         yield RunningCodexProxy(
             server=server,
             thread=thread,
-            base_url=f"http://{host}:{port}/openai",
+            base_url=f"http://{host_text}:{port}/openai",
             status_path=runtime.status_path,
         )
     finally:

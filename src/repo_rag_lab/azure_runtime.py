@@ -434,7 +434,7 @@ def embed_with_azure_openai(
         api_version=config.api_version,
     )
     response = client.embeddings.create(model=config.deployment_name, input=list(inputs))
-    response_data = sorted(list(getattr(response, "data", [])), key=lambda item: int(item.index))
+    response_data = sorted(getattr(response, "data", []), key=lambda item: int(item.index))
     embeddings: list[list[float]] = []
     for item in response_data:
         vector = getattr(item, "embedding", None)

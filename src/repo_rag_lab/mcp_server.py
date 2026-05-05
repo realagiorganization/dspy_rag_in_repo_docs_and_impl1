@@ -8,17 +8,21 @@ from __future__ import annotations
 
 import json
 import os
+import select
 import time
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import TYPE_CHECKING, BinaryIO
-from urllib.parse import parse_qs, urlsplit
+from typing import TYPE_CHECKING, BinaryIO, Literal, cast
+from urllib.parse import SplitResult, parse_qs, urlsplit
 
 if TYPE_CHECKING:
-    from .retrieval import RetrievalMode
+    from .mcp import MCPServerCandidate
     from .retrieval_profile import RetrievalProfile
+    from .workflow import Chunk, RAGAnswer
+
+RetrievalMode = Literal["lexical", "idf-rerank", "vector", "hybrid-vector"]
 
 MCP_PROTOCOL_VERSION = "2024-11-05"
 MCP_SERVER_NAME = "repo-rag-mcp"
@@ -37,6 +41,7 @@ SUPPORTED_RETRIEVAL_MODES = frozenset(
 RETRIEVAL_MODE_ENUM = sorted(SUPPORTED_RETRIEVAL_MODES)
 MCP_USAGE_LOG_ENV = "REPO_RAG_MCP_USAGE_LOG"
 MCP_DEFAULT_RETRIEVAL_MODE_ENV = "REPO_RAG_MCP_DEFAULT_RETRIEVAL_MODE"
+MCP_DEBUG_LOG_ENV = "REPO_RAG_MCP_DEBUG_LOG"
 MCP_RESOURCE_SCHEME = "repo-rag"
 MCP_STARTUP_CONTEXT_QUESTION = (
     "repository guidance current gameplay slice transmutation alchemy assumptions "
@@ -123,7 +128,7 @@ def _artifact_metadata() -> dict[str, list[str]]:
     return {"input_paths": [], "generated_paths": [], "related_paths": []}
 
 
-def load_retrieval_profile(server_root: Path) -> "RetrievalProfile":
+def load_retrieval_profile(server_root: Path) -> RetrievalProfile:
     from .retrieval_profile import load_retrieval_profile
 
     return load_retrieval_profile(server_root)
@@ -140,9 +145,9 @@ def collect_repository_context(
     question: str,
     root: Path,
     top_k: int = 4,
-    retrieval_mode: str | None = None,
-    profile: "RetrievalProfile | None" = None,
-):
+    retrieval_mode: RetrievalMode | None = None,
+    profile: RetrievalProfile | None = None,
+) -> list[Chunk]:
     from .workflow import collect_repository_context
 
     return collect_repository_context(
@@ -154,19 +159,24 @@ def collect_repository_context(
     )
 
 
-def serialize_chunk(chunk: object, *, root: Path) -> dict[str, object]:
+def serialize_chunk(chunk: Chunk, *, root: Path) -> dict[str, str]:
     from .workflow import serialize_chunk
 
     return serialize_chunk(chunk, root=root)
 
 
-def discover_mcp_servers(root: Path):
+def discover_mcp_servers(root: Path) -> list[MCPServerCandidate]:
     from .mcp import discover_mcp_servers as _discover_mcp_servers
 
     return _discover_mcp_servers(root)
 
 
-def ask_repository(*, question: str, root: Path, retrieval_mode: str | None = None):
+def ask_repository(
+    *,
+    question: str,
+    root: Path,
+    retrieval_mode: RetrievalMode | None = None,
+) -> RAGAnswer:
     from .workflow import ask_repository
 
     return ask_repository(
@@ -264,6 +274,30 @@ def _log_usage_event(
         return
 
 
+def _mcp_debug_log_path() -> Path | None:
+    raw = str(os.getenv(MCP_DEBUG_LOG_ENV) or "").strip()
+    return Path(raw) if raw else None
+
+
+def _log_mcp_debug(message: str) -> None:
+    path = _mcp_debug_log_path()
+    if path is None:
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(f"{time.time():.6f} {message}\n")
+    except OSError:
+        return
+
+
+def _fd_target(fd: int) -> str:
+    try:
+        return os.readlink(f"/proc/{os.getpid()}/fd/{fd}")
+    except OSError:
+        return ""
+
+
 def _resolve_root(server_root: Path, requested_root: object) -> Path:
     """Resolve one optional tool-local root against the server root."""
 
@@ -303,7 +337,10 @@ def _jsonify(value: object) -> object:
     if isinstance(value, (list, tuple)):
         return [_jsonify(item) for item in value]
     if isinstance(value, (set, frozenset)):
-        return sorted(_jsonify(item) for item in value)
+        return sorted(
+            (_jsonify(item) for item in value),
+            key=lambda item: json.dumps(item, sort_keys=True, default=str),
+        )
     return value
 
 
@@ -315,7 +352,8 @@ def build_mcp_tool_definitions() -> list[MCPToolDefinition]:
             name="search_repo",
             description=(
                 "Search the repository corpus and return a bounded shortlist of relevant files "
-                "plus matching text previews. Prefer this for repository discovery before shell reads."
+                "plus matching text previews. Prefer this for repository discovery before "
+                "shell reads."
             ),
             input_schema={
                 "type": "object",
@@ -503,16 +541,16 @@ def _resource_read_result(uri: str, *, text: str, mime_type: str) -> dict[str, o
 def _resource_query_value(parsed: object, key: str) -> str | None:
     """Return one normalized query parameter from one parsed resource URI."""
 
-    if not hasattr(parsed, "query"):
+    if not isinstance(parsed, SplitResult):
         return None
-    values = parse_qs(getattr(parsed, "query"), keep_blank_values=False).get(key)
+    values = parse_qs(parsed.query, keep_blank_values=False).get(key)
     if not values:
         return None
     text = str(values[-1]).strip()
     return text or None
 
 
-def _resource_retrieval_mode_from_uri(parsed: object) -> str | None:
+def _resource_retrieval_mode_from_uri(parsed: object) -> RetrievalMode | None:
     """Return the requested retrieval mode from one resource URI when provided."""
 
     raw_value = _resource_query_value(parsed, "retrieval_mode")
@@ -524,7 +562,7 @@ def _resource_retrieval_mode_from_uri(parsed: object) -> str | None:
     if raw_value not in SUPPORTED_RETRIEVAL_MODES:
         supported = ", ".join(sorted(SUPPORTED_RETRIEVAL_MODES))
         raise ValueError(f"`retrieval_mode` must be one of: {supported}")
-    return raw_value  # type: ignore[return-value]
+    return cast(RetrievalMode, raw_value)
 
 
 def _overview_resource_text(server_root: Path) -> str:
@@ -544,7 +582,8 @@ def _overview_resource_text(server_root: Path) -> str:
         "Preferred workflow:",
         "1. Read `repo-rag://startup-context` first for one bounded working set.",
         "2. If only templates are listed, that is still a usable MCP discovery surface.",
-        "3. Call `read_mcp_resource` on a concrete URI such as `repo-rag://search?question=transmutation&top_k=4` for repository discovery.",
+        "3. Call `read_mcp_resource` on a concrete URI such as",
+        "   `repo-rag://search?question=transmutation&top_k=4` for repository discovery.",
         "4. Use `repo-rag://ask{?question,retrieval_mode}` for bounded repo-grounded answers.",
         "5. Use shell reads only for exact file verification and post-edit validation.",
     ]
@@ -559,7 +598,7 @@ def _startup_context_resource_text(server_root: Path) -> str:
         question=MCP_STARTUP_CONTEXT_QUESTION,
         root=server_root,
         top_k=4,
-        retrieval_mode=profile.retrieval_mode,  # type: ignore[arg-type]
+        retrieval_mode=cast(RetrievalMode, profile.retrieval_mode),
     )
     serialized = [serialize_chunk(chunk, root=server_root) for chunk in context]
     payload = {
@@ -567,11 +606,17 @@ def _startup_context_resource_text(server_root: Path) -> str:
         "root": str(server_root),
         "question": MCP_STARTUP_CONTEXT_QUESTION,
         "retrieval_mode": profile.retrieval_mode,
-        "sources": [item.get("source") for item in serialized if isinstance(item, dict)],
+        "sources": [item.get("source") for item in serialized],
         "context": serialized,
         "next_actions": [
-            "If you need repository discovery, call read_mcp_resource on repo-rag://search?question=<your question>&top_k=4",
-            "Use shell reads only after MCP narrowed the file set or when exact post-edit verification is required.",
+            (
+                "If you need repository discovery, call read_mcp_resource on "
+                "repo-rag://search?question=<your question>&top_k=4"
+            ),
+            (
+                "Use shell reads only after MCP narrowed the file set or when exact "
+                "post-edit verification is required."
+            ),
         ],
         "examples": {
             "search": "repo-rag://search?question=transmutation+preview+flow&top_k=4",
@@ -592,11 +637,21 @@ def _discovery_guide_resource_text(server_root: Path) -> str:
         f"- Default retrieval mode: `{profile.retrieval_mode}`",
         "",
         "Use these exact patterns:",
-        "- `read_mcp_resource(\"repo-rag://startup-context\")` for one bounded startup working set.",
-        "- `read_mcp_resource(\"repo-rag://search?question=<your question>&top_k=4\")` for repository discovery.",
-        "- `read_mcp_resource(\"repo-rag://ask?question=<your question>\")` for one concise repo-grounded answer.",
+        '- `read_mcp_resource("repo-rag://startup-context")` for one bounded startup working set.',
+        (
+            '- `read_mcp_resource("repo-rag://search?question=<your question>&top_k=4")` '
+            "for repository discovery."
+        ),
+        (
+            '- `read_mcp_resource("repo-rag://ask?question=<your question>")` for one '
+            "concise repo-grounded answer."
+        ),
         "",
-        "Do not interpret a template-only MCP listing as absence of repo resources. The repo-rag search/ask surfaces are intentionally exposed as resource templates that must be instantiated with a concrete question.",
+        (
+            "Do not interpret a template-only MCP listing as absence of repo resources. "
+            "The repo-rag search/ask surfaces are intentionally exposed as resource "
+            "templates that must be instantiated with a concrete question."
+        ),
     ]
     return "\n".join(lines)
 
@@ -669,7 +724,9 @@ def read_mcp_resource(uri: str, *, server_root: Path) -> dict[str, object]:
         )
         mcp_candidates = [candidate.__dict__ for candidate in discover_mcp_servers(server_root)]
         serialized_context = [serialize_chunk(chunk, root=server_root) for chunk in context[:top_k]]
-        sources = list(dict.fromkeys(item["source"] for item in serialized_context if "source" in item))
+        sources = list(
+            dict.fromkeys(item["source"] for item in serialized_context if "source" in item)
+        )
         payload = {
             "command": "search-repo-resource",
             "command_status": "success",
@@ -733,7 +790,7 @@ def call_mcp_tool(
     root = _resolve_root(server_root, params.get("root"))
     default_retrieval_mode = os.getenv(MCP_DEFAULT_RETRIEVAL_MODE_ENV)
 
-    def _resolve_tool_retrieval_mode() -> str | None:
+    def _resolve_tool_retrieval_mode() -> RetrievalMode | None:
         retrieval_mode = params.get("retrieval_mode")
         selected = retrieval_mode if retrieval_mode is not None else default_retrieval_mode
         if selected is None:
@@ -742,7 +799,7 @@ def call_mcp_tool(
             raise ValueError(
                 "`retrieval_mode` must be one of: " + ", ".join(sorted(SUPPORTED_RETRIEVAL_MODES))
             )
-        return selected  # type: ignore[return-value]
+        return cast(RetrievalMode, selected)
 
     if tool_name == "search_repo":
         question = params.get("question")
@@ -750,10 +807,20 @@ def call_mcp_tool(
             raise ValueError("`search_repo` requires a non-empty `question`.")
         retrieval_mode_value = _resolve_tool_retrieval_mode()
         raw_top_k = params.get("top_k", 4)
-        try:
-            top_k = max(1, min(12, int(raw_top_k)))
-        except (TypeError, ValueError):
+        if isinstance(raw_top_k, bool):
+            top_k = int(raw_top_k)
+        elif isinstance(raw_top_k, int):
+            top_k = raw_top_k
+        elif isinstance(raw_top_k, float):
+            top_k = int(raw_top_k)
+        elif isinstance(raw_top_k, str):
+            try:
+                top_k = int(raw_top_k.strip())
+            except ValueError:
+                raise ValueError("`top_k` must be an integer between 1 and 12.") from None
+        else:
             raise ValueError("`top_k` must be an integer between 1 and 12.") from None
+        top_k = max(1, min(12, top_k))
         context = collect_repository_context(
             question=question,
             root=root,
@@ -763,7 +830,7 @@ def call_mcp_tool(
         sources = list(
             dict.fromkeys(serialize_chunk(chunk, root=root)["source"] for chunk in context)
         )
-        payload = {
+        search_payload: dict[str, object] = {
             "command": "search-repo",
             "command_status": "success",
             "root": str(root),
@@ -775,7 +842,7 @@ def call_mcp_tool(
             "artifact_metadata": _artifact_metadata(),
             "mcp_candidates": [candidate.__dict__ for candidate in discover_mcp_servers(root)],
         }
-        return _json_content(payload)
+        return _json_content(search_payload)
 
     if tool_name == "ask_repo":
         question = params.get("question")
@@ -787,7 +854,7 @@ def call_mcp_tool(
             root=root,
             retrieval_mode=retrieval_mode_value,
         )
-        payload = rag_result.to_payload(root=root)
+        payload: dict[str, object] = rag_result.to_payload(root=root)
         bundle_version = params.get("bundle_version")
         overlay_path = params.get("overlay_path")
         bundle_version_value = bundle_version if isinstance(bundle_version, str) else None
@@ -802,16 +869,14 @@ def call_mcp_tool(
         payload["warnings"] = []
         payload["artifact_metadata"] = _artifact_metadata()
         payload["mode"] = "baseline"
-        payload["top_k"] = 4
-        payload["bundle_version"] = bundle_version_value
-        payload["overlay_path"] = overlay_path_value
+        payload["top_k"] = cast(object, 4)
+        payload["bundle_version"] = cast(object, bundle_version_value)
+        payload["overlay_path"] = cast(object, overlay_path_value)
         payload["trace"] = build_runtime_trace_payload(
             question=question,
             retrieval_mode=str(payload.get("retrieval_mode") or "lexical"),
             sources=_string_list_field(payload, "sources"),
-            context_items=[
-                item for item in normalized_context_items if isinstance(item, dict)
-            ],
+            context_items=[item for item in normalized_context_items if isinstance(item, dict)],
             bundle_version=bundle_version_value,
             overlay_path=overlay_path_value,
             mcp_candidate_count=len(normalized_mcp_candidates),
@@ -989,29 +1054,57 @@ def read_json_rpc_message(stream: BinaryIO) -> dict[str, object] | None:
     """Read one `Content-Length` framed JSON-RPC message from ``stream``."""
 
     headers: dict[str, str] = {}
+    try:
+        fileno = stream.fileno()
+    except Exception:
+        fileno = None
+    waiting_logged = False
 
     while True:
+        if fileno is not None:
+            ready, _, _ = select.select([fileno], [], [], 5.0)
+            if not ready:
+                if not waiting_logged:
+                    _log_mcp_debug("waiting-for-headers no-bytes-yet")
+                    waiting_logged = True
+                continue
         line = stream.readline()
         if line == b"":
+            _log_mcp_debug("eof-before-headers")
             return None
         if line in {b"\r\n", b"\n"}:
             if headers:
                 break
             continue
+        _log_mcp_debug(f"header-line {line.decode('utf-8', errors='ignore').rstrip()}")
         key, separator, value = line.decode("utf-8").partition(":")
         if separator != ":":
+            _log_mcp_debug("invalid-header-line")
             raise ValueError("Invalid JSON-RPC header line.")
         headers[key.strip().lower()] = value.strip()
 
     if "content-length" not in headers:
+        _log_mcp_debug("missing-content-length")
         raise ValueError("Missing Content-Length header.")
     content_length = int(headers["content-length"])
-    body = stream.read(content_length)
-    if len(body) != content_length:
-        raise ValueError("Incomplete JSON-RPC message body.")
+    body = bytearray()
+    while len(body) < content_length:
+        if fileno is not None:
+            ready, _, _ = select.select([fileno], [], [], 5.0)
+            if not ready:
+                _log_mcp_debug(f"waiting-for-body received={len(body)} expected={content_length}")
+                continue
+        chunk = stream.read(content_length - len(body))
+        if not chunk:
+            _log_mcp_debug(f"eof-during-body received={len(body)} expected={content_length}")
+            raise ValueError("Incomplete JSON-RPC message body.")
+        body.extend(chunk)
+    _log_mcp_debug(f"body-bytes {content_length}")
     payload = json.loads(body.decode("utf-8"))
     if not isinstance(payload, dict):
+        _log_mcp_debug("payload-not-object")
         raise ValueError("JSON-RPC payload must be an object.")
+    _log_mcp_debug(f"message method={payload.get('method') or ''!s} id={payload.get('id') or ''!s}")
     return {str(key): value for key, value in payload.items()}
 
 
@@ -1032,10 +1125,23 @@ def serve_repo_rag_mcp(
 ) -> int:
     """Serve the bounded repo-RAG MCP surface over stdio until EOF."""
 
+    _log_mcp_debug(
+        "server-start "
+        f"pid={os.getpid()} "
+        f"cwd={os.getcwd()} "
+        f"root={root} "
+        f"stdin={_fd_target(0)} "
+        f"stdout={_fd_target(1)} "
+        f"stderr={_fd_target(2)}"
+    )
     while True:
         message = read_json_rpc_message(input_stream)
         if message is None:
+            _log_mcp_debug("server-stop eof")
             return 0
         response = handle_mcp_message(message, server_root=root)
         if response is not None:
+            _log_mcp_debug(
+                f"response method={message.get('method') or ''!s} id={message.get('id') or ''!s}"
+            )
             write_json_rpc_message(output_stream, response)

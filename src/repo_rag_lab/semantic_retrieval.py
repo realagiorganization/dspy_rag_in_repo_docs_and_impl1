@@ -56,7 +56,7 @@ def rank_semantic_chunks(
         reverse=True,
     )
     if max_candidates is not None:
-        ranked = ranked[:max(1, max_candidates)]
+        ranked = ranked[: max(1, max_candidates)]
     return ranked, []
 
 
@@ -82,7 +82,7 @@ def _load_or_build_document_vectors(
         text_sha256 = hashlib.sha256(text.encode("utf-8")).hexdigest()
         record_key = _record_key(source, text_sha256)
         vector = existing_vectors.get(record_key)
-        current_record = {
+        current_record: dict[str, object] = {
             "source": source,
             "text_sha256": text_sha256,
             "vector": None,
@@ -208,4 +208,6 @@ def _normalize_vector(vector: Sequence[float]) -> list[float]:
 def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
     if len(left) != len(right):
         raise RuntimeError("Semantic retrieval vectors must share one common dimensionality.")
-    return sum(left_value * right_value for left_value, right_value in zip(left, right, strict=True))
+    return sum(
+        left_value * right_value for left_value, right_value in zip(left, right, strict=True)
+    )

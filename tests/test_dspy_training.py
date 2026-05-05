@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
@@ -361,17 +362,18 @@ def test_repository_rag_program_includes_source_paths_in_generation_context(
         "repo_rag_lab.dspy_training.retrieve_repository_context",
         fake_retrieve_repository_context,
     )
-    program.respond = fake_respond
+    cast(Any, program).respond = fake_respond
 
     prediction = program(question="What does this repository research?")
+    prediction_payload = cast(Any, prediction)
 
     assert captured["question"] == "What does this repository research?"
     assert captured["context"] == [
         "Source: README.md\n\nREADME summary",
         "Source: docs/architecture/package-api.md\n\nPackage API notes",
     ]
-    assert prediction.context == ["README summary", "Package API notes"]
-    assert prediction.context_sources == [
+    assert prediction_payload.context == ["README summary", "Package API notes"]
+    assert prediction_payload.context_sources == [
         "README.md",
         "docs/architecture/package-api.md",
     ]
@@ -522,10 +524,13 @@ def test_train_repository_program_writes_artifacts(
     metadata_path = tmp_path / result.metadata_path
     assert metadata_path.exists()
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    assert isinstance(metadata, dict)
     assert metadata["run_name"] == "sample-run"
     assert metadata["bundle_version"] == "sample-version-001"
     assert metadata["run_family"] == "trainer-auto"
-    assert metadata["lineage"]["new_candidate_count"] == 1
+    lineage = metadata["lineage"]
+    assert isinstance(lineage, dict)
+    assert lineage["new_candidate_count"] == 1
     assert metadata["training_example_count"] == 1
     assert metadata["program_path"] == "artifacts/dspy/sample-run/program.json"
     assert result.bundle_version == "sample-version-001"
@@ -533,10 +538,13 @@ def test_train_repository_program_writes_artifacts(
     bundle_path = tmp_path / result.bundle_path
     assert bundle_path.exists()
     bundle = load_bundle_manifest(bundle_path)
+    assert isinstance(bundle, dict)
     assert bundle["bundle_kind"] == "global"
     assert bundle["bundle_version"] == "sample-version-001"
     assert bundle["run_family"] == "trainer-auto"
-    assert bundle["lineage"]["new_candidate_count"] == 1
+    bundle_lineage = bundle["lineage"]
+    assert isinstance(bundle_lineage, dict)
+    assert bundle_lineage["new_candidate_count"] == 1
     assert bundle["retrieval_mode"] is None
     assert bundle["program_path"] == "artifacts/dspy/sample-run/program.json"
 

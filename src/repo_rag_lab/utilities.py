@@ -59,8 +59,8 @@ from .runtime_artifacts import (
     queue_trace_record,
     resolve_azure_artifact_config,
     resolve_bundle_manifest,
-    rollback_bundle,
     restore_processed_trace_records,
+    rollback_bundle,
     upload_remote_bundle,
     upload_remote_bundle_channel,
     write_trace_record,
@@ -70,8 +70,8 @@ from .trainer_deployment import (
     DEFAULT_TRAINER_K8S_CYCLE_SCHEDULE,
     DEFAULT_TRAINER_K8S_IMAGE,
     DEFAULT_TRAINER_K8S_IMAGE_PULL_SECRET_NAME,
-    DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE,
     DEFAULT_TRAINER_K8S_MIN_NEW_CANDIDATES_FOR_RECOMPILE,
+    DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE,
     DEFAULT_TRAINER_K8S_MINIMUM_PASS_RATE,
     DEFAULT_TRAINER_K8S_MINIMUM_SOURCE_RECALL,
     DEFAULT_TRAINER_K8S_NAMESPACE,
@@ -472,9 +472,7 @@ def run_trainer_k8s_manifest_generation(
     minimum_source_recall: float | None = DEFAULT_TRAINER_K8S_MINIMUM_SOURCE_RECALL,
     minimum_bundle_pass_rate: float | None = DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE,
     recompile_run_name: str | None = DEFAULT_TRAINER_K8S_RECOMPILE_RUN_NAME,
-    min_new_candidates_for_recompile: int = (
-        DEFAULT_TRAINER_K8S_MIN_NEW_CANDIDATES_FOR_RECOMPILE
-    ),
+    min_new_candidates_for_recompile: int = (DEFAULT_TRAINER_K8S_MIN_NEW_CANDIDATES_FOR_RECOMPILE),
     recompile_base_training_path: Path = DEFAULT_TRAINING_PATH,
 ) -> str:
     """Materialize Kubernetes manifests for trainer-service and trainer-cycle roles."""
@@ -1281,11 +1279,12 @@ def run_trainer_cycle(
         queue_name=queue_name,
         output_dir=DEFAULT_TRAINER_RECOVERED_TRACES_DIR,
     )
-    recovered_trace_paths = [
-        str(path)
-        for path in durable_trace_recovery.get("trace_paths", [])
-        if isinstance(path, str) and path.strip()
-    ]
+    raw_trace_paths = durable_trace_recovery.get("trace_paths")
+    recovered_trace_paths = (
+        [str(path) for path in raw_trace_paths if isinstance(path, str) and path.strip()]
+        if isinstance(raw_trace_paths, list)
+        else []
+    )
     trainer_trace_paths = recovered_trace_paths or imported_trace_paths
     ingestion_summary = _summarize_imported_trace_records(root, trainer_trace_paths)
     training_candidates = materialize_training_candidates(
@@ -1366,6 +1365,7 @@ def run_trainer_cycle(
                     "training candidates did not reach the configured minimum threshold."
                 )
         else:
+            assert recompile_run_name is not None
             resolved_recompile_run_name = _versioned_training_run_name(recompile_run_name)
             recompile_lineage = {
                 "run_family": recompile_run_name,
@@ -1419,7 +1419,9 @@ def run_trainer_cycle(
                     "type": type(exc).__name__,
                     "message": str(exc),
                 }
-                cycle_warnings.append("Trainer-side bundle recompilation failed during trainer cycle.")
+                cycle_warnings.append(
+                    "Trainer-side bundle recompilation failed during trainer cycle."
+                )
 
     effective_publish_run_name = run_name
     if effective_publish_run_name is None and isinstance(recompile_payload, Mapping):
@@ -1490,6 +1492,7 @@ def run_trainer_cycle(
                 f"Promotion to `{promote_channel}` was skipped because bundle publish failed."
             )
         else:
+            assert promote_channel is not None
             try:
                 promote_state = promote_bundle(
                     root,
@@ -1557,14 +1560,14 @@ def run_trainer_cycle(
         "promotion_error": promote_error,
         "note": note,
     }
-    recompile_status = (
+    final_recompile_status: str | None = (
         str(recompile_payload.get("recompile_status"))
         if isinstance(recompile_payload, Mapping)
         and recompile_payload.get("recompile_status") is not None
         else None
     )
     recompile_failed = recompile_error is not None or (
-        recompile_triggered and recompile_status != "compiled"
+        recompile_triggered and final_recompile_status != "compiled"
     )
     bundle_gate_required = effective_minimum_bundle_pass_rate is not None and (
         publish_requested or recompile_triggered

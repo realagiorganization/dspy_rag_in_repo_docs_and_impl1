@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 import pytest
 import yaml
@@ -43,6 +45,63 @@ from repo_rag_lab.utilities import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+_RECOVERED_TRACES_DIR = Path("artifacts/trainer/recovered-imported-traces")
+
+
+def _restore_processed_trace_records_stub(
+    *,
+    processed_count: int,
+    restored_count: int,
+    trace_paths: Sequence[str],
+    failed_count: int = 0,
+) -> Callable[..., dict[str, object]]:
+    def _restore(
+        root: Path,
+        queue_name: str = "default",
+        output_dir: Path = _RECOVERED_TRACES_DIR,
+    ) -> dict[str, object]:
+        del root
+        return {
+            "storage_backend": "azure-blob-queue",
+            "queue_name": queue_name,
+            "processed_count": processed_count,
+            "restored_count": restored_count,
+            "failed_count": failed_count,
+            "trace_paths": list(trace_paths),
+            "failures": [],
+            "output_dir": str(output_dir),
+        }
+
+    return _restore
+
+
+def _materialize_training_candidates_stub(
+    *,
+    candidate_count: int,
+    new_candidate_count: int,
+    prompt_family_count: int,
+    context_group_count: int,
+) -> Callable[..., dict[str, object]]:
+    def _materialize(
+        root: Path,
+        trace_paths: Sequence[str],
+        output_path: Path,
+        summary_path: Path,
+        include_statuses: tuple[str, ...] = ("accepted", "candidate"),
+        seed_existing_output: bool = True,
+    ) -> dict[str, object]:
+        del root, trace_paths, output_path, summary_path, include_statuses, seed_existing_output
+        return {
+            "candidate_count": candidate_count,
+            "new_candidate_count": new_candidate_count,
+            "prompt_family_count": prompt_family_count,
+            "context_group_count": context_group_count,
+            "champion_index_path": "artifacts/trainer/champion-index.json",
+            "output_path": "artifacts/trainer/training-candidates.yaml",
+            "summary_path": "artifacts/trainer/training-candidates-summary.json",
+        }
+
+    return _materialize
 
 
 def _write_bundle_manifest(
@@ -720,9 +779,13 @@ def test_run_trace_enqueue_and_drain_round_trip(tmp_path: Path) -> None:
 
 
 def test_versioned_training_run_name_returns_high_resolution_timestamp_only() -> None:
-    from repo_rag_lab.utilities import _versioned_training_run_name
+    import repo_rag_lab.utilities as utilities_module
 
-    resolved = _versioned_training_run_name(
+    versioned_training_run_name = cast(
+        Callable[..., str],
+        utilities_module.__dict__["_versioned_training_run_name"],
+    )
+    resolved = versioned_training_run_name(
         "trainer auto",
         recorded_at=datetime(2026, 5, 1, 17, 0, 0, 123456, tzinfo=UTC),
     )
@@ -760,16 +823,11 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.restore_processed_trace_records",
-        lambda root, queue_name="default", output_dir=Path("artifacts/trainer/recovered-imported-traces"): {
-            "storage_backend": "azure-blob-queue",
-            "queue_name": queue_name,
-            "processed_count": 1,
-            "restored_count": 1,
-            "failed_count": 0,
-            "trace_paths": ["artifacts/trainer/recovered-imported-traces/demo.json"],
-            "failures": [],
-            "output_dir": str(output_dir),
-        },
+        _restore_processed_trace_records_stub(
+            processed_count=1,
+            restored_count=1,
+            trace_paths=["artifacts/trainer/recovered-imported-traces/demo.json"],
+        ),
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.load_training_examples",
@@ -947,16 +1005,11 @@ def test_run_trainer_cycle_blocks_promotion_when_gate_fails(
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.restore_processed_trace_records",
-        lambda root, queue_name="default", output_dir=Path("artifacts/trainer/recovered-imported-traces"): {
-            "storage_backend": "azure-blob-queue",
-            "queue_name": queue_name,
-            "processed_count": 0,
-            "restored_count": 0,
-            "failed_count": 0,
-            "trace_paths": [],
-            "failures": [],
-            "output_dir": str(output_dir),
-        },
+        _restore_processed_trace_records_stub(
+            processed_count=0,
+            restored_count=0,
+            trace_paths=[],
+        ),
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.load_training_examples",
@@ -1066,16 +1119,11 @@ def test_run_trainer_cycle_blocks_publish_when_bundle_benchmark_gate_fails(
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.restore_processed_trace_records",
-        lambda root, queue_name="default", output_dir=Path("artifacts/trainer/recovered-imported-traces"): {
-            "storage_backend": "azure-blob-queue",
-            "queue_name": queue_name,
-            "processed_count": 1,
-            "restored_count": 1,
-            "failed_count": 0,
-            "trace_paths": ["artifacts/trainer/recovered-imported-traces/one.json"],
-            "failures": [],
-            "output_dir": str(output_dir),
-        },
+        _restore_processed_trace_records_stub(
+            processed_count=1,
+            restored_count=1,
+            trace_paths=["artifacts/trainer/recovered-imported-traces/one.json"],
+        ),
     )
     monkeypatch.setattr("repo_rag_lab.utilities.load_training_examples", lambda path: ["example"])
     monkeypatch.setattr(
@@ -1180,16 +1228,11 @@ def test_run_trainer_cycle_skips_recompile_and_publish_without_new_candidates(
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.restore_processed_trace_records",
-        lambda root, queue_name="default", output_dir=Path("artifacts/trainer/recovered-imported-traces"): {
-            "storage_backend": "azure-blob-queue",
-            "queue_name": queue_name,
-            "processed_count": 0,
-            "restored_count": 0,
-            "failed_count": 0,
-            "trace_paths": [],
-            "failures": [],
-            "output_dir": str(output_dir),
-        },
+        _restore_processed_trace_records_stub(
+            processed_count=0,
+            restored_count=0,
+            trace_paths=[],
+        ),
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.load_training_examples",
@@ -1219,15 +1262,12 @@ def test_run_trainer_cycle_skips_recompile_and_publish_without_new_candidates(
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.materialize_training_candidates",
-        lambda root, trace_paths, output_path, summary_path, include_statuses=("accepted", "candidate"), seed_existing_output=True: {
-            "candidate_count": 1,
-            "new_candidate_count": 0,
-            "prompt_family_count": 1,
-            "context_group_count": 2,
-            "champion_index_path": "artifacts/trainer/champion-index.json",
-            "output_path": "artifacts/trainer/training-candidates.yaml",
-            "summary_path": "artifacts/trainer/training-candidates-summary.json",
-        },
+        _materialize_training_candidates_stub(
+            candidate_count=1,
+            new_candidate_count=0,
+            prompt_family_count=1,
+            context_group_count=2,
+        ),
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities._trainer_recompile_payload",
@@ -1282,16 +1322,11 @@ def test_run_trainer_cycle_does_not_fail_promotion_without_new_bundle_candidate(
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.restore_processed_trace_records",
-        lambda root, queue_name="default", output_dir=Path("artifacts/trainer/recovered-imported-traces"): {
-            "storage_backend": "azure-blob-queue",
-            "queue_name": queue_name,
-            "processed_count": 0,
-            "restored_count": 0,
-            "failed_count": 0,
-            "trace_paths": [],
-            "failures": [],
-            "output_dir": str(output_dir),
-        },
+        _restore_processed_trace_records_stub(
+            processed_count=0,
+            restored_count=0,
+            trace_paths=[],
+        ),
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.load_training_examples",
@@ -1317,21 +1352,16 @@ def test_run_trainer_cycle_does_not_fail_promotion_without_new_bundle_candidate(
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.check_retrieval_quality_thresholds",
-        lambda summary, minimum_pass_rate=None, minimum_source_recall=None: [
-            "below-threshold"
-        ],
+        lambda summary, minimum_pass_rate=None, minimum_source_recall=None: ["below-threshold"],
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.materialize_training_candidates",
-        lambda root, trace_paths, output_path, summary_path, include_statuses=("accepted", "candidate"), seed_existing_output=True: {
-            "candidate_count": 1,
-            "new_candidate_count": 0,
-            "prompt_family_count": 1,
-            "context_group_count": 1,
-            "champion_index_path": "artifacts/trainer/champion-index.json",
-            "output_path": "artifacts/trainer/training-candidates.yaml",
-            "summary_path": "artifacts/trainer/training-candidates-summary.json",
-        },
+        _materialize_training_candidates_stub(
+            candidate_count=1,
+            new_candidate_count=0,
+            prompt_family_count=1,
+            context_group_count=1,
+        ),
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities._trainer_recompile_payload",
@@ -1369,7 +1399,9 @@ def test_run_trainer_cycle_does_not_fail_promotion_without_new_bundle_candidate(
     assert payload["promotion_requested"] is False
     assert payload["promotion_status"] == "not-requested"
     assert payload["bundle_gate"]["status"] == "not-requested"
-    assert not any("Promotion to `stable` was blocked" in warning for warning in payload["warnings"])
+    assert not any(
+        "Promotion to `stable` was blocked" in warning for warning in payload["warnings"]
+    )
 
 
 def test_run_trainer_cycle_skips_recompile_below_new_candidate_threshold(
@@ -1394,16 +1426,11 @@ def test_run_trainer_cycle_skips_recompile_below_new_candidate_threshold(
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.restore_processed_trace_records",
-        lambda root, queue_name="default", output_dir=Path("artifacts/trainer/recovered-imported-traces"): {
-            "storage_backend": "azure-blob-queue",
-            "queue_name": queue_name,
-            "processed_count": 1,
-            "restored_count": 1,
-            "failed_count": 0,
-            "trace_paths": ["artifacts/trainer/recovered-imported-traces/one.json"],
-            "failures": [],
-            "output_dir": str(output_dir),
-        },
+        _restore_processed_trace_records_stub(
+            processed_count=1,
+            restored_count=1,
+            trace_paths=["artifacts/trainer/recovered-imported-traces/one.json"],
+        ),
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.load_training_examples",
@@ -1433,15 +1460,12 @@ def test_run_trainer_cycle_skips_recompile_below_new_candidate_threshold(
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.materialize_training_candidates",
-        lambda root, trace_paths, output_path, summary_path, include_statuses=("accepted", "candidate"), seed_existing_output=True: {
-            "candidate_count": 2,
-            "new_candidate_count": 1,
-            "prompt_family_count": 1,
-            "context_group_count": 2,
-            "champion_index_path": "artifacts/trainer/champion-index.json",
-            "output_path": "artifacts/trainer/training-candidates.yaml",
-            "summary_path": "artifacts/trainer/training-candidates-summary.json",
-        },
+        _materialize_training_candidates_stub(
+            candidate_count=2,
+            new_candidate_count=1,
+            prompt_family_count=1,
+            context_group_count=2,
+        ),
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities._trainer_recompile_payload",
@@ -1506,16 +1530,11 @@ def test_run_trainer_cycle_uploads_remote_bundle_when_publish_succeeds(
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.restore_processed_trace_records",
-        lambda root, queue_name="default", output_dir=Path("artifacts/trainer/recovered-imported-traces"): {
-            "storage_backend": "azure-blob-queue",
-            "queue_name": queue_name,
-            "processed_count": 1,
-            "restored_count": 1,
-            "failed_count": 0,
-            "trace_paths": ["artifacts/trainer/recovered-imported-traces/one.json"],
-            "failures": [],
-            "output_dir": str(output_dir),
-        },
+        _restore_processed_trace_records_stub(
+            processed_count=1,
+            restored_count=1,
+            trace_paths=["artifacts/trainer/recovered-imported-traces/one.json"],
+        ),
     )
     monkeypatch.setattr("repo_rag_lab.utilities.load_training_examples", lambda path: ["example"])
     monkeypatch.setattr(
@@ -1542,15 +1561,12 @@ def test_run_trainer_cycle_uploads_remote_bundle_when_publish_succeeds(
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.materialize_training_candidates",
-        lambda root, trace_paths, output_path, summary_path, include_statuses=("accepted", "candidate"), seed_existing_output=True: {
-            "candidate_count": 1,
-            "new_candidate_count": 1,
-            "prompt_family_count": 1,
-            "context_group_count": 1,
-            "champion_index_path": "artifacts/trainer/champion-index.json",
-            "output_path": "artifacts/trainer/training-candidates.yaml",
-            "summary_path": "artifacts/trainer/training-candidates-summary.json",
-        },
+        _materialize_training_candidates_stub(
+            candidate_count=1,
+            new_candidate_count=1,
+            prompt_family_count=1,
+            context_group_count=1,
+        ),
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities._trainer_recompile_payload",

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
-import hashlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -1029,7 +1029,9 @@ def _normalize_runtime_trace(payload: Mapping[str, object]) -> dict[str, object]
         "context_count": context_count if context_count is not None else 0,
         "context_field": _string_or_none(payload.get("context_field")) or "context",
         "evidence_fingerprints": evidence_fingerprints,
-        "evidence_count": evidence_count if evidence_count is not None else len(evidence_fingerprints),
+        "evidence_count": evidence_count
+        if evidence_count is not None
+        else len(evidence_fingerprints),
         "mcp_candidate_count": mcp_candidate_count if mcp_candidate_count is not None else 0,
         "answer_length": answer_length,
     }
@@ -1063,7 +1065,9 @@ def _backfill_runtime_trace_evidence(
     """Backfill evidence fingerprints from stored context rows when the trace lacks them."""
 
     normalized = {str(key): value for key, value in trace_payload.items()}
-    evidence_fingerprints = _dedupe_string_list(_string_list(normalized.get("evidence_fingerprints")))
+    evidence_fingerprints = _dedupe_string_list(
+        _string_list(normalized.get("evidence_fingerprints"))
+    )
     if not evidence_fingerprints:
         evidence_rows = [
             row
@@ -1161,14 +1165,14 @@ def normalize_trace_record_payload(payload: Mapping[str, object]) -> dict[str, o
     embedded_trace = _mapping_or_none(payload.get("trace"))
     if embedded_trace is not None:
         outcome_payload = _mapping_or_none(payload.get("outcome"))
-        snapshot = _trace_record_snapshot(payload)
+        embedded_snapshot: dict[str, object] = _trace_record_snapshot(payload)
         return {
             "source_command": _string_or_none(payload.get("command")) or "unknown-command",
             "source_command_status": _string_or_none(payload.get("command_status")) or "success",
             "source_root": _string_or_none(payload.get("root")),
-            "snapshot": snapshot,
+            "snapshot": embedded_snapshot,
             "trace": _normalize_runtime_trace(
-                _backfill_runtime_trace_evidence(embedded_trace, snapshot)
+                _backfill_runtime_trace_evidence(embedded_trace, embedded_snapshot)
             ),
             "outcome": _normalize_outcome_payload(outcome_payload)
             if outcome_payload is not None
@@ -1511,8 +1515,7 @@ def _is_stale_queue_blob_pointer(blob_name: str | None, exc: Exception) -> bool:
         return False
     error_text = str(exc)
     return (
-        type(exc).__name__ in {"ResourceNotFoundError", "KeyError"}
-        or "BlobNotFound" in error_text
+        type(exc).__name__ in {"ResourceNotFoundError", "KeyError"} or "BlobNotFound" in error_text
     )
 
 

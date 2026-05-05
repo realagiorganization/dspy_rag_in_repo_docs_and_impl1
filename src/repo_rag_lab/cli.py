@@ -22,6 +22,7 @@ from .dspy_training import (
 from .dspy_workflow import RepositoryRAG
 from .mcp import discover_mcp_servers, dump_candidates
 from .mcp_server import serve_repo_rag_mcp
+from .retrieval_profile import SUPPORTED_RETRIEVAL_MODES
 from .runtime_artifacts import (
     DEFAULT_TRAINER_GENERATED_TRAINING_PATH,
     DEFAULT_TRAINER_GENERATED_TRAINING_SUMMARY_PATH,
@@ -35,13 +36,12 @@ from .runtime_artifacts import (
     resolve_bundle_manifest,
     resolve_bundle_version_for_program,
 )
-from .retrieval_profile import SUPPORTED_RETRIEVAL_MODES
 from .trainer_deployment import (
     DEFAULT_TRAINER_K8S_CYCLE_SCHEDULE,
     DEFAULT_TRAINER_K8S_IMAGE,
     DEFAULT_TRAINER_K8S_IMAGE_PULL_SECRET_NAME,
-    DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE,
     DEFAULT_TRAINER_K8S_MIN_NEW_CANDIDATES_FOR_RECOMPILE,
+    DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE,
     DEFAULT_TRAINER_K8S_MINIMUM_PASS_RATE,
     DEFAULT_TRAINER_K8S_MINIMUM_SOURCE_RECALL,
     DEFAULT_TRAINER_K8S_NAMESPACE,
@@ -689,6 +689,12 @@ def main() -> int:
                         runner.program_path,
                     )
                     overlay_path = getattr(args, "overlay_path", None)
+                    retrieved_context = result.get("retrieved_context")
+                    evidence_items = (
+                        [item for item in retrieved_context if isinstance(item, dict)]
+                        if isinstance(retrieved_context, list)
+                        else []
+                    )
                     result["bundle_version"] = bundle_version
                     result["overlay_path"] = overlay_path
                     result["trace"] = build_runtime_trace(
@@ -706,11 +712,7 @@ def main() -> int:
                             mcp_candidate_count=0,
                             answer_length=len(str(result.get("answer") or "")),
                             context_field="retrieved_context",
-                            evidence_items=[
-                                item
-                                for item in result.get("retrieved_context", [])
-                                if isinstance(item, dict)
-                            ],
+                            evidence_items=evidence_items,
                         )
                     )
                     _print_json(_command_payload("ask", root=root, result=result))
@@ -728,6 +730,12 @@ def main() -> int:
                 result["top_k"] = 4
                 bundle_version = getattr(args, "bundle_version", None)
                 overlay_path = getattr(args, "overlay_path", None)
+                context_items = result.get("context")
+                evidence_items = (
+                    [item for item in context_items if isinstance(item, dict)]
+                    if isinstance(context_items, list)
+                    else []
+                )
                 result["bundle_version"] = bundle_version
                 result["overlay_path"] = overlay_path
                 result["trace"] = build_runtime_trace(
@@ -743,9 +751,7 @@ def main() -> int:
                         mcp_candidate_count=_list_length_field(result, "mcp_candidates"),
                         answer_length=len(str(result.get("answer") or "")),
                         context_field="context",
-                        evidence_items=[
-                            item for item in result.get("context", []) if isinstance(item, dict)
-                        ],
+                        evidence_items=evidence_items,
                     )
                 )
                 _print_json(_command_payload("ask", root=root, result=result))
@@ -775,6 +781,12 @@ def main() -> int:
                 result["load_env_file"] = args.load_env_file
                 bundle_version = getattr(args, "bundle_version", None)
                 overlay_path = getattr(args, "overlay_path", None)
+                context_items = result.get("context")
+                evidence_items = (
+                    [item for item in context_items if isinstance(item, dict)]
+                    if isinstance(context_items, list)
+                    else []
+                )
                 result["bundle_version"] = bundle_version
                 result["overlay_path"] = overlay_path
                 result["trace"] = build_runtime_trace(
@@ -791,9 +803,7 @@ def main() -> int:
                         mcp_candidate_count=_list_length_field(result, "mcp_candidates"),
                         answer_length=len(str(result.get("answer") or "")),
                         context_field="context",
-                        evidence_items=[
-                            item for item in result.get("context", []) if isinstance(item, dict)
-                        ],
+                        evidence_items=evidence_items,
                     )
                 )
                 _print_json(_command_payload("ask-live", root=root, result=result))
@@ -834,15 +844,9 @@ def main() -> int:
             essentials_count=args.essentials_count,
             low_signal_min_sources=args.low_signal_min_sources,
             retrieval_mode=getattr(args, "retrieval_mode", None),
-            cache_dir=(
-                Path(args.cache_dir).expanduser().resolve() if args.cache_dir else None
-            ),
+            cache_dir=(Path(args.cache_dir).expanduser().resolve() if args.cache_dir else None),
             cache_ttl_seconds=args.cache_ttl_seconds,
-            ready_file=(
-                Path(args.ready_file).expanduser().resolve()
-                if args.ready_file
-                else None
-            ),
+            ready_file=(Path(args.ready_file).expanduser().resolve() if args.ready_file else None),
         )
 
     if args.command == "azure-manifest":

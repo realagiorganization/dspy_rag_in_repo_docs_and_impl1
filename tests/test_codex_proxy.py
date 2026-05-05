@@ -2,23 +2,49 @@ from __future__ import annotations
 
 import json
 import threading
+from collections.abc import Callable, Mapping
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from types import SimpleNamespace
+from typing import NoReturn, cast
 
 import httpx
 import pytest
 
+import repo_rag_lab.codex_proxy as codex_proxy_module
 from repo_rag_lab.codex_proxy import (
     CodexMediationResult,
     CodexProxyConfig,
-    _resolve_program_path_and_bundle_version,
     augment_responses_payload,
     build_codex_mediation,
     extract_codex_task_text,
     running_codex_proxy,
 )
-from repo_rag_lab.retrieval import Chunk
+from repo_rag_lab.retrieval import Chunk, RetrievalMode
+
+
+def _payload_mapping(value: object) -> Mapping[str, object]:
+    assert isinstance(value, dict)
+    return value
+
+
+def _resolve_program_path_and_bundle_version(
+    *,
+    repository_root: Path,
+    bundle_root: Path,
+    bundle_version: str | None,
+    bundle_channel: str,
+) -> tuple[Path | None, str | None]:
+    resolver = cast(
+        Callable[..., tuple[Path | None, str | None]],
+        codex_proxy_module.__dict__["_resolve_program_path_and_bundle_version"],
+    )
+    return resolver(
+        repository_root=repository_root,
+        bundle_root=bundle_root,
+        bundle_version=bundle_version,
+        bundle_channel=bundle_channel,
+    )
 
 
 def test_extract_codex_task_text_prefers_latest_user_message() -> None:
@@ -47,7 +73,7 @@ def test_extract_codex_task_text_prefers_latest_user_message() -> None:
         ]
     }
 
-    assert extract_codex_task_text(payload) == "second task"
+    assert extract_codex_task_text(_payload_mapping(payload)) == "second task"
 
 
 def test_augment_responses_payload_inserts_developer_message_after_existing_developers() -> None:
@@ -67,7 +93,7 @@ def test_augment_responses_payload_inserts_developer_message_after_existing_deve
     }
 
     updated = augment_responses_payload(
-        payload,
+        _payload_mapping(payload),
         developer_message="repo-rag mediation",
     )
 
@@ -83,20 +109,36 @@ def test_running_codex_proxy_forwards_sse_and_injects_mediation(
     captured: dict[str, object] = {}
 
     class UpstreamHandler(BaseHTTPRequestHandler):
-        def do_POST(self) -> None:  # noqa: N802
+        def do_POST(self) -> None:
             length = int(self.headers.get("Content-Length", "0"))
             body = self.rfile.read(length)
             captured["payload"] = json.loads(body)
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.end_headers()
+            completed_event = {
+                "type": "response.completed",
+                "response": {
+                    "id": "resp_1",
+                    "object": "response",
+                    "status": "completed",
+                    "output": [],
+                    "usage": {
+                        "input_tokens": 1,
+                        "output_tokens": 1,
+                        "total_tokens": 2,
+                    },
+                },
+            }
             self.wfile.write(
-                b'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp_1","object":"response","status":"completed","output":[],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}\n\n'
+                b"event: response.completed\ndata: "
+                + json.dumps(completed_event).encode("utf-8")
+                + b"\n\n"
             )
             self.wfile.write(b"data: [DONE]\n\n")
             self.wfile.flush()
 
-        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+        def log_message(self, format: str, *args: object) -> None:
             del format, args
 
     upstream = HTTPServer(("127.0.0.1", 0), UpstreamHandler)
@@ -123,9 +165,14 @@ def test_running_codex_proxy_forwards_sse_and_injects_mediation(
         evidence_previews=[{"source": "README.md", "text": "summary"}],
         developer_message="repo-rag mediation block",
     )
+
+    def fake_build_codex_mediation(*args: object, **kwargs: object) -> CodexMediationResult:
+        del args, kwargs
+        return mediation
+
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy.build_codex_mediation",
-        lambda *args, **kwargs: mediation,
+        fake_build_codex_mediation,
     )
 
     root = tmp_path / "repo"
@@ -179,17 +226,27 @@ def test_build_codex_mediation_suppresses_low_signal(
 ) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
-    monkeypatch.setattr(
-        "repo_rag_lab.codex_proxy.ask_repository",
-        lambda question, root, retrieval_mode=None: SimpleNamespace(
+
+    def fake_ask_repository(
+        question: str,
+        root: Path,
+        retrieval_mode: RetrievalMode | None = None,
+    ) -> SimpleNamespace:
+        del question, root
+        return SimpleNamespace(
             context=[],
             summary="thin",
             retrieval_mode=retrieval_mode or "lexical",
-        ),
-    )
+        )
+
+    def fake_build_heuristic_previews(root: Path) -> list[dict[str, str]]:
+        del root
+        return []
+
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.ask_repository", fake_ask_repository)
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy._build_heuristic_previews",
-        lambda root: [],
+        fake_build_heuristic_previews,
     )
 
     mediation = build_codex_mediation(
@@ -217,19 +274,27 @@ def test_resolve_program_path_and_bundle_version_uses_local_bundle_root_without_
     program_path = program_dir / "program.json"
     program_path.write_text('{"program":"demo"}\n', encoding="utf-8")
 
-    monkeypatch.setattr("repo_rag_lab.codex_proxy.fetch_remote_bundle", lambda *args, **kwargs: None)
-    monkeypatch.setattr(
-        "repo_rag_lab.codex_proxy.inspect_bundle_channel",
-        lambda root, channel: {
+    def fake_fetch_remote_bundle(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+
+    def fake_inspect_bundle_channel(root: Path, channel: str) -> dict[str, object]:
+        del root, channel
+        return {
             "channel_found": True,
             "current_bundle_version": "stable-42",
             "current_program_path": "artifacts/dspy/remote/stable-42/program.json",
-        },
-    )
+        }
+
+    def fail_repository_rag(*args: object, **kwargs: object) -> NoReturn:
+        del args, kwargs
+        pytest.fail("RepositoryRAG fallback should not run")
+
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.fetch_remote_bundle", fake_fetch_remote_bundle)
     monkeypatch.setattr(
-        "repo_rag_lab.codex_proxy.RepositoryRAG",
-        lambda *args, **kwargs: pytest.fail("RepositoryRAG fallback should not run"),
+        "repo_rag_lab.codex_proxy.inspect_bundle_channel",
+        fake_inspect_bundle_channel,
     )
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.RepositoryRAG", fail_repository_rag)
 
     resolved_program_path, resolved_bundle_version = _resolve_program_path_and_bundle_version(
         repository_root=repository_root,
@@ -249,7 +314,7 @@ def test_running_codex_proxy_uses_budgeted_disk_cache(
     calls = {"ask_repository": 0}
 
     class UpstreamHandler(BaseHTTPRequestHandler):
-        def do_POST(self) -> None:  # noqa: N802
+        def do_POST(self) -> None:
             length = int(self.headers.get("Content-Length", "0"))
             body = self.rfile.read(length)
             payload = json.loads(body)
@@ -257,13 +322,29 @@ def test_running_codex_proxy_uses_budgeted_disk_cache(
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.end_headers()
+            completed_event = {
+                "type": "response.completed",
+                "response": {
+                    "id": "resp_2",
+                    "object": "response",
+                    "status": "completed",
+                    "output": [],
+                    "usage": {
+                        "input_tokens": 1,
+                        "output_tokens": 1,
+                        "total_tokens": 2,
+                    },
+                },
+            }
             self.wfile.write(
-                b'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp_2","object":"response","status":"completed","output":[],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}\n\n'
+                b"event: response.completed\ndata: "
+                + json.dumps(completed_event).encode("utf-8")
+                + b"\n\n"
             )
             self.wfile.write(b"data: [DONE]\n\n")
             self.wfile.flush()
 
-        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+        def log_message(self, format: str, *args: object) -> None:
             del format, args
 
     upstream = HTTPServer(("127.0.0.1", 0), UpstreamHandler)
@@ -281,7 +362,11 @@ def test_running_codex_proxy_uses_budgeted_disk_cache(
     repo.mkdir()
     (repo / "README.md").write_text("repo summary\n" * 40, encoding="utf-8")
 
-    def fake_ask_repository(question, root, retrieval_mode=None):
+    def fake_ask_repository(
+        question: str,
+        root: Path,
+        retrieval_mode: str | None = None,
+    ) -> SimpleNamespace:
         calls["ask_repository"] += 1
         return SimpleNamespace(
             context=[

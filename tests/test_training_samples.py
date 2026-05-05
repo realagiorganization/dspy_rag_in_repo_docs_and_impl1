@@ -405,7 +405,9 @@ def test_materialize_training_candidates_tracks_context_groups_but_materializes_
     assert summary["context_group_count"] == 2
     assert summary["new_context_group_count"] == 2
 
-    materialized = load_training_examples(tmp_path / "artifacts" / "trainer" / "training-candidates.yaml")
+    materialized = load_training_examples(
+        tmp_path / "artifacts" / "trainer" / "training-candidates.yaml"
+    )
     assert len(materialized) == 1
     assert "core gameplay loop" in materialized[0].expected_answer
 
@@ -659,7 +661,7 @@ def test_materialize_training_candidates_splits_same_sources_when_evidence_finge
     assert len(family["context_groups"]) == 2
 
 
-def test_materialize_training_candidates_keeps_supported_family_champion_against_small_score_advantage(
+def test_materialize_training_candidates_keeps_family_champion_on_small_score_edge(
     tmp_path: Path,
 ) -> None:
     imported_dir = tmp_path / "artifacts" / "traces" / "imported"
@@ -761,7 +763,7 @@ def test_materialize_training_candidates_keeps_supported_family_champion_against
     assert family["family_champion_record"]["support_count"] == 2
 
 
-def test_materialize_combined_training_examples_replaces_duplicate_questions_and_strips_legacy_worker_sources(
+def test_materialize_combined_training_examples_dedupes_questions_and_strips_legacy_worker_sources(
     tmp_path: Path,
 ) -> None:
     (tmp_path / "README.md").write_text("# Demo\n", encoding="utf-8")

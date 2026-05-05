@@ -35,6 +35,28 @@ CONTEXT_GROUP_SOFT_THRESHOLD = 0.6
 CHAMPION_REPLACEMENT_DELTA = 0.05
 
 
+def _coerce_int(value: object) -> int | None:
+    """Return one best-effort integer conversion for optional scalar values."""
+
+    if value in (None, ""):
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            return int(stripped)
+        except ValueError:
+            return None
+    return None
+
+
 def normalize_training_examples(records: list[dict[str, Any]]) -> list[TrainingExample]:
     """
     Normalize raw YAML records into immutable training examples.
@@ -297,14 +319,8 @@ def _string_match_similarity(left: object, right: object) -> float:
 def _count_similarity(left: object, right: object) -> float:
     """Return a bounded similarity score for two optional integer-like values."""
 
-    try:
-        left_value = int(left) if left not in (None, "") else None
-    except (TypeError, ValueError):
-        left_value = None
-    try:
-        right_value = int(right) if right not in (None, "") else None
-    except (TypeError, ValueError):
-        right_value = None
+    left_value = _coerce_int(left)
+    right_value = _coerce_int(right)
     if left_value is None and right_value is None:
         return 1.0
     if left_value is None or right_value is None:
@@ -326,11 +342,7 @@ def _trace_context_snapshot(
 
     observed_sources = _normalized_source_tokens(
         [
-            *(
-                str(source).strip()
-                for source in payload.get("sources", [])
-                if str(source).strip()
-            ),
+            *(str(source).strip() for source in payload.get("sources", []) if str(source).strip()),
             *(
                 str(source).strip()
                 for source in trace_mapping.get("sources", [])
@@ -342,15 +354,9 @@ def _trace_context_snapshot(
     mode = str(trace_mapping.get("mode") or "").strip()
     context_field = str(trace_mapping.get("context_field") or "").strip()
     evidence_rows = [
-        row
-        for row in payload.get("retrieved_context", [])
-        if isinstance(row, Mapping)
+        row for row in payload.get("retrieved_context", []) if isinstance(row, Mapping)
     ]
-    evidence_rows.extend(
-        row
-        for row in payload.get("context", [])
-        if isinstance(row, Mapping)
-    )
+    evidence_rows.extend(row for row in payload.get("context", []) if isinstance(row, Mapping))
     evidence_fingerprints = _normalized_source_tokens(
         [
             *_evidence_fingerprint_tokens_from_rows(evidence_rows),
@@ -366,7 +372,9 @@ def _trace_context_snapshot(
     top_k_raw = trace_mapping.get("top_k")
     top_k = int(top_k_raw) if isinstance(top_k_raw, int) else None
     return {
-        "question": _normalize_question_text(payload.get("question") or trace_mapping.get("question")),
+        "question": _normalize_question_text(
+            payload.get("question") or trace_mapping.get("question")
+        ),
         "retrieval_mode": retrieval_mode,
         "mode": mode,
         "context_field": context_field,
@@ -402,7 +410,14 @@ def _exact_snapshot_id(
 ) -> str:
     """Return the immutable identity for one concrete imported trace snapshot."""
 
-    return f"ts-{_stable_hash(question, expected_answer, trace_record_path, recorded_at, context_snapshot)}"
+    stable_snapshot_hash = _stable_hash(
+        question,
+        expected_answer,
+        trace_record_path,
+        recorded_at,
+        context_snapshot,
+    )
+    return f"ts-{stable_snapshot_hash}"
 
 
 def _trace_quality_score(
@@ -440,13 +455,17 @@ def _trace_quality_score(
     return round(score, 6)
 
 
-def _context_similarity(candidate_snapshot: Mapping[str, Any], group_payload: Mapping[str, Any]) -> float:
+def _context_similarity(
+    candidate_snapshot: Mapping[str, Any], group_payload: Mapping[str, Any]
+) -> float:
     """Return a soft similarity score between one trace snapshot and one stored context group."""
 
     candidate_sources = _normalized_source_tokens(candidate_snapshot.get("sources", []))
     group_sources = _normalized_source_tokens(group_payload.get("sources", []))
     source_overlap = _jaccard_similarity(candidate_sources, group_sources)
-    candidate_evidence = _normalized_source_tokens(candidate_snapshot.get("evidence_fingerprints", []))
+    candidate_evidence = _normalized_source_tokens(
+        candidate_snapshot.get("evidence_fingerprints", [])
+    )
     group_evidence = _normalized_source_tokens(group_payload.get("evidence_fingerprints", []))
     evidence_overlap = _jaccard_similarity(candidate_evidence, group_evidence)
     retrieval_mode_score = _string_match_similarity(
@@ -485,7 +504,9 @@ def _context_similarity(candidate_snapshot: Mapping[str, Any], group_payload: Ma
     )
 
 
-def _matches_context_group(candidate_snapshot: Mapping[str, Any], group_payload: Mapping[str, Any]) -> bool:
+def _matches_context_group(
+    candidate_snapshot: Mapping[str, Any], group_payload: Mapping[str, Any]
+) -> bool:
     """Return whether a trace snapshot should join an existing context group."""
 
     similarity = _context_similarity(candidate_snapshot, group_payload)
@@ -497,7 +518,9 @@ def _matches_context_group(candidate_snapshot: Mapping[str, Any], group_payload:
         _normalized_source_tokens(candidate_snapshot.get("sources", [])),
         _normalized_source_tokens(group_payload.get("sources", [])),
     )
-    candidate_evidence = _normalized_source_tokens(candidate_snapshot.get("evidence_fingerprints", []))
+    candidate_evidence = _normalized_source_tokens(
+        candidate_snapshot.get("evidence_fingerprints", [])
+    )
     group_evidence = _normalized_source_tokens(group_payload.get("evidence_fingerprints", []))
     if candidate_evidence and group_evidence:
         evidence_overlap = _jaccard_similarity(candidate_evidence, group_evidence)
@@ -549,7 +572,9 @@ def _load_champion_index(path: Path) -> dict[str, Any]:
     return payload
 
 
-def _seed_champion_index_from_existing_records(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+def _seed_champion_index_from_existing_records(
+    records: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
     """Build a first champion index from legacy materialized candidate rows."""
 
     index_payload = _fresh_champion_index()
@@ -667,6 +692,16 @@ def _group_champion_evidence_count(group_payload: Mapping[str, Any]) -> int:
         return 0
 
 
+def _context_group_rank_key(group: Mapping[str, Any]) -> tuple[float, int, str]:
+    """Return the stable sort key for one candidate context group."""
+
+    return (
+        float(group.get("champion_score") or 0.0),
+        _group_champion_support_count(group),
+        str(group.get("context_group_id") or ""),
+    )
+
+
 def _refresh_family_champion(family_payload: dict[str, Any]) -> tuple[bool, str | None, str | None]:
     """Recompute the best family champion from its context-group champions."""
 
@@ -683,11 +718,7 @@ def _refresh_family_champion(family_payload: dict[str, Any]) -> tuple[bool, str 
             for group in groups
             if isinstance(group, Mapping) and isinstance(group.get("champion_record"), Mapping)
         ),
-        key=lambda group: (
-            float(group.get("champion_score") or 0.0),
-            _group_champion_support_count(group),
-            str(group.get("context_group_id") or ""),
-        ),
+        key=_context_group_rank_key,
         reverse=True,
     )
     if not ranked_groups:
@@ -723,17 +754,17 @@ def _refresh_family_champion(family_payload: dict[str, Any]) -> tuple[bool, str 
             challenger_evidence_count = _group_champion_evidence_count(challenger_group)
 
             should_switch = False
-            if challenger_score > incumbent_score + CHAMPION_REPLACEMENT_DELTA:
-                should_switch = True
-            elif (
-                abs(challenger_score - incumbent_score) <= CHAMPION_REPLACEMENT_DELTA
-                and challenger_support > incumbent_support
-            ):
-                should_switch = True
-            elif (
-                abs(challenger_score - incumbent_score) <= CHAMPION_REPLACEMENT_DELTA
-                and challenger_support == incumbent_support
-                and challenger_evidence_count > incumbent_evidence_count
+            if (
+                challenger_score > incumbent_score + CHAMPION_REPLACEMENT_DELTA
+                or (
+                    abs(challenger_score - incumbent_score) <= CHAMPION_REPLACEMENT_DELTA
+                    and challenger_support > incumbent_support
+                )
+                or (
+                    abs(challenger_score - incumbent_score) <= CHAMPION_REPLACEMENT_DELTA
+                    and challenger_support == incumbent_support
+                    and challenger_evidence_count > incumbent_evidence_count
+                )
             ):
                 should_switch = True
 
@@ -788,8 +819,10 @@ def _find_or_create_context_group(
     for group in groups:
         if isinstance(group, dict) and _matches_context_group(context_snapshot, group):
             return group, False
-    context_group_id = f"cg-{_stable_hash(prompt_family_id, question, context_snapshot, exact_snapshot_id)}"
-    group_payload = {
+    context_group_id = (
+        f"cg-{_stable_hash(prompt_family_id, question, context_snapshot, exact_snapshot_id)}"
+    )
+    group_payload: dict[str, Any] = {
         "context_group_id": context_group_id,
         "sources": list(context_snapshot.get("sources", [])),
         "evidence_fingerprints": list(context_snapshot.get("evidence_fingerprints", [])),
@@ -870,9 +903,7 @@ def _normalize_materialized_candidate_record(record: Mapping[str, Any]) -> dict[
     tags = _dedupe_tags(record.get("tags", []))
     tag_set = {tag.casefold() for tag in tags}
     expected_sources = [
-        str(source).strip()
-        for source in record.get("expected_sources", [])
-        if str(source).strip()
+        str(source).strip() for source in record.get("expected_sources", []) if str(source).strip()
     ]
     if "trainer-candidate" in tag_set:
         # Imported worker traces are global candidates, not repo-local retrieval benchmarks.
@@ -950,11 +981,7 @@ def _training_candidate_from_trace_record(
         execution_status=str(outcome_mapping.get("execution_status") or ""),
         used_baseline_fallback=bool(outcome_mapping.get("used_baseline_fallback")),
         source_count=int(context_snapshot.get("source_count") or 0),
-        top_k=(
-            int(context_snapshot.get("top_k"))
-            if isinstance(context_snapshot.get("top_k"), int)
-            else None
-        ),
+        top_k=_coerce_int(context_snapshot.get("top_k")),
         program_loaded=bool(context_snapshot.get("program_loaded")),
     )
     tags = _dedupe_tags(
@@ -1101,12 +1128,6 @@ def materialize_training_candidates(
     new_candidate_count = 0
     new_context_group_count = 0
     prompt_family_count_before = len(family_by_id)
-    context_group_count_before = sum(
-        len(family_payload.get("context_groups", []))
-        for family_payload in family_by_id.values()
-        if isinstance(family_payload.get("context_groups"), list)
-    )
-
     for record in loaded_records:
         prompt_family_id = str(record.get("prompt_family_id") or "").strip()
         exact_snapshot_id = str(record.get("exact_snapshot_id") or "").strip()
@@ -1178,7 +1199,9 @@ def materialize_training_candidates(
         replace_group_champion = False
         if not isinstance(current_group_record, Mapping):
             replace_group_champion = True
-        elif _candidate_record_key(current_group_record) == _candidate_record_key(serialized_record):
+        elif _candidate_record_key(current_group_record) == _candidate_record_key(
+            serialized_record
+        ):
             current_group_record = dict(current_group_record)
             current_group_record["support_count"] = candidate_support
             context_group["champion_record"] = current_group_record
@@ -1186,9 +1209,7 @@ def materialize_training_candidates(
                 current_group_score,
                 candidate_score,
             )
-        elif candidate_score > current_group_score + CHAMPION_REPLACEMENT_DELTA:
-            replace_group_champion = True
-        elif (
+        elif candidate_score > current_group_score + CHAMPION_REPLACEMENT_DELTA or (
             abs(candidate_score - current_group_score) <= CHAMPION_REPLACEMENT_DELTA
             and candidate_support > current_group_support
         ):
@@ -1211,7 +1232,11 @@ def materialize_training_candidates(
         )
         if previous_family_record is None and current_family_record is not None:
             new_candidate_count += 1
-        elif previous_family_key is not None and current_family_key is not None and previous_family_key != current_family_key:
+        elif (
+            previous_family_key is not None
+            and current_family_key is not None
+            and previous_family_key != current_family_key
+        ):
             new_candidate_count += 1
             replaced_count += 1
         elif family_changed and current_family_record is not None and previous_family_key is None:

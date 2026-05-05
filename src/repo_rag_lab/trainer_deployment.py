@@ -86,9 +86,7 @@ class TrainerK8sConfig:
     trace_queue_limit: int | None = None
     trace_keep_queued: bool = False
     recompile_run_name: str | None = DEFAULT_TRAINER_K8S_RECOMPILE_RUN_NAME
-    min_new_candidates_for_recompile: int = (
-        DEFAULT_TRAINER_K8S_MIN_NEW_CANDIDATES_FOR_RECOMPILE
-    )
+    min_new_candidates_for_recompile: int = DEFAULT_TRAINER_K8S_MIN_NEW_CANDIDATES_FOR_RECOMPILE
     recompile_base_training_path: str = str(DEFAULT_TRAINING_PATH)
     recompile_optimizer: str = "bootstrapfewshot"
     recompile_top_k: int = 4
@@ -115,7 +113,9 @@ def _config_map_payload(config: TrainerK8sConfig) -> dict[str, object]:
         "TRAINER_PROMOTE_CHANNEL": config.promote_channel or "",
         "TRAINER_SERVICE_POLL_INTERVAL": str(config.poll_interval_seconds),
         "TRAINER_SERVICE_MAX_IDLE_CYCLES": (
-            str(config.service_max_idle_cycles) if config.service_max_idle_cycles is not None else ""
+            str(config.service_max_idle_cycles)
+            if config.service_max_idle_cycles is not None
+            else ""
         ),
         "RETRIEVAL_TRAINING_PATH": config.retrieval_training_path,
         "RETRIEVAL_TOP_K": str(config.retrieval_top_k),
@@ -125,9 +125,7 @@ def _config_map_payload(config: TrainerK8sConfig) -> dict[str, object]:
             str(config.minimum_pass_rate) if config.minimum_pass_rate is not None else ""
         ),
         "RETRIEVAL_MIN_SOURCE_RECALL": (
-            str(config.minimum_source_recall)
-            if config.minimum_source_recall is not None
-            else ""
+            str(config.minimum_source_recall) if config.minimum_source_recall is not None else ""
         ),
         "TRAINER_MIN_BUNDLE_PASS_RATE": (
             str(config.minimum_bundle_pass_rate)
@@ -415,9 +413,7 @@ def write_trainer_k8s_manifests(root: Path, *, config: TrainerK8sConfig) -> dict
         "cycle_schedule": config.cycle_schedule,
         "promote_channel": config.promote_channel,
         "minimum_bundle_pass_rate": config.minimum_bundle_pass_rate,
-        "min_new_candidates_for_recompile": max(
-            1, int(config.min_new_candidates_for_recompile)
-        ),
+        "min_new_candidates_for_recompile": max(1, int(config.min_new_candidates_for_recompile)),
         "manifest_dir": _relative_path_text(resolved_root, output_dir),
         "manifest_paths": [
             _relative_path_text(resolved_root, service_account_path),

@@ -418,6 +418,13 @@ Current implementation note:
 - For worker-side Codex integration the preferred spawn path is now the lighter
   `python -m repo_rag_lab.mcp_stdio --root ...` entrypoint rather than `repo-rag serve-mcp`,
   because the generic CLI imports far more of the repo-RAG stack before it reaches the MCP branch.
+- The worker now also stamps a stable `mcp_contract_signature` into persisted Codex lane metadata,
+  so live MCP contract changes trigger one clean `reset` instead of silently resuming an older lane
+  whose Codex-side MCP behavior predates the new launcher/resources contract.
+- The bounded MCP launch path now emits low-level transport diagnostics
+  (`repo_rag_mcp_debug.log` plus richer launcher stderr traces) because current live evidence shows
+  worker-side preflight succeeding while the Codex-launched child still stalls before the first
+  recorded `initialize` request.
 - The MCP surface deliberately excludes `dspy-train`, `trainer-recompile`, `trainer-cycle`,
   `trainer-service`, `retrieval-eval`, and notebook execution, so the primary integration path for
   `dataset` remains direct CLI execution with JSON envelopes rather than long-lived work tunneled

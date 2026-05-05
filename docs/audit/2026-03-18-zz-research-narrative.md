@@ -10,7 +10,7 @@
 This audit covers documentation and agent-contract work for a new overreaching repository
 narrative:
 
-- [README.AGENTS.md](../../README.AGENTS.md)
+- [docs/architecture/research-narrative.md](../../docs/architecture/research-narrative.md)
 - [AGENTS.md](../../AGENTS.md)
 - [README.md](../../README.md)
 
@@ -39,7 +39,7 @@ Executed successfully in this turn:
 
 ## Documentation Changes
 
-- Added [README.AGENTS.md](../../README.AGENTS.md) as the top-level research narrative describing
+- Added [docs/architecture/research-narrative.md](../../docs/architecture/research-narrative.md) as the top-level research narrative describing
   the repository thesis, research questions, workflow arc, evidence surfaces, open tensions, and
   maintenance contract.
 - Updated [AGENTS.md](../../AGENTS.md) so agents must keep `README.AGENTS.md` current whenever a
