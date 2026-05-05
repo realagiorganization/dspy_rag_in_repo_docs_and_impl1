@@ -228,6 +228,198 @@ session subtree was being deleted upstream before the execution workflow began.
 - `cargo build --manifest-path rust-cli/Cargo.toml`
   - `pass`
 
+## 2026-05-05 Follow-up: codex-launched MCP transport still stalls before initialize
+
+### What changed locally after the 9.46M-token resumed run
+
+- Added a stable `mcp_contract_signature` to worker-side persisted session metadata.
+  - This signature ignores ephemeral launcher/log paths.
+  - It does track the bounded repo-RAG MCP contract version plus retrieval-mode default.
+  - Restore now hard-resets the lane on `mcp-contract-mismatch` instead of silently resuming a
+    session that predates MCP launch-contract changes.
+- Added low-level MCP transport diagnostics:
+  - worker launcher now appends `pwd`, `HOME`, `PATH`, `PYTHONPATH`, and `fd0/fd1/fd2` targets to
+    `repo_rag_mcp_stderr.log`
+  - bounded MCP server now honors `REPO_RAG_MCP_DEBUG_LOG` and logs:
+    - server start
+    - pipe targets
+    - header wait states
+    - EOF before headers
+    - body wait states
+    - parsed MCP method names
+
+### New evidence that narrows the live failure
+
+- The latest `repo_rag_mcp_stderr.log` captured a `PATH` rooted under
+  `/dev/shm/codex_home_...`, which is only true for the actual Codex-launched child, not the
+  worker-side preflight.
+- The same run's `repo_rag_mcp_usage_summary.json` still contained only the preflight events:
+  - `initialize = 1`
+  - `resources/list = 1`
+- Taken together, that means:
+  - Codex **did** launch the MCP child process
+  - but the server never logged a Codex-side `initialize` request
+  - therefore the live failure is now narrowed to the transport boundary before the server
+    receives its first MCP frame
+
+### Current interpretation
+
+The bounded server implementation is no longer the only plausible culprit. The strongest current
+evidence is:
+
+- worker-side preflight can launch the same command and complete `initialize -> resources/list`
+- Codex-side launch reaches the launcher shell
+- but the live child still never records the first MCP request
+
+So the remaining blocker is now one of these:
+
+- Codex resumes a lane whose MCP client state is stale relative to the new launch contract
+- Codex spawns the child with a stdio/transport behavior that differs from the worker preflight
+- Codex sends no bytes or closes stdin before our server sees `initialize`
+
+### Verification executed for the local fixes
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py tests/test_mcp_server.py tests/test_mcp_stdio.py -q`
+  - `pass` (`67 passed`)
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+- `python -m compileall /home/standard/Desktop/realagi_work/dataset/docker/prompt-executor/worker_codex_cli_exec.py /home/standard/Desktop/realagi_work/dataset/tests/unit/test_worker_codex_cli_exec_small.py`
+  - `pass`
+- `cd /home/standard/Desktop/realagi_work/dataset && UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/unit/test_worker_codex_cli_exec_small.py tests/unit/test_execute_worker_prompts_helpers_extra.py -q`
+  - `pass` (`75 passed`)
+
+## 2026-05-05 Local Artifact Review: preflight MCP fix landed, but live resumed lane still burned 9.46M prompt tokens
+
+The newest artifact upload from `../dataset/artifacts/` still shows a very expensive run, but the
+shape of the failure changed again.
+
+### What worked
+
+- live `codex exec resume`: `pass`
+  - `codex_session_state.json`
+    - `session_mode = resumed`
+    - `restore_status = restored`
+    - `resume_candidate_present = true`
+    - `resume_attempted = true`
+    - `resume_used = true`
+    - `resume_command_mode = explicit-session-id`
+    - `restored_files = 7`
+    - `persisted_files = 10`
+    - `pvc_sync_health = healthy`
+    - `total_run_count = 5`
+    - `fresh_run_count = 1`
+    - `resumed_run_count = 4`
+- live `RAG`: `pass`
+  - `repo_rag_backend.json`
+    - `rag_status = success`
+    - `mediation_mode = dspy_rag`
+  - `repo_rag_codex_proxy_last.json`
+    - `sources = [docs/AGENTS.md, README.md, docs/ASSUMPTIONS.md, docs/USAGE.md]`
+    - `warnings = []`
+- live `DSPy` mediation: `pass`
+  - `repo_rag_backend.json`
+    - `dspy_status = success`
+    - `bundle_resolved = true`
+    - `bundle_version = 20260502T122127191445Z`
+  - `repo_rag_trace.json`
+    - `program_loaded = true`
+- worker-side MCP preflight: `pass`
+  - `repo_rag_mcp_usage_summary.json`
+    - `preflight_status = success`
+    - `preflight_initialize_ok = true`
+    - `preflight_resources_count = 5`
+    - `resolved_command = /usr/local/bin/python`
+    - launcher command = `python -m repo_rag_lab.mcp_stdio --root ...`
+  - the same summary also recorded two actual preflight events:
+    - `initialize = 1`
+    - `resources/list = 1`
+- trainer handoff: `pass`
+  - `trusted_trace_handoff_summary.json`
+    - `attempted = 1`
+    - `queued = 1`
+    - `failed = 0`
+
+### What still failed
+
+- live `MCP-first discovery`: `fail`
+  - `repo_rag_mcp_usage_summary.json`
+    - `event_count = 2`
+    - `resources_list_count = 1`
+    - `resource_read_count = 0`
+    - `search_resource_read_count = 0`
+    - `ask_resource_read_count = 0`
+    - `discovery_via_mcp = false`
+  - the bounded repo-RAG server was healthy enough for worker preflight, but the live Codex run
+    still never issued a real `read_mcp_resource`
+  - raw transcript evidence in `codex_response.txt`:
+    - `resources/list failed` = `2`
+    - `timed out handshaking` = `4`
+    - `repo-rag://search` = `4`
+    - `repo-rag://startup-context` = `2`
+    - `mcp: repo_rag/read_mcp_resource` = `0`
+    - `search_repo` = `0`
+    - `ask_repo` = `0`
+
+### Token outcome
+
+- `redis_results.json`
+  - `prompt_tokens = 9455404`
+  - `completion_tokens = 0`
+  - `total_tokens = 9455404`
+- compared with the previous run captured in the lane metadata:
+  - `usage_delta_vs_previous.prompt_tokens_delta = -5944399`
+  - `usage_delta_vs_previous.prompt_tokens_delta_ratio = -0.386005`
+- compared with the fresh baseline:
+  - `usage_delta_vs_last_fresh.prompt_tokens_delta = 6887342`
+  - `usage_delta_vs_last_fresh.prompt_tokens_delta_ratio = 2.681922`
+
+So this run is better than the previous `15.4M` spike, but it is still much worse than the
+fresh-baseline token floor and still far too expensive to call healthy.
+
+### Shell churn profile
+
+- `codex_response.txt`
+  - `README.md` = `66`
+  - `docs/DEVPLAN.md` = `42`
+  - `docs/USAGE.md` = `48`
+  - `docs/ASSUMPTIONS.md` = `30`
+  - `docs/ENVS.md` = `6`
+  - `docs/AGENTS.md` = `4`
+  - `diff --git` = `610`
+  - `sed -n` = `75`
+
+The transcript is still overwhelmingly shell/diff-driven even though the worker-side MCP launcher
+and preflight now work.
+
+### Current interpretation
+
+The newest fix clearly improved one layer only:
+
+- the worker can now prove that the dedicated `python -m repo_rag_lab.mcp_stdio --root ...`
+  launcher itself is healthy before Codex starts
+
+But that did **not** yet translate into live MCP use inside the resumed Codex lane. The strongest
+clue is the restored session metadata:
+
+- `codex_restore_probe.json`
+  - `latest_session_id = rollout-2026-05-05T10-53-53-019df7c5-dfd6-72e1-bab5-4f1804a502d5`
+
+That session id predates the latest MCP-startup-regression fix push. So the current live run most
+likely resumed a lane whose Codex-side session state was created before the new MCP launch contract
+was available. The worker preflight therefore exercised the new launcher successfully, but the
+resumed Codex run still behaved like an older lane that kept retrying MCP startup and then fell
+back to shell.
+
+This is still an inference, not yet a proved root cause. But it is the strongest explanation that
+matches all currently visible facts:
+
+- preflight `pass`
+- live `resources/list` retries still `fail`
+- no successful `read_mcp_resource`
+- resumed session id older than the newest MCP launch fix
+
 ## 2026-05-05 Local Root-Cause Fix: heavy CLI entrypoint, dedicated MCP stdio module, and fail-closed worker preflight
 
 The newest artifact review plus local reproduction closes the main ambiguity around the

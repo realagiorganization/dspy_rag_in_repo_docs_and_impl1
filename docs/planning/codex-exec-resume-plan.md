@@ -199,3 +199,8 @@ Latest local artifact status:
 - [x] The worker restored the expected persisted lane snapshot (`restored_files = 4`).
 - [x] The resumed lane materially reduced prompt-token cost versus the recorded fresh baseline
   (`2568062 -> 103760`).
+- [x] Persisted lane metadata now carries a stable `mcp_contract_signature`, so MCP launch-contract
+  changes can force one clean reset instead of silently reusing a stale resumed lane.
+- [ ] Live Codex-side MCP transport still needs one more validation pass with the new
+  `repo_rag_mcp_debug.log` instrumentation, because worker-side preflight succeeds but the
+  Codex-launched child still times out before the first recorded MCP request.

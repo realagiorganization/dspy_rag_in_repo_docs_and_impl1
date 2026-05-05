@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import select
 import time
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
@@ -37,6 +38,7 @@ SUPPORTED_RETRIEVAL_MODES = frozenset(
 RETRIEVAL_MODE_ENUM = sorted(SUPPORTED_RETRIEVAL_MODES)
 MCP_USAGE_LOG_ENV = "REPO_RAG_MCP_USAGE_LOG"
 MCP_DEFAULT_RETRIEVAL_MODE_ENV = "REPO_RAG_MCP_DEFAULT_RETRIEVAL_MODE"
+MCP_DEBUG_LOG_ENV = "REPO_RAG_MCP_DEBUG_LOG"
 MCP_RESOURCE_SCHEME = "repo-rag"
 MCP_STARTUP_CONTEXT_QUESTION = (
     "repository guidance current gameplay slice transmutation alchemy assumptions "
@@ -262,6 +264,30 @@ def _log_usage_event(
             handle.write(json.dumps(payload) + "\n")
     except OSError:
         return
+
+
+def _mcp_debug_log_path() -> Path | None:
+    raw = str(os.getenv(MCP_DEBUG_LOG_ENV) or "").strip()
+    return Path(raw) if raw else None
+
+
+def _log_mcp_debug(message: str) -> None:
+    path = _mcp_debug_log_path()
+    if path is None:
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(f"{time.time():.6f} {message}\n")
+    except OSError:
+        return
+
+
+def _fd_target(fd: int) -> str:
+    try:
+        return os.readlink(f"/proc/{os.getpid()}/fd/{fd}")
+    except OSError:
+        return ""
 
 
 def _resolve_root(server_root: Path, requested_root: object) -> Path:
@@ -989,29 +1015,64 @@ def read_json_rpc_message(stream: BinaryIO) -> dict[str, object] | None:
     """Read one `Content-Length` framed JSON-RPC message from ``stream``."""
 
     headers: dict[str, str] = {}
+    try:
+        fileno = stream.fileno()
+    except Exception:
+        fileno = None
+    if fileno is not None:
+        waiting_logged = False
 
     while True:
+        if fileno is not None:
+            ready, _, _ = select.select([fileno], [], [], 5.0)
+            if not ready:
+                if not waiting_logged:
+                    _log_mcp_debug("waiting-for-headers no-bytes-yet")
+                    waiting_logged = True
+                continue
         line = stream.readline()
         if line == b"":
+            _log_mcp_debug("eof-before-headers")
             return None
         if line in {b"\r\n", b"\n"}:
             if headers:
                 break
             continue
+        _log_mcp_debug(f"header-line {line.decode('utf-8', errors='ignore').rstrip()}")
         key, separator, value = line.decode("utf-8").partition(":")
         if separator != ":":
+            _log_mcp_debug("invalid-header-line")
             raise ValueError("Invalid JSON-RPC header line.")
         headers[key.strip().lower()] = value.strip()
 
     if "content-length" not in headers:
+        _log_mcp_debug("missing-content-length")
         raise ValueError("Missing Content-Length header.")
     content_length = int(headers["content-length"])
-    body = stream.read(content_length)
-    if len(body) != content_length:
-        raise ValueError("Incomplete JSON-RPC message body.")
+    body = bytearray()
+    while len(body) < content_length:
+        if fileno is not None:
+            ready, _, _ = select.select([fileno], [], [], 5.0)
+            if not ready:
+                _log_mcp_debug(
+                    f"waiting-for-body received={len(body)} expected={content_length}"
+                )
+                continue
+        chunk = stream.read(content_length - len(body))
+        if not chunk:
+            _log_mcp_debug(
+                f"eof-during-body received={len(body)} expected={content_length}"
+            )
+            raise ValueError("Incomplete JSON-RPC message body.")
+        body.extend(chunk)
+    _log_mcp_debug(f"body-bytes {content_length}")
     payload = json.loads(body.decode("utf-8"))
     if not isinstance(payload, dict):
+        _log_mcp_debug("payload-not-object")
         raise ValueError("JSON-RPC payload must be an object.")
+    _log_mcp_debug(
+        f"message method={str(payload.get('method') or '')} id={str(payload.get('id') or '')}"
+    )
     return {str(key): value for key, value in payload.items()}
 
 
@@ -1032,10 +1093,24 @@ def serve_repo_rag_mcp(
 ) -> int:
     """Serve the bounded repo-RAG MCP surface over stdio until EOF."""
 
+    _log_mcp_debug(
+        "server-start "
+        f"pid={os.getpid()} "
+        f"cwd={os.getcwd()} "
+        f"root={root} "
+        f"stdin={_fd_target(0)} "
+        f"stdout={_fd_target(1)} "
+        f"stderr={_fd_target(2)}"
+    )
     while True:
         message = read_json_rpc_message(input_stream)
         if message is None:
+            _log_mcp_debug("server-stop eof")
             return 0
         response = handle_mcp_message(message, server_root=root)
         if response is not None:
+            _log_mcp_debug(
+                f"response method={str(message.get('method') or '')} "
+                f"id={str(message.get('id') or '')}"
+            )
             write_json_rpc_message(output_stream, response)

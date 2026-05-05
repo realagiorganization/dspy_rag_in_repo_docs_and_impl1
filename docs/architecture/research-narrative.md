@@ -497,7 +497,14 @@ At the time of this document:
   The script now auto-cleans helper pods on exit and explicit cleanup also deletes by
   `app=artifacts-sync,claim=<claim>` label, so future PVC helper pods should not linger after
   deploy/workflow sync steps complete. Actual `resumed` proof still depends on the next same-lane
-  run
+  run; after that proof landed, the remaining bottleneck moved one layer lower into Codex-side MCP
+  transport. Worker-side preflight can now complete `initialize -> resources/list`, but the actual
+  Codex-launched MCP child still stalls before the first recorded `initialize` frame. The current
+  repo state therefore adds two guardrails: a stable `mcp_contract_signature` in persisted Codex
+  lane metadata so MCP launch-contract changes force one clean reset, and low-level MCP transport
+  diagnostics (`repo_rag_mcp_debug.log` plus richer launcher stderr traces) so the next live run
+  can distinguish `stdin closed`, `no bytes received`, and malformed-frame cases instead of
+  flattening them all into one generic handshake timeout
 - notebook batch execution and reporting are implemented and exposed through
   `make notebook-report`
 - TODO and publication backlog synchronization are implemented and exposed through
