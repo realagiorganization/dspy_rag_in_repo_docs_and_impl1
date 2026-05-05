@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 import repo_rag_lab.retrieval as retrieval_module
 from repo_rag_lab.corpus import load_documents
 from repo_rag_lab.retrieval import (

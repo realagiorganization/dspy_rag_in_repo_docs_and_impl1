@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .workflow import RAGAnswer
 
 __all__ = ["ask_repository", "ask_repository_live"]
 
@@ -12,7 +16,7 @@ def ask_repository(
     root: Path,
     *,
     retrieval_mode: str | None = None,
-):
+) -> RAGAnswer:
     from .workflow import ask_repository as _ask_repository
 
     return _ask_repository(
@@ -29,7 +33,7 @@ def ask_repository_live(
     provider: str,
     load_env_file: bool = False,
     retrieval_mode: str | None = None,
-):
+) -> RAGAnswer:
     from .workflow import ask_repository_live as _ask_repository_live
 
     return _ask_repository_live(

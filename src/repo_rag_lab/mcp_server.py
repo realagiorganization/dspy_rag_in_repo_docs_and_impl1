@@ -18,8 +18,9 @@ from typing import TYPE_CHECKING, BinaryIO
 from urllib.parse import parse_qs, urlsplit
 
 if TYPE_CHECKING:
-    from .retrieval import RetrievalMode
+    from .mcp import MCPServerCandidate
     from .retrieval_profile import RetrievalProfile
+    from .workflow import Chunk, RAGAnswer
 
 MCP_PROTOCOL_VERSION = "2024-11-05"
 MCP_SERVER_NAME = "repo-rag-mcp"
@@ -125,7 +126,7 @@ def _artifact_metadata() -> dict[str, list[str]]:
     return {"input_paths": [], "generated_paths": [], "related_paths": []}
 
 
-def load_retrieval_profile(server_root: Path) -> "RetrievalProfile":
+def load_retrieval_profile(server_root: Path) -> RetrievalProfile:
     from .retrieval_profile import load_retrieval_profile
 
     return load_retrieval_profile(server_root)
@@ -143,8 +144,8 @@ def collect_repository_context(
     root: Path,
     top_k: int = 4,
     retrieval_mode: str | None = None,
-    profile: "RetrievalProfile | None" = None,
-):
+    profile: RetrievalProfile | None = None,
+) -> list[Chunk]:
     from .workflow import collect_repository_context
 
     return collect_repository_context(
@@ -162,13 +163,13 @@ def serialize_chunk(chunk: object, *, root: Path) -> dict[str, object]:
     return serialize_chunk(chunk, root=root)
 
 
-def discover_mcp_servers(root: Path):
+def discover_mcp_servers(root: Path) -> list[MCPServerCandidate]:
     from .mcp import discover_mcp_servers as _discover_mcp_servers
 
     return _discover_mcp_servers(root)
 
 
-def ask_repository(*, question: str, root: Path, retrieval_mode: str | None = None):
+def ask_repository(*, question: str, root: Path, retrieval_mode: str | None = None) -> RAGAnswer:
     from .workflow import ask_repository
 
     return ask_repository(
@@ -341,7 +342,8 @@ def build_mcp_tool_definitions() -> list[MCPToolDefinition]:
             name="search_repo",
             description=(
                 "Search the repository corpus and return a bounded shortlist of relevant files "
-                "plus matching text previews. Prefer this for repository discovery before shell reads."
+                "plus matching text previews. Prefer this for repository discovery before "
+                "shell reads."
             ),
             input_schema={
                 "type": "object",
@@ -531,7 +533,7 @@ def _resource_query_value(parsed: object, key: str) -> str | None:
 
     if not hasattr(parsed, "query"):
         return None
-    values = parse_qs(getattr(parsed, "query"), keep_blank_values=False).get(key)
+    values = parse_qs(parsed.query, keep_blank_values=False).get(key)
     if not values:
         return None
     text = str(values[-1]).strip()
@@ -570,7 +572,8 @@ def _overview_resource_text(server_root: Path) -> str:
         "Preferred workflow:",
         "1. Read `repo-rag://startup-context` first for one bounded working set.",
         "2. If only templates are listed, that is still a usable MCP discovery surface.",
-        "3. Call `read_mcp_resource` on a concrete URI such as `repo-rag://search?question=transmutation&top_k=4` for repository discovery.",
+        "3. Call `read_mcp_resource` on a concrete URI such as",
+        "   `repo-rag://search?question=transmutation&top_k=4` for repository discovery.",
         "4. Use `repo-rag://ask{?question,retrieval_mode}` for bounded repo-grounded answers.",
         "5. Use shell reads only for exact file verification and post-edit validation.",
     ]
@@ -596,8 +599,14 @@ def _startup_context_resource_text(server_root: Path) -> str:
         "sources": [item.get("source") for item in serialized if isinstance(item, dict)],
         "context": serialized,
         "next_actions": [
-            "If you need repository discovery, call read_mcp_resource on repo-rag://search?question=<your question>&top_k=4",
-            "Use shell reads only after MCP narrowed the file set or when exact post-edit verification is required.",
+            (
+                "If you need repository discovery, call read_mcp_resource on "
+                "repo-rag://search?question=<your question>&top_k=4"
+            ),
+            (
+                "Use shell reads only after MCP narrowed the file set or when exact "
+                "post-edit verification is required."
+            ),
         ],
         "examples": {
             "search": "repo-rag://search?question=transmutation+preview+flow&top_k=4",
@@ -619,10 +628,20 @@ def _discovery_guide_resource_text(server_root: Path) -> str:
         "",
         "Use these exact patterns:",
         '- `read_mcp_resource("repo-rag://startup-context")` for one bounded startup working set.',
-        '- `read_mcp_resource("repo-rag://search?question=<your question>&top_k=4")` for repository discovery.',
-        '- `read_mcp_resource("repo-rag://ask?question=<your question>")` for one concise repo-grounded answer.',
+        (
+            '- `read_mcp_resource("repo-rag://search?question=<your question>&top_k=4")` '
+            "for repository discovery."
+        ),
+        (
+            '- `read_mcp_resource("repo-rag://ask?question=<your question>")` for one '
+            "concise repo-grounded answer."
+        ),
         "",
-        "Do not interpret a template-only MCP listing as absence of repo resources. The repo-rag search/ask surfaces are intentionally exposed as resource templates that must be instantiated with a concrete question.",
+        (
+            "Do not interpret a template-only MCP listing as absence of repo resources. "
+            "The repo-rag search/ask surfaces are intentionally exposed as resource "
+            "templates that must be instantiated with a concrete question."
+        ),
     ]
     return "\n".join(lines)
 
@@ -1066,9 +1085,7 @@ def read_json_rpc_message(stream: BinaryIO) -> dict[str, object] | None:
     if not isinstance(payload, dict):
         _log_mcp_debug("payload-not-object")
         raise ValueError("JSON-RPC payload must be an object.")
-    _log_mcp_debug(
-        f"message method={str(payload.get('method') or '')} id={str(payload.get('id') or '')}"
-    )
+    _log_mcp_debug(f"message method={payload.get('method') or ''!s} id={payload.get('id') or ''!s}")
     return {str(key): value for key, value in payload.items()}
 
 
@@ -1106,7 +1123,6 @@ def serve_repo_rag_mcp(
         response = handle_mcp_message(message, server_root=root)
         if response is not None:
             _log_mcp_debug(
-                f"response method={str(message.get('method') or '')} "
-                f"id={str(message.get('id') or '')}"
+                f"response method={message.get('method') or ''!s} id={message.get('id') or ''!s}"
             )
             write_json_rpc_message(output_stream, response)

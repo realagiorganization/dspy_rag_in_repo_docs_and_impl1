@@ -22,6 +22,7 @@ from .dspy_training import (
 from .dspy_workflow import RepositoryRAG
 from .mcp import discover_mcp_servers, dump_candidates
 from .mcp_server import serve_repo_rag_mcp
+from .retrieval_profile import SUPPORTED_RETRIEVAL_MODES
 from .runtime_artifacts import (
     DEFAULT_TRAINER_GENERATED_TRAINING_PATH,
     DEFAULT_TRAINER_GENERATED_TRAINING_SUMMARY_PATH,
@@ -35,13 +36,12 @@ from .runtime_artifacts import (
     resolve_bundle_manifest,
     resolve_bundle_version_for_program,
 )
-from .retrieval_profile import SUPPORTED_RETRIEVAL_MODES
 from .trainer_deployment import (
     DEFAULT_TRAINER_K8S_CYCLE_SCHEDULE,
     DEFAULT_TRAINER_K8S_IMAGE,
     DEFAULT_TRAINER_K8S_IMAGE_PULL_SECRET_NAME,
-    DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE,
     DEFAULT_TRAINER_K8S_MIN_NEW_CANDIDATES_FOR_RECOMPILE,
+    DEFAULT_TRAINER_K8S_MINIMUM_BUNDLE_PASS_RATE,
     DEFAULT_TRAINER_K8S_MINIMUM_PASS_RATE,
     DEFAULT_TRAINER_K8S_MINIMUM_SOURCE_RECALL,
     DEFAULT_TRAINER_K8S_NAMESPACE,

@@ -200,12 +200,7 @@ def retrieve_with_metadata(
     )
     if not semantic_rankings:
         fallback_ranked = lexical_ranked
-        warnings = tuple(
-            [
-                *semantic_warnings,
-                "Semantic retrieval fell back to idf-rerank.",
-            ]
-        )
+        warnings = (*semantic_warnings, "Semantic retrieval fell back to idf-rerank.")
         return RetrievalExecution(
             chunks=tuple(_select_diverse_chunks(fallback_ranked, top_k=top_k)),
             retrieval_mode="idf-rerank",

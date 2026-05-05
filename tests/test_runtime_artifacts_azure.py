@@ -526,7 +526,8 @@ def test_restore_processed_trace_records_rebuilds_local_ledger_from_azure_proces
     assert restored["processed_count"] == 1
     assert restored["restored_count"] == 1
     trace_paths = restored["trace_paths"]
-    assert isinstance(trace_paths, list) and trace_paths
+    assert isinstance(trace_paths, list)
+    assert trace_paths
     restored_path = tmp_path / str(trace_paths[0])
     assert restored_path.exists()
     restored_payload = json.loads(restored_path.read_text(encoding="utf-8"))

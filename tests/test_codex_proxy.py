@@ -83,20 +83,36 @@ def test_running_codex_proxy_forwards_sse_and_injects_mediation(
     captured: dict[str, object] = {}
 
     class UpstreamHandler(BaseHTTPRequestHandler):
-        def do_POST(self) -> None:  # noqa: N802
+        def do_POST(self) -> None:
             length = int(self.headers.get("Content-Length", "0"))
             body = self.rfile.read(length)
             captured["payload"] = json.loads(body)
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.end_headers()
+            completed_event = {
+                "type": "response.completed",
+                "response": {
+                    "id": "resp_1",
+                    "object": "response",
+                    "status": "completed",
+                    "output": [],
+                    "usage": {
+                        "input_tokens": 1,
+                        "output_tokens": 1,
+                        "total_tokens": 2,
+                    },
+                },
+            }
             self.wfile.write(
-                b'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp_1","object":"response","status":"completed","output":[],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}\n\n'
+                b"event: response.completed\ndata: "
+                + json.dumps(completed_event).encode("utf-8")
+                + b"\n\n"
             )
             self.wfile.write(b"data: [DONE]\n\n")
             self.wfile.flush()
 
-        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+        def log_message(self, format: str, *args: object) -> None:
             del format, args
 
     upstream = HTTPServer(("127.0.0.1", 0), UpstreamHandler)
@@ -251,7 +267,7 @@ def test_running_codex_proxy_uses_budgeted_disk_cache(
     calls = {"ask_repository": 0}
 
     class UpstreamHandler(BaseHTTPRequestHandler):
-        def do_POST(self) -> None:  # noqa: N802
+        def do_POST(self) -> None:
             length = int(self.headers.get("Content-Length", "0"))
             body = self.rfile.read(length)
             payload = json.loads(body)
@@ -259,13 +275,29 @@ def test_running_codex_proxy_uses_budgeted_disk_cache(
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.end_headers()
+            completed_event = {
+                "type": "response.completed",
+                "response": {
+                    "id": "resp_2",
+                    "object": "response",
+                    "status": "completed",
+                    "output": [],
+                    "usage": {
+                        "input_tokens": 1,
+                        "output_tokens": 1,
+                        "total_tokens": 2,
+                    },
+                },
+            }
             self.wfile.write(
-                b'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp_2","object":"response","status":"completed","output":[],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}\n\n'
+                b"event: response.completed\ndata: "
+                + json.dumps(completed_event).encode("utf-8")
+                + b"\n\n"
             )
             self.wfile.write(b"data: [DONE]\n\n")
             self.wfile.flush()
 
-        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+        def log_message(self, format: str, *args: object) -> None:
             del format, args
 
     upstream = HTTPServer(("127.0.0.1", 0), UpstreamHandler)
@@ -283,7 +315,11 @@ def test_running_codex_proxy_uses_budgeted_disk_cache(
     repo.mkdir()
     (repo / "README.md").write_text("repo summary\n" * 40, encoding="utf-8")
 
-    def fake_ask_repository(question, root, retrieval_mode=None):
+    def fake_ask_repository(
+        question: str,
+        root: Path,
+        retrieval_mode: str | None = None,
+    ) -> SimpleNamespace:
         calls["ask_repository"] += 1
         return SimpleNamespace(
             context=[

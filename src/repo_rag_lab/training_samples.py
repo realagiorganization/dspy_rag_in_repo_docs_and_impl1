@@ -394,7 +394,14 @@ def _exact_snapshot_id(
 ) -> str:
     """Return the immutable identity for one concrete imported trace snapshot."""
 
-    return f"ts-{_stable_hash(question, expected_answer, trace_record_path, recorded_at, context_snapshot)}"
+    stable_snapshot_hash = _stable_hash(
+        question,
+        expected_answer,
+        trace_record_path,
+        recorded_at,
+        context_snapshot,
+    )
+    return f"ts-{stable_snapshot_hash}"
 
 
 def _trace_quality_score(
@@ -725,17 +732,17 @@ def _refresh_family_champion(family_payload: dict[str, Any]) -> tuple[bool, str 
             challenger_evidence_count = _group_champion_evidence_count(challenger_group)
 
             should_switch = False
-            if challenger_score > incumbent_score + CHAMPION_REPLACEMENT_DELTA:
-                should_switch = True
-            elif (
-                abs(challenger_score - incumbent_score) <= CHAMPION_REPLACEMENT_DELTA
-                and challenger_support > incumbent_support
-            ):
-                should_switch = True
-            elif (
-                abs(challenger_score - incumbent_score) <= CHAMPION_REPLACEMENT_DELTA
-                and challenger_support == incumbent_support
-                and challenger_evidence_count > incumbent_evidence_count
+            if (
+                challenger_score > incumbent_score + CHAMPION_REPLACEMENT_DELTA
+                or (
+                    abs(challenger_score - incumbent_score) <= CHAMPION_REPLACEMENT_DELTA
+                    and challenger_support > incumbent_support
+                )
+                or (
+                    abs(challenger_score - incumbent_score) <= CHAMPION_REPLACEMENT_DELTA
+                    and challenger_support == incumbent_support
+                    and challenger_evidence_count > incumbent_evidence_count
+                )
             ):
                 should_switch = True
 
@@ -1103,12 +1110,6 @@ def materialize_training_candidates(
     new_candidate_count = 0
     new_context_group_count = 0
     prompt_family_count_before = len(family_by_id)
-    context_group_count_before = sum(
-        len(family_payload.get("context_groups", []))
-        for family_payload in family_by_id.values()
-        if isinstance(family_payload.get("context_groups"), list)
-    )
-
     for record in loaded_records:
         prompt_family_id = str(record.get("prompt_family_id") or "").strip()
         exact_snapshot_id = str(record.get("exact_snapshot_id") or "").strip()
@@ -1190,9 +1191,7 @@ def materialize_training_candidates(
                 current_group_score,
                 candidate_score,
             )
-        elif candidate_score > current_group_score + CHAMPION_REPLACEMENT_DELTA:
-            replace_group_champion = True
-        elif (
+        elif candidate_score > current_group_score + CHAMPION_REPLACEMENT_DELTA or (
             abs(candidate_score - current_group_score) <= CHAMPION_REPLACEMENT_DELTA
             and candidate_support > current_group_support
         ):

@@ -7,12 +7,12 @@ import json
 import os
 import threading
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx
@@ -197,7 +197,7 @@ def _build_budgeted_message(
     if sources:
         section = ["", "Inspect first:"]
         for source in sources[: max(1, essentials_count + 1)]:
-            trial = section + [f"- {source}"]
+            trial = [*section, f"- {source}"]
             if _estimate_token_count(_candidate_text(trial)) > budget_tokens:
                 break
             section = trial
@@ -208,7 +208,7 @@ def _build_budgeted_message(
         section = ["", "Evidence:"]
         for preview in trimmed_previews:
             candidate_line = f"- {preview['source']}: {preview['text']}"
-            trial = section + [candidate_line]
+            trial = [*section, candidate_line]
             if _estimate_token_count(_candidate_text(trial)) > budget_tokens:
                 break
             section = trial
@@ -219,7 +219,7 @@ def _build_budgeted_message(
         section = ["", "Notes:"]
         for warning in warnings[:2]:
             candidate_line = f"- {_truncate_text(warning, limit=160)}"
-            trial = section + [candidate_line]
+            trial = [*section, candidate_line]
             if _estimate_token_count(_candidate_text(trial)) > budget_tokens:
                 break
             section = trial
@@ -652,10 +652,10 @@ class _CodexProxyHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     @property
-    def runtime(self) -> "_CodexProxyRuntime":
+    def runtime(self) -> _CodexProxyRuntime:
         return self.server.runtime  # type: ignore[attr-defined]
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
         if self.path.rstrip("/") != "/healthz":
             self.send_error(HTTPStatus.NOT_FOUND)
             return
@@ -671,7 +671,7 @@ class _CodexProxyHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def do_POST(self) -> None:  # noqa: N802
+    def do_POST(self) -> None:
         runtime = self.runtime
         split = urlsplit(self.path)
         if split.path.rstrip("/") != "/openai/responses":
@@ -752,7 +752,7 @@ class _CodexProxyHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
 
-    def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+    def log_message(self, format: str, *args: object) -> None:
         del format, args
 
 
@@ -900,7 +900,7 @@ class _CodexProxyRuntime:
 
 
 @contextmanager
-def running_codex_proxy(config: CodexProxyConfig):
+def running_codex_proxy(config: CodexProxyConfig) -> Iterator[RunningCodexProxy]:
     """Run one local ThreadingHTTPServer that mediates Codex responses requests."""
 
     runtime = _CodexProxyRuntime(config)

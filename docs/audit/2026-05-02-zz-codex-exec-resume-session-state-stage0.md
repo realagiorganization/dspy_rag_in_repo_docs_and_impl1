@@ -228,6 +228,48 @@ session subtree was being deleted upstream before the execution workflow began.
 - `cargo build --manifest-path rust-cli/Cargo.toml`
   - `pass`
 
+## 2026-05-05 Follow-up: CI parity repair after MCP transport debug push
+
+### What failed remotely
+
+- The post-push CI run for `02ce5dd8aa4b45890bfe9cb847ec59c1e06bf02a` failed in two places:
+  - `CI` -> `Run Ruff`
+  - `GitHub Pages` -> `Build Markdown catalog site`
+- The Ruff failure was not a single MCP regression. After syncing with `origin/main`, the branch
+  carried a larger accumulated Python lint/style delta across package and test surfaces.
+- The Pages failure came from strict MkDocs warnings caused by stale audit links that still pointed
+  at the removed `README.AGENTS.md` narrative path.
+
+### What changed locally to restore parity
+
+- Repaired the accumulated Ruff delta across the touched Python package and tests:
+  - added missing return annotations on public wrapper surfaces
+  - shortened several overlong MCP guidance strings and test fixtures
+  - normalized small list/tuple/style issues flagged by Ruff
+  - refreshed formatting on the affected files
+- Updated `docs/audit/2026-03-18-zz-research-narrative.md` so the historical audit note links to
+  `docs/architecture/research-narrative.md` instead of the removed `README.AGENTS.md`.
+- Re-ran local `mkdocs --strict` through `make pages-build`; it now completes successfully.
+
+### Verification executed in this turn
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run ruff check src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run ruff format --check src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py tests/test_mcp_server.py tests/test_mcp_stdio.py tests/test_codex_proxy.py tests/test_retrieval.py tests/test_runtime_artifacts_azure.py tests/test_training_samples.py -q`
+  - `pass` (`112 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+- `make verify-surfaces`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache make pages-build`
+  - `pass`
+
 ## 2026-05-05 Follow-up: codex-launched MCP transport still stalls before initialize
 
 ### What changed locally after the 9.46M-token resumed run
