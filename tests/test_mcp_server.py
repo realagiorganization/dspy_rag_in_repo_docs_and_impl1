@@ -11,6 +11,7 @@ from typing import Any, cast
 import pytest
 
 import repo_rag_lab.mcp_server as mcp_server
+from repo_rag_lab.retrieval_profile import RetrievalProfile
 
 
 def test_build_mcp_tool_definitions_exposes_only_bounded_tools() -> None:
@@ -325,6 +326,117 @@ def test_handle_mcp_message_lists_tools(tmp_path: Path) -> None:
     assert tools[0]["name"] == "search_repo"
 
 
+def test_handle_mcp_message_lists_resources_and_templates(tmp_path: Path) -> None:
+    resources_response = mcp_server.handle_mcp_message(
+        {"jsonrpc": "2.0", "id": 20, "method": "resources/list"},
+        server_root=tmp_path,
+    )
+    templates_response = mcp_server.handle_mcp_message(
+        {"jsonrpc": "2.0", "id": 21, "method": "resources/templates/list"},
+        server_root=tmp_path,
+    )
+
+    assert resources_response is not None
+    assert templates_response is not None
+    resources_result = cast(dict[str, Any], resources_response["result"])
+    templates_result = cast(dict[str, Any], templates_response["result"])
+    resources = cast(list[dict[str, Any]], resources_result["resources"])
+    resource_templates = cast(list[dict[str, Any]], templates_result["resourceTemplates"])
+    assert any(item["uri"] == "repo-rag://overview" for item in resources)
+    assert any(item["uriTemplate"] == "repo-rag://search{?question,top_k,retrieval_mode}" for item in resource_templates)
+
+
+def test_handle_mcp_message_reads_overview_resource(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        mcp_server,
+        "load_retrieval_profile",
+        lambda root: RetrievalProfile(name="demo-profile", retrieval_mode="hybrid-vector"),
+    )
+    monkeypatch.setattr(
+        mcp_server,
+        "build_corpus_manifest",
+        lambda root: {
+            "schema_version": 1,
+            "root": str(root),
+            "document_count": 3,
+            "entries": [],
+            "corpus_fingerprint": "demo-fingerprint",
+        },
+    )
+
+    response = mcp_server.handle_mcp_message(
+        {
+            "jsonrpc": "2.0",
+            "id": 22,
+            "method": "resources/read",
+            "params": {"uri": "repo-rag://overview"},
+        },
+        server_root=tmp_path,
+    )
+
+    assert response is not None
+    result = cast(dict[str, Any], response["result"])
+    contents = cast(list[dict[str, Any]], result["contents"])
+    assert contents[0]["mimeType"] == "text/markdown"
+    assert "demo-profile" in contents[0]["text"]
+    assert "repo-rag://search{?question,top_k,retrieval_mode}" in contents[0]["text"]
+
+
+def test_handle_mcp_message_reads_search_resource(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class FakeChunk:
+        source = tmp_path / "README.md"
+        text = "Repository research context."
+
+    monkeypatch.setattr(
+        mcp_server,
+        "collect_repository_context",
+        lambda **kwargs: [FakeChunk()],
+    )
+    monkeypatch.setattr(
+        mcp_server,
+        "serialize_chunk",
+        lambda chunk, *, root: {
+            "source": "README.md",
+            "preview": "Repository research context.",
+            "text": chunk.text,
+        },
+    )
+    monkeypatch.setattr(
+        mcp_server,
+        "load_retrieval_profile",
+        lambda root: RetrievalProfile(name="demo-profile", retrieval_mode="hybrid-vector"),
+    )
+    monkeypatch.setattr(
+        mcp_server,
+        "discover_mcp_servers",
+        lambda root: [],
+    )
+
+    response = mcp_server.handle_mcp_message(
+        {
+            "jsonrpc": "2.0",
+            "id": 23,
+            "method": "resources/read",
+            "params": {
+                "uri": "repo-rag://search?question=Where+should+I+start%3F&top_k=3"
+            },
+        },
+        server_root=tmp_path,
+    )
+
+    assert response is not None
+    result = cast(dict[str, Any], response["result"])
+    contents = cast(list[dict[str, Any]], result["contents"])
+    payload = json.loads(contents[0]["text"])
+    assert payload["command"] == "search-repo-resource"
+    assert payload["retrieval_mode"] == "hybrid-vector"
+    assert payload["sources"] == ["README.md"]
+
+
 def test_handle_mcp_message_wraps_tool_errors(tmp_path: Path) -> None:
     response = mcp_server.handle_mcp_message(
         {
@@ -448,7 +560,9 @@ def test_serve_repo_rag_mcp_handles_initialize_and_ping(tmp_path: Path) -> None:
 
     assert first is not None
     first_result = cast(dict[str, Any], first["result"])
+    capabilities = cast(dict[str, Any], first_result["capabilities"])
     server_info = cast(dict[str, Any], first_result["serverInfo"])
+    assert "resources" in capabilities
     assert server_info["name"] == "repo-rag-mcp"
     assert second is not None
     second_result = cast(dict[str, Any], second["result"])

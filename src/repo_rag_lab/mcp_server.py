@@ -10,17 +10,23 @@ import json
 import os
 import time
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import BinaryIO
+from urllib.parse import parse_qs, urlsplit
 
 from .retrieval import RetrievalMode
-from .retrieval_profile import SUPPORTED_RETRIEVAL_MODES
+from .retrieval_profile import SUPPORTED_RETRIEVAL_MODES, load_retrieval_profile
 from .runtime_artifacts import RuntimeTraceContext, build_runtime_trace
 from .utilities import run_bundle_inspection, run_dspy_artifacts, run_trace_enqueue
 from .mcp import discover_mcp_servers
-from .workflow import ask_repository, collect_repository_context, serialize_chunk
+from .corpus import build_corpus_manifest
+from .workflow import (
+    ask_repository,
+    collect_repository_context,
+    serialize_chunk,
+)
 
 MCP_PROTOCOL_VERSION = "2024-11-05"
 MCP_SERVER_NAME = "repo-rag-mcp"
@@ -31,6 +37,7 @@ MCP_SERVER_INSTRUCTIONS = (
 RETRIEVAL_MODE_ENUM = sorted(SUPPORTED_RETRIEVAL_MODES)
 MCP_USAGE_LOG_ENV = "REPO_RAG_MCP_USAGE_LOG"
 MCP_DEFAULT_RETRIEVAL_MODE_ENV = "REPO_RAG_MCP_DEFAULT_RETRIEVAL_MODE"
+MCP_RESOURCE_SCHEME = "repo-rag"
 
 
 @dataclass(frozen=True)
@@ -49,6 +56,52 @@ class MCPToolDefinition:
             "description": self.description,
             "inputSchema": self.input_schema,
         }
+
+
+@dataclass(frozen=True)
+class MCPResourceDefinition:
+    """One direct MCP resource definition."""
+
+    uri: str
+    name: str
+    description: str
+    mime_type: str
+    title: str | None = None
+
+    def to_payload(self) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "uri": self.uri,
+            "name": self.name,
+            "description": self.description,
+            "mimeType": self.mime_type,
+            "annotations": {"audience": ["assistant"], "priority": 0.9},
+        }
+        if self.title:
+            payload["title"] = self.title
+        return payload
+
+
+@dataclass(frozen=True)
+class MCPResourceTemplateDefinition:
+    """One parameterized MCP resource template definition."""
+
+    uri_template: str
+    name: str
+    description: str
+    mime_type: str
+    title: str | None = None
+
+    def to_payload(self) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "uriTemplate": self.uri_template,
+            "name": self.name,
+            "description": self.description,
+            "mimeType": self.mime_type,
+            "annotations": {"audience": ["assistant"], "priority": 1.0},
+        }
+        if self.title:
+            payload["title"] = self.title
+        return payload
 
 
 def _server_version() -> str:
@@ -121,6 +174,18 @@ def _string_list_field(payload: Mapping[str, object], key: str) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item) for item in value]
+
+
+def _jsonify(value: object) -> object:
+    """Normalize nested values into JSON-serializable structures."""
+
+    if isinstance(value, dict):
+        return {str(key): _jsonify(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonify(item) for item in value]
+    if isinstance(value, (set, frozenset)):
+        return sorted(_jsonify(item) for item in value)
+    return value
 
 
 def build_mcp_tool_definitions() -> list[MCPToolDefinition]:
@@ -212,6 +277,226 @@ def build_mcp_tool_definitions() -> list[MCPToolDefinition]:
             },
         ),
     ]
+
+
+def build_mcp_resource_definitions() -> list[MCPResourceDefinition]:
+    """Return the bounded MCP direct-resource catalog."""
+
+    return [
+        MCPResourceDefinition(
+            uri=f"{MCP_RESOURCE_SCHEME}://overview",
+            name="Repository Overview",
+            title="repo-rag repository overview",
+            description=(
+                "Start here. Summarizes the repository root, active retrieval profile, "
+                "and the preferred repo-RAG discovery workflow."
+            ),
+            mime_type="text/markdown",
+        ),
+        MCPResourceDefinition(
+            uri=f"{MCP_RESOURCE_SCHEME}://retrieval-profile",
+            name="Retrieval Profile",
+            title="repo-rag retrieval profile",
+            description=(
+                "Returns the effective retrieval profile and default low-level retrieval mode "
+                "for the current repository root."
+            ),
+            mime_type="application/json",
+        ),
+        MCPResourceDefinition(
+            uri=f"{MCP_RESOURCE_SCHEME}://corpus-manifest",
+            name="Corpus Manifest",
+            title="repo-rag corpus manifest summary",
+            description=(
+                "Returns the current indexed text-corpus fingerprint and file manifest used "
+                "for repo-RAG retrieval invalidation."
+            ),
+            mime_type="application/json",
+        ),
+    ]
+
+
+def build_mcp_resource_template_definitions() -> list[MCPResourceTemplateDefinition]:
+    """Return the bounded MCP parameterized-resource catalog."""
+
+    return [
+        MCPResourceTemplateDefinition(
+            uri_template=f"{MCP_RESOURCE_SCHEME}://search{{?question,top_k,retrieval_mode}}",
+            name="Repository Discovery Search",
+            title="repo-rag bounded discovery search",
+            description=(
+                "Use this first for repository discovery. Provide a natural-language `question` "
+                "and optional `top_k` before resorting to broad shell exploration."
+            ),
+            mime_type="application/json",
+        ),
+        MCPResourceTemplateDefinition(
+            uri_template=f"{MCP_RESOURCE_SCHEME}://ask{{?question,retrieval_mode}}",
+            name="Repository Ask",
+            title="repo-rag bounded ask",
+            description=(
+                "Returns a bounded repo-grounded answer with sources and retrieved context. "
+                "Use after discovery when a concise repository answer is enough."
+            ),
+            mime_type="application/json",
+        ),
+    ]
+
+
+def _text_resource_content(uri: str, *, text: str, mime_type: str) -> dict[str, object]:
+    """Return one MCP text resource content record."""
+
+    return {"uri": uri, "mimeType": mime_type, "text": text}
+
+
+def _resource_read_result(uri: str, *, text: str, mime_type: str) -> dict[str, object]:
+    """Return one MCP `resources/read` payload."""
+
+    return {"contents": [_text_resource_content(uri, text=text, mime_type=mime_type)]}
+
+
+def _resource_query_value(parsed: object, key: str) -> str | None:
+    """Return one normalized query parameter from one parsed resource URI."""
+
+    if not hasattr(parsed, "query"):
+        return None
+    values = parse_qs(getattr(parsed, "query"), keep_blank_values=False).get(key)
+    if not values:
+        return None
+    text = str(values[-1]).strip()
+    return text or None
+
+
+def _resource_retrieval_mode_from_uri(parsed: object) -> RetrievalMode | None:
+    """Return the requested retrieval mode from one resource URI when provided."""
+
+    raw_value = _resource_query_value(parsed, "retrieval_mode")
+    if raw_value is None:
+        default_value = str(os.getenv(MCP_DEFAULT_RETRIEVAL_MODE_ENV) or "").strip()
+        raw_value = default_value or None
+    if raw_value is None:
+        return None
+    if raw_value not in SUPPORTED_RETRIEVAL_MODES:
+        supported = ", ".join(sorted(SUPPORTED_RETRIEVAL_MODES))
+        raise ValueError(f"`retrieval_mode` must be one of: {supported}")
+    return raw_value  # type: ignore[return-value]
+
+
+def _overview_resource_text(server_root: Path) -> str:
+    """Return the repository overview resource text."""
+
+    profile = load_retrieval_profile(server_root)
+    manifest = build_corpus_manifest(server_root)
+    lines = [
+        "# repo-rag Repository Overview",
+        "",
+        f"- Root: `{server_root}`",
+        f"- Retrieval profile: `{profile.name}`",
+        f"- Default retrieval mode: `{profile.retrieval_mode}`",
+        f"- Indexed document count: `{manifest['document_count']}`",
+        f"- Corpus fingerprint: `{manifest['corpus_fingerprint']}`",
+        "",
+        "Preferred workflow:",
+        "1. Use `repo-rag://search{?question,top_k,retrieval_mode}` for repository discovery.",
+        "2. Use `repo-rag://ask{?question,retrieval_mode}` for bounded repo-grounded answers.",
+        "3. Use shell reads only for exact file verification and post-edit validation.",
+    ]
+    return "\n".join(lines)
+
+
+def read_mcp_resource(uri: str, *, server_root: Path) -> dict[str, object]:
+    """Read one direct or template resource and return its MCP payload."""
+
+    parsed = urlsplit(uri)
+    if parsed.scheme != MCP_RESOURCE_SCHEME:
+        raise FileNotFoundError(f"Unsupported MCP resource URI: {uri}")
+
+    if parsed.netloc == "overview":
+        return _resource_read_result(
+            uri,
+            text=_overview_resource_text(server_root),
+            mime_type="text/markdown",
+        )
+
+    if parsed.netloc == "retrieval-profile":
+        profile = load_retrieval_profile(server_root)
+        payload = {
+            "root": str(server_root),
+            "profile": _jsonify(asdict(profile)),
+        }
+        return _resource_read_result(
+            uri,
+            text=f"{json.dumps(payload, indent=2)}\n",
+            mime_type="application/json",
+        )
+
+    if parsed.netloc == "corpus-manifest":
+        manifest = build_corpus_manifest(server_root)
+        return _resource_read_result(
+            uri,
+            text=f"{json.dumps(manifest, indent=2)}\n",
+            mime_type="application/json",
+        )
+
+    if parsed.netloc == "search":
+        question = _resource_query_value(parsed, "question")
+        if not question:
+            raise ValueError("`repo-rag://search` requires a non-empty `question` query parameter.")
+        raw_top_k = _resource_query_value(parsed, "top_k") or "4"
+        try:
+            top_k = max(1, min(12, int(raw_top_k)))
+        except ValueError:
+            raise ValueError("`top_k` must be an integer between 1 and 12.") from None
+        retrieval_mode_value = _resource_retrieval_mode_from_uri(parsed)
+        profile = load_retrieval_profile(server_root)
+        resolved_mode = retrieval_mode_value or profile.retrieval_mode
+        context = collect_repository_context(
+            question=question,
+            root=server_root,
+            top_k=top_k,
+            retrieval_mode=retrieval_mode_value,
+        )
+        mcp_candidates = [candidate.__dict__ for candidate in discover_mcp_servers(server_root)]
+        serialized_context = [serialize_chunk(chunk, root=server_root) for chunk in context[:top_k]]
+        sources = list(dict.fromkeys(item["source"] for item in serialized_context if "source" in item))
+        payload = {
+            "command": "search-repo-resource",
+            "command_status": "success",
+            "root": str(server_root),
+            "question": question,
+            "top_k": top_k,
+            "retrieval_mode": resolved_mode,
+            "sources": sources,
+            "context": serialized_context,
+            "mcp_candidates": mcp_candidates,
+            "warnings": [],
+        }
+        return _resource_read_result(
+            uri,
+            text=f"{json.dumps(payload, indent=2)}\n",
+            mime_type="application/json",
+        )
+
+    if parsed.netloc == "ask":
+        question = _resource_query_value(parsed, "question")
+        if not question:
+            raise ValueError("`repo-rag://ask` requires a non-empty `question` query parameter.")
+        retrieval_mode_value = _resource_retrieval_mode_from_uri(parsed)
+        payload = ask_repository(
+            question=question,
+            root=server_root,
+            retrieval_mode=retrieval_mode_value,
+        ).to_payload(root=server_root)
+        payload["command"] = "ask-resource"
+        payload["command_status"] = "success"
+        payload["root"] = str(server_root)
+        return _resource_read_result(
+            uri,
+            text=f"{json.dumps(payload, indent=2)}\n",
+            mime_type="application/json",
+        )
+
+    raise FileNotFoundError(f"Resource not found: {uri}")
 
 
 def call_mcp_tool(
@@ -406,7 +691,7 @@ def handle_mcp_message(
             message_id,
             {
                 "protocolVersion": MCP_PROTOCOL_VERSION,
-                "capabilities": {"tools": {}},
+                "capabilities": {"tools": {}, "resources": {}},
                 "serverInfo": {
                     "name": MCP_SERVER_NAME,
                     "version": _server_version(),
@@ -427,6 +712,42 @@ def handle_mcp_message(
             message_id,
             {"tools": [tool.to_payload() for tool in build_mcp_tool_definitions()]},
         )
+
+    if method == "resources/list":
+        _log_usage_event(method=method, server_root=server_root)
+        return _json_rpc_success(
+            message_id,
+            {"resources": [resource.to_payload() for resource in build_mcp_resource_definitions()]},
+        )
+
+    if method == "resources/templates/list":
+        _log_usage_event(method=method, server_root=server_root)
+        return _json_rpc_success(
+            message_id,
+            {
+                "resourceTemplates": [
+                    template.to_payload() for template in build_mcp_resource_template_definitions()
+                ]
+            },
+        )
+
+    if method == "resources/read":
+        uri = param_mapping.get("uri")
+        if not isinstance(uri, str) or not uri.strip():
+            return _json_rpc_error(message_id, -32602, "Resource reads require a non-empty `uri`.")
+        try:
+            parsed_uri = urlsplit(uri.strip())
+            _log_usage_event(
+                method=method,
+                server_root=server_root,
+                details={"uri": uri.strip(), "resource_kind": parsed_uri.netloc},
+            )
+            result = read_mcp_resource(uri.strip(), server_root=server_root)
+        except FileNotFoundError as exc:
+            return _json_rpc_error(message_id, -32002, str(exc))
+        except Exception as exc:
+            return _json_rpc_error(message_id, -32603, str(exc))
+        return _json_rpc_success(message_id, result)
 
     if method == "tools/call":
         tool_name = param_mapping.get("name")

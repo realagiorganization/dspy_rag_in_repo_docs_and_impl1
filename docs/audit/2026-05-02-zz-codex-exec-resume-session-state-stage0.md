@@ -1162,6 +1162,67 @@ Repository-native checks rerun in this repo while updating the audit narrative:
 - `make verify-surfaces`
   - `pass`
 
+## 2026-05-05 Local MCP resource follow-up
+
+The next blocker after the first successful resumed lane is now clearly MCP-side discovery rather
+than session continuity. The latest local follow-up therefore changes the bounded MCP server shape
+itself:
+
+- `repo-rag serve-mcp` now advertises `resources` capability in `initialize`
+- it now responds to:
+  - `resources/list`
+  - `resources/templates/list`
+  - `resources/read`
+- the new direct resources are:
+  - `repo-rag://overview`
+  - `repo-rag://retrieval-profile`
+  - `repo-rag://corpus-manifest`
+- the new parameterized discovery resources are:
+  - `repo-rag://search{?question,top_k,retrieval_mode}`
+  - `repo-rag://ask{?question,retrieval_mode}`
+
+The goal is to stop the next live Codex run from concluding that the repo-RAG MCP surface is
+"not exposing repository resources" before it ever reaches bounded repo-RAG discovery.
+
+The same local follow-up also improves worker-side MCP telemetry in `../dataset`:
+
+- `repo_rag_mcp_usage_summary.json` can now record resource operations instead of only tool calls
+- summary fields now include:
+  - `resources_list_count`
+  - `resource_templates_list_count`
+  - `resource_read_count`
+  - `search_resource_read_count`
+  - `ask_resource_read_count`
+  - `resource_uri_counts`
+  - `resource_kind_counts`
+- `discovery_via_mcp` now becomes true for either:
+  - `search_repo` tool calls
+  - `repo-rag://search...` resource reads
+
+This follow-up also removes one likely retrieval-mode skew for future MCP use:
+
+- resource-backed discovery now resolves `retrieval_mode` from the repo retrieval profile when the
+  URI omits an explicit override, instead of implicitly inheriting the generic lexical fallback
+
+### Verification executed in this turn
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_mcp_server.py tests/test_codex_proxy.py -q`
+  - `pass` (`29 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+- `python -m compileall /home/standard/Desktop/realagi_work/dataset/docker/prompt-executor/worker_codex_cli_exec.py /home/standard/Desktop/realagi_work/dataset/tests/unit/test_worker_codex_cli_exec_small.py`
+  - `pass`
+- `cd /home/standard/Desktop/realagi_work/dataset && uv run pytest tests/unit/test_worker_codex_cli_exec_small.py -q`
+  - `pass` (`43 passed`)
+- `cd /home/standard/Desktop/realagi_work/dataset && uv run pytest tests/test_aks_module_generator_generate_modules.py tests/unit/test_worker_codex_cli_exec_small.py -q`
+  - `pass` (`81 passed`)
+
 ### Token cost and transcript behavior
 
 Prompt-token spend is still far too high:
@@ -1729,6 +1790,120 @@ they remove two real sources of false-negative diagnosis:
   - `pass`
 - `cd /home/standard/Desktop/realagi_work/dataset && uv run pytest tests/unit/test_worker_codex_cli_exec_small.py tests/unit/test_pvc_artifact_sync_small.py -q`
   - `pass` (`48 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+
+## 2026-05-05 Local Artifact Review: resume finally works, MCP-first discovery does not
+
+The latest locally exported worker artifacts from `../dataset/artifacts/` finally show a real
+resumed Codex lane instead of another fresh seed run.
+
+### What worked
+
+- live `codex exec resume`: `pass`
+  - `codex_session_state.json`
+    - `session_mode = resumed`
+    - `restore_status = restored`
+    - `resume_candidate_present = true`
+    - `resume_attempted = true`
+    - `resume_used = true`
+    - `resume_command_mode = explicit-session-id`
+    - `resume_target_session_id = rollout-2026-05-04T18-43-35-019df44d-8b17-7892-8c9e-4424323bb3c0`
+    - `restored_files = 4`
+    - `persist_status = persisted`
+    - `persisted_files = 5`
+    - `pvc_sync_health = healthy`
+    - `total_run_count = 2`
+    - `fresh_run_count = 1`
+    - `resumed_run_count = 1`
+  - `repo_rag_trace.json`
+    - `codex_session_mode = resumed`
+- live `RAG`: `pass`
+  - `repo_rag_backend.json`
+    - `rag_status = success`
+    - `mediation_mode = dspy_rag`
+  - `repo_rag_codex_proxy_last.json`
+    - `sources = [docs/AGENTS.md, docs/ASSUMPTIONS.md, docs/ENVS.md, README.md]`
+    - `warnings = []`
+- live `DSPy` mediation: `pass`
+  - `repo_rag_backend.json`
+    - `dspy_status = success`
+    - `bundle_resolved = true`
+    - `bundle_version = 20260502T122127191445Z`
+  - `repo_rag_trace.json`
+    - `program_loaded = true`
+- live trainer handoff: `pass`
+  - `trusted_trace_handoff_summary.json`
+    - `attempted = 1`
+    - `queued = 1`
+    - `failed = 0`
+
+### What improved materially
+
+- token cost dropped sharply on the resumed lane
+  - `redis_results.json`
+    - `prompt_tokens = 103760`
+    - `completion_tokens = 0`
+    - `total_tokens = 103760`
+  - compared with the recorded fresh baseline in `codex_session_state.json`
+    - `last_fresh_usage.prompt_tokens = 2568062`
+    - `usage_delta_vs_last_fresh.prompt_tokens_delta = -2464302`
+    - `usage_delta_vs_last_fresh.prompt_tokens_delta_ratio = -0.959596`
+- transcript churn also contracted
+  - `codex_session_state.json`
+    - `transcript_path_summary.path_mention_count = 8`
+    - `transcript_path_summary.documentation_mention_count = 5`
+    - `transcript_path_summary.read_like_command_count = 0`
+    - `transcript_path_summary.diff_command_count = 0`
+
+### What still failed
+
+- live `MCP-first discovery`: `fail`
+  - `repo_rag_mcp_usage_summary.json` was not emitted
+  - `codex_session_state.json`
+    - `repo_rag_mcp_usage_summary = {}`
+  - direct transcript inspection shows no bounded repo-RAG tool calls:
+    - `search_repo = 0`
+    - `get_working_set = 0`
+    - `read_file_exact = 0`
+  - the transcript instead shows only MCP capability/resource probes followed by Codex's own
+    fallback statement:
+    - `mcp: codex/list_mcp_resources`
+    - `mcp: codex/list_mcp_resource_templates`
+    - `The repo-RAG MCP surface is not exposing repository resources in this session, so I’m falling back to targeted shell reads...`
+- shell/doc churn is lower than earlier fresh runs but still substantial in the raw transcript:
+  - `codex_response.txt`
+    - `README.md`: `112`
+    - `docs/DEVPLAN.md`: `130`
+    - `docs/ASSUMPTIONS.md`: `36`
+    - `docs/USAGE.md`: `9`
+    - `docs/AGENTS.md`: `10`
+    - `docs/ENVS.md`: `4`
+    - `diff --git`: `136`
+    - `sed -n`: `34`
+- low-level retrieval mode in the live worker path remained `lexical`
+  - `repo_rag_trace.json`
+    - `retrieval_mode = lexical`
+  - `repo_rag_codex_proxy_last.json`
+    - `retrieval_mode = lexical`
+
+### Current interpretation
+
+The preserved `_codex_sessions` root and explicit session-id targeting finally fixed the original
+resume blocker. The next active blocker is now separate: the bounded repo-RAG MCP server is
+reachable enough for Codex to probe resource-related endpoints, but it is not advertising the kind
+of repository resources Codex expects before it decides to issue search/read tool calls. So the new
+system prompt preference is visible in the transcript, but the model still abandons MCP and falls
+back to shell reads for discovery.
+
+### Verification executed in this turn
+
 - `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
   - `pass`
 - `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
