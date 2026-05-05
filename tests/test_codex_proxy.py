@@ -37,7 +37,7 @@ def _resolve_program_path_and_bundle_version(
 ) -> tuple[Path | None, str | None]:
     resolver = cast(
         Callable[..., tuple[Path | None, str | None]],
-        codex_proxy_module._resolve_program_path_and_bundle_version,
+        codex_proxy_module.__dict__["_resolve_program_path_and_bundle_version"],
     )
     return resolver(
         repository_root=repository_root,

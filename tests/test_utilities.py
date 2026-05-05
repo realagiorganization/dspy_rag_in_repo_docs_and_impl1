@@ -783,7 +783,7 @@ def test_versioned_training_run_name_returns_high_resolution_timestamp_only() ->
 
     versioned_training_run_name = cast(
         Callable[..., str],
-        utilities_module._versioned_training_run_name,
+        utilities_module.__dict__["_versioned_training_run_name"],
     )
     resolved = versioned_training_run_name(
         "trainer auto",
