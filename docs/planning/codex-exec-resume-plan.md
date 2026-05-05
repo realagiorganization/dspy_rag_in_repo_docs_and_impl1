@@ -192,3 +192,10 @@ session files.
 - The worker restores the right Codex session files from PVC automatically.
 - The resumed run materially reduces repeated repository re-reading and input-token cost.
 - Repo-RAG and DSPy remain freshness/delta layers, not fake substitutes for Codex session memory.
+
+Latest local artifact status:
+
+- [x] A second run against the same repository lane used `codex exec resume`.
+- [x] The worker restored the expected persisted lane snapshot (`restored_files = 4`).
+- [x] The resumed lane materially reduced prompt-token cost versus the recorded fresh baseline
+  (`2568062 -> 103760`).

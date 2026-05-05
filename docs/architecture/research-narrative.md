@@ -219,8 +219,11 @@ cooldown through `DATASET_CODEX_SESSION_RESET` / `DATASET_CODEX_FORCE_FRESH`,
 `DATASET_CODEX_REPO_DRIFT_RESET_THRESHOLD`. The same worker artifact surface now also reports
 `restore_status`, `persist_status`, and `pvc_sync_health`, so later AKS validation can tell the
 difference between a true restored lane, a reset caused by compatibility guards, and a degraded
-PVC snapshot write. Local worker coverage now also proves the basic `fresh -> resumed` lane
-transition rather than only seeded restore fixtures. A further local slice now supports divergent
+PVC snapshot write. The latest local worker-artifact review now also proves one real same-lane
+`fresh -> resumed` transition with `resume_command_mode=explicit-session-id`,
+`resumed_run_count=1`, and a prompt-token drop from `2568062` on the fresh baseline to `103760`
+on the resumed lane, so the dominant execution-memory blocker has moved from session persistence
+to MCP-guided discovery quality. A further local slice now supports divergent
 task-family forks: operators or prompts can supply `DATASET_CODEX_SESSION_LANE`,
 `codex_session_lane`, or `session_lane`, and when that lane is new but the base repository lane
 already has a durable snapshot the worker restores from the base lane, resumes Codex, and records

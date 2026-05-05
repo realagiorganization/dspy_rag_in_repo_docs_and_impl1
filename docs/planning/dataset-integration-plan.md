@@ -395,11 +395,19 @@ Current implementation note:
 Current implementation note:
 
 - The repository now exposes `repo-rag serve-mcp` plus `make serve-mcp`, a bounded stdio MCP
-  server that advertises exactly four short-running tools:
+  server that advertises five short-running tools plus bounded repository resources/templates:
+  - `search_repo`
   - `ask_repo`
   - `bundle_status`
   - `dspy_artifacts`
   - `publish_trace`
+  - direct resources:
+    - `repo-rag://overview`
+    - `repo-rag://retrieval-profile`
+    - `repo-rag://corpus-manifest`
+  - parameterized discovery resources:
+    - `repo-rag://search{?question,top_k,retrieval_mode}`
+    - `repo-rag://ask{?question,retrieval_mode}`
 - The MCP surface deliberately excludes `dspy-train`, `trainer-recompile`, `trainer-cycle`,
   `trainer-service`, `retrieval-eval`, and notebook execution, so the primary integration path for
   `dataset` remains direct CLI execution with JSON envelopes rather than long-lived work tunneled
