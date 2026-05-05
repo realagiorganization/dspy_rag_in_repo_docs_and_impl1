@@ -351,6 +351,10 @@ Current implementation note:
   - inject a bounded local `repo-rag` MCP server into the worker-generated Codex config and steer
     the autonomous execution contract toward MCP-first discovery plus shell-only exact
     verification, with `repo_rag_mcp_usage_summary.json` emitted per run to measure actual MCP use
+  - harden the Codex-side MCP launch path itself by generating one launcher script per run,
+    resolving `repo-rag` to an absolute executable path when possible, raising Codex MCP startup
+    and tool timeouts, and exporting `repo_rag_mcp_stderr.log` diagnostics so an empty
+    `list_mcp_resources` result can be distinguished from a real “no resources defined” condition
   - confirm whether the new default `TRAINER_PROMOTE_CHANNEL=stable` should remain enabled in live
     AKS or be overridden explicitly for manual-only promotion
   - validate that later worker runs can resolve and consume a trainer-published bundle via `DSPY_BUNDLE_VERSION`
