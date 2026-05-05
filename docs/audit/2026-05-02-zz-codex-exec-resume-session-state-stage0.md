@@ -262,6 +262,8 @@ session subtree was being deleted upstream before the execution workflow began.
 
 - `UV_CACHE_DIR=/tmp/uvcache uv run mypy src tests`
   - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run basedpyright`
+  - `pass`
 - `UV_CACHE_DIR=/tmp/uvcache uv run ruff check src tests`
   - `pass`
 - `UV_CACHE_DIR=/tmp/uvcache uv run ruff format --check src tests`
@@ -270,6 +272,8 @@ session subtree was being deleted upstream before the execution workflow began.
   - `pass`
 - `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py tests/test_mcp_server.py tests/test_mcp_stdio.py tests/test_codex_proxy.py tests/test_retrieval.py tests/test_runtime_artifacts_azure.py tests/test_training_samples.py tests/test_dspy_training.py -q`
   - `pass` (`134 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py tests/test_mcp_server.py tests/test_mcp_stdio.py tests/test_codex_proxy.py tests/test_retrieval.py tests/test_runtime_artifacts_azure.py tests/test_training_samples.py tests/test_dspy_training.py tests/test_workflow_live.py -q`
+  - `pass` (`137 passed`)
 - `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
   - `pass`
 - `cargo build --manifest-path rust-cli/Cargo.toml`

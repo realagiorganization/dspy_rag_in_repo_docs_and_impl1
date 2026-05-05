@@ -68,7 +68,11 @@ def test_ask_repository_live_uses_openai_completion(
         "repo_rag_lab.workflow._collect_repository_context_execution",
         fake_collect_repository_context_execution,
     )
-    monkeypatch.setattr("repo_rag_lab.workflow.discover_mcp_servers", lambda root: [Candidate()])
+    def fake_discover_mcp_servers(root: Path) -> list[Candidate]:
+        del root
+        return [Candidate()]
+
+    monkeypatch.setattr("repo_rag_lab.workflow.discover_mcp_servers", fake_discover_mcp_servers)
     monkeypatch.setattr("repo_rag_lab.workflow.call_azure_openai_chat", fake_call_azure_openai_chat)
 
     answer = ask_repository_live(
@@ -104,7 +108,11 @@ def test_ask_repository_live_falls_back_without_context(
         "repo_rag_lab.workflow._collect_repository_context_execution",
         fake_collect_repository_context_execution,
     )
-    monkeypatch.setattr("repo_rag_lab.workflow.discover_mcp_servers", lambda root: [])
+    def fake_discover_no_mcp(root: Path) -> list[object]:
+        del root
+        return []
+
+    monkeypatch.setattr("repo_rag_lab.workflow.discover_mcp_servers", fake_discover_no_mcp)
     monkeypatch.setattr("repo_rag_lab.workflow.call_azure_openai_chat", fail_openai_call)
 
     answer = ask_repository_live(

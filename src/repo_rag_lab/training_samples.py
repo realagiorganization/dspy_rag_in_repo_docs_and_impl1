@@ -692,6 +692,16 @@ def _group_champion_evidence_count(group_payload: Mapping[str, Any]) -> int:
         return 0
 
 
+def _context_group_rank_key(group: Mapping[str, Any]) -> tuple[float, int, str]:
+    """Return the stable sort key for one candidate context group."""
+
+    return (
+        float(group.get("champion_score") or 0.0),
+        _group_champion_support_count(group),
+        str(group.get("context_group_id") or ""),
+    )
+
+
 def _refresh_family_champion(family_payload: dict[str, Any]) -> tuple[bool, str | None, str | None]:
     """Recompute the best family champion from its context-group champions."""
 
@@ -708,11 +718,7 @@ def _refresh_family_champion(family_payload: dict[str, Any]) -> tuple[bool, str 
             for group in groups
             if isinstance(group, Mapping) and isinstance(group.get("champion_record"), Mapping)
         ),
-        key=lambda group: (
-            float(group.get("champion_score") or 0.0),
-            _group_champion_support_count(group),
-            str(group.get("context_group_id") or ""),
-        ),
+        key=_context_group_rank_key,
         reverse=True,
     )
     if not ranked_groups:

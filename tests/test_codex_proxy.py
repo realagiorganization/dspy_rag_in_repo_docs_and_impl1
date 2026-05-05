@@ -6,25 +6,45 @@ from collections.abc import Mapping
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Callable, NoReturn, cast
 
 import httpx
 import pytest
 
+import repo_rag_lab.codex_proxy as codex_proxy_module
 from repo_rag_lab.codex_proxy import (
     CodexMediationResult,
     CodexProxyConfig,
-    _resolve_program_path_and_bundle_version,
     augment_responses_payload,
     build_codex_mediation,
     extract_codex_task_text,
     running_codex_proxy,
 )
-from repo_rag_lab.retrieval import Chunk
+from repo_rag_lab.retrieval import Chunk, RetrievalMode
 
 
 def _payload_mapping(value: object) -> Mapping[str, object]:
     assert isinstance(value, dict)
     return value
+
+
+def _resolve_program_path_and_bundle_version(
+    *,
+    repository_root: Path,
+    bundle_root: Path,
+    bundle_version: str | None,
+    bundle_channel: str,
+) -> tuple[Path | None, str | None]:
+    resolver = cast(
+        Callable[..., tuple[Path | None, str | None]],
+        getattr(codex_proxy_module, "_resolve_program_path_and_bundle_version"),
+    )
+    return resolver(
+        repository_root=repository_root,
+        bundle_root=bundle_root,
+        bundle_version=bundle_version,
+        bundle_channel=bundle_channel,
+    )
 
 
 def test_extract_codex_task_text_prefers_latest_user_message() -> None:
@@ -145,9 +165,14 @@ def test_running_codex_proxy_forwards_sse_and_injects_mediation(
         evidence_previews=[{"source": "README.md", "text": "summary"}],
         developer_message="repo-rag mediation block",
     )
+
+    def fake_build_codex_mediation(*args: object, **kwargs: object) -> CodexMediationResult:
+        del args, kwargs
+        return mediation
+
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy.build_codex_mediation",
-        lambda *args, **kwargs: mediation,
+        fake_build_codex_mediation,
     )
 
     root = tmp_path / "repo"
@@ -201,17 +226,26 @@ def test_build_codex_mediation_suppresses_low_signal(
 ) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
-    monkeypatch.setattr(
-        "repo_rag_lab.codex_proxy.ask_repository",
-        lambda question, root, retrieval_mode=None: SimpleNamespace(
+    def fake_ask_repository(
+        question: str,
+        root: Path,
+        retrieval_mode: RetrievalMode | None = None,
+    ) -> SimpleNamespace:
+        del question, root
+        return SimpleNamespace(
             context=[],
             summary="thin",
             retrieval_mode=retrieval_mode or "lexical",
-        ),
-    )
+        )
+
+    def fake_build_heuristic_previews(root: Path) -> list[dict[str, str]]:
+        del root
+        return []
+
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.ask_repository", fake_ask_repository)
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy._build_heuristic_previews",
-        lambda root: [],
+        fake_build_heuristic_previews,
     )
 
     mediation = build_codex_mediation(
@@ -239,21 +273,28 @@ def test_resolve_program_path_and_bundle_version_uses_local_bundle_root_without_
     program_path = program_dir / "program.json"
     program_path.write_text('{"program":"demo"}\n', encoding="utf-8")
 
-    monkeypatch.setattr(
-        "repo_rag_lab.codex_proxy.fetch_remote_bundle", lambda *args, **kwargs: None
-    )
-    monkeypatch.setattr(
-        "repo_rag_lab.codex_proxy.inspect_bundle_channel",
-        lambda root, channel: {
+    def fake_fetch_remote_bundle(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        return None
+
+    def fake_inspect_bundle_channel(root: Path, channel: str) -> dict[str, object]:
+        del root, channel
+        return {
             "channel_found": True,
             "current_bundle_version": "stable-42",
             "current_program_path": "artifacts/dspy/remote/stable-42/program.json",
-        },
-    )
+        }
+
+    def fail_repository_rag(*args: object, **kwargs: object) -> NoReturn:
+        del args, kwargs
+        pytest.fail("RepositoryRAG fallback should not run")
+
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.fetch_remote_bundle", fake_fetch_remote_bundle)
     monkeypatch.setattr(
-        "repo_rag_lab.codex_proxy.RepositoryRAG",
-        lambda *args, **kwargs: pytest.fail("RepositoryRAG fallback should not run"),
+        "repo_rag_lab.codex_proxy.inspect_bundle_channel",
+        fake_inspect_bundle_channel,
     )
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.RepositoryRAG", fail_repository_rag)
 
     resolved_program_path, resolved_bundle_version = _resolve_program_path_and_bundle_version(
         repository_root=repository_root,

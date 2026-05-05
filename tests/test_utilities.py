@@ -6,6 +6,7 @@ import json
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 import pytest
 import yaml
@@ -778,9 +779,13 @@ def test_run_trace_enqueue_and_drain_round_trip(tmp_path: Path) -> None:
 
 
 def test_versioned_training_run_name_returns_high_resolution_timestamp_only() -> None:
-    from repo_rag_lab.utilities import _versioned_training_run_name
+    import repo_rag_lab.utilities as utilities_module
 
-    resolved = _versioned_training_run_name(
+    versioned_training_run_name = cast(
+        Callable[..., str],
+        getattr(utilities_module, "_versioned_training_run_name"),
+    )
+    resolved = versioned_training_run_name(
         "trainer auto",
         recorded_at=datetime(2026, 5, 1, 17, 0, 0, 123456, tzinfo=UTC),
     )

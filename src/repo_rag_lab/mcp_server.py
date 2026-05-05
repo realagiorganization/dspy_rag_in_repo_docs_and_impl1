@@ -15,7 +15,7 @@ from dataclasses import asdict, dataclass
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO, Literal, cast
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import SplitResult, parse_qs, urlsplit
 
 if TYPE_CHECKING:
     from .mcp import MCPServerCandidate
@@ -541,7 +541,7 @@ def _resource_read_result(uri: str, *, text: str, mime_type: str) -> dict[str, o
 def _resource_query_value(parsed: object, key: str) -> str | None:
     """Return one normalized query parameter from one parsed resource URI."""
 
-    if not hasattr(parsed, "query"):
+    if not isinstance(parsed, SplitResult):
         return None
     values = parse_qs(parsed.query, keep_blank_values=False).get(key)
     if not values:
@@ -606,7 +606,7 @@ def _startup_context_resource_text(server_root: Path) -> str:
         "root": str(server_root),
         "question": MCP_STARTUP_CONTEXT_QUESTION,
         "retrieval_mode": profile.retrieval_mode,
-        "sources": [item.get("source") for item in serialized if isinstance(item, dict)],
+        "sources": [item.get("source") for item in serialized],
         "context": serialized,
         "next_actions": [
             (
@@ -1058,8 +1058,7 @@ def read_json_rpc_message(stream: BinaryIO) -> dict[str, object] | None:
         fileno = stream.fileno()
     except Exception:
         fileno = None
-    if fileno is not None:
-        waiting_logged = False
+    waiting_logged = False
 
     while True:
         if fileno is not None:

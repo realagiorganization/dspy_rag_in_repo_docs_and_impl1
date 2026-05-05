@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -253,11 +254,17 @@ def test_retrieve_vector_mode_uses_semantic_rankings(
         Chunk(source=Path("docs/cache.md"), text="Cache eviction and invalidation rules."),
     ]
 
-    monkeypatch.setattr(
-        retrieval_module,
-        "rank_semantic_chunks",
-        lambda question, *, root, chunk_records, max_candidates=None: ([(0, 0.95), (1, 0.2)], []),
-    )
+    def fake_rank_semantic_chunks(
+        question: str,
+        *,
+        root: Path,
+        chunk_records: Sequence[tuple[str, str]],
+        max_candidates: int | None = None,
+    ) -> tuple[list[tuple[int, float]], list[str]]:
+        del question, root, chunk_records, max_candidates
+        return ([(0, 0.95), (1, 0.2)], [])
+
+    monkeypatch.setattr(retrieval_module, "rank_semantic_chunks", fake_rank_semantic_chunks)
 
     result = retrieve_with_metadata(
         "Where is the sign-in flow explained?",
@@ -286,13 +293,20 @@ def test_retrieve_hybrid_vector_falls_back_to_idf_rerank_when_embeddings_are_una
         ),
     ]
 
+    def fake_rank_semantic_chunks_unavailable(
+        question: str,
+        *,
+        root: Path,
+        chunk_records: Sequence[tuple[str, str]],
+        max_candidates: int | None = None,
+    ) -> tuple[list[tuple[int, float]], list[str]]:
+        del question, root, chunk_records, max_candidates
+        return ([], ["Semantic retrieval unavailable: missing embedding deployment."])
+
     monkeypatch.setattr(
         retrieval_module,
         "rank_semantic_chunks",
-        lambda question, *, root, chunk_records, max_candidates=None: (
-            [],
-            ["Semantic retrieval unavailable: missing embedding deployment."],
-        ),
+        fake_rank_semantic_chunks_unavailable,
     )
 
     result = retrieve_with_metadata(
