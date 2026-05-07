@@ -52,6 +52,7 @@ MCP_STARTUP_CONTEXT_QUESTION = (
     "environment usage readme agents devplan"
 )
 _STREAM_READ_BUFFERS: "weakref.WeakKeyDictionary[object, bytearray]" = weakref.WeakKeyDictionary()
+_STREAM_PROTOCOL_MODES: "weakref.WeakKeyDictionary[object, str]" = weakref.WeakKeyDictionary()
 
 
 @dataclass(frozen=True)
@@ -61,15 +62,41 @@ class MCPToolDefinition:
     name: str
     description: str
     input_schema: dict[str, object]
+    annotations: dict[str, object] | None = None
 
     def to_payload(self) -> dict[str, object]:
         """Return the JSON-serializable tool definition payload."""
 
-        return {
+        payload: dict[str, object] = {
             "name": self.name,
             "description": self.description,
             "inputSchema": self.input_schema,
         }
+        if self.annotations:
+            payload["annotations"] = dict(self.annotations)
+        return payload
+
+
+def _readonly_tool_annotations() -> dict[str, object]:
+    """Return tool annotations for bounded read-only MCP tools."""
+
+    return {
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    }
+
+
+def _queue_write_tool_annotations() -> dict[str, object]:
+    """Return tool annotations for bounded queue-write MCP tools."""
+
+    return {
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "idempotentHint": False,
+        "openWorldHint": False,
+    }
 
 
 @dataclass(frozen=True)
@@ -356,88 +383,163 @@ def build_mcp_tool_definitions() -> list[MCPToolDefinition]:
         MCPToolDefinition(
             name="search_repo",
             description=(
-                "Primary repo-RAG discovery entrypoint. Search the repository corpus and return "
-                "a bounded shortlist of relevant files plus matching text previews. Call this "
-                "first before broad shell reads and do not wait for resource listings."
+                "Use this when you need repository discovery. Search the local repository corpus "
+                "and return a bounded shortlist of relevant files plus matching text previews. "
+                "Call this first before broad shell reads and do not wait for resource listings."
             ),
             input_schema={
                 "type": "object",
                 "properties": {
-                    "question": {"type": "string"},
-                    "root": {"type": "string"},
-                    "retrieval_mode": {"type": "string", "enum": RETRIEVAL_MODE_ENUM},
-                    "top_k": {"type": "integer", "minimum": 1, "maximum": 12},
+                    "question": {
+                        "type": "string",
+                        "description": (
+                            "Natural-language repository question or search target."
+                        ),
+                    },
+                    "root": {
+                        "type": "string",
+                        "description": "Optional repository root override relative to the server root.",
+                    },
+                    "retrieval_mode": {
+                        "type": "string",
+                        "enum": RETRIEVAL_MODE_ENUM,
+                        "description": (
+                            "Optional low-level retrieval mode override. Omit to use the "
+                            "repository default profile."
+                        ),
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 12,
+                        "description": "Maximum number of matching context chunks to return.",
+                    },
                 },
                 "required": ["question"],
                 "additionalProperties": False,
             },
+            annotations=_readonly_tool_annotations(),
         ),
         MCPToolDefinition(
             name="ask_repo",
             description=(
-                "After `search_repo` narrowed the file set, use this for one bounded "
-                "repo-grounded answer with local retrieval only. This MCP tool does not invoke "
-                "live providers or DSPy compilation."
+                "Use this when `search_repo` already narrowed the file set and you need one "
+                "bounded repo-grounded answer. This tool stays local to the repository corpus and "
+                "does not invoke live providers or DSPy compilation."
             ),
             input_schema={
                 "type": "object",
                 "properties": {
-                    "question": {"type": "string"},
-                    "root": {"type": "string"},
-                    "retrieval_mode": {"type": "string", "enum": RETRIEVAL_MODE_ENUM},
-                    "bundle_version": {"type": "string"},
-                    "overlay_path": {"type": "string"},
+                    "question": {
+                        "type": "string",
+                        "description": "Natural-language repository question to answer concisely.",
+                    },
+                    "root": {
+                        "type": "string",
+                        "description": "Optional repository root override relative to the server root.",
+                    },
+                    "retrieval_mode": {
+                        "type": "string",
+                        "enum": RETRIEVAL_MODE_ENUM,
+                        "description": (
+                            "Optional low-level retrieval mode override. Omit to use the "
+                            "repository default profile."
+                        ),
+                    },
+                    "bundle_version": {
+                        "type": "string",
+                        "description": "Optional bundle version hint to echo in the trace payload.",
+                    },
+                    "overlay_path": {
+                        "type": "string",
+                        "description": "Optional overlay path hint to echo in the trace payload.",
+                    },
                 },
                 "required": ["question"],
                 "additionalProperties": False,
             },
+            annotations=_readonly_tool_annotations(),
         ),
         MCPToolDefinition(
             name="bundle_status",
             description=(
-                "Inspect the latest or named DSPy bundle manifest, including promoted "
-                "stable/canary channel state."
+                "Use this when you need bundle metadata only. Inspect the latest or named DSPy "
+                "bundle manifest, including promoted stable/canary channel state."
             ),
             input_schema={
                 "type": "object",
                 "properties": {
-                    "root": {"type": "string"},
-                    "run_name": {"type": "string"},
-                    "channel": {"type": "string", "enum": ["stable", "canary"]},
+                    "root": {
+                        "type": "string",
+                        "description": "Optional repository root override relative to the server root.",
+                    },
+                    "run_name": {
+                        "type": "string",
+                        "description": "Optional specific bundle run name to inspect.",
+                    },
+                    "channel": {
+                        "type": "string",
+                        "enum": ["stable", "canary"],
+                        "description": "Optional promoted channel to inspect.",
+                    },
                 },
                 "additionalProperties": False,
             },
+            annotations=_readonly_tool_annotations(),
         ),
         MCPToolDefinition(
             name="dspy_artifacts",
             description=(
-                "List saved DSPy runs, published bundles, and the latest bundle metadata "
-                "without triggering new compilation."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {"root": {"type": "string"}},
-                "additionalProperties": False,
-            },
-        ),
-        MCPToolDefinition(
-            name="publish_trace",
-            description=(
-                "Stage one normalized worker trace into a trainer-side queue for later "
-                "asynchronous drain. This is the MCP-safe trace handoff surface."
+                "Use this when you need saved-run inventory only. List saved DSPy runs, "
+                "published bundles, and the latest bundle metadata without triggering new "
+                "compilation."
             ),
             input_schema={
                 "type": "object",
                 "properties": {
-                    "trace_path": {"type": "string"},
-                    "root": {"type": "string"},
-                    "trace_name": {"type": "string"},
-                    "queue_name": {"type": "string"},
-                    "outcome_path": {"type": "string"},
+                    "root": {
+                        "type": "string",
+                        "description": "Optional repository root override relative to the server root.",
+                    }
+                },
+                "additionalProperties": False,
+            },
+            annotations=_readonly_tool_annotations(),
+        ),
+        MCPToolDefinition(
+            name="publish_trace",
+            description=(
+                "Use this when you need to enqueue one normalized worker trace for later "
+                "trainer-side drain. This writes queue state and is not a read-only tool."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "trace_path": {
+                        "type": "string",
+                        "description": "Path to the normalized trace payload to enqueue.",
+                    },
+                    "root": {
+                        "type": "string",
+                        "description": "Optional repository root override relative to the server root.",
+                    },
+                    "trace_name": {
+                        "type": "string",
+                        "description": "Optional explicit trace name override.",
+                    },
+                    "queue_name": {
+                        "type": "string",
+                        "description": "Target trainer queue name.",
+                    },
+                    "outcome_path": {
+                        "type": "string",
+                        "description": "Optional outcome payload path to attach to the enqueue record.",
+                    },
                 },
                 "required": ["trace_path"],
                 "additionalProperties": False,
             },
+            annotations=_queue_write_tool_annotations(),
         ),
     ]
 
@@ -950,6 +1052,31 @@ def _json_rpc_error(message_id: object, code: int, message: str) -> dict[str, ob
     return {"jsonrpc": "2.0", "id": message_id, "error": {"code": code, "message": message}}
 
 
+def _remember_stream_protocol(stream: object, mode: Literal["framed", "line"]) -> None:
+    """Persist the detected JSON-RPC transport mode for one stream object."""
+
+    _STREAM_PROTOCOL_MODES[stream] = mode
+
+
+def _stream_protocol(stream: object) -> str | None:
+    """Return the last detected JSON-RPC transport mode for one stream object."""
+
+    return _STREAM_PROTOCOL_MODES.get(stream)
+
+
+def _decode_json_rpc_payload(payload_bytes: bytes) -> dict[str, object]:
+    """Decode one JSON-RPC payload body into a normalized mapping."""
+
+    payload = json.loads(payload_bytes.decode("utf-8"))
+    if not isinstance(payload, dict):
+        _log_mcp_debug("payload-not-object")
+        raise ValueError("JSON-RPC payload must be an object.")
+    _log_mcp_debug(
+        f"message method={payload.get('method') or ''!s} id={payload.get('id') or ''!s}"
+    )
+    return {str(key): value for key, value in payload.items()}
+
+
 def handle_mcp_message(
     message: Mapping[str, object], *, server_root: Path
 ) -> dict[str, object] | None:
@@ -1057,10 +1184,13 @@ def handle_mcp_message(
 
 
 def read_json_rpc_message(stream: BinaryIO) -> dict[str, object] | None:
-    """Read one `Content-Length` framed JSON-RPC message from ``stream``."""
+    """Read one JSON-RPC message from ``stream``.
+
+    Supports both MCP `Content-Length` framing and the newline-delimited JSON-RPC
+    variant emitted by current `codex exec` MCP clients.
+    """
 
     buffered_bytes = _STREAM_READ_BUFFERS.setdefault(stream, bytearray())
-    headers: dict[str, str] = {}
     try:
         fileno = stream.fileno()
     except Exception:
@@ -1073,7 +1203,7 @@ def read_json_rpc_message(stream: BinaryIO) -> dict[str, object] | None:
     waiting_logged = False
 
     if fileno is not None:
-        while b"\r\n\r\n" not in buffered_bytes:
+        while b"\r\n\r\n" not in buffered_bytes and b"\n" not in buffered_bytes:
             ready, _, _ = select.select([fileno], [], [], 5.0)
             if not ready:
                 if not waiting_logged:
@@ -1086,6 +1216,20 @@ def read_json_rpc_message(stream: BinaryIO) -> dict[str, object] | None:
                 return None
             buffered_bytes.extend(chunk)
 
+        stripped_buffer = bytes(buffered_bytes).lstrip()
+        if stripped_buffer.startswith(b"{"):
+            newline_index = buffered_bytes.find(b"\n")
+            if newline_index < 0:
+                raise ValueError("Incomplete line-delimited JSON-RPC message.")
+            line_bytes = bytes(buffered_bytes[:newline_index]).rstrip(b"\r")
+            del buffered_bytes[: newline_index + 1]
+            _remember_stream_protocol(stream, "line")
+            _log_mcp_debug(f"line-bytes {len(line_bytes)}")
+            return _decode_json_rpc_payload(line_bytes)
+
+        headers: dict[str, str] = {}
+        if b"\r\n\r\n" not in buffered_bytes:
+            raise ValueError("Missing Content-Length header terminator.")
         header_bytes, remainder = buffered_bytes.split(b"\r\n\r\n", 1)
         for raw_line in header_bytes.decode("utf-8", errors="ignore").split("\r\n"):
             if not raw_line:
@@ -1112,21 +1256,20 @@ def read_json_rpc_message(stream: BinaryIO) -> dict[str, object] | None:
             buffered_bytes.extend(chunk)
         body = bytes(buffered_bytes[:content_length])
         del buffered_bytes[:content_length]
+        _remember_stream_protocol(stream, "framed")
         _log_mcp_debug(f"body-bytes {content_length}")
-        payload = json.loads(body.decode("utf-8"))
-        if not isinstance(payload, dict):
-            _log_mcp_debug("payload-not-object")
-            raise ValueError("JSON-RPC payload must be an object.")
-        _log_mcp_debug(
-            f"message method={payload.get('method') or ''!s} id={payload.get('id') or ''!s}"
-        )
-        return {str(key): value for key, value in payload.items()}
+        return _decode_json_rpc_payload(body)
 
+    headers: dict[str, str] = {}
     while True:
         line = stream.readline()
         if line == b"":
             _log_mcp_debug("eof-before-headers")
             return None
+        if not headers and line.lstrip().startswith(b"{"):
+            _remember_stream_protocol(stream, "line")
+            _log_mcp_debug(f"line-bytes {len(line.rstrip())}")
+            return _decode_json_rpc_payload(line.rstrip(b"\r\n"))
         if line in {b"\r\n", b"\n"}:
             if headers:
                 break
@@ -1149,21 +1292,25 @@ def read_json_rpc_message(stream: BinaryIO) -> dict[str, object] | None:
             _log_mcp_debug(f"eof-during-body received={len(body)} expected={content_length}")
             raise ValueError("Incomplete JSON-RPC message body.")
         body.extend(chunk)
+    _remember_stream_protocol(stream, "framed")
     _log_mcp_debug(f"body-bytes {content_length}")
-    payload = json.loads(body.decode("utf-8"))
-    if not isinstance(payload, dict):
-        _log_mcp_debug("payload-not-object")
-        raise ValueError("JSON-RPC payload must be an object.")
-    _log_mcp_debug(f"message method={payload.get('method') or ''!s} id={payload.get('id') or ''!s}")
-    return {str(key): value for key, value in payload.items()}
+    return _decode_json_rpc_payload(bytes(body))
 
 
-def write_json_rpc_message(stream: BinaryIO, payload: Mapping[str, object]) -> None:
-    """Write one `Content-Length` framed JSON-RPC message to ``stream``."""
+def write_json_rpc_message(
+    stream: BinaryIO,
+    payload: Mapping[str, object],
+    *,
+    protocol: Literal["framed", "line"] = "framed",
+) -> None:
+    """Write one JSON-RPC message to ``stream``."""
 
     body = json.dumps(dict(payload)).encode("utf-8")
-    stream.write(f"Content-Length: {len(body)}\r\n\r\n".encode("ascii"))
-    stream.write(body)
+    if protocol == "line":
+        stream.write(body + b"\n")
+    else:
+        stream.write(f"Content-Length: {len(body)}\r\n\r\n".encode("ascii"))
+        stream.write(body)
     stream.flush()
 
 
@@ -1194,4 +1341,5 @@ def serve_repo_rag_mcp(
             _log_mcp_debug(
                 f"response method={message.get('method') or ''!s} id={message.get('id') or ''!s}"
             )
-            write_json_rpc_message(output_stream, response)
+            protocol = cast(Literal["framed", "line"], _stream_protocol(input_stream) or "framed")
+            write_json_rpc_message(output_stream, response, protocol=protocol)
