@@ -1,4 +1,6 @@
-FROM python:3.11-slim-bookworm
+ARG PYTHON_BASE_IMAGE=python:3.11-slim-bookworm
+
+FROM ${PYTHON_BASE_IMAGE}
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \

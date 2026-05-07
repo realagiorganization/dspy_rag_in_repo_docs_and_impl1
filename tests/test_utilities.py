@@ -1300,6 +1300,211 @@ def test_run_trainer_cycle_skips_recompile_and_publish_without_new_candidates(
     assert any("no new training candidates" in warning for warning in payload["warnings"])
 
 
+def test_run_trainer_cycle_recompiles_when_published_bundle_lags_current_champion_set(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_bundle_manifest(tmp_path, "stable-run")
+    stable_bundle_path = tmp_path / "artifacts" / "dspy" / "stable-run" / "bundle.json"
+    stable_bundle = json.loads(stable_bundle_path.read_text(encoding="utf-8"))
+    stable_bundle["lineage"] = {
+        "imported_trace_record_paths": [
+            "artifacts/trainer/recovered-imported-traces/20260502T111851Z-prompts_shards_of_lokar_game-p00000-355cca.json"
+        ]
+    }
+    stable_bundle_path.write_text(json.dumps(stable_bundle, indent=2) + "\n", encoding="utf-8")
+    json.loads(run_bundle_publish(tmp_path, run_name="stable-run"))
+    json.loads(run_bundle_promote(tmp_path, channel="stable", run_name="stable-run"))
+
+    champion_index_path = tmp_path / "artifacts" / "trainer" / "champion-index.json"
+    champion_index_path.parent.mkdir(parents=True, exist_ok=True)
+    champion_index_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "record_kind": "repo-rag-trainer-champion-index",
+                "generated_at": "2026-05-07T17:00:00+00:00",
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-goat",
+                        "question": "Draft the Goat Labs scope split",
+                        "normalized_question": "draft the goat labs scope split",
+                        "family_champion_context_group_id": "cg-goat",
+                        "family_champion_score": 0.9,
+                        "family_champion_record": {
+                            "question": "Draft the Goat Labs scope split",
+                            "expected_answer": "Prepared the scope split.",
+                            "tags": ["trainer-candidate", "candidate"],
+                            "expected_sources": [],
+                            "candidate_status": "candidate",
+                            "prompt_family_id": "pf-goat",
+                            "context_group_id": "cg-goat",
+                            "exact_snapshot_id": "ts-goat",
+                            "quality_score": 0.9,
+                            "support_count": 1,
+                            "provenance": {
+                                "trace_record_path": (
+                                    "artifacts/trainer/recovered-imported-traces/"
+                                    "20260506T221908Z-worker-0-prompts_goat_labs-p00000-298625-"
+                                    "realagiorganization_goat_labs.json"
+                                )
+                            },
+                        },
+                        "context_groups": [
+                            {
+                                "context_group_id": "cg-goat",
+                                "sources": ["README.md"],
+                                "evidence_fingerprints": [],
+                                "evidence_count": 0,
+                                "retrieval_mode": "lexical",
+                                "mode": "codex-proxy",
+                                "context_field": "evidence_previews",
+                                "source_count": 1,
+                                "context_count": 1,
+                                "top_k": 4,
+                                "trace_count": 1,
+                                "support_by_record_key": {},
+                                "champion_score": 0.9,
+                                "champion_record": {
+                                    "question": "Draft the Goat Labs scope split",
+                                    "expected_answer": "Prepared the scope split.",
+                                    "tags": ["trainer-candidate", "candidate"],
+                                    "expected_sources": [],
+                                    "candidate_status": "candidate",
+                                    "prompt_family_id": "pf-goat",
+                                    "context_group_id": "cg-goat",
+                                    "exact_snapshot_id": "ts-goat",
+                                    "quality_score": 0.9,
+                                    "support_count": 1,
+                                    "provenance": {
+                                        "trace_record_path": (
+                                            "artifacts/trainer/recovered-imported-traces/"
+                                            "20260506T221908Z-worker-0-prompts_goat_labs-p00000-298625-"
+                                            "realagiorganization_goat_labs.json"
+                                        )
+                                    },
+                                },
+                            }
+                        ],
+                    }
+                ],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.drain_trace_queue",
+        lambda root, queue_name="default", limit=None, keep_queued=False: {
+            "queue_name": queue_name,
+            "queue_found": True,
+            "queued_count_before": 0,
+            "selected_count": 0,
+            "drained_count": 0,
+            "failed_count": 0,
+            "remaining_count": 0,
+            "keep_queued": keep_queued,
+            "status": "success",
+            "items": [],
+            "failures": [],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.restore_processed_trace_records",
+        _restore_processed_trace_records_stub(
+            processed_count=0,
+            restored_count=0,
+            trace_paths=[],
+        ),
+    )
+    monkeypatch.setattr("repo_rag_lab.utilities.load_training_examples", lambda path: ["example"])
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.build_retrieval_benchmarks",
+        lambda examples: [{"question": "demo"}],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.evaluate_retrieval_quality_suite",
+        lambda root, benchmarks, top_k, top_k_values, retrieval_mode=None: {
+            "retrieval_mode": "idf-rerank",
+            "default_top_k": 4,
+            "default_summary": {
+                "top_k": 4,
+                "pass_rate": 1.0,
+                "source_recall": 1.0,
+                "tag_summaries": [],
+            },
+            "top_k_summaries": [{"top_k": 4, "pass_rate": 1.0, "source_recall": 1.0}],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.check_retrieval_quality_thresholds",
+        lambda summary, minimum_pass_rate=None, minimum_source_recall=None: [],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.materialize_training_candidates",
+        _materialize_training_candidates_stub(
+            candidate_count=1,
+            new_candidate_count=0,
+            prompt_family_count=1,
+            context_group_count=1,
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._versioned_training_run_name",
+        lambda run_family, recorded_at=None: "20260507T180000Z",
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._trainer_recompile_payload",
+        lambda *args, **kwargs: {
+            "recompile_status": "compiled",
+            "generated_training": {
+                "output_path": "artifacts/trainer/generated-training.yaml",
+                "summary_path": "artifacts/trainer/generated-training-summary.json",
+            },
+            "training_result": {
+                "run_name": "20260507T180000Z",
+                "bundle_version": "20260507T180000Z",
+                "metadata_path": "artifacts/dspy/20260507T180000Z/metadata.json",
+                "bundle_path": "artifacts/dspy/20260507T180000Z/bundle.json",
+                "benchmark_summary": {"pass_rate": 1.0},
+            },
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.publish_bundle",
+        lambda *args, **kwargs: {
+            "bundle_version": "20260507T180000Z",
+            "run_name": "20260507T180000Z",
+            "published_bundle_path": "artifacts/dspy/published/20260507T180000Z.json",
+            "bundle_path": "artifacts/dspy/20260507T180000Z/bundle.json",
+            "metadata_path": "artifacts/dspy/20260507T180000Z/metadata.json",
+            "program_path": "artifacts/dspy/20260507T180000Z/program.json",
+            "publish_status": "published",
+        },
+    )
+    monkeypatch.setattr("repo_rag_lab.utilities.resolve_azure_artifact_config", lambda: None)
+
+    payload = json.loads(
+        run_trainer_cycle(
+            tmp_path,
+            queue_name="dataset",
+            recompile_run_name="trainer-auto",
+        )
+    )
+
+    assert payload["command_status"] == "success"
+    assert payload["training_candidates"]["new_candidate_count"] == 0
+    assert payload["recompile_threshold_met"] is False
+    assert payload["pending_recompile"]["pending_recompile"] is True
+    assert payload["pending_recompile"]["reason"] == "champion-trace-path-drift"
+    assert payload["pending_recompile"]["current_bundle_version"] == "stable-run"
+    assert payload["recompile"]["recompile_status"] == "compiled"
+    assert payload["publish_requested"] is True
+    assert payload["publish"]["bundle_version"] == "20260507T180000Z"
+
+
 def test_run_trainer_cycle_does_not_fail_promotion_without_new_bundle_candidate(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -513,6 +513,183 @@ The remaining MCP blocker is now narrowed and locally reproduced end to end.
   - `pass`
 - `make verify-surfaces`
   - `pass`
+
+## 2026-05-07 build-path hardening for ACR cloud builds after Docker Hub rate-limit failure
+
+The latest runtime-image failure during `BUILD_MODE=acr ./build_and_push_images.sh` was not caused
+by repo-rag code or worker logic. The failing step was the very first Dockerfile base pull:
+
+- ACR task stderr:
+  - `FROM python:3.11-slim-bookworm`
+  - `toomanyrequests: You have reached your unauthenticated pull rate limit`
+
+That meant Azure Container Registry Tasks were trying to pull Docker Hub base images directly
+during every build.
+
+### Fix applied
+
+- `Dockerfile`
+  - now accepts `ARG PYTHON_BASE_IMAGE=python:3.11-slim-bookworm`
+  - `FROM ${PYTHON_BASE_IMAGE}`
+- `../dataset/docker/queue-initializer/Dockerfile`
+  - now accepts `ARG PYTHON_BASE_IMAGE=python:3.11-slim`
+  - `FROM ${PYTHON_BASE_IMAGE}`
+- `../dataset/build_and_push_images.sh`
+  - now imports the required public Python bases into the target ACR before building:
+    - `docker.io/library/python:3.11-slim-bookworm`
+    - `docker.io/library/python:3.11-slim`
+  - mirrors them under:
+    - `$ACR_REGISTRY/mirror/dockerhub/library/python:3.11-slim-bookworm`
+    - `$ACR_REGISTRY/mirror/dockerhub/library/python:3.11-slim`
+  - passes those mirrored references into:
+    - repo-rag runtime build
+    - queue-initializer build
+  - prompt-executor continues to inherit from the freshly built repo-rag runtime image, so it no
+    longer hits Docker Hub through the runtime base path either
+  - optional authenticated Docker Hub import is now supported through:
+    - `DOCKERHUB_USERNAME`
+    - `DOCKERHUB_PASSWORD` (or `DOCKERHUB_TOKEN`)
+
+### Verification executed in this turn
+
+- `bash -n /home/standard/Desktop/realagi_work/dataset/build_and_push_images.sh`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+
+### Follow-up compatibility fix after the first user retry
+
+The first mirrored-base implementation still failed on the user's runner before any import
+actually happened because the local Azure CLI expected `az acr import --name <registry>` rather
+than `--registry <registry>`.
+
+- observed stderr on retry:
+  - `the following arguments are required: --name/-n`
+- root cause:
+  - `../dataset/build_and_push_images.sh` used `az acr import --registry "$ACR_NAME"` in
+    `import_public_base_into_acr()`
+- fix:
+  - switched that call site to `az acr import --name "$ACR_NAME"` for CLI compatibility
+
+Additional verification for the compatibility fix:
+
+- `bash -n /home/standard/Desktop/realagi_work/dataset/build_and_push_images.sh`
+  - `pass`
+
+### Follow-up fallback after authenticated-free Docker Hub imports still returned 429
+
+The next user retry proved that Azure CLI compatibility was no longer the blocker. `az acr import`
+did run, but Docker Hub still answered with `TOOMANYREQUESTS` for the anonymous source-manifest
+fetch:
+
+- observed stderr on retry:
+  - `StatusCode: 429, Reason: Too Many Requests`
+  - `You have reached your unauthenticated pull rate limit`
+
+That means the mirrored-base idea was correct, but it still needed a no-Docker-Hub fallback for
+environments that do not provide `DOCKERHUB_USERNAME` / `DOCKERHUB_PASSWORD`.
+
+Additional hardening applied:
+
+- `../dataset/build_and_push_images.sh`
+  - now keeps `ALLOW_ACR_BASE_IMAGE_FALLBACK=1` by default
+  - if `az acr import` fails for the public Python base, the script queries the target ACR for the
+    newest existing tag in:
+    - `repo-rag-runtime`
+    - `queue-initializer`
+  - and then reuses that ACR-hosted image as the effective `PYTHON_BASE_IMAGE` for the next build
+  - this removes Docker Hub from the hot path even when no Docker Hub credentials are available,
+    as long as the registry already contains one prior successful image for each family
+
+Additional verification for the fallback hardening:
+
+- `az acr repository show-tags --name llmpromptsacr --repository repo-rag-runtime --top 10 --orderby time_desc`
+  - `pass`
+- `az acr repository show-tags --name llmpromptsacr --repository queue-initializer --top 10 --orderby time_desc`
+  - `pass`
+- `bash -n /home/standard/Desktop/realagi_work/dataset/build_and_push_images.sh`
+  - `pass`
+
+## 2026-05-07 fresh artifact review: repo-rag MCP discovery finally exercised live
+
+The newest uploaded `Parallel Prompt Execution on Azure AKS` artifact set
+(`25504587854_20260507_154012`) finally shows real end-to-end `repo-rag` MCP discovery inside the
+live Codex run rather than only worker-side preflight or prompt text mentioning MCP.
+
+Confirmed from `execution_artifacts/.../codex_session_state.json` and the mirrored MCP logs:
+
+- `session_mode = resumed`
+- `restore_status = restored`
+- `resume_used = true`
+- `repo_rag_mcp_usage_summary.mcp_used = true`
+- `repo_rag_mcp_usage_summary.discovery_via_mcp = true`
+- `search_repo_call_count = 3`
+- `ask_repo_call_count = 1`
+- `method_counts.tools/call = 4`
+
+The debug log now proves the actual Codex-launched stdio child is receiving and answering tool
+traffic:
+
+- `message method=initialize`
+- `message method=tools/list`
+- `message method=tools/call id=2`
+- `response method=tools/call id=2`
+- `message method=tools/call id=3`
+- `response method=tools/call id=3`
+- `message method=tools/call id=4`
+- `response method=tools/call id=4`
+- `message method=tools/call id=5`
+- `response method=tools/call id=5`
+
+The human-facing transcript also now contains explicit MCP activity instead of only shell fallback:
+
+- `mcp: repo-rag/search_repo started`
+- `mcp: repo-rag/search_repo (completed)`
+- `mcp: repo-rag/ask_repo started`
+- `mcp: repo-rag/ask_repo (completed)`
+
+What still remains imperfect in this same run:
+
+- token usage is still high at `1,672,097`
+- that is worse than the prior resumed baseline `1,430,939` by `+241,158` (`+16.85%`)
+- but still better than the lane's last fresh baseline `2,568,062` by `-895,965`
+- shell/doc churn is reduced relative to the worst runs but not eliminated:
+  - `diff --git = 76`
+  - `sed -n = 59`
+  - `README.md = 64`
+  - `docs/DEVPLAN.md = 68`
+  - `docs/USAGE.md = 67`
+  - `docs/ASSUMPTIONS.md = 70`
+
+So the current state is now:
+
+- `resume`: `pass`
+- `RAG backend`: `pass`
+- `DSPy mediation`: `pass`
+- `repo-rag MCP discovery`: `pass`
+- `trusted trace handoff`: `pass`
+- `token efficiency`: `improved versus fresh baseline, still expensive in absolute terms`
+
+Artifact-review commands executed in this turn:
+
+- `tar -tzf /home/standard/Desktop/realagi_work/dataset/artifacts/all_artifacts.tar.gz`
+  - `pass`
+- `tar -xOf /home/standard/Desktop/realagi_work/dataset/artifacts/processed.tar.gz processed/token_usage.json`
+  - `pass`
+- `tar -xOf /home/standard/Desktop/realagi_work/dataset/artifacts/all_artifacts.tar.gz execution_artifacts/prompt-worker-0-rehydrated/artifacts/prompts_shards_of_lokar_game-p00000-355cca/codex_session_state.json`
+  - `pass`
+- `tar -xOf /home/standard/Desktop/realagi_work/dataset/artifacts/all_artifacts.tar.gz execution_artifacts/prompt-worker-0-rehydrated/artifacts/prompts_shards_of_lokar_game-p00000-355cca/repo_rag_trace.json`
+  - `pass`
+- `tar -xOf /home/standard/Desktop/realagi_work/dataset/artifacts/all_artifacts.tar.gz execution_artifacts/prompt-worker-0-rehydrated/artifacts/prompts_shards_of_lokar_game-p00000-355cca/repo_rag_mcp_usage_summary.json`
+  - `pass`
+- `tar -xOf /home/standard/Desktop/realagi_work/dataset/artifacts/all_artifacts.tar.gz execution_artifacts/trusted_trace_handoff_summary.json`
+  - `pass`
 - `cd /home/standard/Desktop/realagi_work/dataset && python -m compileall docker/prompt-executor/worker_execution.py docker/prompt-executor/worker_codex_cli_exec.py tests/unit/test_worker_execution_mixins_small.py tests/unit/test_worker_codex_cli_exec_small.py`
   - `pass`
 - `cd /home/standard/Desktop/realagi_work/dataset && UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/unit/test_worker_execution_mixins_small.py tests/unit/test_worker_codex_cli_exec_small.py -q`

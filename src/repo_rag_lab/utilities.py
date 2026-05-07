@@ -92,6 +92,7 @@ from .training_samples import (
     load_training_examples,
     materialize_combined_training_examples,
     materialize_training_candidates,
+    summarize_champion_index,
 )
 from .verification import verify_repository_surfaces
 from .workflow import ask_repository
@@ -1216,6 +1217,178 @@ def _build_bundle_benchmark_gate(
     return payload
 
 
+def _stable_ordered_strings(values: Sequence[object]) -> list[str]:
+    """Return ordered, deduplicated non-empty string values."""
+
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        cleaned = str(value or "").strip()
+        if not cleaned or cleaned in seen:
+            continue
+        seen.add(cleaned)
+        ordered.append(cleaned)
+    return ordered
+
+
+def _trainer_pending_recompile_summary(
+    root: Path,
+    *,
+    training_candidates: Mapping[str, object],
+    channel: str = "stable",
+) -> dict[str, object]:
+    """Return whether the current champion set has drifted past the published bundle."""
+
+    resolved_root = root.resolve()
+    champion_index_path_text = str(training_candidates.get("champion_index_path") or "").strip()
+    if not champion_index_path_text:
+        return {
+            "pending_recompile": False,
+            "reason": "missing-champion-index-path",
+            "channel_name": channel,
+        }
+    resolved_champion_index_path = Path(champion_index_path_text)
+    if not resolved_champion_index_path.is_absolute():
+        resolved_champion_index_path = resolved_root / resolved_champion_index_path
+    if not resolved_champion_index_path.is_file():
+        return {
+            "pending_recompile": False,
+            "reason": "missing-champion-index",
+            "channel_name": channel,
+            "champion_index_path": (
+                str(resolved_champion_index_path.relative_to(resolved_root))
+                if resolved_champion_index_path.is_relative_to(resolved_root)
+                else str(resolved_champion_index_path)
+            ),
+        }
+
+    champion_summary = summarize_champion_index(resolved_champion_index_path)
+    champion_trace_paths = _stable_ordered_strings(
+        champion_summary.get("champion_trace_record_paths", [])
+        if isinstance(champion_summary.get("champion_trace_record_paths"), list)
+        else []
+    )
+    champion_snapshot_ids = _stable_ordered_strings(
+        champion_summary.get("champion_exact_snapshot_ids", [])
+        if isinstance(champion_summary.get("champion_exact_snapshot_ids"), list)
+        else []
+    )
+    champion_record_hashes = _stable_ordered_strings(
+        champion_summary.get("champion_record_hashes", [])
+        if isinstance(champion_summary.get("champion_record_hashes"), list)
+        else []
+    )
+    champion_family_ids = _stable_ordered_strings(
+        champion_summary.get("prompt_family_ids", [])
+        if isinstance(champion_summary.get("prompt_family_ids"), list)
+        else []
+    )
+    champion_candidate_count = int(champion_summary.get("candidate_count") or 0)
+
+    channel_state = inspect_bundle_channel(resolved_root, channel=channel)
+    bundle_version = str(channel_state.get("current_bundle_version") or "").strip()
+    current_bundle: Mapping[str, object] = {}
+    raw_current_bundle = channel_state.get("current_bundle")
+    if isinstance(raw_current_bundle, Mapping):
+        current_bundle = raw_current_bundle
+    current_bundle_path = str(channel_state.get("current_bundle_path") or "").strip()
+    if not current_bundle and current_bundle_path:
+        resolved_bundle_path = Path(current_bundle_path)
+        if not resolved_bundle_path.is_absolute():
+            resolved_bundle_path = resolved_root / resolved_bundle_path
+        if resolved_bundle_path.is_file():
+            current_bundle = load_json_object(resolved_bundle_path)
+    lineage = current_bundle.get("lineage") if isinstance(current_bundle, Mapping) else None
+    lineage_mapping = lineage if isinstance(lineage, Mapping) else {}
+    bundle_trace_paths = _stable_ordered_strings(
+        lineage_mapping.get("champion_trace_record_paths", [])
+        if isinstance(lineage_mapping.get("champion_trace_record_paths"), list)
+        else lineage_mapping.get("imported_trace_record_paths", [])
+        if isinstance(lineage_mapping.get("imported_trace_record_paths"), list)
+        else []
+    )
+    bundle_snapshot_ids = _stable_ordered_strings(
+        lineage_mapping.get("champion_exact_snapshot_ids", [])
+        if isinstance(lineage_mapping.get("champion_exact_snapshot_ids"), list)
+        else []
+    )
+    bundle_record_hashes = _stable_ordered_strings(
+        lineage_mapping.get("champion_record_hashes", [])
+        if isinstance(lineage_mapping.get("champion_record_hashes"), list)
+        else []
+    )
+    bundle_family_ids = _stable_ordered_strings(
+        lineage_mapping.get("champion_prompt_family_ids", [])
+        if isinstance(lineage_mapping.get("champion_prompt_family_ids"), list)
+        else []
+    )
+
+    pending_recompile = False
+    reason = "bundle-matches-current-champion-set"
+    pending_trace_paths: list[str] = []
+    pending_snapshot_ids: list[str] = []
+    pending_record_hashes: list[str] = []
+    pending_family_ids: list[str] = []
+    if champion_candidate_count == 0:
+        reason = "no-champion-candidates"
+    elif not channel_state.get("channel_found") or not bundle_version:
+        pending_recompile = True
+        reason = "no-published-bundle"
+    elif bundle_record_hashes:
+        pending_record_hashes = [
+            record_hash for record_hash in champion_record_hashes if record_hash not in bundle_record_hashes
+        ]
+        pending_recompile = bool(pending_record_hashes)
+        reason = "champion-record-hash-drift" if pending_recompile else reason
+    elif bundle_snapshot_ids:
+        pending_snapshot_ids = [
+            snapshot_id for snapshot_id in champion_snapshot_ids if snapshot_id not in bundle_snapshot_ids
+        ]
+        pending_recompile = bool(pending_snapshot_ids)
+        reason = "champion-snapshot-drift" if pending_recompile else reason
+    elif bundle_family_ids:
+        pending_family_ids = [
+            family_id for family_id in champion_family_ids if family_id not in bundle_family_ids
+        ]
+        pending_recompile = bool(pending_family_ids)
+        reason = "prompt-family-drift" if pending_recompile else reason
+    elif bundle_trace_paths:
+        pending_trace_paths = [
+            trace_path for trace_path in champion_trace_paths if trace_path not in bundle_trace_paths
+        ]
+        pending_recompile = bool(pending_trace_paths)
+        reason = "champion-trace-path-drift" if pending_recompile else reason
+    else:
+        pending_recompile = True
+        reason = "bundle-lineage-missing"
+
+    return {
+        "pending_recompile": pending_recompile,
+        "reason": reason,
+        "channel_name": channel,
+        "channel_found": bool(channel_state.get("channel_found")),
+        "current_bundle_version": bundle_version or None,
+        "champion_index_path": (
+            str(resolved_champion_index_path.relative_to(resolved_root))
+            if resolved_champion_index_path.is_relative_to(resolved_root)
+            else str(resolved_champion_index_path)
+        ),
+        "champion_candidate_count": champion_candidate_count,
+        "champion_prompt_family_ids": champion_family_ids,
+        "champion_trace_record_paths": champion_trace_paths,
+        "champion_exact_snapshot_ids": champion_snapshot_ids,
+        "champion_record_hashes": champion_record_hashes,
+        "bundle_lineage_prompt_family_ids": bundle_family_ids,
+        "bundle_lineage_trace_record_paths": bundle_trace_paths,
+        "bundle_lineage_exact_snapshot_ids": bundle_snapshot_ids,
+        "bundle_lineage_record_hashes": bundle_record_hashes,
+        "pending_prompt_family_ids": pending_family_ids,
+        "pending_trace_record_paths": pending_trace_paths,
+        "pending_exact_snapshot_ids": pending_snapshot_ids,
+        "pending_record_hashes": pending_record_hashes,
+    }
+
+
 def run_trainer_cycle(
     root: Path,
     *,
@@ -1294,6 +1467,11 @@ def run_trainer_cycle(
         summary_path=DEFAULT_TRAINER_TRAINING_CANDIDATES_SUMMARY_PATH,
         seed_existing_output=True,
     )
+    pending_recompile_summary = _trainer_pending_recompile_summary(
+        root,
+        training_candidates=training_candidates,
+        channel=promote_channel or "stable",
+    )
     new_candidate_count_raw = training_candidates.get("new_candidate_count")
     try:
         new_candidate_count = max(0, int(new_candidate_count_raw or 0))
@@ -1302,7 +1480,8 @@ def run_trainer_cycle(
     effective_min_new_candidates = max(1, int(min_new_candidates_for_recompile))
     recompile_requested = recompile_run_name is not None
     recompile_threshold_met = new_candidate_count >= effective_min_new_candidates
-    recompile_triggered = recompile_requested and recompile_threshold_met
+    pending_recompile = bool(pending_recompile_summary.get("pending_recompile"))
+    recompile_triggered = recompile_requested and (recompile_threshold_met or pending_recompile)
     explicit_publish_requested = run_name is not None or bundle_version is not None
     if effective_minimum_bundle_pass_rate is None and (
         explicit_publish_requested or recompile_triggered
@@ -1355,10 +1534,16 @@ def run_trainer_cycle(
                 "min_new_candidates_for_recompile": effective_min_new_candidates,
             }
             if new_candidate_count == 0:
-                cycle_warnings.append(
-                    "Trainer-side bundle recompilation was skipped because no new training "
-                    "candidates were imported during this cycle."
-                )
+                if pending_recompile:
+                    cycle_warnings.append(
+                        "Trainer-side bundle recompilation remained pending because the current "
+                        "champion set still differs from the published bundle."
+                    )
+                else:
+                    cycle_warnings.append(
+                        "Trainer-side bundle recompilation was skipped because no new training "
+                        "candidates were imported during this cycle."
+                    )
             else:
                 cycle_warnings.append(
                     "Trainer-side bundle recompilation was skipped because the number of new "
@@ -1383,6 +1568,7 @@ def run_trainer_cycle(
                 "replaced_count": training_candidates.get("replaced_count"),
                 "prompt_family_count": training_candidates.get("prompt_family_count"),
                 "context_group_count": training_candidates.get("context_group_count"),
+                "pending_recompile_summary": pending_recompile_summary,
             }
             try:
                 recompile_payload = _trainer_recompile_payload(
@@ -1542,6 +1728,7 @@ def run_trainer_cycle(
         "durable_trace_recovery": durable_trace_recovery,
         "ingestion_summary": ingestion_summary,
         "training_candidates": training_candidates,
+        "pending_recompile": pending_recompile_summary,
         "min_new_candidates_for_recompile": effective_min_new_candidates,
         "recompile_threshold_met": recompile_threshold_met,
         "recompile": recompile_payload,
