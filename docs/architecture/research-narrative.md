@@ -539,7 +539,26 @@ At the time of this document:
   resources-first/template-first discovery to tools-first discovery: Codex is instructed to call
   `search_repo` immediately for repository narrowing, then `ask_repo` for one concise
   repo-grounded answer, while resource URIs become optional supporting surfaces rather than the
-  primary gate for MCP use
+  primary gate for MCP use. The next narrowing pass now also aligns the bounded MCP server with
+  OpenAI's documented tool-selection heuristics: `tools/list` exposes action-oriented “Use this
+  when…” descriptions, per-parameter descriptions, and explicit MCP tool annotations such as
+  `readOnlyHint=true` for `search_repo`, `ask_repo`, `bundle_status`, and `dspy_artifacts`, while
+  `publish_trace` is explicitly marked non-read-only. Before this pass the same `tools/list`
+  payload exposed no tool annotations at all, which left Codex free to treat bounded discovery
+  tools conservatively and skip MCP discovery entirely during `codex exec`. The next local control
+  probes then used both the older `tap-mcp.mjs` wrapper from `../dataset` and a tap wrapper in
+  front of `python -m repo_rag_lab.mcp_stdio` to inspect the actual stdio wire bytes. Those probes
+  showed that current `codex exec` MCP traffic is newline-delimited JSON-RPC
+  (`{"jsonrpc":"2.0",...}\n`) instead of classic `Content-Length` framing. That explained the
+  earlier contradiction: `codex mcp list` could see the configured stdio server, the child process
+  really was launched, and the child still timed out because `src/repo_rag_lab/mcp_server.py` kept
+  waiting for header bytes that would never arrive. The repository now accepts both framing styles
+  and mirrors the detected input mode on responses. After that dual-mode transport fix, local
+  `codex exec` probes finally complete `initialize -> tools/list -> resources/list` against
+  `repo_rag`, and direct `search_repo` MCP tool calls now appear in the transcript even with
+  apps/plugins enabled. Live AKS confirmation still depends on the next rebuilt worker image, but
+  the remaining failure is no longer an unexplained Codex-side black box: the local end-to-end MCP
+  transport mismatch is now understood and patched in the repo-rag server itself
 - notebook batch execution and reporting are implemented and exposed through
   `make notebook-report`
 - TODO and publication backlog synchronization are implemented and exposed through

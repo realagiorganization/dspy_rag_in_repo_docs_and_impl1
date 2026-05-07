@@ -28,6 +28,22 @@ def test_build_mcp_tool_definitions_exposes_only_bounded_tools() -> None:
         "publish_trace",
     ]
     assert all("trainer" not in tool.name for tool in tools)
+    by_name = {tool.name: tool for tool in tools}
+    assert by_name["search_repo"].annotations == {
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    }
+    assert by_name["ask_repo"].annotations == by_name["search_repo"].annotations
+    assert by_name["publish_trace"].annotations == {
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "idempotentHint": False,
+        "openWorldHint": False,
+    }
+    assert by_name["search_repo"].description.startswith("Use this when")
+    assert by_name["ask_repo"].description.startswith("Use this when")
 
 
 def test_call_mcp_tool_search_repo_returns_structured_shortlist(
@@ -327,6 +343,10 @@ def test_handle_mcp_message_lists_tools(tmp_path: Path) -> None:
     result = cast(dict[str, Any], response["result"])
     tools = cast(list[dict[str, Any]], result["tools"])
     assert tools[0]["name"] == "search_repo"
+    assert tools[0]["annotations"]["readOnlyHint"] is True
+    assert tools[0]["inputSchema"]["properties"]["question"]["description"]
+    assert tools[-1]["name"] == "publish_trace"
+    assert tools[-1]["annotations"]["readOnlyHint"] is False
 
 
 def test_handle_mcp_message_lists_resources_and_templates(tmp_path: Path) -> None:
@@ -611,6 +631,20 @@ def test_read_json_rpc_message_does_not_reselect_after_first_header(
     assert select_calls in {0, 1}
 
 
+def test_read_json_rpc_message_accepts_line_delimited_jsonrpc_from_pipe() -> None:
+    read_fd, write_fd = os.pipe()
+    reader = os.fdopen(read_fd, "rb")
+    writer = os.fdopen(write_fd, "wb", buffering=0)
+
+    payload = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
+    writer.write((json.dumps(payload) + "\n").encode("utf-8"))
+    writer.flush()
+    writer.close()
+
+    assert mcp_server.read_json_rpc_message(reader) == payload
+    reader.close()
+
+
 def test_serve_repo_rag_mcp_handles_initialize_and_ping(tmp_path: Path) -> None:
     input_stream = io.BytesIO()
     output_stream = io.BytesIO()
@@ -677,6 +711,34 @@ def test_serve_repo_rag_mcp_skips_notification_responses(tmp_path: Path) -> None
     only_response = mcp_server.read_json_rpc_message(output_stream)
     assert only_response is not None
     assert mcp_server.read_json_rpc_message(output_stream) is None
+
+
+def test_serve_repo_rag_mcp_replies_with_line_delimited_jsonrpc(tmp_path: Path) -> None:
+    input_stream = io.BytesIO(
+        (
+            json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize"}) + "\n"
+            + json.dumps({"jsonrpc": "2.0", "id": 2, "method": "resources/list"}) + "\n"
+        ).encode("utf-8")
+    )
+    output_stream = io.BytesIO()
+
+    assert (
+        mcp_server.serve_repo_rag_mcp(
+            tmp_path,
+            input_stream=input_stream,
+            output_stream=output_stream,
+        )
+        == 0
+    )
+
+    output_lines = [line for line in output_stream.getvalue().splitlines() if line.strip()]
+    assert len(output_lines) == 2
+    first = json.loads(output_lines[0].decode("utf-8"))
+    second = json.loads(output_lines[1].decode("utf-8"))
+    assert first["id"] == 1
+    assert second["id"] == 2
+    assert "serverInfo" in first["result"]
+    assert "resources" in second["result"]
 
 
 def test_read_json_rpc_message_preserves_buffered_followup_messages_from_pipe(

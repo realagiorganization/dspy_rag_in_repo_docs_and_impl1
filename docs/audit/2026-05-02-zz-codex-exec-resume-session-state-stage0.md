@@ -228,6 +228,152 @@ Local verification for this fix:
 - `cargo build --manifest-path rust-cli/Cargo.toml`
   - `pass`
 
+## 2026-05-07 direct local Codex probe: MCP server configured, but tools still absent from `codex exec` toolset
+
+### Why this probe mattered
+
+The earlier artifact reviews still left one ambiguity:
+
+- did Codex ignore repo-rag because our MCP server contract was wrong?
+- or did `codex exec` simply fail to expose the configured local MCP tools to the model at all?
+
+To answer that directly, this turn used a local temp `~/.codex/config.toml` with one explicit
+stdio server definition for repo-rag and then compared:
+
+- `codex mcp list`
+- `codex exec ...`
+
+### What the direct local probe showed
+
+The temp config was recognized correctly by Codex:
+
+- `HOME=/tmp/tmp.jJoBrmY64J/home codex mcp list`
+  - listed `repo-rag`
+  - `transport = stdio`
+  - `command = python`
+  - `args = -m repo_rag_lab.mcp_stdio --root ...`
+  - `status = enabled`
+
+So the server registration layer itself is not missing.
+
+But the local non-interactive execution path still did not surface repo-rag as callable MCP tools:
+
+- direct prompt requesting `repo_rag.search_repo(...)`
+  returned:
+  - `The exact MCP tool call failed: search_repo on server repo_rag is not available in the current toolset`
+- direct prompt requesting built-in discovery through `list_mcp_tools`
+  returned:
+  - `` `list_mcp_tools` is not exposed in this session ``
+- another probe using repo-rag wording showed:
+  - `resources/list failed: unknown MCP server 'repo-rag'`
+  when the temporary override registered the server under `repo_rag`
+
+### Current interpretation
+
+This narrows the remaining blocker further:
+
+- repo-rag MCP server registration can be visible to `codex mcp list`
+- but the same server can still be absent from the model's effective `codex exec` toolset
+- therefore the live worker problem is no longer attributable only to repo-rag transport bugs,
+  resource payloads, or missing tool annotations
+
+At minimum, the current Codex path still has one toolset-ingestion gap between:
+
+1. configured MCP servers visible to the CLI management surfaces
+2. MCP tools actually exposed to the model inside `codex exec`
+
+That means future fixes must distinguish:
+
+- server correctness (`mcp_server.py`)
+- worker config generation (`../dataset`)
+- Codex toolset ingestion / discovery behavior
+
+instead of assuming those three layers are equivalent.
+
+## 2026-05-07 local MCP metadata hardening after tool-first prompt still failed live
+
+### Why this follow-up was necessary
+
+The newest AKS artifact review narrowed the MCP failure again:
+
+- worker-side preflight already succeeds through `initialize -> resources/list`
+- the live prompt already contains the newer tool-first guidance:
+  - `search_repo` first
+  - `ask_repo` second
+  - do not gate on `list_mcp_resources`
+- but the actual Codex-launched MCP child still receives no JSON-RPC frames at all and exits with:
+  - `waiting-for-headers no-bytes-yet`
+  - `eof-before-headers`
+
+That means the remaining problem is no longer the original transport-loss bug and no longer only
+the prompt contract. The next likely contract gap was the `tools/list` payload itself.
+
+### Root-cause hypothesis anchored to local evidence
+
+Local inspection of `src/repo_rag_lab/mcp_server.py` and the emitted `tools/list` payload showed
+that bounded repo-RAG MCP tools exposed:
+
+- names
+- descriptions
+- input schema
+
+but **no tool annotations at all**. In the current OpenAI documentation, tools without
+`readOnlyHint` are treated as write actions. For `codex exec`, that makes it plausible that even
+our bounded discovery tools were being classified conservatively and not selected during the real
+run, despite the tool-first prompt text.
+
+Before this fix, a direct local `tools/list` probe showed:
+
+- `search_repo` payload without `annotations`
+- `ask_repo` payload without `annotations`
+- no per-parameter descriptions to help tool selection
+
+### Local fix applied in this turn
+
+- `src/repo_rag_lab/mcp_server.py`
+  - `MCPToolDefinition` now supports explicit `annotations`
+  - read-only bounded tools now emit:
+    - `readOnlyHint = true`
+    - `destructiveHint = false`
+    - `idempotentHint = true`
+    - `openWorldHint = false`
+  - affected tools:
+    - `search_repo`
+    - `ask_repo`
+    - `bundle_status`
+    - `dspy_artifacts`
+  - `publish_trace` is now explicitly marked non-read-only
+  - tool descriptions are now action-oriented and start with `Use this when...`
+  - tool input schemas now include parameter descriptions
+- `tests/test_mcp_server.py`
+  - added regression assertions that `tools/list` exposes the expected read-only metadata
+  - added assertions that `publish_trace` is explicitly non-read-only
+
+### Local evidence after the fix
+
+A direct `tools/list` probe now emits the intended discovery metadata. For example:
+
+- `search_repo.annotations.readOnlyHint = true`
+- `ask_repo.annotations.readOnlyHint = true`
+- `publish_trace.annotations.readOnlyHint = false`
+- `search_repo.description` now starts with `Use this when you need repository discovery...`
+
+This does not yet prove a live AKS fix, but it closes one concrete mismatch between our MCP server
+and the documented OpenAI tool-selection contract.
+
+### Verification executed in this turn
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_mcp_server.py -q`
+  - `pass` (`26 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+
 ## 2026-05-07 tools-first MCP discovery hardening after 2.64M-token fallback run
 
 ### Why this follow-up was necessary
@@ -276,6 +422,96 @@ actual repo-rag tool invocation.
 - `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
   - `pass`
 - `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+
+## 2026-05-07 local root cause confirmation: Codex stdio MCP uses line-delimited JSON-RPC, not Content-Length framing
+
+The remaining MCP blocker is now narrowed and locally reproduced end to end.
+
+### What the local probes proved
+
+- `codex mcp list` already saw the configured `repo_rag` stdio server, so configuration and
+  launcher registration were not the missing layer.
+- A control probe against `../dataset/docker/prompt-executor/model_router/tap-mcp.mjs` showed the
+  actual bytes that `codex exec` writes to stdio children:
+  - first frame logged by the tap wrapper:
+    - `{"jsonrpc":"2.0","id":0,"method":"initialize",...}`
+  - there was no preceding `Content-Length: ...` header line.
+- A tap wrapper placed in front of `python -m repo_rag_lab.mcp_stdio` captured the same
+  line-delimited JSON-RPC frames:
+  - `initialize`
+  - `notifications/initialized`
+  - `tools/list`
+  - `resources/list`
+- The old `repo_rag_mcp_debug.log` behavior on the same probe was:
+  - `server-start ...`
+  - `waiting-for-headers no-bytes-yet`
+- That mismatch proved the remaining live failure was not “Codex never launched the child” and not
+  “the child never received stdin”. The child was launched and bytes were present, but
+  `src/repo_rag_lab/mcp_server.py` only understood `Content-Length` framed messages while
+  `codex exec` was sending newline-delimited JSON-RPC.
+
+### Local fix applied
+
+- `src/repo_rag_lab/mcp_server.py`
+  - `read_json_rpc_message(...)` now accepts both:
+    - classic `Content-Length` framed JSON-RPC
+    - newline-delimited JSON-RPC messages used by the current `codex exec` MCP client
+  - the server now remembers the detected input protocol per stream and writes responses in the
+    same mode, so worker-side framed preflight still works while Codex stdio sessions now get
+    line-delimited replies.
+- `tests/test_mcp_server.py`
+  - added regression coverage for:
+    - line-delimited JSON-RPC reads from a pipe
+    - end-to-end `serve_repo_rag_mcp(...)` replies in line mode
+
+### Post-fix local end-to-end evidence
+
+- direct local `codex exec` probe with the same repo-rag stdio launcher now succeeds through
+  `resources/list`:
+  - transcript:
+    - `mcp_tool_call server=repo_rag tool=list_mcp_resources ... status=completed`
+  - returned resources:
+    - `repo-rag://overview`
+    - `repo-rag://startup-context`
+    - `repo-rag://discovery-guide`
+    - `repo-rag://retrieval-profile`
+    - `repo-rag://corpus-manifest`
+- `repo_rag_mcp_debug.log` on the same probe now records the full sequence:
+  - `message method=initialize`
+  - `response method=initialize`
+  - `message method=notifications/initialized`
+  - `message method=tools/list`
+  - `response method=tools/list`
+  - `message method=resources/list`
+  - `response method=resources/list`
+- a direct local `codex exec` probe with apps/plugins still enabled now also issues the bounded
+  MCP tool call itself:
+  - `mcp_tool_call server=repo_rag tool=search_repo ...`
+
+### Important remaining nuance
+
+- The local probe that called `search_repo` through an ad hoc plain-`python` wrapper failed with:
+  - `ModuleNotFoundError: No module named 'nbformat'`
+- that failure came from the manual probe launcher using an environment outside the repository's
+  `uv`-managed runtime, not from the worker-side launcher contract in `../dataset`, which already
+  prefers `sys.executable`.
+- the MCP transport blocker itself is resolved locally; live confirmation still depends on the next
+  rebuilt worker image/run using this repo-rag revision.
+
+### Verification executed in this turn
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_mcp_server.py -q`
+  - `pass` (`28 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+- `make verify-surfaces`
   - `pass`
 - `cd /home/standard/Desktop/realagi_work/dataset && python -m compileall docker/prompt-executor/worker_execution.py docker/prompt-executor/worker_codex_cli_exec.py tests/unit/test_worker_execution_mixins_small.py tests/unit/test_worker_codex_cli_exec_small.py`
   - `pass`
@@ -521,6 +757,124 @@ session subtree was being deleted upstream before the execution workflow began.
   - `pass`
 - `cargo build --manifest-path rust-cli/Cargo.toml`
   - `pass`
+
+## 2026-05-07 latest AKS artifact review after tool-first MCP prompt hardening
+
+### Artifact set reviewed
+
+- `/home/standard/Desktop/realagi_work/dataset/artifacts/all_artifacts.tar.gz`
+- `/home/standard/Desktop/realagi_work/dataset/artifacts/processed.tar.gz`
+- `/home/standard/Desktop/realagi_work/dataset/artifacts/redis_results.json`
+
+### Prompt and token usage
+
+- one prompt completed:
+  - `prompts_shards_of_lokar_game-p00000-355cca`
+- consolidated token report from `redis_results.json` and `processed/execution_results.json`:
+  - `prompt_tokens = 1430939`
+  - `completion_tokens = 0`
+  - `total_tokens = 1430939`
+  - `success = true`
+  - `execution_time = 895.64606`
+
+### What worked
+
+- `resume`: `pass`
+  - `codex_session_state.json`
+    - `session_mode = resumed`
+    - `restore_status = restored`
+    - `resume_used = true`
+    - `resume_command_mode = explicit-session-id`
+    - `restored_files = 11`
+    - `persisted_files = 12`
+- `RAG` backend and `DSPy`: `pass`
+  - `repo_rag_backend.json`
+    - `rag_status = success`
+    - `dspy_status = success`
+    - `bundle_resolved = true`
+    - `bundle_version = 20260502T122127191445Z`
+  - `repo_rag_trace.json`
+    - `program_loaded = true`
+    - `retrieval_mode = lexical`
+- `trainer handoff`: `pass`
+  - `trusted_trace_handoff_summary.json`
+    - `attempted = 1`
+    - `queued = 1`
+    - `failed = 0`
+- the tool-first prompt patch is present in the live worker prompt
+  - `repo_rag_codex_proxy_last.json`
+    - includes:
+      - `Start repository discovery with the MCP tool search_repo`
+      - `After search_repo returns a shortlist, use MCP tool ask_repo`
+      - `Do not treat list_mcp_resources or list_mcp_resource_templates as the gate for repo-RAG availability`
+
+### What improved materially
+
+- token cost dropped relative to the immediately previous catastrophic run
+  - previous run baseline from lane metadata:
+    - `2643457`
+  - current run:
+    - `1430939`
+  - delta:
+    - `-1212518`
+    - `-0.458686`
+- transcript churn also dropped relative to that prior run
+  - `codex_session_state.json`
+    - `transcript_path_summary.path_mention_count = 7`
+    - `documentation_mention_count = 3`
+  - raw transcript counters:
+    - `diff --git = 298`
+    - `sed -n = 52`
+    - `README.md = 70`
+    - `docs/DEVPLAN.md = 71`
+    - `docs/USAGE.md = 9`
+    - `docs/ASSUMPTIONS.md = 57`
+
+### What still failed
+
+- live `repo-rag` MCP discovery: `fail`
+  - `repo_rag_mcp_usage_summary.json`
+    - `event_count = 2`
+    - `method_counts = {"initialize": 1, "resources/list": 1}`
+    - `search_repo_call_count = 0`
+    - `ask_repo_call_count = 0`
+    - `resource_read_count = 0`
+    - `discovery_via_mcp = false`
+- the actual Codex-launched MCP child still never receives a real MCP request
+  - `repo_rag_mcp_stderr.log`
+    - second launch again uses `HOME=/dev/shm/codex_home_...`, confirming the real Codex-side child
+  - `repo_rag_mcp_debug.log`
+    - preflight child:
+      - `initialize`
+      - `notifications/initialized`
+      - `resources/list`
+      - `response method=resources/list`
+    - Codex-side child:
+      - `server-start pid=228 ...`
+      - `waiting-for-headers no-bytes-yet`
+      - `eof-before-headers`
+      - `server-stop eof`
+- raw transcript no longer shows the old `list_mcp_resources` fallback monologue, but it also
+  shows no actual MCP use:
+  - `mcp: codex/list_mcp_resources = 0`
+  - `mcp: codex/list_mcp_resource_templates = 0`
+  - `mcp: codex/read_mcp_resource = 0`
+  - `mcp: codex/call_mcp_tool = 0`
+  - `search_repo` / `ask_repo` strings only appear in the injected prompt text, not in MCP usage logs
+
+### Current interpretation
+
+The tool-first prompt hardening was applied correctly and reached the live prompt, but that alone
+did not make Codex enter a repo-rag MCP session. The current failure is now even narrower:
+
+- preflight works
+- the Codex-side MCP launcher starts
+- but Codex never sends `initialize` to the actual child during the real run
+
+So this run confirms a real improvement in cost and churn, but it also confirms that the remaining
+blocker is no longer prompt wording inside the repo-rag guidance layer alone. The unresolved bug is
+still at the boundary where Codex decides whether to open an MCP session against the configured
+stdio child at all.
 
 ## 2026-05-07 latest AKS artifact review: old MCP transport bug fixed, end-to-end MCP discovery still failing
 
