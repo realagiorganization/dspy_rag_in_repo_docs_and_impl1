@@ -532,7 +532,14 @@ At the time of this document:
   lane metadata so MCP launch-contract changes force one clean reset, and low-level MCP transport
   diagnostics (`repo_rag_mcp_debug.log` plus richer launcher stderr traces) so the next live run
   can distinguish `stdin closed`, `no bytes received`, and malformed-frame cases instead of
-  flattening them all into one generic handshake timeout
+  flattening them all into one generic handshake timeout. The newest discovery follow-up narrows
+  the remaining failure again: the old post-`initialize` transport loss is now gone, but Codex
+  still burns tokens when it treats empty `list_mcp_resources` results as proof that repo-rag is
+  unusable. The worker prompt and bounded MCP guidance therefore now pivot from
+  resources-first/template-first discovery to tools-first discovery: Codex is instructed to call
+  `search_repo` immediately for repository narrowing, then `ask_repo` for one concise
+  repo-grounded answer, while resource URIs become optional supporting surfaces rather than the
+  primary gate for MCP use
 - notebook batch execution and reporting are implemented and exposed through
   `make notebook-report`
 - TODO and publication backlog synchronization are implemented and exposed through
