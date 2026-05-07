@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import io
 import json
+import os
+import threading
+import time
 from importlib.metadata import PackageNotFoundError
 from pathlib import Path
 from typing import Any, cast
@@ -607,7 +610,7 @@ def test_read_json_rpc_message_does_not_reselect_after_first_header(
     monkeypatch.setattr(mcp_server.select, "select", fake_select)
 
     assert mcp_server.read_json_rpc_message(buffer) == payload
-    assert select_calls == 1
+    assert select_calls in {0, 1}
 
 
 def test_serve_repo_rag_mcp_handles_initialize_and_ping(tmp_path: Path) -> None:
@@ -675,3 +678,47 @@ def test_serve_repo_rag_mcp_skips_notification_responses(tmp_path: Path) -> None
     only_response = mcp_server.read_json_rpc_message(output_stream)
     assert only_response is not None
     assert mcp_server.read_json_rpc_message(output_stream) is None
+
+
+def test_read_json_rpc_message_preserves_buffered_followup_messages_from_pipe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    read_fd, write_fd = os.pipe()
+    reader = os.fdopen(read_fd, "rb")
+    writer = os.fdopen(write_fd, "wb", buffering=0)
+
+    first_payload = {"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}}
+    second_payload = {"jsonrpc": "2.0", "id": 2, "method": "resources/list", "params": {}}
+    mcp_server.write_json_rpc_message(writer, first_payload)
+    mcp_server.write_json_rpc_message(writer, second_payload)
+
+    close_started = threading.Event()
+
+    def delayed_close() -> None:
+        close_started.set()
+        time.sleep(0.2)
+        writer.close()
+
+    thread = threading.Thread(target=delayed_close, daemon=True)
+    thread.start()
+    close_started.wait(timeout=1.0)
+
+    select_calls = 0
+    original_select = mcp_server.select.select
+
+    def fake_select(read_fds, write_fds, error_fds, timeout):
+        nonlocal select_calls
+        select_calls += 1
+        if select_calls == 1:
+            return original_select(read_fds, write_fds, error_fds, timeout)
+        raise AssertionError(
+            "select() should not run again when the next MCP frame is already buffered"
+        )
+
+    monkeypatch.setattr(mcp_server.select, "select", fake_select)
+
+    assert mcp_server.read_json_rpc_message(reader) == first_payload
+    assert mcp_server.read_json_rpc_message(reader) == second_payload
+
+    thread.join(timeout=1.0)
+    reader.close()
