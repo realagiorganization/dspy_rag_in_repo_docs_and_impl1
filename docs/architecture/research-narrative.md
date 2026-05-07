@@ -310,7 +310,15 @@ trainer materialization path now normalizes imported worker answers before candi
 extracts the final assistant-facing Codex block when a transcript is detected, clamps imported
 trainer answers to a bounded compile budget, and sanitizes persisted `champion-index.json`
 champion records on load so already-stored oversized worker-derived answers do not keep poisoning
-later `trainer-auto` recompilation attempts.
+later `trainer-auto` recompilation attempts. The next MCP transport root-cause pass showed that
+the remaining “RAG did not start via MCP” failure was also not a path/config problem: the worker
+already generated an explicit stdio launcher and Codex did reach `initialize`. The actual break was
+inside `repo_rag_lab.mcp_server.read_json_rpc_message()`, which dropped already-buffered follow-up
+frames when `notifications/initialized` and `resources/list` arrived back-to-back on the same
+pipe. The server would therefore log `initialize`, then `notifications/initialized`, then wait for
+new headers forever even though the `resources/list` frame had already been delivered. The reader
+now keeps a persistent per-stream buffer for fd-backed stdio so the bounded MCP discovery surface
+can consume consecutive frames without losing the post-initialize discovery request.
 
 ## Current State
 

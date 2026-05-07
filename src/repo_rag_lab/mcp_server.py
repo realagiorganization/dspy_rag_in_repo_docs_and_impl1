@@ -10,6 +10,7 @@ import json
 import os
 import select
 import time
+import weakref
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from importlib.metadata import PackageNotFoundError, version
@@ -47,6 +48,7 @@ MCP_STARTUP_CONTEXT_QUESTION = (
     "repository guidance current gameplay slice transmutation alchemy assumptions "
     "environment usage readme agents devplan"
 )
+_STREAM_READ_BUFFERS: "weakref.WeakKeyDictionary[object, bytearray]" = weakref.WeakKeyDictionary()
 
 
 @dataclass(frozen=True)
@@ -1053,21 +1055,70 @@ def handle_mcp_message(
 def read_json_rpc_message(stream: BinaryIO) -> dict[str, object] | None:
     """Read one `Content-Length` framed JSON-RPC message from ``stream``."""
 
+    buffered_bytes = _STREAM_READ_BUFFERS.setdefault(stream, bytearray())
     headers: dict[str, str] = {}
     try:
         fileno = stream.fileno()
     except Exception:
         fileno = None
+    if fileno is not None:
+        try:
+            os.fstat(fileno)
+        except OSError:
+            fileno = None
     waiting_logged = False
 
-    while True:
-        if fileno is not None and not headers:
+    if fileno is not None:
+        while b"\r\n\r\n" not in buffered_bytes:
             ready, _, _ = select.select([fileno], [], [], 5.0)
             if not ready:
                 if not waiting_logged:
                     _log_mcp_debug("waiting-for-headers no-bytes-yet")
                     waiting_logged = True
                 continue
+            chunk = os.read(fileno, 4096)
+            if chunk == b"":
+                _log_mcp_debug("eof-before-headers")
+                return None
+            buffered_bytes.extend(chunk)
+
+        header_bytes, remainder = buffered_bytes.split(b"\r\n\r\n", 1)
+        for raw_line in header_bytes.decode("utf-8", errors="ignore").split("\r\n"):
+            if not raw_line:
+                continue
+            _log_mcp_debug(f"header-line {raw_line}")
+            key, separator, value = raw_line.partition(":")
+            if separator != ":":
+                _log_mcp_debug("invalid-header-line")
+                raise ValueError("Invalid JSON-RPC header line.")
+            headers[key.strip().lower()] = value.strip()
+        buffered_bytes[:] = remainder
+
+        if "content-length" not in headers:
+            _log_mcp_debug("missing-content-length")
+            raise ValueError("Missing Content-Length header.")
+        content_length = int(headers["content-length"])
+        while len(buffered_bytes) < content_length:
+            chunk = os.read(fileno, max(4096, content_length - len(buffered_bytes)))
+            if not chunk:
+                _log_mcp_debug(
+                    f"eof-during-body received={len(buffered_bytes)} expected={content_length}"
+                )
+                raise ValueError("Incomplete JSON-RPC message body.")
+            buffered_bytes.extend(chunk)
+        body = bytes(buffered_bytes[:content_length])
+        del buffered_bytes[:content_length]
+        _log_mcp_debug(f"body-bytes {content_length}")
+        payload = json.loads(body.decode("utf-8"))
+        if not isinstance(payload, dict):
+            _log_mcp_debug("payload-not-object")
+            raise ValueError("JSON-RPC payload must be an object.")
+        _log_mcp_debug(
+            f"message method={payload.get('method') or ''!s} id={payload.get('id') or ''!s}"
+        )
+        return {str(key): value for key, value in payload.items()}
+
+    while True:
         line = stream.readline()
         if line == b"":
             _log_mcp_debug("eof-before-headers")

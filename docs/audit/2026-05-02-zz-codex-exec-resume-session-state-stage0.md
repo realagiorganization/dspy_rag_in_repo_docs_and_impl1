@@ -257,6 +257,148 @@ This readiness check does **not** claim that the older MCP-first discovery regre
 It only confirms that the trainer-side bundle publish blocker identified in cycle `0171` has a
 local code fix with current passing verification.
 
+## 2026-05-07 fresh artifact review: RAG backend yes, MCP discovery still no
+
+Fresh `../dataset/artifacts/all_artifacts.tar.gz` review from the latest uploaded run shows that
+repo-rag mediation still works, but MCP-first discovery remains broken end-to-end.
+
+Prompts inspected:
+
+- `prompts_goat_labs-p00000-298625`
+- `prompts_shards_of_lokar_game-p00001-355cca`
+
+Confirmed working on both prompts:
+
+- `repo_rag_backend.json`
+  - `backend = "codex_cli_repo_rag_proxy"`
+  - `rag_status = "success"`
+  - `dspy_status = "success"`
+  - `bundle_resolved = true`
+  - `bundle_version = "20260502T122127191445Z"`
+  - `mediation_mode = "dspy_rag"`
+- `repo_rag_trace.json`
+  - `retrieval_mode = "lexical"`
+  - `program_loaded = true`
+  - `codex_session_mode = "resumed"`
+- `codex_session_state.json`
+  - `session_mode = "resumed"`
+  - `restore_status = "restored"`
+  - `resume_used = true`
+  - `resume_command_mode = "explicit-session-id"`
+- `trusted_trace_handoff_summary.json`
+  - `attempted = 2`
+  - `queued = 2`
+  - `failed = 0`
+
+Still broken on both prompts:
+
+- `repo_rag_mcp_usage_summary.json`
+  - `preflight_status = "error"`
+  - `preflight_error = "Timed out waiting for MCP response headers."`
+  - `event_count = 1`
+  - `method_counts = {"initialize": 1}`
+  - `resources_list_count = 0`
+  - `resource_templates_list_count = 0`
+  - `resource_read_count = 0`
+  - `search_resource_read_count = 0`
+  - `ask_resource_read_count = 0`
+  - `search_repo_call_count = 0`
+  - `ask_repo_call_count = 0`
+
+The new MCP transport evidence narrows the failure point further:
+
+- `repo_rag_mcp_debug.log` now proves the server process starts and handles:
+  - `initialize`
+  - `notifications/initialized`
+- but then the server sits at:
+  - `waiting-for-headers no-bytes-yet`
+
+So the current live blocker is **after** successful `initialize`, but **before** any usable
+`resources/list` / `read_mcp_resource` traffic. In other words:
+
+- repo-rag MCP child starts
+- stdio framing works for the initial handshake
+- the follow-up request needed for discovery never arrives or never reaches the server
+- Codex therefore never performs real MCP discovery and falls back to shell exploration
+
+Transcript-level consequences from `codex_response.txt`:
+
+- `repo-rag://search` string mentions still appear (`4` on each prompt), so the prompt contract
+  is present
+- but there are still no actual MCP reads or tool calls
+- shell churn remains visible, especially on `prompts_shards_of_lokar_game-p00001-355cca`:
+  - `diff --git = 118`
+  - `sed -n = 40`
+  - `README.md = 84`
+  - `docs/USAGE.md = 78`
+  - `docs/ASSUMPTIONS.md = 73`
+  - `docs/DEVPLAN.md = 72`
+
+Artifact-driven conclusion for this run:
+
+- **RAG backend worked**
+- **DSPy bundle mediation worked**
+- **resume worked**
+- **trusted trace handoff worked**
+- **repo-rag as MCP discovery surface did not work**
+
+The current failure is no longer “repo-rag missing” or “initialize broken”; it is specifically the
+missing post-initialize discovery exchange.
+
+## 2026-05-07 MCP root cause after initialize: dropped buffered follow-up frame
+
+Deeper transport debugging finally isolated the MCP failure to `src/repo_rag_lab/mcp_server.py`,
+not to `config.toml`, not to the launcher path, and not to Codex failing to start the child
+process.
+
+Proven facts from the latest artifacts:
+
+- launcher path was explicit and executable (`repo_rag_mcp_launcher.sh`)
+- the child process did start
+- `initialize` succeeded
+- `notifications/initialized` reached the server
+- no `resources/list` request was ever observed in the server usage log
+
+The missing piece turned out to be the server-side framed reader itself:
+
+- `read_json_rpc_message()` used buffered `readline()` / `read()` on `sys.stdin.buffer`
+- when `notifications/initialized` and the next `resources/list` frame arrived back-to-back in one
+  pipe chunk, the function consumed the first message but discarded the already-buffered bytes for
+  the second message
+- the next call then waited on the raw file descriptor for fresh bytes that would never arrive
+- that exact state matches the live debug logs:
+  - `message method=notifications/initialized id=`
+  - then `waiting-for-headers no-bytes-yet`
+
+Local repro after isolating the worker-like stdio path:
+
+- `uv run python -m repo_rag_lab.mcp_stdio --root .`
+- send `initialize`
+- send `notifications/initialized`
+- send `resources/list`
+- before the fix: the second response timed out waiting for headers
+- after the fix: `resources/list` returns the expected direct resource catalog
+
+The fix now applied locally:
+
+- `read_json_rpc_message()` keeps a persistent per-stream byte buffer for file-descriptor-backed
+  streams
+- extra bytes after one decoded message are preserved for the next MCP frame instead of being lost
+- a regression test now covers back-to-back framed messages over a real pipe
+
+Verification executed for this transport fix:
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_mcp_server.py -q`
+  - `pass` (`26 passed`)
+- worker-like stdio repro against `uv run python -m repo_rag_lab.mcp_stdio --root .`
+  - `pass`
+  - `initialize` returned normally
+  - `resources/list` returned the expected resources after `notifications/initialized`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+
 ### Exact destructive pipeline stage that wipes the guild artifacts PVC
 
 Deep workflow inspection plus the live worker snapshot now identify the exact destructive path
