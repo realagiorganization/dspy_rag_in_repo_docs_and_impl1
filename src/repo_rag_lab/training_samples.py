@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -33,6 +34,12 @@ TRAINER_CHAMPION_INDEX_KIND = "repo-rag-trainer-champion-index"
 CONTEXT_GROUP_MATCH_THRESHOLD = 0.8
 CONTEXT_GROUP_SOFT_THRESHOLD = 0.6
 CHAMPION_REPLACEMENT_DELTA = 0.05
+TRAINER_IMPORTED_ANSWER_CHAR_BUDGET = 4000
+
+_CODEX_TRANSCRIPT_BLOCK_PATTERN = re.compile(
+    r"(?ms)^codex\n(.*?)(?=^(?:user|exec|apply patch|diff --git|web search|mcp)\b|^tokens used\b|\Z)"
+)
+_CODEX_STDOUT_SECTION_PATTERN = re.compile(r"(?ms)\nSTDOUT:\n(.*?)(?:\nSTDERR:\n|\Z)")
 
 
 def _coerce_int(value: object) -> int | None:
@@ -233,6 +240,94 @@ def _dedupe_tags(tags: Sequence[str]) -> list[str]:
         seen.add(cleaned)
         deduped.append(cleaned)
     return deduped
+
+
+def _looks_like_codex_cli_transcript(text: str) -> bool:
+    """Return whether one imported answer looks like a raw Codex CLI transcript."""
+
+    if not text:
+        return False
+    return (
+        text.startswith("COMMAND: ")
+        and "WORKING DIRECTORY:" in text
+        and "STDOUT:" in text
+        and "STDERR:" in text
+    ) or (
+        "OpenAI Codex v" in text
+        and "\nuser\n" in text
+        and ("\nexec\n" in text or "\napply patch\n" in text)
+    )
+
+
+def _normalize_training_answer_whitespace(text: str) -> str:
+    """Collapse one answer into stable readable paragraph spacing."""
+
+    normalized_lines = [line.rstrip() for line in text.replace("\r\n", "\n").splitlines()]
+    collapsed: list[str] = []
+    blank_pending = False
+    for line in normalized_lines:
+        stripped = line.strip()
+        if not stripped:
+            blank_pending = bool(collapsed)
+            continue
+        if blank_pending:
+            collapsed.append("")
+            blank_pending = False
+        collapsed.append(stripped)
+    return "\n".join(collapsed).strip()
+
+
+def _clip_training_answer(text: str, budget: int = TRAINER_IMPORTED_ANSWER_CHAR_BUDGET) -> str:
+    """Clamp one trainer answer to a bounded compile-friendly size."""
+
+    if len(text) <= budget:
+        return text
+    clipped = text[:budget].rstrip()
+    return f"{clipped}\n...[truncated for trainer budget]"
+
+
+def _extract_codex_cli_transcript_answer(text: str) -> tuple[str, str]:
+    """Extract the most training-useful assistant answer from one raw Codex transcript."""
+
+    matches = [
+        _normalize_training_answer_whitespace(match)
+        for match in _CODEX_TRANSCRIPT_BLOCK_PATTERN.findall(text)
+        if _normalize_training_answer_whitespace(match)
+    ]
+    if matches:
+        return matches[-1], "codex-final-block"
+    stdout_match = _CODEX_STDOUT_SECTION_PATTERN.search(text)
+    if stdout_match is not None:
+        stdout_text = _normalize_training_answer_whitespace(stdout_match.group(1))
+        if stdout_text:
+            return stdout_text, "stdout-section"
+    return _normalize_training_answer_whitespace(text), "raw-fallback"
+
+
+def _normalize_imported_training_answer(
+    answer: object,
+    response_text: object | None = None,
+) -> tuple[str, dict[str, Any]]:
+    """Return one bounded trainer answer plus normalization metadata."""
+
+    raw_answer = str(answer or "").strip()
+    fallback_response = str(response_text or "").strip()
+    source = "answer" if raw_answer else "response_text"
+    candidate = raw_answer or fallback_response
+    method = "raw"
+    if _looks_like_codex_cli_transcript(candidate):
+        candidate, method = _extract_codex_cli_transcript_answer(candidate)
+    normalized = _clip_training_answer(_normalize_training_answer_whitespace(candidate))
+    metadata: dict[str, Any] = {
+        "source": source,
+        "normalization_method": method,
+        "raw_answer_length": len(raw_answer),
+        "raw_response_text_length": len(fallback_response),
+        "normalized_answer_length": len(normalized),
+        "was_transcript": _looks_like_codex_cli_transcript(raw_answer or fallback_response),
+        "was_truncated": len(normalized) < len(_normalize_training_answer_whitespace(candidate)),
+    }
+    return normalized, metadata
 
 
 def _normalize_question_text(value: object) -> str:
@@ -543,7 +638,11 @@ def _serialize_candidate_record(record: Mapping[str, Any]) -> dict[str, Any]:
             normalized[field_name] = record.get(field_name)
     provenance = record.get("provenance")
     if isinstance(provenance, Mapping):
-        normalized["provenance"] = dict(provenance)
+        merged_provenance = dict(provenance)
+        existing_provenance = normalized.get("provenance")
+        if isinstance(existing_provenance, Mapping):
+            merged_provenance.update(existing_provenance)
+        normalized["provenance"] = merged_provenance
     return normalized
 
 
@@ -569,6 +668,38 @@ def _load_champion_index(path: Path) -> dict[str, Any]:
     families = payload.get("prompt_families")
     if not isinstance(families, list):
         payload["prompt_families"] = []
+        return payload
+    for family in families:
+        if not isinstance(family, dict):
+            continue
+        family_record = family.get("family_champion_record")
+        if isinstance(family_record, Mapping):
+            family["family_champion_record"] = _normalize_materialized_candidate_record(
+                family_record
+            )
+        context_groups = family.get("context_groups")
+        if not isinstance(context_groups, list):
+            continue
+        for group in context_groups:
+            if not isinstance(group, dict):
+                continue
+            champion_record = group.get("champion_record")
+            if not isinstance(champion_record, Mapping):
+                continue
+            support_mapping = group.get("support_by_record_key")
+            old_hash = _candidate_record_hash(champion_record)
+            normalized_record = _normalize_materialized_candidate_record(champion_record)
+            new_hash = _candidate_record_hash(normalized_record)
+            if isinstance(support_mapping, dict):
+                carried_support = int(support_mapping.get(old_hash) or 0)
+                if old_hash != new_hash:
+                    support_mapping.pop(old_hash, None)
+                    if carried_support:
+                        support_mapping[new_hash] = max(
+                            int(support_mapping.get(new_hash) or 0),
+                            carried_support,
+                        )
+            group["champion_record"] = normalized_record
     return payload
 
 
@@ -909,18 +1040,34 @@ def _normalize_materialized_candidate_record(record: Mapping[str, Any]) -> dict[
         # Imported worker traces are global candidates, not repo-local retrieval benchmarks.
         expected_sources = []
 
+    normalized_answer, answer_metadata = _normalize_imported_training_answer(
+        record.get("expected_answer"),
+        None,
+    )
+    provenance = record.get("provenance")
+    existing_answer_metadata: Mapping[str, Any] | None = None
+    if isinstance(provenance, Mapping):
+        candidate_metadata = provenance.get("answer_normalization")
+        if isinstance(candidate_metadata, Mapping):
+            existing_answer_metadata = candidate_metadata
+    if (
+        existing_answer_metadata is not None
+        and str(record.get("expected_answer") or "").strip() == normalized_answer
+    ):
+        answer_metadata = dict(existing_answer_metadata)
     normalized: dict[str, Any] = {
         "question": str(record.get("question") or "").strip(),
-        "expected_answer": str(record.get("expected_answer") or "").strip(),
+        "expected_answer": normalized_answer,
         "tags": tags,
         "expected_sources": expected_sources,
     }
     candidate_status = str(record.get("candidate_status") or "").strip()
     if candidate_status:
         normalized["candidate_status"] = candidate_status
-    provenance = record.get("provenance")
     if isinstance(provenance, Mapping):
-        normalized["provenance"] = dict(provenance)
+        normalized_provenance = dict(provenance)
+        normalized_provenance["answer_normalization"] = answer_metadata
+        normalized["provenance"] = normalized_provenance
     return normalized
 
 
@@ -948,7 +1095,10 @@ def _training_candidate_from_trace_record(
     """Build one training-candidate record from an imported trace record."""
 
     question = str(payload.get("question") or "").strip()
-    expected_answer = str(payload.get("answer") or payload.get("response_text") or "").strip()
+    expected_answer, answer_metadata = _normalize_imported_training_answer(
+        payload.get("answer"),
+        payload.get("response_text"),
+    )
     trace = payload.get("trace")
     trace_mapping = trace if isinstance(trace, Mapping) else {}
     outcome = payload.get("outcome")
@@ -1024,6 +1174,7 @@ def _training_candidate_from_trace_record(
                 "acceptance_status": acceptance_status or None,
                 "used_baseline_fallback": outcome_mapping.get("used_baseline_fallback"),
                 "context_snapshot": context_snapshot,
+                "answer_normalization": answer_metadata,
             },
         },
         None,

@@ -142,6 +142,173 @@ def test_materialize_training_candidates_and_combined_training_examples(tmp_path
     assert combined_summary["replaced_candidate_count"] == 0
 
 
+def test_materialize_training_candidates_extracts_final_answer_from_codex_transcript(
+    tmp_path: Path,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    transcript = """COMMAND: /usr/local/bin/codex exec -- demo
+WORKING DIRECTORY: /tmp/demo
+RETURN CODE: 0
+STDOUT:
+The plan is set.
+
+STDERR:
+OpenAI Codex v0.128.0
+user
+Add a demo GIF to README
+codex
+I am verifying the repo shape first.
+exec
+/bin/bash -lc "true"
+ succeeded in 0ms:
+
+codex
+Added the demo GIF to README and verified npm run build.
+
+tokens used
+371,035
+"""
+    (imported_dir / "accepted.json").write_text(
+        json.dumps(
+            {
+                "trace_record_kind": "repo-rag-trace-record",
+                "trace_record_path": "artifacts/traces/imported/accepted.json",
+                "question": "Add a demo GIF to README",
+                "answer": transcript,
+                "trace": {
+                    "schema_version": 1,
+                    "trace_kind": "repo-rag-runtime",
+                    "recorded_at": "2026-05-06T16:55:06+00:00",
+                    "question": "Add a demo GIF to README",
+                    "mode": "codex-proxy",
+                    "retrieval_mode": "lexical",
+                    "sources": ["README.md"],
+                    "source_count": 1,
+                    "context_count": 1,
+                    "context_field": "evidence_previews",
+                    "mcp_candidate_count": 0,
+                    "answer_length": len(transcript),
+                },
+                "outcome": {
+                    "acceptance_status": "candidate",
+                    "accepted": None,
+                    "execution_status": "success",
+                    "method": "codex_cli",
+                    "backend": "codex_cli_repo_rag_proxy",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+    )
+
+    assert summary["candidate_count"] == 1
+    materialized = load_training_examples(
+        tmp_path / "artifacts" / "trainer" / "training-candidates.yaml"
+    )
+    assert materialized[0].expected_answer == (
+        "Added the demo GIF to README and verified npm run build."
+    )
+    payload = json.loads(
+        (tmp_path / "artifacts" / "trainer" / "champion-index.json").read_text(encoding="utf-8")
+    )
+    provenance = payload["prompt_families"][0]["family_champion_record"]["provenance"]
+    assert provenance["answer_normalization"]["normalization_method"] == "codex-final-block"
+    assert provenance["answer_normalization"]["was_transcript"] is True
+
+
+def test_materialize_training_candidates_sanitizes_existing_champion_index_transcript_answers(
+    tmp_path: Path,
+) -> None:
+    trainer_dir = tmp_path / "artifacts" / "trainer"
+    trainer_dir.mkdir(parents=True, exist_ok=True)
+    transcript = """COMMAND: /usr/local/bin/codex exec -- demo
+WORKING DIRECTORY: /tmp/demo
+RETURN CODE: 0
+STDOUT:
+Done.
+
+STDERR:
+OpenAI Codex v0.128.0
+user
+Add a demo GIF to README
+codex
+Added the demo GIF to README and verified npm run build.
+
+tokens used
+203,413
+"""
+    champion_record = {
+        "question": "Add a demo GIF to README",
+        "expected_answer": transcript,
+        "tags": ["trainer-candidate", "candidate"],
+        "expected_sources": [],
+        "candidate_status": "candidate",
+        "prompt_family_id": "pf-demo",
+        "context_group_id": "cg-demo",
+        "exact_snapshot_id": "ts-demo",
+        "quality_score": 0.8,
+        "support_count": 1,
+        "provenance": {},
+    }
+    champion_index = {
+        "schema_version": 1,
+        "record_kind": "repo-rag-trainer-champion-index",
+        "generated_at": "2026-05-06T17:00:00+00:00",
+        "prompt_families": [
+            {
+                "prompt_family_id": "pf-demo",
+                "question": "Add a demo GIF to README",
+                "normalized_question": "add a demo gif to readme",
+                "family_champion_context_group_id": "cg-demo",
+                "family_champion_score": 0.8,
+                "family_champion_record": champion_record,
+                "context_groups": [
+                    {
+                        "context_group_id": "cg-demo",
+                        "sources": ["README.md"],
+                        "evidence_fingerprints": [],
+                        "evidence_count": 0,
+                        "retrieval_mode": "lexical",
+                        "mode": "codex-proxy",
+                        "context_field": "evidence_previews",
+                        "source_count": 1,
+                        "context_count": 1,
+                        "top_k": 4,
+                        "trace_count": 1,
+                        "support_by_record_key": {},
+                        "champion_score": 0.8,
+                        "champion_record": champion_record,
+                    }
+                ],
+            }
+        ],
+    }
+    (trainer_dir / "champion-index.json").write_text(
+        json.dumps(champion_index, indent=2),
+        encoding="utf-8",
+    )
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+        seed_existing_output=False,
+    )
+
+    assert summary["candidate_count"] == 1
+    materialized = load_training_examples(trainer_dir / "training-candidates.yaml")
+    assert materialized[0].expected_answer == (
+        "Added the demo GIF to README and verified npm run build."
+    )
+
+
 def test_materialize_training_candidates_normalizes_legacy_worker_sources_and_duplicate_questions(
     tmp_path: Path,
 ) -> None:
