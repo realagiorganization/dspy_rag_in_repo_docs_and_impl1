@@ -350,7 +350,9 @@ Current implementation note:
     on TTL
   - inject a bounded local `repo-rag` MCP server into the worker-generated Codex config and steer
     the autonomous execution contract toward MCP-first discovery plus shell-only exact
-    verification, with `repo_rag_mcp_usage_summary.json` emitted per run to measure actual MCP use
+    verification, with the current default now explicitly tool-first (`search_repo` then
+    `ask_repo`) instead of resource-template-gated, and `repo_rag_mcp_usage_summary.json` emitted
+    per run to measure actual MCP use
   - harden the Codex-side MCP launch path itself by generating one launcher script per run,
     exporting `repo_rag_mcp_stderr.log` diagnostics, and defaulting that launcher to the dedicated
     lightweight module entrypoint `python -m repo_rag_lab.mcp_stdio --root ...` instead of routing

@@ -227,6 +227,69 @@ Local verification for this fix:
   - `pass`
 - `cargo build --manifest-path rust-cli/Cargo.toml`
   - `pass`
+
+## 2026-05-07 tools-first MCP discovery hardening after 2.64M-token fallback run
+
+### Why this follow-up was necessary
+
+The latest AKS artifact set proved two things at once:
+
+- the old post-`initialize` MCP transport bug is no longer the active blocker, because worker-side
+  preflight now completes through `resources/list`
+- Codex still burns millions of tokens when it interprets empty `list_mcp_resources` /
+  `list_mcp_resource_templates` output as “repo-rag is unavailable”, then falls back to broad
+  shell/doc exploration without issuing a single `tools/call`
+
+That means the remaining blocker is not only transport. It is also the discovery contract we
+handed to Codex. The worker prompt and repo-rag guidance were still teaching a resources-first
+path built around `read_mcp_resource("repo-rag://search?...")`. The newest run showed that this
+contract is too weak in practice because Codex can stop at resource listing and never reach an
+actual repo-rag tool invocation.
+
+### Local fix applied in this turn
+
+- `../dataset/docker/prompt-executor/worker_execution.py`
+  - the autonomous execution contract is now explicitly tool-first
+  - Codex is told to start discovery with MCP tool `search_repo`
+  - Codex is told to use `ask_repo` after discovery for one bounded repo-grounded answer
+  - the prompt now explicitly says not to treat `list_mcp_resources` or
+    `list_mcp_resource_templates` as the gate for repo-rag availability
+  - shell exploration is now deferred until an explicit MCP tool call fails or returns
+    insufficient evidence
+- `../dataset/aks_module_generator/templates/worker_script/part_7.txt`
+  - generated worker prompt template updated to match the runtime prompt exactly
+- `src/repo_rag_lab/mcp_server.py`
+  - `MCP_SERVER_INSTRUCTIONS` now explicitly prefer `search_repo` then `ask_repo`
+  - bounded tool descriptions now identify `search_repo` as the primary discovery entrypoint
+  - overview/startup/discovery-guide resource text now mirrors the same tools-first guidance so
+    any later resource reads do not reintroduce the old resources-first bias
+- `../dataset/docker/prompt-executor/worker_codex_cli_exec.py`
+  - MCP usage telemetry now treats `ask_repo`-only usage as real MCP discovery instead of falsely
+    reporting `discovery_via_mcp = false`
+
+### Verification executed in this turn
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_mcp_server.py tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`68 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+- `cd /home/standard/Desktop/realagi_work/dataset && python -m compileall docker/prompt-executor/worker_execution.py docker/prompt-executor/worker_codex_cli_exec.py tests/unit/test_worker_execution_mixins_small.py tests/unit/test_worker_codex_cli_exec_small.py`
+  - `pass`
+- `cd /home/standard/Desktop/realagi_work/dataset && UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/unit/test_worker_execution_mixins_small.py tests/unit/test_worker_codex_cli_exec_small.py -q`
+  - `pass` (`52 passed`)
+- `cd /home/standard/Desktop/realagi_work/dataset && UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_aks_module_generator_generate_modules.py tests/unit/test_worker_execution_mixins_small.py tests/unit/test_worker_codex_cli_exec_small.py -q`
+  - `pass` (`90 passed`)
+
+### Current status after the local fix
+
+This turn fixes the local contract that was still encouraging Codex to stall on resource listing
+instead of exercising `call_mcp_tool`. It does **not** by itself prove that the next AKS run will
+use `search_repo`; that still requires one new live run after image rebuild/deploy. But the
+remaining local guidance now finally matches the actual bounded MCP surface the repository exposes.
 - `make verify-surfaces`
   - `pass`
 
@@ -447,6 +510,139 @@ So the current end-to-end path is:
 
 This explains why all worker-side `resume` fixes were ineffective in live runs: the persisted
 session subtree was being deleted upstream before the execution workflow began.
+
+### Verification executed in this turn
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+
+## 2026-05-07 latest AKS artifact review: old MCP transport bug fixed, end-to-end MCP discovery still failing
+
+### Artifact set reviewed
+
+- `/home/standard/Desktop/realagi_work/dataset/artifacts/all_artifacts.tar.gz`
+- `/home/standard/Desktop/realagi_work/dataset/artifacts/processed.tar.gz`
+- `/home/standard/Desktop/realagi_work/dataset/artifacts/redis_results.json`
+
+### Prompt and token usage
+
+- one prompt completed:
+  - `prompts_shards_of_lokar_game-p00000-355cca`
+- consolidated token report from `processed/token_usage.json`:
+  - `prompt_tokens = 2643457`
+  - `completion_tokens = 0`
+  - `total_tokens = 2643457`
+- `processed/execution_results.json` confirms the same prompt-level result:
+  - `success = true`
+  - `execution_time = 910.503243`
+  - `prompt_tokens = 2643457`
+
+### What worked
+
+- `resume`: `pass`
+  - `codex_session_state.json`
+    - `session_mode = resumed`
+    - `restore_status = restored`
+    - `resume_used = true`
+    - `resume_command_mode = explicit-session-id`
+    - `restored_files = 10`
+    - `persisted_files = 11`
+- `RAG` backend and `DSPy`: `pass`
+  - `repo_rag_backend.json`
+    - `rag_status = success`
+    - `dspy_status = success`
+    - `bundle_resolved = true`
+    - `bundle_version = 20260502T122127191445Z`
+  - `repo_rag_trace.json`
+    - `program_loaded = true`
+    - `retrieval_mode = lexical`
+- `trainer handoff`: `pass`
+  - `trace_handoff_status = queued`
+  - `trusted_trace_handoff_summary.json`
+    - `attempted = 1`
+    - `queued = 1`
+    - `failed = 0`
+- the earlier MCP post-`initialize` transport loss is no longer the observed blocker
+  - `repo_rag_mcp_usage_summary.json`
+    - `preflight_status = success`
+    - `preflight_initialize_ok = true`
+    - `preflight_resources_count = 5`
+  - `repo_rag_mcp_debug.log`
+    - `message method=initialize id=1`
+    - `response method=initialize id=1`
+    - `message method=notifications/initialized id=`
+    - `message method=resources/list id=2`
+    - `response method=resources/list id=2`
+
+### What still failed
+
+- end-to-end `repo-rag` MCP discovery inside the actual Codex run: `fail`
+  - `repo_rag_mcp_usage_summary.json`
+    - `event_count = 2`
+    - `method_counts = {"initialize": 1, "resources/list": 1}`
+    - `resource_read_count = 0`
+    - `search_resource_read_count = 0`
+    - `ask_resource_read_count = 0`
+    - `search_repo_call_count = 0`
+    - `ask_repo_call_count = 0`
+    - `discovery_via_mcp = false`
+  - raw transcript `codex_response.txt`
+    - `mcp: codex/list_mcp_resources = 2`
+    - `mcp: codex/list_mcp_resource_templates = 2`
+    - `mcp: codex/read_mcp_resource = 0`
+    - `mcp: codex/call_mcp_tool = 0`
+    - Codex explicitly wrote:
+      - `The repo-RAG MCP surface isn’t exposing any resources in this run, so I’m falling back to targeted file reads from the working tree.`
+- actual Codex-launched MCP child still received no JSON-RPC traffic after spawn
+  - `repo_rag_mcp_stderr.log`
+    - second launch had `HOME=/dev/shm/codex_home_...`, proving this was the real Codex-side child
+  - `repo_rag_mcp_debug.log`
+    - `server-start pid=216 ...`
+    - then only:
+      - `waiting-for-headers no-bytes-yet`
+      - `eof-before-headers`
+      - `server-stop eof`
+
+### Why the 2.64M-token run happened
+
+- this run did **not** explode because of the old MCP frame-loss bug; that specific bug is now absent
+- the run still fell back to shell/doc exploration because the live Codex process never performed
+  any `resources/read` or `tools/call` against repo-rag
+- raw transcript churn remained high:
+  - `README.md = 52`
+  - `docs/DEVPLAN.md = 48`
+  - `docs/USAGE.md = 10`
+  - `docs/ASSUMPTIONS.md = 48`
+  - `diff --git = 150`
+  - `sed -n = 61`
+- lane telemetry shows the resumed session had regressed badly versus the previous resumed run
+  even though it was only slightly above the historical fresh baseline for this lane:
+  - `usage_delta_vs_previous.prompt_tokens_delta = 2105708`
+  - `usage_delta_vs_previous.prompt_tokens_delta_ratio = 3.915782`
+  - `usage_delta_vs_last_fresh.prompt_tokens_delta = 75395`
+  - `usage_delta_vs_last_fresh.prompt_tokens_delta_ratio = 0.029359`
+
+### Current interpretation
+
+The previous claim that the post-`initialize` frame-loss bug was fixed is still supported by the
+new artifacts: preflight now completes through `resources/list`, which did not happen before.
+However, that fix was not sufficient to make Codex actually use repo-rag as its MCP discovery
+surface. The remaining live blocker is now different:
+
+- worker-side MCP preflight works
+- repo-rag resource listing works in direct MCP exchange
+- but the actual Codex-side MCP child is spawned and then never receives an `initialize`
+  request or any follow-up traffic
+
+So the current failure is no longer “repo-rag server cannot answer MCP resource listing”; it is
+“the live Codex run still does not enter repo-rag MCP discovery at all, then falls back to
+shell/document reads and burns tokens there.”
 
 ### Verification executed in this turn
 

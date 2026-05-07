@@ -388,8 +388,8 @@ def test_handle_mcp_message_reads_overview_resource(
     contents = cast(list[dict[str, Any]], result["contents"])
     assert contents[0]["mimeType"] == "text/markdown"
     assert "demo-profile" in contents[0]["text"]
-    assert "repo-rag://startup-context" in contents[0]["text"]
-    assert "repo-rag://search?question=transmutation&top_k=4" in contents[0]["text"]
+    assert "search_repo" in contents[0]["text"]
+    assert "ask_repo" in contents[0]["text"]
 
 
 def test_handle_mcp_message_reads_startup_context_resource(
@@ -436,10 +436,8 @@ def test_handle_mcp_message_reads_startup_context_resource(
     assert payload["command"] == "startup-context-resource"
     assert payload["retrieval_mode"] == "hybrid-vector"
     assert payload["sources"] == ["README.md"]
-    assert (
-        "repo-rag://search?question=transmutation+preview+flow&top_k=4"
-        in payload["examples"]["search"]
-    )
+    assert payload["examples"]["search_tool"]["name"] == "search_repo"
+    assert payload["examples"]["ask_tool"]["name"] == "ask_repo"
 
 
 def test_handle_mcp_message_reads_search_resource(
@@ -646,6 +644,7 @@ def test_serve_repo_rag_mcp_handles_initialize_and_ping(tmp_path: Path) -> None:
     server_info = cast(dict[str, Any], first_result["serverInfo"])
     assert "resources" in capabilities
     assert server_info["name"] == "repo-rag-mcp"
+    assert "search_repo" in str(first_result["instructions"])
     assert second is not None
     second_result = cast(dict[str, Any], second["result"])
     assert second_result == {}
