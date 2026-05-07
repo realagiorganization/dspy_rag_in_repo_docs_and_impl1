@@ -299,7 +299,18 @@ handoff path itself: `repo-rag` local bundle lookup now understands both the rep
 `artifacts/dspy/...` layout and the staged worker mirror layout `channels/...` + `versions/...`,
 while the `dataset` deploy path now refreshes `repo-rag-storage-config` from the active Azure
 Storage environment so workers can resolve `stable` either from a staged PVC mirror or directly
-from the shared Blob store when credentials are available.
+from the shared Blob store when credentials are available. The newest trainer-side publish
+root-cause pass then showed that a distinct new prompt family can still fail before bundle publish
+if worker-originated trace records carry raw `codex_response.txt` transcripts as
+`expected_answer`. Live cycle `20260506T165814Z-cycle-0171.json` did raise
+`new_candidate_count = 1` and `new_prompt_family_count = 1`, but DSPy recompilation failed at
+`1126031` prompt tokens because imported `answer` fields still contained `COMMAND: ...`, `STDERR`,
+`exec`, `apply patch`, and large `diff --git` blocks instead of concise assistant answers. The
+trainer materialization path now normalizes imported worker answers before candidate creation,
+extracts the final assistant-facing Codex block when a transcript is detected, clamps imported
+trainer answers to a bounded compile budget, and sanitizes persisted `champion-index.json`
+champion records on load so already-stored oversized worker-derived answers do not keep poisoning
+later `trainer-auto` recompilation attempts.
 
 ## Current State
 

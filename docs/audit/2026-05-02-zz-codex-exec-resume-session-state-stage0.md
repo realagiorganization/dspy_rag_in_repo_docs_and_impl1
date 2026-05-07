@@ -168,6 +168,95 @@
 - `cargo build --manifest-path rust-cli/Cargo.toml`
   - `pass`
 
+## 2026-05-06 trainer-side root cause for “new prompt but no new bundle”
+
+The missing bundle publish was not caused by queue handoff failure and not by prompt-family
+dedupe. Live trainer state under `repo-rag` shows that cycle
+`artifacts/trainer/history/20260506T165814Z-cycle-0171.json` did ingest the newly queued traces:
+
+- `new_candidate_count = 1`
+- `new_prompt_family_count = 1`
+- `new_context_group_count = 1`
+- recovered/imported traces explicitly include:
+  - `20260506T165641Z-prompts_tylers_landscaper-p00000-4008f5.json`
+  - `20260506T165643Z-prompts_debt_relief-p00001-22fc5b.json`
+
+So trainer-side materialization did recognize at least one genuinely new candidate family. The
+actual failure happened at trainer recompilation:
+
+- `recompile_threshold_met = true`
+- `recompile_error.type = BadRequestError`
+- `recompile_error.message` reported Azure/LiteLLM input-token overflow:
+  - configured limit: `922000`
+  - actual prompt: `1126031`
+
+The underlying data issue is now confirmed from the imported trace record itself:
+
+- `artifacts/trainer/recovered-imported-traces/20260506T165643Z-prompts_debt_relief-p00001-22fc5b.json`
+  stores `answer` as the full `codex_response.txt` transcript
+- that payload begins with `COMMAND: /usr/local/bin/codex exec ...`
+- it includes raw `STDERR`, `exec` blocks, `apply patch`, repeated `diff --git`, and final
+  `tokens used`
+
+That raw transcript then flowed through trainer materialization unchanged:
+
+- `src/repo_rag_lab/training_samples.py` previously used
+  `payload["answer"] or payload["response_text"]` verbatim as `expected_answer`
+- `materialize_combined_training_examples(...)` then copied those giant answers directly into
+  `artifacts/trainer/generated-training.yaml`
+- DSPy compile therefore tried to train on compile targets that were not concise answers at all,
+  but whole Codex transcripts
+
+The local fix applied in this turn addresses the trainer side directly:
+
+- imported trace answers are now normalized before candidate materialization
+- raw Codex CLI transcripts are reduced to the final assistant-facing `codex` block when present
+- normalized imported answers are clipped to a bounded trainer budget (`4000` chars)
+- persisted `champion-index.json` champion records are sanitized on load as well, so the next
+  trainer cycle can shrink already-stored oversized answers instead of only fixing future traces
+
+Local verification for this fix:
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_training_samples.py -q`
+  - `pass` (`17 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+- `make verify-surfaces`
+  - `pass`
+
+## 2026-05-07 readiness check for trainer-side bundle publish fix
+
+The local repository state for the trainer-side imported-answer sanitation fix is ready for image
+build/deploy validation. The specific failure that blocked new bundle publication was the trainer
+recompile token overflow caused by importing raw `codex_response.txt` transcripts as
+`expected_answer`. That code path is now locally patched in `src/repo_rag_lab/training_samples.py`
+and covered by regression tests in `tests/test_training_samples.py`.
+
+Verification executed in this turn:
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_training_samples.py -q`
+  - `pass` (`17 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
+- `make verify-surfaces`
+  - `pass`
+
+This readiness check does **not** claim that the older MCP-first discovery regression is solved.
+It only confirms that the trainer-side bundle publish blocker identified in cycle `0171` has a
+local code fix with current passing verification.
+
 ### Exact destructive pipeline stage that wipes the guild artifacts PVC
 
 Deep workflow inspection plus the live worker snapshot now identify the exact destructive path
@@ -258,6 +347,107 @@ So the server had already consumed the first header line, but then waited on the
 never reached the buffered blank line/body.
 
 ### Fix
+
+## 2026-05-06 Parallel Prompt Execution artifact review: queue handoff succeeded, but bundle publication was not part of this artifact set
+
+Fresh local artifact review under `../dataset/artifacts` now explains why the user did not see a
+new published bundle after the latest `Parallel Prompt Execution on Azure AKS` run.
+
+### Artifact facts
+
+- `upload_summary.json`
+  - `execution_id = 25447918986_20260506_165644`
+  - upload timestamp `2026-05-06T16:56:47Z`
+- `trusted_trace_handoff_summary.json`
+  - `attempted = 2`
+  - `queued = 2`
+  - `failed = 0`
+  - queued blobs:
+    - `queued/repo-rag-training/20260506T165641Z-prompts_tylers_landscaper-p00000-4008f5.json`
+    - `queued/repo-rag-training/20260506T165643Z-prompts_debt_relief-p00001-22fc5b.json`
+- `processed.tar.gz`
+  - contains only execution summaries
+  - does **not** contain any trainer-side artifacts such as:
+    - `artifacts/trainer/generated-training.yaml`
+    - `artifacts/trainer/champion-index.json`
+    - trainer cycle history records
+    - published bundle records
+
+### Worker-side execution results
+
+- `prompts_tylers_landscaper-p00000-4008f5`
+  - `prompt_tokens = 203413`
+  - `codex_session_mode = resumed`
+  - `acceptance_status = candidate`
+  - `trace_handoff_status = queued`
+- `prompts_debt_relief-p00001-22fc5b`
+  - `prompt_tokens = 371035`
+  - `codex_session_mode = fresh`
+  - handoff path also ended at `queue_status = queued`
+
+Combined prompt-token usage for the uploaded run was `574448`.
+
+### Why “different prompt” was not enough to prove a new bundle publish
+
+Trainer-side publish is not performed by the worker run itself. The worker only queues traces for
+the separate trainer service / trainer cycle. The trainer code path is explicit:
+
+1. worker exports or packages a trace and outcome
+2. worker runs `trace-enqueue`
+3. trainer later drains `repo-rag-training`
+4. trainer materializes candidates and computes `new_candidate_count`
+5. only then can `trainer-cycle` recompile and publish a new bundle
+
+The relevant gating logic lives in `src/repo_rag_lab/utilities.py:1219-1556`.
+
+So for this artifact set, the strongest supported conclusion is:
+
+- queue handoff worked
+- bundle publication was **not yet evidenced**
+- these artifacts end too early to prove that the trainer drained the queue, computed
+  `new_candidate_count`, recompiled, or published
+
+### The new prompt really was new
+
+Trainer dedupe does **not** explain the missing bundle by itself here. Using the current
+`_prompt_family_id()` logic from `src/repo_rag_lab/training_samples.py:396-400`, the queued
+questions map to different prompt families:
+
+- `prompts_tylers_landscaper...` -> `pf-ccc125aebb9a50fe`
+- `prompts_debt_relief...` -> `pf-c93cbc537b800fac`
+
+That means a later trainer cycle should treat them as distinct prompt families instead of
+collapsing them into one family because of prompt-text identity.
+
+### What is still missing
+
+To explain “why no new bundle was published” with full finality, we still need trainer-side
+evidence from after `2026-05-06T16:56:47Z`, for example:
+
+- the latest `trainer-service` state file
+- the latest `trainer-cycle` JSON history record
+- `training-candidates-summary.json`
+- `champion-index.json`
+- `generated-training-summary.json`
+- any `bundle-publish` / promotion payloads or errors
+
+Without that trainer-side evidence, the latest PPE artifact set only supports:
+
+- `resume` partially working (`landscaper` resumed, `debt_relief` seeded fresh)
+- `RAG` / `DSPy` bundle usage working
+- trace queue handoff working
+- no proof yet that the trainer ever reached recompile/publish for these two queued traces
+
+### Verification executed in this turn
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
+  - `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  - `pass` (`42 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
+  - `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+  - `pass`
 
 `read_json_rpc_message()` now only uses `select()` before the very first header byte. After the
 first header line is seen, it reads remaining headers and body directly from the buffered stream
