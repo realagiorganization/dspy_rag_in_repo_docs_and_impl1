@@ -481,7 +481,11 @@ At the time of this document:
 - the downstream `../dataset` deployment story now assumes a real repo-RAG runtime image named
   `repo-rag-runtime`, built from this repository through `../dataset/build_and_push_images.sh`,
   with `prompt-executor` using that runtime image as its base layer instead of treating repo-RAG
-  as an optional side checkout
+  as an optional side checkout; the same build path now mirrors the required public Python base
+  images into the target Azure Container Registry first, so ACR Tasks no longer depend on
+  unauthenticated Docker Hub pulls during cloud builds, and if those mirror imports still hit
+  Docker Hub 429 limits the build script now falls back to the newest already-published
+  ACR-hosted `repo-rag-runtime` / `queue-initializer` images as base layers
 - `../dataset` now also carries explicit submodule metadata for this repository and
   `dataset_website`, so the orchestration repository can show those relationships directly and use
   the repo-RAG submodule as the preferred build context when it is initialized
@@ -556,9 +560,20 @@ At the time of this document:
   and mirrors the detected input mode on responses. After that dual-mode transport fix, local
   `codex exec` probes finally complete `initialize -> tools/list -> resources/list` against
   `repo_rag`, and direct `search_repo` MCP tool calls now appear in the transcript even with
-  apps/plugins enabled. Live AKS confirmation still depends on the next rebuilt worker image, but
-  the remaining failure is no longer an unexplained Codex-side black box: the local end-to-end MCP
-  transport mismatch is now understood and patched in the repo-rag server itself
+  apps/plugins enabled. The newest live AKS artifact set now confirms that this is no longer only
+  a local probe result: the actual Codex-launched MCP child in the worker answered `tools/list`
+  and multiple `tools/call` requests, with `search_repo` called three times and `ask_repo` once
+  during one resumed prompt run. The remaining issue is no longer “why doesn't MCP discovery start
+  at all”, but “how do we reduce the still-large shell/doc churn after MCP has already narrowed
+  the repo”. On the trainer side, another live-state bug also became concrete: the current stable
+  bundle in Azure Blob still points to the older `20260502T122127191445Z` lineage and therefore
+  does not contain later families such as `prompts_goat_labs-p00000-298625`. The root cause is no
+  longer only DSPy compile overflow. After the first `goat_labs` cycle failed during recompile,
+  the champion index kept the new family, but later cycles saw `new_candidate_count = 0` and
+  skipped recompilation forever even though the published bundle still lagged behind the current
+  champion set. The repository now contains a local trainer-side drift detector that compares the
+  current family champion set against the published stable bundle lineage and forces a recompilation
+  whenever the published bundle is stale, even if no additional fresh traces arrived in that cycle
 - notebook batch execution and reporting are implemented and exposed through
   `make notebook-report`
 - TODO and publication backlog synchronization are implemented and exposed through

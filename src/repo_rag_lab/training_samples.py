@@ -674,9 +674,7 @@ def _load_champion_index(path: Path) -> dict[str, Any]:
             continue
         family_record = family.get("family_champion_record")
         if isinstance(family_record, Mapping):
-            family["family_champion_record"] = _normalize_materialized_candidate_record(
-                family_record
-            )
+            family["family_champion_record"] = _serialize_candidate_record(family_record)
         context_groups = family.get("context_groups")
         if not isinstance(context_groups, list):
             continue
@@ -688,7 +686,7 @@ def _load_champion_index(path: Path) -> dict[str, Any]:
                 continue
             support_mapping = group.get("support_by_record_key")
             old_hash = _candidate_record_hash(champion_record)
-            normalized_record = _normalize_materialized_candidate_record(champion_record)
+            normalized_record = _serialize_candidate_record(champion_record)
             new_hash = _candidate_record_hash(normalized_record)
             if isinstance(support_mapping, dict):
                 carried_support = int(support_mapping.get(old_hash) or 0)
@@ -931,6 +929,60 @@ def _materialize_family_champion_records(index_payload: Mapping[str, Any]) -> li
             continue
         records.append(champion_record)
     return records
+
+
+def summarize_champion_index(path: Path) -> dict[str, Any]:
+    """Return one compact summary of the current family champion set."""
+
+    index_payload = _load_champion_index(path)
+    prompt_family_ids: list[str] = []
+    champion_trace_record_paths: list[str] = []
+    champion_exact_snapshot_ids: list[str] = []
+    champion_record_hashes: list[str] = []
+    seen_family_ids: set[str] = set()
+    seen_trace_paths: set[str] = set()
+    seen_snapshot_ids: set[str] = set()
+    seen_record_hashes: set[str] = set()
+    families = index_payload.get("prompt_families")
+    champion_records: list[dict[str, Any]] = []
+    if isinstance(families, list):
+        for family in families:
+            if not isinstance(family, Mapping):
+                continue
+            prompt_family_id = str(family.get("prompt_family_id") or "").strip()
+            champion_record = _family_champion_record(family)
+            if champion_record is None:
+                continue
+            champion_records.append(champion_record)
+            if prompt_family_id and prompt_family_id not in seen_family_ids:
+                seen_family_ids.add(prompt_family_id)
+                prompt_family_ids.append(prompt_family_id)
+    for record in champion_records:
+        prompt_family_id = str(record.get("prompt_family_id") or "").strip()
+        if prompt_family_id and prompt_family_id not in seen_family_ids:
+            seen_family_ids.add(prompt_family_id)
+            prompt_family_ids.append(prompt_family_id)
+        provenance = record.get("provenance")
+        if isinstance(provenance, Mapping):
+            trace_record_path = str(provenance.get("trace_record_path") or "").strip()
+            if trace_record_path and trace_record_path not in seen_trace_paths:
+                seen_trace_paths.add(trace_record_path)
+                champion_trace_record_paths.append(trace_record_path)
+        snapshot_id = str(record.get("exact_snapshot_id") or "").strip()
+        if snapshot_id and snapshot_id not in seen_snapshot_ids:
+            seen_snapshot_ids.add(snapshot_id)
+            champion_exact_snapshot_ids.append(snapshot_id)
+        record_hash = _candidate_record_hash(record)
+        if record_hash not in seen_record_hashes:
+            seen_record_hashes.add(record_hash)
+            champion_record_hashes.append(record_hash)
+    return {
+        "candidate_count": len(champion_records),
+        "prompt_family_ids": prompt_family_ids,
+        "champion_trace_record_paths": champion_trace_record_paths,
+        "champion_exact_snapshot_ids": champion_exact_snapshot_ids,
+        "champion_record_hashes": champion_record_hashes,
+    }
 
 
 def _find_or_create_context_group(

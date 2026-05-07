@@ -8,6 +8,7 @@ from repo_rag_lab.training_samples import (
     load_training_examples,
     materialize_combined_training_examples,
     materialize_training_candidates,
+    summarize_champion_index,
     summarize_training_examples,
     validate_training_examples,
 )
@@ -307,6 +308,94 @@ tokens used
     assert materialized[0].expected_answer == (
         "Added the demo GIF to README and verified npm run build."
     )
+
+
+def test_summarize_champion_index_reports_family_trace_and_snapshot_ids(tmp_path: Path) -> None:
+    trainer_dir = tmp_path / "artifacts" / "trainer"
+    trainer_dir.mkdir(parents=True, exist_ok=True)
+    champion_index = {
+        "schema_version": 1,
+        "record_kind": "repo-rag-trainer-champion-index",
+        "generated_at": "2026-05-07T17:00:00+00:00",
+        "prompt_families": [
+            {
+                "prompt_family_id": "pf-goat",
+                "question": "Draft the Goat Labs scope split",
+                "normalized_question": "draft the goat labs scope split",
+                "family_champion_context_group_id": "cg-goat",
+                "family_champion_score": 0.9,
+                "family_champion_record": {
+                    "question": "Draft the Goat Labs scope split",
+                    "expected_answer": "Prepared the scope split.",
+                    "tags": ["trainer-candidate", "candidate"],
+                    "expected_sources": [],
+                    "candidate_status": "candidate",
+                    "prompt_family_id": "pf-goat",
+                    "context_group_id": "cg-goat",
+                    "exact_snapshot_id": "ts-goat",
+                    "quality_score": 0.9,
+                    "support_count": 1,
+                    "provenance": {
+                        "trace_record_path": (
+                            "artifacts/trainer/recovered-imported-traces/"
+                            "20260506T221908Z-worker-0-prompts_goat_labs-p00000-298625-"
+                            "realagiorganization_goat_labs.json"
+                        )
+                    },
+                },
+                "context_groups": [
+                    {
+                        "context_group_id": "cg-goat",
+                        "sources": ["README.md"],
+                        "evidence_fingerprints": [],
+                        "evidence_count": 0,
+                        "retrieval_mode": "lexical",
+                        "mode": "codex-proxy",
+                        "context_field": "evidence_previews",
+                        "source_count": 1,
+                        "context_count": 1,
+                        "top_k": 4,
+                        "trace_count": 1,
+                        "support_by_record_key": {},
+                        "champion_score": 0.9,
+                        "champion_record": {
+                            "question": "Draft the Goat Labs scope split",
+                            "expected_answer": "Prepared the scope split.",
+                            "tags": ["trainer-candidate", "candidate"],
+                            "expected_sources": [],
+                            "candidate_status": "candidate",
+                            "prompt_family_id": "pf-goat",
+                            "context_group_id": "cg-goat",
+                            "exact_snapshot_id": "ts-goat",
+                            "quality_score": 0.9,
+                            "support_count": 1,
+                            "provenance": {
+                                "trace_record_path": (
+                                    "artifacts/trainer/recovered-imported-traces/"
+                                    "20260506T221908Z-worker-0-prompts_goat_labs-p00000-298625-"
+                                    "realagiorganization_goat_labs.json"
+                                )
+                            },
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+    champion_index_path = trainer_dir / "champion-index.json"
+    champion_index_path.write_text(json.dumps(champion_index, indent=2), encoding="utf-8")
+
+    summary = summarize_champion_index(champion_index_path)
+
+    assert summary["candidate_count"] == 1
+    assert summary["prompt_family_ids"] == ["pf-goat"]
+    assert summary["champion_exact_snapshot_ids"] == ["ts-goat"]
+    assert summary["champion_trace_record_paths"] == [
+        "artifacts/trainer/recovered-imported-traces/"
+        "20260506T221908Z-worker-0-prompts_goat_labs-p00000-298625-"
+        "realagiorganization_goat_labs.json"
+    ]
+    assert summary["champion_record_hashes"]
 
 
 def test_materialize_training_candidates_normalizes_legacy_worker_sources_and_duplicate_questions(
