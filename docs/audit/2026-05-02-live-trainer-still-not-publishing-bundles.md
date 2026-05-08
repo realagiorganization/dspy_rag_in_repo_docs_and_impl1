@@ -807,3 +807,184 @@ changes the remaining question substantially. The trainer is no longer blocked o
 benchmark bank versus global trainset” as a structural contradiction. The next live question is
 whether the generated champion set, evaluated with preserved benchmark context where needed, is
 sufficiently strong to publish a new global bundle.
+
+## 2026-05-08 fresh artifact review: the new worker trace was recovered, but the family champion did not refresh to the richer benchmark-context-bearing record
+
+Fresh `dataset/artifacts` for `prompts_debt_relief-p00000-22fc5b` show that the worker-side path
+is now healthy and cheap:
+
+- `success = true`
+- `execution_status = "success"`
+- `acceptance_status = "candidate"`
+- `prompt_tokens = 23769`
+- `bundle_resolved = true`
+- `bundle_version = "20260502T122127191445Z"`
+- `mcp_used = true`
+- `discovery_via_mcp = true`
+- `search_repo_call_count = 1`
+- `ask_repo_call_count = 1`
+- `trusted_trace_handoff_summary.json` reported `queued = 1`, `failed = 0`
+
+The key trainer-side question was whether that new queued trace turned into either:
+
+1. a new prompt family
+2. a better family champion
+3. a published/promoted bundle
+
+The live trainer state says no.
+
+Observed live state:
+
+- `artifacts/trainer/recovered-imported-traces/20260508T132324Z-prompts_debt_relief-p00000-22fc5b.json`
+  now exists inside the trainer workspace
+- so the new worker trace **was** recovered by the trainer
+- but `training-candidates-summary.json` still reports:
+  - `candidate_count = 13`
+  - `new_candidate_count = 0`
+  - `replaced_count = 0`
+  - `new_prompt_family_count = 0`
+- the latest trainer cycle
+  `artifacts/trainer/history/20260508T131838Z-cycle-0002.json` reports:
+  - `bundle_gate.status = "fail"`
+  - `bundle_gate.run_name = "20260508T132001843054Z"`
+  - `bundle_gate.bundle_version = "20260508T132001843054Z"`
+  - `bundle_gate.benchmark_pass_rate = 0.38095238095238093`
+  - `publish_requested = true`
+  - `publish = null`
+  - `promotion_requested = true`
+  - `promotion = null`
+  - `promotion_status = "failed"`
+- `artifacts/dspy/channels/stable.json` still points to:
+  - `current_bundle_version = "20260502T122127191445Z"`
+
+The decisive new detail is why the newer worker trace did not change the benchmark surface.
+
+The recovered imported trace `20260508T132324Z-prompts_debt_relief-p00000-22fc5b.json` already
+contains retrieval context:
+
+- `context` rows are present
+- `retrieved_context` rows are present
+- the trace also carries:
+  - `retrieval_mode = "lexical"`
+  - `sources = ["README.md", "package-lock.json", "package.json", "tsconfig.json"]`
+  - `program_loaded = true`
+
+But the live compile-facing champion set still does **not** carry that context through:
+
+- `generated-training.yaml` currently contains `21` rows
+- rows with non-empty `benchmark_context`: `0`
+- the current `prompts_debt_relief` family champion in `champion-index.json` still points to the
+  older recovered trace:
+  - `artifacts/trainer/recovered-imported-traces/20260506T201606Z-prompts_debt_relief-p00000-22fc5b.json`
+- that champion row still has:
+  - `benchmark_context_len = 0`
+  - `benchmark_context_sources_len = 0`
+
+So the present live blocker is sharper than “bundle gate still fails.”
+
+The live trainer is now doing all of this correctly:
+
+- resolving the old stable bundle for worker runtime
+- queueing the fresh trace
+- recovering the fresh trace into the trainer workspace
+- recompiling bundle candidates
+- re-running bundle publication gates
+
+What it is **not** doing yet is refreshing the compile-facing family champion when the newer trace
+mostly confirms the same family outcome but adds richer benchmark context. Because that champion
+record still points at the older empty-context snapshot, the current generated champion set remains
+context-poor:
+
+- `training_example_count = 21`
+- `benchmark_example_count = 21`
+- `benchmark_path = "artifacts/trainer/generated-training.yaml"`
+- `benchmark_summary.pass_count = 8`
+- `benchmark_summary.pass_rate = 0.38095238095238093`
+
+That explains why the bundle still does not publish:
+
+- the trainer is benchmarking the right global surface again
+- but the materialized champion rows are still stale with respect to benchmark-context enrichment
+- so the benchmark gate is not yet benefiting from the newer recovered evidence
+
+Verification and inspection commands executed in this turn:
+
+- `uv run python -m compileall src tests` -> `pass`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q` -> `pass` (`43 passed`)
+- `uv run repo-rag smoke-test` -> `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml` -> `pass`
+- `tar -tf /home/standard/Desktop/realagi_work/dataset/artifacts/all_artifacts.tar.gz`
+- `tar -xOf ... execution_artifacts/trusted_trace_handoff_summary.json`
+- `tar -xOf ... execution_artifacts/all_results.json`
+- `tar -xOf .../repo_rag_backend.json`
+- `tar -xOf .../repo_rag_outcome.json`
+- `tar -xOf .../repo_rag_trace.json`
+- `kubectl -n repo-rag get deploy,pods,cronjob`
+- `kubectl -n repo-rag exec deploy/repo-rag-trainer-service -- sh -lc 'cat /workspace/repo-rag/artifacts/trainer/service-state.json'`
+- `kubectl -n repo-rag exec deploy/repo-rag-trainer-service -- sh -lc 'cat /workspace/repo-rag/artifacts/trainer/history/20260508T131838Z-cycle-0002.json'`
+- `kubectl -n repo-rag exec deploy/repo-rag-trainer-service -- sh -lc 'find /workspace/repo-rag/artifacts/trainer/recovered-imported-traces -maxdepth 1 -type f | sort | tail -n 30'`
+- `kubectl -n repo-rag exec deploy/repo-rag-trainer-service -- sh -lc 'cat /workspace/repo-rag/artifacts/trainer/training-candidates-summary.json'`
+- `kubectl -n repo-rag exec deploy/repo-rag-trainer-service -- sh -lc 'cat /workspace/repo-rag/artifacts/dspy/channels/stable.json'`
+- `kubectl -n repo-rag exec deploy/repo-rag-trainer-service -- sh -lc 'grep -n "benchmark_context" /workspace/repo-rag/artifacts/trainer/generated-training.yaml | sed -n "1,20p"'`
+- `kubectl -n repo-rag exec deploy/repo-rag-trainer-service -- sh -lc 'python - <<\"PY\" ... count nonempty benchmark_context rows ... PY'`
+- `kubectl -n repo-rag exec deploy/repo-rag-trainer-service -- sh -lc 'python - <<\"PY\" ... inspect debt_relief row in training-candidates.yaml ... PY'`
+- `kubectl -n repo-rag exec deploy/repo-rag-trainer-service -- sh -lc 'python - <<\"PY\" ... inspect debt_relief family champion in champion-index.json ... PY'`
+
+Current conclusion:
+
+- the new worker trace did arrive
+- the new trace did not become a new or replacement family champion
+- the champion set still carries empty benchmark-context payloads
+- the bundle gate still fails on that stale champion set
+- therefore no new published bundle or `stable` promotion occurred
+
+## 2026-05-08 same-key champion refresh now treats richer benchmark context as a material update
+
+The remaining trainer-side bug has now been reproduced and fixed locally.
+
+The failing live pattern was:
+
+- an older family champion already existed for `prompts_debt_relief`
+- a newer trace arrived with the same question/answer/status key
+- that newer trace carried richer `benchmark_context` and `benchmark_context_sources`
+- but `materialize_training_candidates(...)` only incremented support for same-key variants
+- so the family champion record stayed pinned to the older empty-context snapshot
+- therefore the compile-facing champion set still benchmarked as if no richer evidence had ever
+  arrived
+
+The local fix changes two things in `src/repo_rag_lab/training_samples.py`:
+
+- same-key champion variants are now merged with `_merge_equivalent_candidate_records(...)`, so a
+  later trace with richer benchmark context can replace the context-poorer record even when the
+  question/answer key is unchanged
+- `new_candidate_count` and `replaced_count` now key off a materialized champion signature that
+  includes benchmark-context payloads, not only the question/answer tuple
+
+That means “same family, same answer, richer retrieved evidence” now counts as a meaningful
+champion refresh and will trigger downstream recompile/publish logic instead of disappearing as a
+mere support-count increment.
+
+Verification commands executed after this local fix:
+
+- `uv run python -m compileall src tests` -> `pass`
+- `uv run pytest tests/test_training_samples.py -q` -> `pass` (`21 passed`)
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q` -> `pass`
+  (`43 passed`)
+- `uv run repo-rag smoke-test` -> `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml` -> `pass`
+
+The new regression test covers the exact live-shaped case:
+
+- first materialize an older champion with no benchmark context
+- then import a same-key trace with richer benchmark context
+- assert that the family champion now refreshes to the richer trace
+- assert that `new_candidate_count = 1` and `replaced_count = 1`
+- assert that the materialized training row now contains non-empty benchmark context
+
+Current conclusion after the local fix:
+
+- worker-side MCP/recovery remains healthy
+- trainer-side global champion evaluation remains in place
+- the remaining stale-champion blocker has been removed locally
+- the next live rebuild/redeploy should determine whether this was the last blocker before bundle
+  publication resumes

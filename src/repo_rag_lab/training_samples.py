@@ -1398,6 +1398,92 @@ def _normalize_combined_training_record(record: Mapping[str, Any]) -> dict[str, 
     }
 
 
+def _candidate_materialization_signature(record: Mapping[str, Any] | None) -> str | None:
+    """Return the compile-facing signature for one champion record."""
+
+    if not isinstance(record, Mapping):
+        return None
+    normalized = _normalize_combined_training_record(record)
+    return json.dumps(normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def _ordered_unique_texts(values: Sequence[object]) -> list[str]:
+    """Return stable ordered unique non-empty strings."""
+
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = str(value or "").strip()
+        if not normalized:
+            continue
+        folded = normalized.casefold()
+        if folded in seen:
+            continue
+        seen.add(folded)
+        ordered.append(normalized)
+    return ordered
+
+
+def _candidate_benchmark_context_richness(record: Mapping[str, Any]) -> tuple[int, int, int, int]:
+    """Return one lexicographic richness score for stored benchmark context."""
+
+    benchmark_context = _ordered_unique_texts(record.get("benchmark_context", []))
+    benchmark_context_sources = _ordered_unique_texts(record.get("benchmark_context_sources", []))
+    return (
+        len(benchmark_context),
+        len(benchmark_context_sources),
+        sum(len(text) for text in benchmark_context),
+        sum(len(source) for source in benchmark_context_sources),
+    )
+
+
+def _candidate_recorded_at(record: Mapping[str, Any]) -> str:
+    """Return the provenance recorded-at timestamp for one candidate record."""
+
+    provenance = record.get("provenance")
+    if not isinstance(provenance, Mapping):
+        return ""
+    return str(provenance.get("recorded_at") or "").strip()
+
+
+def _merge_equivalent_candidate_records(
+    current_record: Mapping[str, Any],
+    candidate_record: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Merge two same-key candidate variants, preferring richer benchmark context."""
+
+    current_serialized = _serialize_candidate_record(current_record)
+    candidate_serialized = _serialize_candidate_record(candidate_record)
+    current_richness = _candidate_benchmark_context_richness(current_serialized)
+    candidate_richness = _candidate_benchmark_context_richness(candidate_serialized)
+    prefer_candidate = (
+        candidate_richness > current_richness
+        or (
+            candidate_richness == current_richness
+            and _candidate_recorded_at(candidate_serialized) > _candidate_recorded_at(current_serialized)
+        )
+    )
+    merged = dict(candidate_serialized if prefer_candidate else current_serialized)
+    merged["benchmark_context"] = _ordered_unique_texts(
+        [
+            *current_serialized.get("benchmark_context", []),
+            *candidate_serialized.get("benchmark_context", []),
+        ]
+    )
+    merged["benchmark_context_sources"] = _ordered_unique_texts(
+        [
+            *current_serialized.get("benchmark_context_sources", []),
+            *candidate_serialized.get("benchmark_context_sources", []),
+        ]
+    )
+    provenance = merged.get("provenance")
+    if isinstance(provenance, Mapping):
+        merged_provenance = dict(provenance)
+        merged_provenance["benchmark_context_count"] = len(merged["benchmark_context"])
+        merged["provenance"] = merged_provenance
+    return merged
+
+
 def _training_candidate_from_trace_record(
     payload: Mapping[str, Any],
     *,
@@ -1628,6 +1714,11 @@ def materialize_training_candidates(
             if previous_family_record is not None
             else None
         )
+        previous_family_signature = (
+            _candidate_materialization_signature(previous_family_record)
+            if previous_family_record is not None
+            else None
+        )
 
         context_group, created_group = _find_or_create_context_group(
             family_payload,
@@ -1666,9 +1757,12 @@ def materialize_training_candidates(
         elif _candidate_record_key(current_group_record) == _candidate_record_key(
             serialized_record
         ):
-            current_group_record = dict(current_group_record)
-            current_group_record["support_count"] = candidate_support
-            context_group["champion_record"] = current_group_record
+            merged_group_record = _merge_equivalent_candidate_records(
+                current_group_record,
+                serialized_record,
+            )
+            merged_group_record["support_count"] = candidate_support
+            context_group["champion_record"] = merged_group_record
             context_group["champion_score"] = max(
                 current_group_score,
                 candidate_score,
@@ -1689,17 +1783,17 @@ def materialize_training_candidates(
 
         family_changed, _, _ = _refresh_family_champion(family_payload)
         current_family_record = _family_champion_record(family_payload)
-        current_family_key = (
-            _candidate_record_key(current_family_record)
+        current_family_signature = (
+            _candidate_materialization_signature(current_family_record)
             if current_family_record is not None
             else None
         )
         if previous_family_record is None and current_family_record is not None:
             new_candidate_count += 1
         elif (
-            previous_family_key is not None
-            and current_family_key is not None
-            and previous_family_key != current_family_key
+            previous_family_signature is not None
+            and current_family_signature is not None
+            and previous_family_signature != current_family_signature
         ):
             new_candidate_count += 1
             replaced_count += 1

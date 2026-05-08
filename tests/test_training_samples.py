@@ -754,6 +754,134 @@ def test_materialize_training_candidates_accumulates_support_for_repeated_answer
     assert family["family_champion_record"]["support_count"] == 2
 
 
+def test_materialize_training_candidates_refreshes_same_key_champion_with_richer_benchmark_context(
+    tmp_path: Path,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    trainer_dir = tmp_path / "artifacts" / "trainer"
+    trainer_dir.mkdir(parents=True, exist_ok=True)
+    question = "Continue developing this game"
+    answer = "Focus first on the core gameplay loop and wire the save system after the combat pass."
+    legacy_trace = imported_dir / "accepted-a.json"
+    richer_trace = imported_dir / "accepted-b.json"
+    legacy_trace.write_text(
+        f"""{{
+  "trace_record_kind": "repo-rag-trace-record",
+  "trace_record_path": "artifacts/traces/imported/accepted-a.json",
+  "question": "{question}",
+  "answer": "{answer}",
+  "sources": ["README.md"],
+  "trace": {{
+    "schema_version": 1,
+    "trace_kind": "repo-rag-runtime",
+    "recorded_at": "2026-05-02T12:00:00+00:00",
+    "question": "{question}",
+    "mode": "codex-proxy",
+    "retrieval_mode": "hybrid-vector",
+    "sources": ["README.md"],
+    "source_count": 1,
+    "context_count": 1,
+    "context_field": "evidence_previews",
+    "top_k": 4,
+    "program_loaded": true,
+    "mcp_candidate_count": 0,
+    "answer_length": 92
+  }},
+  "outcome": {{
+    "acceptance_status": "accepted",
+    "accepted": true,
+    "execution_status": "success",
+    "method": "codex_cli",
+    "backend": "codex_cli_repo_rag_proxy",
+    "used_baseline_fallback": false
+  }}
+}}
+""",
+        encoding="utf-8",
+    )
+    first_summary = materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+    )
+
+    richer_trace.write_text(
+        f"""{{
+  "trace_record_kind": "repo-rag-trace-record",
+  "trace_record_path": "artifacts/traces/imported/accepted-b.json",
+  "question": "{question}",
+  "answer": "{answer}",
+  "sources": ["README.md"],
+  "context": [
+    {{
+      "source": "README.md",
+      "preview": "Core gameplay loop summary.",
+      "text": "Core gameplay loop summary."
+    }}
+  ],
+  "retrieved_context": [
+    {{
+      "source": "docs/USAGE.md",
+      "preview": "Save system follows the combat pass.",
+      "text": "Save system follows the combat pass."
+    }}
+  ],
+  "trace": {{
+    "schema_version": 1,
+    "trace_kind": "repo-rag-runtime",
+    "recorded_at": "2026-05-02T12:05:00+00:00",
+    "question": "{question}",
+    "mode": "codex-proxy",
+    "retrieval_mode": "hybrid-vector",
+    "sources": ["README.md"],
+    "source_count": 1,
+    "context_count": 1,
+    "context_field": "evidence_previews",
+    "top_k": 4,
+    "program_loaded": true,
+    "mcp_candidate_count": 0,
+    "answer_length": 92
+  }},
+  "outcome": {{
+    "acceptance_status": "accepted",
+    "accepted": true,
+    "execution_status": "success",
+    "method": "codex_cli",
+    "backend": "codex_cli_repo_rag_proxy",
+    "used_baseline_fallback": false
+  }}
+}}
+""",
+        encoding="utf-8",
+    )
+    second_summary = materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+    )
+
+    assert first_summary["new_candidate_count"] == 1
+    assert second_summary["candidate_count"] == 1
+    assert second_summary["new_candidate_count"] == 1
+    assert second_summary["replaced_count"] == 1
+
+    materialized = load_training_examples(trainer_dir / "training-candidates.yaml")
+    assert len(materialized) == 1
+    assert materialized[0].benchmark_context == (
+        "Save system follows the combat pass.",
+        "Core gameplay loop summary.",
+    )
+    assert materialized[0].benchmark_context_sources == ("docs/USAGE.md", "README.md")
+
+    champion_index = json.loads((trainer_dir / "champion-index.json").read_text(encoding="utf-8"))
+    family = champion_index["prompt_families"][0]
+    assert family["family_champion_record"]["provenance"]["trace_record_path"].endswith(
+        "accepted-b.json"
+    )
+    assert family["family_champion_record"]["provenance"]["benchmark_context_count"] == 2
+
+
 def test_materialize_training_candidates_groups_similar_prompt_variants_into_one_family(
     tmp_path: Path,
 ) -> None:

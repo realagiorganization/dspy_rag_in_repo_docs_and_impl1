@@ -676,6 +676,13 @@ places:
 - trainer-candidate rows can preserve benchmark context so global bundle benchmarking follows the
   champion set instead of collapsing back to repo-local evaluation
 
+One additional trainer-side edge case has now been closed locally: when a later trace lands in the
+same prompt family and carries the same question/answer/status key as the existing champion, that
+trace can still materially improve the champion if it brings richer retrieved benchmark context.
+The trainer now treats that as a real champion refresh instead of a mere support-count increment.
+That matters because global bundle publication depends on the compile-facing champion set carrying
+the freshest benchmark context, not just the freshest family/question identity.
+
 ## Tensions And Open Work
 
 The narrative is coherent, but not complete. The main open tensions are:
