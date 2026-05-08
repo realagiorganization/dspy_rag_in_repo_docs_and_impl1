@@ -323,3 +323,66 @@ def test_retrieve_hybrid_vector_falls_back_to_idf_rerank_when_embeddings_are_una
         "Semantic retrieval fell back to idf-rerank.",
     )
     assert [chunk.source for chunk in result.chunks] == [Path("docs/ordered.md")]
+
+
+def test_retrieve_hybrid_vector_keeps_strong_lexical_doc_hits_ahead_of_semantic_noise(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    question = "Where are inspired implementation summaries stored?"
+    chunks = [
+        Chunk(
+            source=Path("docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md"),
+            text=(
+                "Inspired implementation summaries are stored under docs architecture inspired "
+                "and include the implementing rag with dspy technical guide."
+            ),
+        ),
+        Chunk(
+            source=Path("docs/architecture/inspired/dspy-rag-tutorial.md"),
+            text=(
+                "Inspired implementation summaries are stored under docs architecture inspired "
+                "and include the DSPy RAG tutorial."
+            ),
+        ),
+        Chunk(
+            source=Path("publication/exploratorium_translation/README.md"),
+            text=(
+                "Publication translation notes mention inspired implementation work and where "
+                "summaries are discussed for publication output."
+            ),
+        ),
+        Chunk(
+            source=Path("src/repo_rag_lab/benchmarks.py"),
+            text=(
+                "Benchmark helpers describe repository questions about where inspired "
+                "implementation summaries are stored."
+            ),
+        ),
+    ]
+
+    def fake_rank_semantic_chunks(
+        question: str,
+        *,
+        root: Path,
+        chunk_records: Sequence[tuple[str, str]],
+        max_candidates: int | None = None,
+    ) -> tuple[list[tuple[int, float]], list[str]]:
+        del question, root, chunk_records, max_candidates
+        return ([(2, 0.99), (3, 0.98), (0, 0.25), (1, 0.24)], [])
+
+    monkeypatch.setattr(retrieval_module, "rank_semantic_chunks", fake_rank_semantic_chunks)
+
+    result = retrieve_with_metadata(
+        question,
+        chunks,
+        top_k=2,
+        profile=REPO_PROFILE,
+        retrieval_mode="hybrid-vector",
+        root=tmp_path,
+    )
+
+    assert result.retrieval_mode == "hybrid-vector"
+    assert set(chunk.source for chunk in result.chunks) == {
+        Path("docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md"),
+        Path("docs/architecture/inspired/dspy-rag-tutorial.md"),
+    }

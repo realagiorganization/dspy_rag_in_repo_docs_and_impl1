@@ -341,3 +341,197 @@ This is still a local code fix at this point. The live trainer pod is running co
 contains the transcript-normalization change, but it has not yet consumed this new unpublished
 champion-drift trigger, so a rebuild/redeploy is still required before the AKS trainer can prove
 the fix on the next cycle.
+
+## 2026-05-08 live result: the drift fix worked, but publish is now blocked by retrieval and bundle gates
+
+Fresh worker artifacts under `../dataset/artifacts/` and current live trainer state show that the
+trainer is no longer stuck in `skipped-no-new-candidates`.
+
+Current live trainer service state:
+
+- `cycles_executed = 2`
+- `successful_cycle_count = 0`
+- `failed_cycle_count = 2`
+- `total_recompiled_run_count = 2`
+- `total_publish_count = 0`
+- `total_skipped_recompile_count = 0`
+- `latest_cycle_record_path = "artifacts/trainer/history/20260508T100904Z-cycle-0002.json"`
+- `last_cycle_command_status = "fail"`
+- `last_cycle_warnings` include:
+  - `Bundle publish was blocked by trainer-side DSPy benchmark gates.`
+  - `Promotion to \`stable\` was blocked by retrieval gate failures.`
+
+So the unpublished-champion drift fix is working in the live trainer:
+
+1. the cycle is re-entering recompilation even with `queued_count_before = 0`
+2. a fresh DSPy bundle is being generated locally
+3. publish is requested
+4. promotion to `stable` is blocked later by failing gates
+
+The newest live cycle generated a fresh local bundle:
+
+- `artifacts/dspy/20260508T101020034403Z/program.json`
+- `artifacts/dspy/20260508T101020034403Z/metadata.json`
+- `artifacts/dspy/20260508T101020034403Z/bundle.json`
+
+But that bundle was not published or promoted:
+
+- `publish_requested = true`
+- `publish = null`
+- `publish_error = null`
+- `promotion_requested = true`
+- `promotion_status = "blocked"`
+- `promotion = null`
+- `promotion_error = null`
+
+The current live retrieval gate failed with:
+
+- `status = "fail"`
+- `best_pass_rate = 0.875`
+- `threshold_failures`:
+  - `Benchmark pass rate 0.88 is below required threshold 1.00.`
+  - `Benchmark average source recall 0.75 is below required threshold 1.00.`
+
+The concrete failing retrieval benchmark question is:
+
+- `Where are inspired implementation summaries stored?`
+
+Its expected sources are:
+
+- `docs/architecture/inspired/dspy-rag-tutorial.md`
+- `docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md`
+
+But the retrieved sources did not include either inspired-document path.
+
+The current live bundle gate also failed for the newly recompiled bundle:
+
+- `status = "fail"`
+- `run_name = "20260508T101020034403Z"`
+- `bundle_version = "20260508T101020034403Z"`
+- `benchmark_pass_rate = 0.2857142857142857`
+- `benchmark_status = "fail"`
+- `bundle_path = "artifacts/dspy/20260508T101020034403Z/bundle.json"`
+- `metadata_path = "artifacts/dspy/20260508T101020034403Z/metadata.json"`
+
+So the current direct reason the user still does not see a fresh bundle is now:
+
+- **recompilation is finally happening again**
+- **but trainer-side retrieval and bundle benchmark gates are blocking publication and stable promotion**
+
+## 2026-05-08 worker-side confirmation: worker fixes are no longer the blocker
+
+The same `../dataset/artifacts/` upload confirms that the worker-side MCP and resume fixes are
+working and are not the reason a new bundle is missing.
+
+For `prompts_debt_relief-p00000-22fc5b`:
+
+- `execution_status = "success"`
+- `acceptance_status = "candidate"`
+- `codex_session_mode = "resumed"`
+- `restore_status = "restored"`
+- `rag_status = "success"`
+- `dspy_status = "success"`
+- `bundle_resolved = true`
+- `bundle_version = "20260502T122127191445Z"`
+- `mcp_used = true`
+- `discovery_via_mcp = true`
+- `search_repo_call_count = 1`
+- `ask_repo_call_count = 1`
+- `prompt_tokens = 34765`
+
+The corresponding MCP debug and usage artifacts show both preflight and live tool calls
+succeeding, and the transcript churn is low:
+
+- `diff --git = 5`
+- `sed -n = 5`
+- `README.md = 9`
+
+So as of this turn:
+
+- worker-side `resume + MCP + DSPy` worked
+- trainer-side unpublished-champion drift recompilation worked
+- the remaining blocker is entirely the trainer publish gates
+
+## Verification Commands
+
+Repository-local checks executed in this turn:
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests` -> `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q` -> `pass` (`43 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test` -> `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml` -> `pass`
+
+Operational evidence collected in this turn:
+
+- local artifact inspection under `../dataset/artifacts/`
+- `kubectl -n repo-rag exec deploy/repo-rag-trainer-service -- sh -lc 'cat /workspace/repo-rag/artifacts/trainer/service-state.json'`
+- `kubectl -n repo-rag exec deploy/repo-rag-trainer-service -- sh -lc 'f=$(ls -1 /workspace/repo-rag/artifacts/trainer/history | sort | tail -n 1); echo $f; cat /workspace/repo-rag/artifacts/trainer/history/$f'`
+
+## 2026-05-08 local root cause and fix: trainer pod `hybrid-vector` semantic blending overrides strong lexical document hits
+
+The current live trainer failure is now reproducible as a retrieval-ranking bug, not as a queue,
+publish, or candidate-ingestion bug.
+
+Direct execution inside the live trainer pod showed:
+
+- `lexical` retrieval for `Where are inspired implementation summaries stored?` returns:
+  - `docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md`
+  - `docs/architecture/inspired/dspy-rag-tutorial.md`
+- `idf-rerank` returns the same two inspired documents first
+- but `hybrid-vector` returns unrelated semantic neighbors first:
+  - `publication/exploratorium_translation/README.md`
+  - `utilities/README.md`
+  - `src/repo_rag_lab/benchmarks.py`
+  - `src/repo_rag_lab/exploratorium_translation.py`
+
+At the same time, trainer-pod path scoring for the same question already strongly prefers the
+expected inspired-doc paths:
+
+- `docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md` -> `5.05`
+- `docs/architecture/inspired/dspy-rag-tutorial.md` -> `5.05`
+- `publication/exploratorium_translation/README.md` -> `3.1`
+- `src/repo_rag_lab/benchmarks.py` -> `0.6`
+
+So the live failure is not caused by wrong lexical scoring or missing path bonuses. It is caused by
+the `hybrid-vector` combiner using only rank positions plus a very small semantic-score term,
+allowing semantic-only neighbors to outrank much stronger lexical/path-aware document matches in
+the trainer pod environment.
+
+The repository now contains a local fix for that blend:
+
+- `src/repo_rag_lab/retrieval.py`
+  - `_hybrid_ranked_chunks(...)` now includes one normalized lexical-score component in the hybrid
+    score instead of relying only on lexical position + semantic position
+  - this keeps `hybrid-vector` from discarding strong lexical document hits when the semantic branch
+    overgeneralizes
+
+Regression coverage added:
+
+- `tests/test_retrieval.py`
+  - new test:
+    - `test_retrieve_hybrid_vector_keeps_strong_lexical_doc_hits_ahead_of_semantic_noise`
+  - it simulates a misleading semantic ranking and asserts that the top-2 hybrid results remain the
+    two inspired docs instead of semantic-noise files
+
+Local verification after the fix:
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_retrieval.py -q` -> `pass` (`15 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_benchmarks_and_notebook_scaffolding.py::test_repository_benchmarks_pass_with_current_training_samples tests/test_benchmarks_and_notebook_scaffolding.py::test_evaluate_retrieval_quality_suite_reports_top_k_summaries -q` -> `pass` (`2 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run python - <<'PY' ... evaluate_retrieval_quality_suite(..., top_k=8) ... PY` ->
+  - `retrieval_mode = "idf-rerank"`
+  - `default_summary.pass_rate = 1.0`
+  - `default_summary.average_source_recall = 1.0`
+  - the inspired benchmark retrieves:
+    - `docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md`
+    - `docs/architecture/inspired/dspy-rag-tutorial.md`
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests` -> `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py tests/test_benchmarks_and_notebook_scaffolding.py::test_repository_benchmarks_pass_with_current_training_samples tests/test_benchmarks_and_notebook_scaffolding.py::test_evaluate_retrieval_quality_suite_reports_top_k_summaries -q` -> `pass` (`45 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test` -> `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml` -> `pass`
+
+This remains a local code fix until a rebuilt trainer image proves it in AKS, but the current
+remaining blocker is now sharply isolated:
+
+- before this fix, trainer-side `hybrid-vector` ranking itself was capable of blocking publish even
+  after recompilation resumed
+- after deployment, the same live benchmark should stop failing on the inspired-doc question

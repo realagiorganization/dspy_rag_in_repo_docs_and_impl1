@@ -97,6 +97,7 @@ RetrievalMode = Literal["lexical", "idf-rerank", "vector", "hybrid-vector"]
 _HYBRID_RRF_K = 40.0
 _HYBRID_LEXICAL_WEIGHT = 0.45
 _HYBRID_SEMANTIC_WEIGHT = 0.75
+_HYBRID_LEXICAL_SCORE_WEIGHT = 0.4
 _SEMANTIC_CANDIDATE_MULTIPLIER = 2
 
 
@@ -216,6 +217,7 @@ def retrieve_with_metadata(
         )
 
     hybrid_ranked = _hybrid_ranked_chunks(
+        lexical_scored=lexical_scored,
         lexical_ranked=lexical_ranked,
         semantic_rankings=semantic_rankings,
         semantic_chunks=eligible_chunks,
@@ -292,17 +294,23 @@ def _semantic_source_key(source: Path, *, root: Path | None) -> str:
 
 def _hybrid_ranked_chunks(
     *,
+    lexical_scored: list[tuple[float, Chunk]],
     lexical_ranked: list[Chunk],
     semantic_rankings: list[tuple[int, float]],
     semantic_chunks: list[Chunk],
     top_k: int,
     candidate_pool_size: int,
 ) -> list[Chunk]:
+    lexical_scored_pool = lexical_scored[: max(top_k, candidate_pool_size)]
     lexical_pool = lexical_ranked[: max(top_k, candidate_pool_size)]
     semantic_pool = [
         semantic_chunks[index] for index, _ in semantic_rankings[: max(top_k, candidate_pool_size)]
     ]
     lexical_positions = {chunk: position for position, chunk in enumerate(lexical_pool, start=1)}
+    lexical_scores = {
+        chunk: max(0.0, value) for value, chunk in lexical_scored_pool if value > 0.0
+    }
+    max_lexical_score = max(lexical_scores.values(), default=0.0)
     semantic_positions = {chunk: position for position, chunk in enumerate(semantic_pool, start=1)}
     semantic_scores = {
         semantic_chunks[index]: value
@@ -332,6 +340,12 @@ def _hybrid_ranked_chunks(
                 else 0.0
             )
             + (semantic_scores.get(chunk, 0.0) * 0.05)
+            + (
+                (lexical_scores.get(chunk, 0.0) / max_lexical_score)
+                * _HYBRID_LEXICAL_SCORE_WEIGHT
+                if max_lexical_score > 0.0
+                else 0.0
+            )
         ),
         reverse=True,
     )
