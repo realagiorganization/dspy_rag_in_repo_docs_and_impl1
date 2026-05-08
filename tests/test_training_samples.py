@@ -80,6 +80,13 @@ def test_materialize_training_candidates_and_combined_training_examples(tmp_path
   "question": "What does this repository research?",
   "answer": "It researches repository-grounded RAG.",
   "sources": ["README.md"],
+  "context": [
+    {
+      "source": "README.md",
+      "preview": "Repository-grounded RAG over repository files.",
+      "text": "Repository-grounded RAG over repository files."
+    }
+  ],
   "trace": {
     "schema_version": 1,
     "trace_kind": "repo-rag-runtime",
@@ -118,6 +125,8 @@ def test_materialize_training_candidates_and_combined_training_examples(tmp_path
     )
     assert len(materialized) == 1
     assert materialized[0].expected_sources == ()
+    assert materialized[0].benchmark_context == ("Repository-grounded RAG over repository files.",)
+    assert materialized[0].benchmark_context_sources == ("README.md",)
 
     base_training_path = tmp_path / "samples" / "training" / "base.yaml"
     base_training_path.parent.mkdir(parents=True, exist_ok=True)
@@ -743,6 +752,153 @@ def test_materialize_training_candidates_accumulates_support_for_repeated_answer
     champion_record = group["champion_record"]
     assert champion_record["support_count"] == 2
     assert family["family_champion_record"]["support_count"] == 2
+
+
+def test_materialize_training_candidates_groups_similar_prompt_variants_into_one_family(
+    tmp_path: Path,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    prompts = (
+        (
+            "accepted-a.json",
+            "2026-05-02T12:00:00+00:00",
+            "Continue developing this game",
+            "Focus first on the core gameplay loop and wire the save system after the combat pass.",
+            "accepted",
+            True,
+            True,
+        ),
+        (
+            "accepted-b.json",
+            "2026-05-02T12:05:00+00:00",
+            "Continue developing this game further",
+            "Document the remaining gameplay systems after the current implementation pass.",
+            "candidate",
+            False,
+            None,
+        ),
+    )
+    for name, recorded_at, question, answer, acceptance_status, program_loaded, accepted in prompts:
+        (imported_dir / name).write_text(
+            f"""{{
+  "trace_record_kind": "repo-rag-trace-record",
+  "trace_record_path": "artifacts/traces/imported/{name}",
+  "question": "{question}",
+  "answer": "{answer}",
+  "sources": ["README.md"],
+  "trace": {{
+    "schema_version": 1,
+    "trace_kind": "repo-rag-runtime",
+    "recorded_at": "{recorded_at}",
+    "question": "{question}",
+    "mode": "codex-proxy",
+    "retrieval_mode": "hybrid-vector",
+    "sources": ["README.md"],
+    "source_count": 1,
+    "context_count": 1,
+    "context_field": "evidence_previews",
+    "top_k": 4,
+    "program_loaded": {str(program_loaded).lower()},
+    "mcp_candidate_count": 0,
+    "answer_length": {len(answer)}
+  }},
+  "outcome": {{
+    "acceptance_status": "{acceptance_status}",
+    "accepted": {json.dumps(accepted)},
+    "execution_status": "success",
+    "method": "codex_cli",
+    "backend": "codex_cli_repo_rag_proxy",
+    "used_baseline_fallback": false
+  }}
+}}
+""",
+            encoding="utf-8",
+        )
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+    )
+
+    assert summary["prompt_family_count"] == 1
+    assert summary["new_prompt_family_count"] == 1
+    champion_index = json.loads(
+        (tmp_path / "artifacts" / "trainer" / "champion-index.json").read_text(encoding="utf-8")
+    )
+    family = champion_index["prompt_families"][0]
+    assert family["question_variant_count"] == 2
+    assert sorted(family["question_variants"]) == [
+        "Continue developing this game",
+        "Continue developing this game further",
+    ]
+
+
+def test_materialize_training_candidates_splits_prompt_family_on_large_prompt_delta(
+    tmp_path: Path,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    prompts = (
+        (
+            "accepted-a.json",
+            "2026-05-02T12:00:00+00:00",
+            "Continue developing this game",
+            "Focus first on the core gameplay loop and wire the save system after the combat pass.",
+        ),
+        (
+            "accepted-b.json",
+            "2026-05-02T12:05:00+00:00",
+            "Refactor the webhook dispatcher and Discord publish pipeline",
+            "Separate webhook routing from batch publish orchestration and simplify retries.",
+        ),
+    )
+    for name, recorded_at, question, answer in prompts:
+        (imported_dir / name).write_text(
+            f"""{{
+  "trace_record_kind": "repo-rag-trace-record",
+  "trace_record_path": "artifacts/traces/imported/{name}",
+  "question": "{question}",
+  "answer": "{answer}",
+  "sources": ["README.md"],
+  "trace": {{
+    "schema_version": 1,
+    "trace_kind": "repo-rag-runtime",
+    "recorded_at": "{recorded_at}",
+    "question": "{question}",
+    "mode": "codex-proxy",
+    "retrieval_mode": "hybrid-vector",
+    "sources": ["README.md"],
+    "source_count": 1,
+    "context_count": 1,
+    "context_field": "evidence_previews",
+    "top_k": 4,
+    "program_loaded": true,
+    "mcp_candidate_count": 0,
+    "answer_length": {len(answer)}
+  }},
+  "outcome": {{
+    "acceptance_status": "accepted",
+    "accepted": true,
+    "execution_status": "success",
+    "method": "codex_cli",
+    "backend": "codex_cli_repo_rag_proxy",
+    "used_baseline_fallback": false
+  }}
+}}
+""",
+            encoding="utf-8",
+        )
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+    )
+
+    assert summary["prompt_family_count"] == 2
+    assert summary["new_prompt_family_count"] == 2
 
 
 def test_materialize_training_candidates_keeps_gradual_source_drift_in_one_context_group(

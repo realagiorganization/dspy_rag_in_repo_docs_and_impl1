@@ -1957,6 +1957,8 @@ def test_run_trainer_recompile_merges_candidates_and_reports_training_result(
         },
     )
 
+    captured_config: dict[str, object] = {}
+
     class FakeTrainingResult:
         def to_payload(self) -> dict[str, object]:
             return {
@@ -1968,7 +1970,15 @@ def test_run_trainer_recompile_merges_candidates_and_reports_training_result(
 
     monkeypatch.setattr(
         "repo_rag_lab.utilities.train_repository_program",
-        lambda root, training_config, lm_config: FakeTrainingResult(),
+        lambda root, training_config, lm_config: (
+            captured_config.update(
+                {
+                    "training_path": str(training_config.training_path),
+                    "benchmark_path": str(training_config.benchmark_path),
+                }
+            )
+            or FakeTrainingResult()
+        ),
     )
 
     payload = json.loads(
@@ -1984,6 +1994,8 @@ def test_run_trainer_recompile_merges_candidates_and_reports_training_result(
     assert payload["recompile_status"] == "compiled"
     assert payload["generated_training"]["combined_example_count"] == 10
     assert payload["training_result"]["run_name"] == "trainer-auto"
+    assert captured_config["training_path"] == "artifacts/trainer/generated-training.yaml"
+    assert captured_config["benchmark_path"] == "artifacts/trainer/generated-training.yaml"
 
 
 def test_run_trainer_service_writes_state_and_history(

@@ -9,6 +9,36 @@ repository to the `../dataset` pipeline without blocking pipeline execution on t
 - Workers should use one explicitly pinned global bundle version plus repo-local RAG state.
 - Global optimization should be asynchronous.
 
+## Standing Bundle Requirement
+
+The intended end state is still one **global universal DSPy bundle**:
+
+- every accepted or candidate worker run should be able to improve that global bundle
+- if a prompt family gets a better champion, the next bundle candidate should replace the old
+  family champion
+- if a completely new prompt family appears, the next bundle candidate should include it instead
+  of leaving it stranded outside the published lineage
+- trainer-side validation must ultimately be driven by request deltas and retrieved-context deltas
+  across prompt families, not by hard dependence on repo name, branch name, or one fixed replay
+  repository
+
+Clarification:
+
+- the trainer may still rematerialize `generated-training.yaml` and recompile a fresh bundle from
+  the current champion set
+- that does **not** violate the incremental contract
+- the intended incremental behavior is:
+  - candidates accumulate durably
+  - better candidates replace champions
+  - materially new prompt/context deltas create new champion paths
+  - the next bundle candidate reflects only the current champion set, not the whole raw candidate
+    pool
+- in other words, “incremental” applies to champion-state evolution, not to forbidding a fresh
+  compile from the latest champion set
+
+Any repo-local benchmark split documented elsewhere is a temporary unblocker for publication, not
+the final product contract.
+
 ## Status
 
 - [x] Confirm that the current repository already has working baseline RAG, DSPy compile/reload, retrieval evaluation, and utility surfaces.
@@ -231,7 +261,12 @@ Current implementation note:
   compile-input stage, so one evolving worker prompt cannot keep re-invalidating trainer
   recompilation through stale prompt-artifact paths or answer-variant duplicate rows; unchanged
   recovered ledgers no longer count as new trainer work, and stale `failed/...` queue blobs are
-  skipped instead of poisoning the next poll cycle.
+  skipped instead of poisoning the next poll cycle. Trainer-side benchmarking now follows the
+  generated champion set again, while imported trainer-candidate rows may preserve their own
+  benchmark context so cross-family validation does not have to depend on repo-bound replay
+  identity. That benchmark-context bridge is still an intermediate step; the final trainer
+  contract remains a global universal bundle whose family/champion validation is driven by request
+  deltas plus retrieved-context deltas, not by repo-bound replay identity.
 - The trainer now also has a first-stage context-aware champion model instead of only
   question-level replacement. Imported traces are persisted immutably in the trace ledger, then
   grouped in `artifacts/trainer/champion-index.json` by prompt family plus soft retrieval-context

@@ -97,6 +97,14 @@ class RepositoryProgram(QuestionAnsweringProgram, Protocol):
 
     def set_lm(self, lm: object) -> object: ...
 
+    def answer_from_context(
+        self,
+        *,
+        question: str,
+        context: Sequence[str],
+        context_sources: Sequence[str],
+    ) -> object: ...
+
 
 class OptimizerLike(Protocol):
     """Minimal optimizer surface shared by the supported DSPy optimizers."""
@@ -134,6 +142,7 @@ class DSPyTrainingConfig:
     """Configuration for compiling a repository-grounded DSPy program."""
 
     training_path: Path = DEFAULT_TRAINING_PATH
+    benchmark_path: Path | None = None
     run_name: str = DEFAULT_DSPY_RUN_NAME
     bundle_version: str | None = None
     run_family: str | None = None
@@ -167,8 +176,10 @@ class DSPyTrainingResult:
     program_path: str
     metadata_path: str
     training_path: str
+    benchmark_path: str
     optimizer: str
     training_example_count: int
+    benchmark_example_count: int
     benchmark_summary: dict[str, object]
     lm_model: str
     bundle_path: str | None = None
@@ -179,8 +190,11 @@ class DSPyTrainingResult:
         """Return the training result as a machine-readable payload."""
 
         payload = asdict(self)
+        input_paths = [self.training_path]
+        if self.benchmark_path and self.benchmark_path not in input_paths:
+            input_paths.append(self.benchmark_path)
         payload["artifact_metadata"] = {
-            "input_paths": [self.training_path],
+            "input_paths": input_paths,
             "generated_paths": [
                 self.artifact_dir,
                 self.program_path,
@@ -633,6 +647,19 @@ if _dspy is not None:
                 top_k=self.top_k,
                 retrieval_mode=self.retrieval_mode,
             )
+            return self.answer_from_context(
+                question=question,
+                context=context,
+                context_sources=context_sources,
+            )
+
+        def answer_from_context(
+            self,
+            *,
+            question: str,
+            context: Sequence[str],
+            context_sources: Sequence[str],
+        ) -> object:
             generation_context = _format_generation_context(context, context_sources)
             dspy_module = _dspy
             assert dspy_module is not None
@@ -743,7 +770,17 @@ def evaluate_repository_program(
     results: list[dict[str, object]] = []
     pass_count = 0
     for example in examples:
-        prediction = cast(PredictionLike, program(question=example.question))
+        if example.benchmark_context and hasattr(program, "answer_from_context"):
+            prediction = cast(
+                PredictionLike,
+                cast(RepositoryProgram, program).answer_from_context(
+                    question=example.question,
+                    context=example.benchmark_context,
+                    context_sources=example.benchmark_context_sources,
+                ),
+            )
+        else:
+            prediction = cast(PredictionLike, program(question=example.question))
         retrieved_sources = _normalize_sources(prediction.context_sources)
         matched_sources = tuple(
             source for source in retrieved_sources if source in set(example.expected_sources)
@@ -761,6 +798,7 @@ def evaluate_repository_program(
             {
                 "question": example.question,
                 "expected_sources": list(example.expected_sources),
+                "benchmark_context_sources": list(example.benchmark_context_sources),
                 "retrieved_sources": list(retrieved_sources),
                 "matched_sources": list(matched_sources),
                 "answer_preview": prediction.answer[:240],
@@ -795,6 +833,20 @@ def train_repository_program(
     if validation_issues:
         issues_text = "\n".join(f"- {issue}" for issue in validation_issues)
         raise ValueError(f"Training samples are invalid:\n{issues_text}")
+    benchmark_path = training_config.benchmark_path or training_config.training_path
+    if not benchmark_path.is_absolute():
+        benchmark_path = resolved_root / benchmark_path
+    if benchmark_path == training_path:
+        benchmark_examples = examples
+    else:
+        benchmark_examples = load_training_examples(benchmark_path)
+        benchmark_validation_issues = validate_training_examples(
+            benchmark_examples,
+            root=resolved_root,
+        )
+        if benchmark_validation_issues:
+            issues_text = "\n".join(f"- {issue}" for issue in benchmark_validation_issues)
+            raise ValueError(f"Benchmark samples are invalid:\n{issues_text}")
 
     configure_dspy_lm(lm_config)
     trainset = build_dspy_trainset(examples)
@@ -819,7 +871,11 @@ def train_repository_program(
         compiled_program = optimizer.compile(program, trainset=trainset)
 
     compiled_program.save(str(artifact_paths.program_path), save_program=False)
-    benchmark_summary = evaluate_repository_program(compiled_program, resolved_root, examples)
+    benchmark_summary = evaluate_repository_program(
+        compiled_program,
+        resolved_root,
+        benchmark_examples,
+    )
     relative_program_path = str(artifact_paths.program_path.relative_to(resolved_root))
     relative_metadata_path = str(artifact_paths.metadata_path.relative_to(resolved_root))
     metadata = {
@@ -837,7 +893,9 @@ def train_repository_program(
         "program_path": relative_program_path,
         "metadata_path": relative_metadata_path,
         "training_path": str(training_path.relative_to(resolved_root)),
+        "benchmark_path": str(benchmark_path.relative_to(resolved_root)),
         "training_example_count": len(examples),
+        "benchmark_example_count": len(benchmark_examples),
         "optimizer": training_config.optimizer,
         "top_k": training_config.top_k,
         "retrieval_mode": training_config.retrieval_mode,
@@ -870,8 +928,10 @@ def train_repository_program(
         program_path=relative_program_path,
         metadata_path=relative_metadata_path,
         training_path=str(training_path.relative_to(resolved_root)),
+        benchmark_path=str(benchmark_path.relative_to(resolved_root)),
         optimizer=training_config.optimizer,
         training_example_count=len(examples),
+        benchmark_example_count=len(benchmark_examples),
         benchmark_summary=benchmark_summary,
         lm_model=lm_config.model,
         bundle_path=str(bundle_manifest.get("bundle_path") or ""),

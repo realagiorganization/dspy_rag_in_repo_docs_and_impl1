@@ -170,7 +170,10 @@ that shared envelope. The ask-family payloads now also carry:
   candidates for later DSPy review or compilation
 - a `trainer-recompile` command that merges the base training set with those cumulative
   candidate examples, writes `artifacts/trainer/generated-training.yaml`, and compiles a fresh
-  DSPy run from the merged corpus
+  DSPy run from the merged corpus; the same trainer path now also treats that generated champion
+  set as the benchmark surface for publish gating, while allowing trainer-candidate rows to carry
+  their own benchmark context so external prompt families can be evaluated by request/context
+  deltas instead of forcing live retrieval against the current repository
 - a `trainer-cycle` command that can be wrapped by cron, systemd, or a Kubernetes Job before a
   longer-lived trainer/publisher service exists, while optionally invoking that same
   candidate-to-recompile bridge when LM config is available and enforcing a trainer-side DSPy
@@ -373,10 +376,7 @@ The current checked-in sample file uses question, expected answer, and tags:
 
 ```yaml
 - question: What does this repository research?
-  expected_answer: >-
-    This repository researches repository-grounded question answering and RAG
-    workflows over repository files, with shared utilities, notebooks,
-    evaluation, and Azure deployment support.
+  expected_answer: It researches repository-grounded RAG over repository files.
   tags:
     - repo
     - rag

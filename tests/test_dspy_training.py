@@ -330,6 +330,49 @@ def test_evaluate_repository_program_reports_pass_rate() -> None:
     assert summary["pass_rate"] == 1.0
 
 
+def test_evaluate_repository_program_uses_benchmark_context_when_available() -> None:
+    class FakeProgram:
+        def __call__(self, *, question: str) -> object:
+            raise AssertionError(f"unexpected live retrieval call for {question}")
+
+        def answer_from_context(
+            self,
+            *,
+            question: str,
+            context: tuple[str, ...],
+            context_sources: tuple[str, ...],
+        ) -> object:
+            assert question == "Draft the Goat Labs scope split"
+            assert context == ("Goat Labs needs a scope split and implementation outline.",)
+            assert context_sources == ("README.md",)
+            return type(
+                "Prediction",
+                (),
+                {
+                    "answer": "Prepared the Goat Labs scope split.",
+                    "context_sources": ("README.md",),
+                },
+            )()
+
+    summary = evaluate_repository_program(
+        FakeProgram(),
+        Path("."),
+        [
+            TrainingExample(
+                question="Draft the Goat Labs scope split",
+                expected_answer="Prepared the Goat Labs scope split.",
+                tags=("trainer-candidate", "candidate"),
+                benchmark_context=("Goat Labs needs a scope split and implementation outline.",),
+                benchmark_context_sources=("README.md",),
+            )
+        ],
+    )
+
+    assert summary["case_count"] == 1
+    assert summary["pass_count"] == 1
+    assert summary["results"][0]["benchmark_context_sources"] == ["README.md"]
+
+
 def test_repository_rag_program_includes_source_paths_in_generation_context(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -532,7 +575,11 @@ def test_train_repository_program_writes_artifacts(
     assert isinstance(lineage, dict)
     assert lineage["new_candidate_count"] == 1
     assert metadata["training_example_count"] == 1
+    assert metadata["benchmark_example_count"] == 1
+    assert metadata["benchmark_path"] == "samples/training/sample-training.yaml"
     assert metadata["program_path"] == "artifacts/dspy/sample-run/program.json"
+    assert result.benchmark_path == "samples/training/sample-training.yaml"
+    assert result.benchmark_example_count == 1
     assert result.bundle_version == "sample-version-001"
     assert result.bundle_path == "artifacts/dspy/sample-run/bundle.json"
     bundle_path = tmp_path / result.bundle_path
@@ -547,6 +594,119 @@ def test_train_repository_program_writes_artifacts(
     assert bundle_lineage["new_candidate_count"] == 1
     assert bundle["retrieval_mode"] is None
     assert bundle["program_path"] == "artifacts/dspy/sample-run/program.json"
+
+
+def test_train_repository_program_uses_distinct_benchmark_path(tmp_path: Path) -> None:
+    (tmp_path / "README.md").write_text("# sample\n", encoding="utf-8")
+    samples_dir = tmp_path / "samples" / "training"
+    samples_dir.mkdir(parents=True)
+    training_path = samples_dir / "generated-training.yaml"
+    training_path.write_text(
+        "\n".join(
+            [
+                '- question: "Worker candidate question?"',
+                '  expected_answer: "Worker candidate answer."',
+                '  tags: ["trainer-candidate", "candidate"]',
+                '- question: "What does this repository research?"',
+                '  expected_answer: "Repository answer"',
+                "  expected_sources:",
+                '    - "README.md"',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    benchmark_path = samples_dir / "repository-benchmark.yaml"
+    benchmark_path.write_text(
+        "\n".join(
+            [
+                '- question: "What does this repository research?"',
+                '  expected_answer: "Repository answer"',
+                "  expected_sources:",
+                '    - "README.md"',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    class FakeProgram:
+        def __init__(
+            self,
+            root: Path | None = None,
+            top_k: int = 4,
+            *,
+            retrieval_mode: str | None = None,
+        ) -> None:
+            del root, top_k, retrieval_mode
+
+        def save(
+            self,
+            path: str | Path,
+            save_program: bool = False,
+            modules_to_serialize: object | None = None,
+        ) -> object:
+            del save_program, modules_to_serialize
+            Path(path).write_text("{}", encoding="utf-8")
+            return None
+
+        def load(self, path: str | Path, allow_pickle: bool = False) -> object:
+            del path, allow_pickle
+            return None
+
+        def dump_state(self) -> dict[str, object]:
+            return {}
+
+        def get_lm(self) -> object:
+            return object()
+
+        def set_lm(self, lm: object) -> object:
+            return lm
+
+        def __call__(self, *, question: str) -> object:
+            return type(
+                "Prediction",
+                (),
+                {
+                    "answer": f"Repository answer for {question}",
+                    "context_sources": ["README.md"],
+                },
+            )()
+
+    class FakeOptimizer:
+        def compile(self, program: object, **_: object) -> FakeProgram:
+            return cast(FakeProgram, program)
+
+    def fake_configure_dspy_lm(lm_config: object) -> object:
+        del lm_config
+        return object()
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr("repo_rag_lab.dspy_training.configure_dspy_lm", fake_configure_dspy_lm)
+    monkeypatch.setattr("repo_rag_lab.dspy_training.RepositoryRAGProgram", FakeProgram)
+    monkeypatch.setattr(
+        "repo_rag_lab.dspy_training._build_optimizer",
+        lambda training_config: FakeOptimizer(),
+    )
+    try:
+        result = train_repository_program(
+            tmp_path,
+            training_config=DSPyTrainingConfig(
+                training_path=Path("samples/training/generated-training.yaml"),
+                benchmark_path=Path("samples/training/repository-benchmark.yaml"),
+                run_name="sample run",
+            ),
+            lm_config=DSPyLMConfig(model="openai/test-model"),
+        )
+    finally:
+        monkeypatch.undo()
+
+    metadata = json.loads((tmp_path / result.metadata_path).read_text(encoding="utf-8"))
+    assert metadata["training_example_count"] == 2
+    assert metadata["benchmark_example_count"] == 1
+    assert metadata["training_path"] == "samples/training/generated-training.yaml"
+    assert metadata["benchmark_path"] == "samples/training/repository-benchmark.yaml"
+    assert metadata["benchmark_summary"]["case_count"] == 1
 
 
 def test_train_repository_program_raises_for_invalid_training_examples(tmp_path: Path) -> None:
