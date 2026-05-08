@@ -602,6 +602,25 @@ Use these files when you need to defend the current repository story quickly:
 | What environment is required? | [docs/operations/environment.md](../operations/environment.md) | [docs/operations/azure-deployment.md](../operations/azure-deployment.md) |
 | How does the publication relate? | [publication/README.md](../../publication/README.md) | [publication/repository-rag-lab-article.pdf](../../publication/repository-rag-lab-article.pdf), [publication/exploratorium_translation/exploratorium_translation.pdf](../../publication/exploratorium_translation/exploratorium_translation.pdf) |
 
+## Current Trainer Publication Constraint
+
+The live trainer now successfully resumes recompilation when the unpublished champion set drifts
+past the current stable bundle lineage, so the dominant publication blocker has moved downstream.
+
+The current bottleneck is trainer-side retrieval quality under live `hybrid-vector` conditions:
+
+- lexical and `idf-rerank` retrieval already surface the expected inspired-document paths for the
+  benchmark question `Where are inspired implementation summaries stored?`
+- but the semantic branch inside the trainer pod can over-rank broad semantic neighbors such as
+  publication or utility documents
+- this can make `hybrid-vector` fail benchmark gates even when the lexical path is correct
+
+The repository now guards that blend by adding one normalized lexical-score term into the hybrid
+combiner, so strong path-aware lexical hits are no longer discarded by semantic noise. That change
+matters both for the standalone retrieval gate and for DSPy bundle publication, because the trainer
+reuses the same retrieval path while evaluating whether a compiled bundle may be published or
+promoted.
+
 ## Tensions And Open Work
 
 The narrative is coherent, but not complete. The main open tensions are:
