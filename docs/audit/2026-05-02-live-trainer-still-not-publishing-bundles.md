@@ -535,3 +535,275 @@ remaining blocker is now sharply isolated:
 - before this fix, trainer-side `hybrid-vector` ranking itself was capable of blocking publish even
   after recompilation resumed
 - after deployment, the same live benchmark should stop failing on the inspired-doc question
+
+## 2026-05-08 current live state: a new local bundle is compiled, but publish/promote is blocked by the trainer-side bundle gate
+
+The newest live trainer cycle confirms that the current blocker is no longer candidate drift and no
+longer the retrieval gate.
+
+Live trainer service state now reports:
+
+- `cycles_executed = 2`
+- `successful_cycle_count = 0`
+- `failed_cycle_count = 2`
+- `total_recompiled_run_count = 2`
+- `total_publish_count = 0`
+- `total_promotion_count = 0`
+- `last_cycle_command_status = "fail"`
+- `last_cycle_warnings`:
+  - `Bundle publish was blocked by trainer-side DSPy benchmark gates.`
+  - `Promotion to \`stable\` was blocked by trainer-side DSPy benchmark gates.`
+
+The newest cycle record is:
+
+- `artifacts/trainer/history/20260508T112754Z-cycle-0002.json`
+
+That cycle proves a new bundle was in fact formed locally inside the trainer workspace:
+
+- `artifacts/dspy/20260508T112905566179Z/program.json`
+- `artifacts/dspy/20260508T112905566179Z/metadata.json`
+- `artifacts/dspy/20260508T112905566179Z/bundle.json`
+
+At the same time, the published surfaces remain unchanged:
+
+- `artifacts/dspy/published/20260502T122127191445Z.json` is still the newest published timestamped
+  record
+- `artifacts/dspy/channels/stable.json` still points to
+  `current_bundle_version = "20260502T122127191445Z"`
+- there is no published record for `20260508T112905566179Z`
+
+So the direct answer to “why is there no new visible bundle?” is:
+
+- **a new bundle was compiled locally**
+- **it was not published**
+- **the stable channel did not move**
+
+The critical gate split in the live cycle is now:
+
+- retrieval gate: `pass`
+  - `best_pass_rate = 1.0`
+  - `threshold_failures = []`
+  - the previously failing inspired-doc benchmark now retrieves:
+    - `docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md`
+    - `docs/architecture/inspired/dspy-rag-tutorial.md`
+- bundle gate: `fail`
+  - `bundle_version = "20260508T112905566179Z"`
+  - `benchmark_pass_rate = 0.2857142857142857`
+  - `benchmark_status = "fail"`
+  - `bundle_gate_passed = false`
+  - `publish_requested = true`
+  - `promotion_requested = true`
+  - `publish = null`
+  - `promotion = null`
+  - `promotion_status = "failed"`
+
+The bundle metadata for `20260508T112905566179Z` shows why the bundle gate still blocks publish:
+
+- `training_example_count = 21`
+- `benchmark_summary.case_count = 21`
+- `benchmark_summary.pass_count = 6`
+- `benchmark_summary.pass_rate = 0.2857142857142857`
+
+Representative failing benchmark rows include both core repo prompts and imported trainer-candidate
+prompts:
+
+- `What does this repository research?`
+  - sources are correct, but the compiled answer still fails the benchmark contract
+- `How do you build the publication PDF locally?`
+  - the compiled answer says `make paper-build`, which does not satisfy the benchmark expectation
+- multiple `trainer-candidate` Discord-family prompts
+  - especially `prompts_shards_of_lokar_game`
+  - these still fail even though they are present in the compiled training set
+
+That means the current blocker has shifted again:
+
+- **the trainer now recompiles**
+- **the retrieval gate now passes**
+- **but the compiled DSPy bundle itself still fails its benchmark suite, so publish/promote are
+  intentionally blocked**
+
+Operational evidence collected for this update:
+
+- `kubectl -n repo-rag exec deploy/repo-rag-trainer-service -- sh -lc 'cat /workspace/repo-rag/artifacts/trainer/service-state.json'`
+- `kubectl -n repo-rag exec deploy/repo-rag-trainer-service -- sh -lc 'latest=$(ls -1 /workspace/repo-rag/artifacts/trainer/history | sort | tail -n 1); echo "$latest"; cat "/workspace/repo-rag/artifacts/trainer/history/$latest"'`
+- `kubectl -n repo-rag exec deploy/repo-rag-trainer-service -- sh -lc 'find /workspace/repo-rag/artifacts/dspy/published -maxdepth 1 -type f | sort | tail -n 10; printf "\\n---\\n"; for f in /workspace/repo-rag/artifacts/dspy/channels/*; do [ -f "$f" ] || continue; echo "===${f}==="; cat "$f"; echo; done'`
+- `kubectl -n repo-rag exec deploy/repo-rag-trainer-service -- sh -lc 'cat /workspace/repo-rag/artifacts/dspy/20260508T112905566179Z/metadata.json'`
+
+## 2026-05-08 local root cause and fix: the trainer bundle gate was benchmarking the merged Discord/candidate trainset instead of the curated repo-local benchmark bank
+
+The newest live metadata makes the remaining publish blocker structurally clear:
+
+- `training_example_count = 21`
+- `benchmark_summary.case_count = 21`
+
+That equality is the bug. The trainer was using the same merged compile input
+`artifacts/trainer/generated-training.yaml` for both:
+
+1. DSPy compilation
+2. bundle publish benchmarking
+
+But that merged training file intentionally contains imported `trainer-candidate` rows from worker
+traces, including prompts about external repositories such as:
+
+- `prompts_shards_of_lokar_game`
+- `prompts_goat_labs`
+- `prompts_debt_relief`
+
+Those rows are valid as compile-time supervision for the trainer lineage, but they are **not valid
+repo-local publication benchmarks** for this repository-grounded DSPy bundle. Their expected
+answers describe work done in other repositories, while the compiled program still retrieves only
+from the current repository corpus. As a result, the bundle gate was forced to score impossible
+cases and could never publish reliably even after retrieval itself recovered.
+
+The repository now contains a local fix for that split:
+
+- `src/repo_rag_lab/dspy_training.py`
+  - `DSPyTrainingConfig` now accepts an explicit `benchmark_path`
+  - `train_repository_program(...)` now loads compile examples from `training_path`, but evaluates
+    the compiled program against `benchmark_path` when provided
+  - training metadata now records:
+    - `training_path`
+    - `benchmark_path`
+    - `training_example_count`
+    - `benchmark_example_count`
+- `src/repo_rag_lab/utilities.py`
+  - trainer-side recompilation now compiles from
+    `artifacts/trainer/generated-training.yaml`
+  - but bundle publish benchmarking now evaluates against the curated base bank
+    `samples/training/repository_training_examples.yaml`
+
+The same pass also tightened two overly brittle repo-local benchmark answers inside
+`samples/training/repository_training_examples.yaml`:
+
+- `What does this repository research?`
+  - shortened to `It researches repository-grounded RAG over repository files.`
+- `How do you build the publication PDF locally?`
+  - shortened to `Use make paper-build to build the publication PDF locally.`
+
+Those changes keep the repo-local publish gate focused on the stable contract it is supposed to
+enforce, while still allowing the trainer to learn from the larger imported candidate corpus during
+compilation.
+
+Local verification for this fix:
+
+- `uv run python -m compileall src tests` -> `pass`
+- `uv run pytest tests/test_dspy_training.py tests/test_utilities.py -q` -> `pass` (`63 passed`)
+- `uv run pytest tests/test_repository_rag_bdd.py tests/test_benchmarks_and_notebook_scaffolding.py::test_repository_benchmarks_pass_with_current_training_samples tests/test_benchmarks_and_notebook_scaffolding.py::test_evaluate_retrieval_quality_suite_reports_top_k_summaries -q` -> `pass` (`5 passed`)
+- `uv run pytest tests/test_cli_and_dspy.py::test_cli_main_dspy_train_command tests/test_cli_and_dspy.py::test_cli_main_trainer_recompile_command -q` -> `pass` (`2 passed`)
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q` -> `pass` (`43 passed`)
+- `uv run repo-rag smoke-test` -> `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml` -> `pass`
+
+This is still a local code fix until the next rebuilt trainer image proves it in AKS, but the
+remaining live publish diagnosis is now much sharper:
+
+- retrieval gate failure has already been removed
+- champion drift recompilation is already working again
+- the next live question is whether a trainer image with this benchmark-path split can finally
+  publish a fresh bundle instead of scoring external Discord-family prompts as repo-local gate
+  failures
+
+This audit note should not be read as changing the long-term bundle contract. The repo-local
+`benchmark_path` split is only a temporary unblocker. The standing requirement remains:
+
+- one global universal DSPy bundle
+- incremental updates whenever an accepted/candidate run improves a family champion
+- inclusion of completely new prompt families in the next bundle candidate
+- future publication logic driven by request deltas plus retrieved-context deltas across prompt
+  families, not by hard dependence on repo/branch replay identity
+
+## 2026-05-08 local trainer-state follow-up: prompt-family assignment is now delta-aware instead of exact-question-only
+
+The current local trainer slice now makes one additional step toward that contract:
+
+- prompt-family assignment is no longer treated as “exact normalized question or nothing”
+- the trainer still keeps a durable candidate pool
+- champions are still materialized incrementally from that pool
+- bundle recompilation may still rebuild from the current champion set without violating the
+  incremental contract
+
+The local implementation now adds an explicit prompt-similarity layer beside the existing
+context-similarity layer:
+
+- close prompt variants can be grouped into one prompt family instead of always forking on exact
+  question text
+- larger prompt deltas now create a fresh family path instead of silently collapsing into the
+  incumbent family
+- context-group creation remains separate from family-champion replacement, so a new
+  context-group champion path does not automatically become the family champion unless the
+  family-level score/support comparison also prefers it
+
+The current code path uses explicit similarity bands rather than a dedicated user-facing
+`20% delta` knob, and that is the more correct long-term shape. One hard cutoff is too blunt for
+prompt/context grouping. The better contract is:
+
+- a strong-match band that confidently merges into the same family/group
+- a weak-match band that confidently splits into a new family/group
+- a gray zone in between where additional overlap heuristics decide the outcome
+
+So the trainer state model has now moved in the right direction: prompt identity is treated as a
+delta-aware grouping problem rather than as exact normalized-question equality or as one rigid
+percentage threshold.
+
+Local verification for this follow-up:
+
+- `uv run python -m compileall src tests` -> `pass`
+- `uv run pytest tests/test_training_samples.py -q` -> `pass` (`20 passed`)
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q` -> `pass` (`43 passed`)
+
+## 2026-05-08 local trainer-state follow-up: bundle benchmarking now follows the generated champion set while trainer-candidate rows may carry benchmark context
+
+The previous local bridge that pointed trainer benchmarking back at the curated repo-local bank was
+useful as a temporary diagnosis aid, but it did not satisfy the standing product requirement for
+one global incremental bundle. The current local slice moves the trainer one step closer to that
+contract without reintroducing repo/branch replay coupling.
+
+The current implementation now does three concrete things:
+
+1. imported trainer-candidate rows preserve benchmark evidence directly in the materialized
+   champion set:
+   - `benchmark_context`
+   - `benchmark_context_sources`
+2. trainer-side recompilation still compiles from
+   `artifacts/trainer/generated-training.yaml`
+3. trainer-side benchmarking now also evaluates the generated champion set, but each benchmark row
+   may answer from stored benchmark context instead of forcing live retrieval against the current
+   repo
+
+That means the trainer can now benchmark a global champion set in a mixed mode:
+
+- repo-local benchmark rows still run through normal repository retrieval
+- external prompt-family champion rows can be evaluated from stored benchmark context
+- the publication contract is therefore driven more by request/context deltas than by repository
+  identity
+
+The local code changes behind this slice are:
+
+- `src/repo_rag_lab/training_samples.py`
+  - `TrainingExample` now carries `benchmark_context` and `benchmark_context_sources`
+  - imported trace materialization extracts benchmark context from `context` /
+    `retrieved_context`
+  - normalized/materialized candidate records preserve those fields through champion-index and
+    generated-training flows
+- `src/repo_rag_lab/dspy_training.py`
+  - `DSPyTrainingConfig` accepts a distinct `benchmark_path`
+  - `RepositoryRAGProgram` exposes `answer_from_context(...)`
+  - `evaluate_repository_program(...)` uses stored benchmark context when available instead of
+    always forcing live retrieval
+- `src/repo_rag_lab/utilities.py`
+  - trainer recompile now benchmarks `artifacts/trainer/generated-training.yaml`, so bundle
+    evaluation follows the current champion set rather than a repo-local bridge file
+
+Local verification for this slice:
+
+- `uv run python -m compileall src tests` -> `pass`
+- `uv run pytest tests/test_training_samples.py tests/test_dspy_training.py tests/test_utilities.py -q` -> `pass` (`84 passed`)
+- `uv run pytest tests/test_repository_rag_bdd.py -q` -> `pass` (`3 passed`)
+- `uv run repo-rag smoke-test` -> `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml` -> `pass`
+
+This is still only a local code change until a rebuilt trainer image proves it in AKS, but it
+changes the remaining question substantially. The trainer is no longer blocked on “repo-local
+benchmark bank versus global trainset” as a structural contradiction. The next live question is
+whether the generated champion set, evaluated with preserved benchmark context where needed, is
+sufficiently strong to publish a new global bundle.

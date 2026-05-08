@@ -8,6 +8,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
@@ -27,10 +28,14 @@ class TrainingExample:
     expected_answer: str
     tags: tuple[str, ...]
     expected_sources: tuple[str, ...] = ()
+    benchmark_context: tuple[str, ...] = ()
+    benchmark_context_sources: tuple[str, ...] = ()
 
 
 TRAINER_CHAMPION_INDEX_SCHEMA_VERSION = 1
 TRAINER_CHAMPION_INDEX_KIND = "repo-rag-trainer-champion-index"
+PROMPT_FAMILY_MATCH_THRESHOLD = 0.8
+PROMPT_FAMILY_SOFT_THRESHOLD = 0.6
 CONTEXT_GROUP_MATCH_THRESHOLD = 0.8
 CONTEXT_GROUP_SOFT_THRESHOLD = 0.6
 CHAMPION_REPLACEMENT_DELTA = 0.05
@@ -95,12 +100,24 @@ def normalize_training_examples(records: list[dict[str, Any]]) -> list[TrainingE
             for source in record.get("expected_sources", [])
             if str(source).strip()
         )
+        benchmark_context = tuple(
+            str(text).strip()
+            for text in record.get("benchmark_context", [])
+            if str(text).strip()
+        )
+        benchmark_context_sources = tuple(
+            str(source).strip()
+            for source in record.get("benchmark_context_sources", [])
+            if str(source).strip()
+        )
         normalized.append(
             TrainingExample(
                 question=str(record["question"]).strip(),
                 expected_answer=str(record["expected_answer"]).strip(),
                 tags=tags,
                 expected_sources=expected_sources,
+                benchmark_context=benchmark_context,
+                benchmark_context_sources=benchmark_context_sources,
             )
         )
     return normalized
@@ -143,7 +160,11 @@ def summarize_training_examples(examples: list[TrainingExample]) -> dict[str, An
     unique_tags = sorted({tag for example in examples for tag in example.tags})
     return {
         "example_count": len(examples),
-        "benchmark_count": sum(1 for example in examples if example.expected_sources),
+        "benchmark_count": sum(
+            1
+            for example in examples
+            if example.expected_sources or example.benchmark_context
+        ),
         "questions": [example.question for example in examples],
         "unique_tags": unique_tags,
     }
@@ -188,6 +209,11 @@ def validate_training_examples(
                 continue
             if not (root / source).exists():
                 issues.append(f"Example {index} expected source does not exist: {source}")
+        for source in example.benchmark_context_sources:
+            if Path(source).is_absolute():
+                issues.append(
+                    f"Example {index} benchmark context source must be relative: {source}"
+                )
     return issues
 
 
@@ -495,6 +521,172 @@ def _prompt_family_id(question: str) -> str:
     return f"pf-{_stable_hash(normalized_question)}"
 
 
+def _question_tokens(question: object) -> list[str]:
+    """Return stable normalized lexical tokens for one prompt string."""
+
+    normalized_question = _normalize_question_text(question).casefold()
+    if not normalized_question:
+        return []
+    return [token for token in re.findall(r"[a-z0-9]+", normalized_question) if token]
+
+
+def _question_similarity(left: object, right: object) -> float:
+    """Return a bounded similarity score between two prompt strings."""
+
+    normalized_left = _normalize_question_text(left).casefold()
+    normalized_right = _normalize_question_text(right).casefold()
+    if not normalized_left and not normalized_right:
+        return 1.0
+    if not normalized_left or not normalized_right:
+        return 0.0
+    exact_score = _string_match_similarity(normalized_left, normalized_right)
+    token_score = _jaccard_similarity(
+        _question_tokens(normalized_left),
+        _question_tokens(normalized_right),
+    )
+    char_score = SequenceMatcher(a=normalized_left, b=normalized_right).ratio()
+    length_score = _count_similarity(
+        len(_question_tokens(normalized_left)),
+        len(_question_tokens(normalized_right)),
+    )
+    return round(
+        max(
+            exact_score,
+            (0.50 * token_score) + (0.35 * char_score) + (0.15 * length_score),
+        ),
+        6,
+    )
+
+
+def _family_question_variants(family_payload: Mapping[str, Any]) -> list[str]:
+    """Return the stored normalized question variants for one prompt family."""
+
+    variants: list[str] = []
+    seen: set[str] = set()
+
+    def _append_variant(value: object) -> None:
+        normalized = _normalize_question_text(value).strip()
+        if not normalized:
+            return
+        folded = normalized.casefold()
+        if folded in seen:
+            return
+        seen.add(folded)
+        variants.append(normalized)
+
+    _append_variant(family_payload.get("question"))
+    _append_variant(family_payload.get("normalized_question"))
+    stored_variants = family_payload.get("question_variants")
+    if isinstance(stored_variants, list):
+        for variant in stored_variants:
+            _append_variant(variant)
+    champion_record = family_payload.get("family_champion_record")
+    if isinstance(champion_record, Mapping):
+        _append_variant(champion_record.get("question"))
+    return variants
+
+
+def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) -> float:
+    """Return the best prompt similarity between one question and one prompt family."""
+
+    return max(
+        (
+            _question_similarity(question, variant)
+            for variant in _family_question_variants(family_payload)
+        ),
+        default=0.0,
+    )
+
+
+def _matches_prompt_family(question: str, family_payload: Mapping[str, Any]) -> bool:
+    """Return whether one question should join an existing prompt family."""
+
+    similarity = _prompt_family_similarity(question, family_payload)
+    if similarity >= PROMPT_FAMILY_MATCH_THRESHOLD:
+        return True
+    if similarity < PROMPT_FAMILY_SOFT_THRESHOLD:
+        return False
+    question_tokens = _question_tokens(question)
+    for variant in _family_question_variants(family_payload):
+        if (
+            _jaccard_similarity(question_tokens, _question_tokens(variant))
+            >= PROMPT_FAMILY_MATCH_THRESHOLD
+        ):
+            return True
+    return False
+
+
+def _refresh_prompt_family_summary(family_payload: dict[str, Any], question: str) -> None:
+    """Update one prompt-family summary so similar prompt variants stay grouped."""
+
+    normalized_question = _normalize_question_text(question)
+    if normalized_question:
+        family_payload["question"] = normalized_question
+        family_payload["normalized_question"] = normalized_question.casefold()
+    question_variants = family_payload.get("question_variants")
+    if not isinstance(question_variants, list):
+        question_variants = []
+        family_payload["question_variants"] = question_variants
+    merged_variants = _family_question_variants(
+        {
+            **family_payload,
+            "question_variants": [*question_variants, normalized_question],
+        }
+    )
+    family_payload["question_variants"] = merged_variants
+    family_payload["question_variant_count"] = len(merged_variants)
+
+
+def _find_or_create_prompt_family(
+    family_by_id: dict[str, dict[str, Any]],
+    family_order: list[str],
+    *,
+    question: str,
+    preferred_family_id: str | None = None,
+) -> tuple[dict[str, Any], bool]:
+    """Return the matching prompt family for one question, creating one when needed."""
+
+    best_family: dict[str, Any] | None = None
+    best_similarity = 0.0
+    for family_id in family_order:
+        family_payload = family_by_id.get(family_id)
+        if family_payload is None:
+            continue
+        similarity = _prompt_family_similarity(question, family_payload)
+        if similarity > best_similarity and _matches_prompt_family(question, family_payload):
+            best_family = family_payload
+            best_similarity = similarity
+    if best_family is not None:
+        _refresh_prompt_family_summary(best_family, question)
+        return best_family, False
+
+    prompt_family_id = str(preferred_family_id or _prompt_family_id(question)).strip()
+    if not prompt_family_id:
+        prompt_family_id = _prompt_family_id(question)
+    if prompt_family_id in family_by_id:
+        suffix = 2
+        candidate_id = f"{prompt_family_id}-{suffix}"
+        while candidate_id in family_by_id:
+            suffix += 1
+            candidate_id = f"{prompt_family_id}-{suffix}"
+        prompt_family_id = candidate_id
+    family_payload = {
+        "prompt_family_id": prompt_family_id,
+        "question": "",
+        "normalized_question": "",
+        "question_variants": [],
+        "question_variant_count": 0,
+        "family_champion_context_group_id": None,
+        "family_champion_score": None,
+        "family_champion_record": None,
+        "context_groups": [],
+    }
+    _refresh_prompt_family_summary(family_payload, question)
+    family_by_id[prompt_family_id] = family_payload
+    family_order.append(prompt_family_id)
+    return family_payload, True
+
+
 def _exact_snapshot_id(
     *,
     question: str,
@@ -548,6 +740,37 @@ def _trace_quality_score(
         + 0.05 * program_score
     )
     return round(score, 6)
+
+
+def _extract_benchmark_context(
+    payload: Mapping[str, Any],
+) -> tuple[list[str], list[str]]:
+    """Return compact benchmark context snippets plus their sources from one trace payload."""
+
+    rows: list[Mapping[str, Any]] = []
+    for field_name in ("retrieved_context", "context"):
+        raw_rows = payload.get(field_name)
+        if not isinstance(raw_rows, list):
+            continue
+        rows.extend(row for row in raw_rows if isinstance(row, Mapping))
+
+    context_texts: list[str] = []
+    context_sources: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    for row in rows:
+        source = " ".join(str(row.get("source") or "").strip().split())
+        text = _normalize_training_answer_whitespace(
+            str(row.get("text") or row.get("preview") or "").strip()
+        )
+        if not source and not text:
+            continue
+        key = (source.casefold(), text.casefold())
+        if key in seen:
+            continue
+        seen.add(key)
+        context_texts.append(text)
+        context_sources.append(source)
+    return context_texts, context_sources
 
 
 def _context_similarity(
@@ -672,9 +895,11 @@ def _load_champion_index(path: Path) -> dict[str, Any]:
     for family in families:
         if not isinstance(family, dict):
             continue
+        _refresh_prompt_family_summary(family, family.get("question") or "")
         family_record = family.get("family_champion_record")
         if isinstance(family_record, Mapping):
             family["family_champion_record"] = _serialize_candidate_record(family_record)
+            _refresh_prompt_family_summary(family, family_record.get("question") or "")
         context_groups = family.get("context_groups")
         if not isinstance(context_groups, list):
             continue
@@ -707,20 +932,29 @@ def _seed_champion_index_from_existing_records(
     """Build a first champion index from legacy materialized candidate rows."""
 
     index_payload = _fresh_champion_index()
-    canonical_records: dict[str, Mapping[str, Any]] = {}
+    family_by_id: dict[str, dict[str, Any]] = {}
     family_order: list[str] = []
     for record in records:
         question = _normalize_question_text(record.get("question"))
         if not question:
             continue
-        prompt_family_id = str(record.get("prompt_family_id") or _prompt_family_id(question))
-        if prompt_family_id not in canonical_records:
-            family_order.append(prompt_family_id)
-        canonical_records[prompt_family_id] = record
+        preferred_family_id = str(record.get("prompt_family_id") or "").strip() or None
+        family_payload, created_family = _find_or_create_prompt_family(
+            family_by_id,
+            family_order,
+            question=question,
+            preferred_family_id=preferred_family_id,
+        )
+        if created_family:
+            family_payload["seed_record"] = record
+            continue
+        family_payload["seed_record"] = record
 
     families: list[dict[str, Any]] = []
     for prompt_family_id in family_order:
-        record = canonical_records[prompt_family_id]
+        record = family_by_id[prompt_family_id].get("seed_record")
+        if not isinstance(record, Mapping):
+            continue
         question = _normalize_question_text(record.get("question"))
         sources = _normalized_source_tokens(record.get("expected_sources", []))
         context_group_id = str(
@@ -743,6 +977,10 @@ def _seed_champion_index_from_existing_records(
                 "prompt_family_id": prompt_family_id,
                 "question": question,
                 "normalized_question": question.casefold(),
+                "question_variants": _family_question_variants(family_by_id[prompt_family_id]),
+                "question_variant_count": len(
+                    _family_question_variants(family_by_id[prompt_family_id])
+                ),
                 "family_champion_context_group_id": context_group_id,
                 "family_champion_score": quality_score,
                 "family_champion_record": champion_record,
@@ -767,7 +1005,7 @@ def _seed_champion_index_from_existing_records(
                     }
                 ],
             }
-        )
+    )
     index_payload["prompt_families"] = families
     return index_payload
 
@@ -910,6 +1148,7 @@ def _refresh_family_champion(family_payload: dict[str, Any]) -> tuple[bool, str 
     family_payload["family_champion_context_group_id"] = best_group_id
     family_payload["family_champion_score"] = float(best_group.get("champion_score") or 0.0)
     family_payload["family_champion_record"] = best_record
+    _refresh_prompt_family_summary(family_payload, best_record.get("question") or "")
     changed = previous_group_id != best_group_id or previous_snapshot_id != best_snapshot_id
     return changed, previous_group_id, best_group_id
 
@@ -1112,6 +1351,16 @@ def _normalize_materialized_candidate_record(record: Mapping[str, Any]) -> dict[
         "expected_answer": normalized_answer,
         "tags": tags,
         "expected_sources": expected_sources,
+        "benchmark_context": [
+            str(text).strip()
+            for text in record.get("benchmark_context", [])
+            if str(text).strip()
+        ],
+        "benchmark_context_sources": [
+            str(source).strip()
+            for source in record.get("benchmark_context_sources", [])
+            if str(source).strip()
+        ],
     }
     candidate_status = str(record.get("candidate_status") or "").strip()
     if candidate_status:
@@ -1134,6 +1383,16 @@ def _normalize_combined_training_record(record: Mapping[str, Any]) -> dict[str, 
         "expected_sources": [
             str(source).strip()
             for source in normalized.get("expected_sources", [])
+            if str(source).strip()
+        ],
+        "benchmark_context": [
+            str(text).strip()
+            for text in normalized.get("benchmark_context", [])
+            if str(text).strip()
+        ],
+        "benchmark_context_sources": [
+            str(source).strip()
+            for source in normalized.get("benchmark_context_sources", [])
             if str(source).strip()
         ],
     }
@@ -1169,6 +1428,7 @@ def _training_candidate_from_trace_record(
     if not question:
         return None, "missing-question"
     prompt_family_id = _prompt_family_id(question)
+    benchmark_context, benchmark_context_sources = _extract_benchmark_context(payload)
     exact_snapshot_id = _exact_snapshot_id(
         question=question,
         expected_answer=expected_answer,
@@ -1206,6 +1466,8 @@ def _training_candidate_from_trace_record(
             # trainer keeps their source paths in provenance instead of turning them into
             # repo-local retrieval benchmarks.
             "expected_sources": [],
+            "benchmark_context": benchmark_context,
+            "benchmark_context_sources": benchmark_context_sources,
             "candidate_status": acceptance_status or None,
             "prompt_family_id": prompt_family_id,
             "exact_snapshot_id": exact_snapshot_id,
@@ -1226,6 +1488,7 @@ def _training_candidate_from_trace_record(
                 "acceptance_status": acceptance_status or None,
                 "used_baseline_fallback": outcome_mapping.get("used_baseline_fallback"),
                 "context_snapshot": context_snapshot,
+                "benchmark_context_count": len(benchmark_context),
                 "answer_normalization": answer_metadata,
             },
         },
@@ -1330,9 +1593,10 @@ def materialize_training_candidates(
     replaced_count = 0
     new_candidate_count = 0
     new_context_group_count = 0
+    new_prompt_family_count = 0
     prompt_family_count_before = len(family_by_id)
     for record in loaded_records:
-        prompt_family_id = str(record.get("prompt_family_id") or "").strip()
+        prompt_family_id_hint = str(record.get("prompt_family_id") or "").strip()
         exact_snapshot_id = str(record.get("exact_snapshot_id") or "").strip()
         question = _normalize_question_text(record.get("question"))
         provenance = record.get("provenance")
@@ -1341,26 +1605,22 @@ def materialize_training_candidates(
             candidate_snapshot = provenance.get("context_snapshot")
             if isinstance(candidate_snapshot, Mapping):
                 context_snapshot = dict(candidate_snapshot)
-        if not prompt_family_id or not exact_snapshot_id or not question or not context_snapshot:
+        if not exact_snapshot_id or not question or not context_snapshot:
             continue
         if exact_snapshot_id in seen_snapshot_ids:
             duplicate_count += 1
             continue
         seen_snapshot_ids.add(exact_snapshot_id)
 
-        family_payload = family_by_id.get(prompt_family_id)
-        if family_payload is None:
-            family_payload = {
-                "prompt_family_id": prompt_family_id,
-                "question": question,
-                "normalized_question": question.casefold(),
-                "family_champion_context_group_id": None,
-                "family_champion_score": None,
-                "family_champion_record": None,
-                "context_groups": [],
-            }
-            family_by_id[prompt_family_id] = family_payload
-            family_order.append(prompt_family_id)
+        family_payload, created_family = _find_or_create_prompt_family(
+            family_by_id,
+            family_order,
+            question=question,
+            preferred_family_id=prompt_family_id_hint or None,
+        )
+        if created_family:
+            new_prompt_family_count += 1
+        prompt_family_id = str(family_payload.get("prompt_family_id") or "").strip()
 
         previous_family_record = _family_champion_record(family_payload)
         previous_family_key = (
@@ -1382,6 +1642,7 @@ def materialize_training_candidates(
         context_group["trace_count"] = _group_support_count(context_group) + 1
         candidate_score = float(record.get("quality_score") or 0.0)
         serialized_record = _serialize_candidate_record(record)
+        serialized_record["prompt_family_id"] = prompt_family_id
         serialized_record["context_group_id"] = context_group["context_group_id"]
         support_mapping = context_group.get("support_by_record_key")
         if not isinstance(support_mapping, dict):
@@ -1467,7 +1728,10 @@ def materialize_training_candidates(
         "duplicate_count": duplicate_count,
         "replaced_count": replaced_count,
         "prompt_family_count": len(family_by_id),
-        "new_prompt_family_count": max(0, len(family_by_id) - prompt_family_count_before),
+        "new_prompt_family_count": max(
+            new_prompt_family_count,
+            max(0, len(family_by_id) - prompt_family_count_before),
+        ),
         "context_group_count": sum(
             len(family_payload.get("context_groups", []))
             for family_payload in family_by_id.values()

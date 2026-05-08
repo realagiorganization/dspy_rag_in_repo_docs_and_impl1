@@ -1898,6 +1898,7 @@ def _trainer_recompile_payload(
         root,
         training_config=DSPyTrainingConfig(
             training_path=generated_training_path,
+            benchmark_path=generated_training_path,
             run_name=run_name,
             bundle_version=bundle_version,
             run_family=run_family,

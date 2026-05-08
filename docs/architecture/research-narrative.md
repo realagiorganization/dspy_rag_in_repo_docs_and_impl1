@@ -436,11 +436,14 @@ At the time of this document:
   bridge from worker traces to DSPy review/compile inputs
 - that trainer materialization path now also persists a separate
   `artifacts/trainer/champion-index.json` state surface, where imported traces are grouped first
-  by prompt family (normalized question) and then by soft retrieval-context groups instead of
-  using question-level `last write wins`; the compile-facing `training-candidates.yaml` file is now
-  materialized from one family champion per prompt family, so replaying many worker traces for the
-  same evolving prompt no longer necessarily creates recompile churn unless the effective family
-  champion actually changes; trainer-cycle and trainer-service summaries now also expose
+  by prompt family and then by soft retrieval-context groups instead of using question-level `last
+  write wins`; prompt-family assignment is no longer intended to mean “exact normalized question
+  only”, because the trainer now treats prompt identity as a delta-aware surface and can keep close
+  prompt variants inside one family while still splitting larger prompt deltas into a new family
+  path; the compile-facing `training-candidates.yaml` file is now materialized from one family
+  champion per prompt family, so replaying many worker traces for the same evolving prompt no
+  longer necessarily creates recompile churn unless the effective family champion actually changes;
+  trainer-cycle and trainer-service summaries now also expose
   `prompt_family_count`, `context_group_count`, and `champion_index_path`, so that grouping
   behavior is visible without reopening the raw JSON state by hand; repeated same-answer traces now
   increase explicit champion support inside one context group, and the group summary now merges
@@ -619,7 +622,59 @@ The repository now guards that blend by adding one normalized lexical-score term
 combiner, so strong path-aware lexical hits are no longer discarded by semantic noise. That change
 matters both for the standalone retrieval gate and for DSPy bundle publication, because the trainer
 reuses the same retrieval path while evaluating whether a compiled bundle may be published or
-promoted.
+promoted. The next live trainer cycle then exposed one more layer below retrieval: the trainer was
+compiling from the merged `artifacts/trainer/generated-training.yaml` corpus and also using that
+same merged file as the publish-gate benchmark bank. That made the publication gate structurally
+wrong for a global bundle, because imported `trainer-candidate` examples about external prompt
+families such as `prompts_shards_of_lokar_game`, `prompts_goat_labs`, and `prompts_debt_relief`
+were being scored by forcing live retrieval against the current repository.
+
+The repository now keeps the benchmark path global while changing what each benchmark row carries.
+Imported trainer-candidate rows can preserve:
+
+- `benchmark_context`
+- `benchmark_context_sources`
+
+and DSPy evaluation can answer those cases from the stored benchmark context instead of forcing the
+compiled program to re-retrieve evidence from the current repo. Trainer recompilation therefore now
+works like this:
+
+- compile/trainset input comes from `artifacts/trainer/generated-training.yaml`
+- publish-gate benchmarking also evaluates the current generated champion set
+- repo-local benchmark rows still use live retrieval
+- external or cross-family champion rows may carry their own benchmark context, so the publish gate
+  can evaluate them without depending on repo/branch replay identity
+
+This is much closer to the intended contract for one global universal bundle. The standing product
+requirement is that publication should be family-aware and delta-aware:
+
+- compare candidate prompts against prior champions by request delta
+- compare retrieved evidence against prior champions by context delta
+- treat repo identity, branch identity, or any other fixed replay-repository surface as optional
+  supporting metadata, not the primary validation contract
+
+In other words, the target publication logic is “global champion evolution by prompt/context
+deltas,” not “repo-local gate forever.”
+
+There is also one important implementation clarification: incremental learning here does not mean
+the trainer must patch an existing DSPy bundle in place forever. The current and intended pattern
+is:
+
+- keep a durable candidate pool
+- maintain champion state incrementally across runs
+- materialize the compile-facing dataset from the current champion set
+- then compile a fresh bundle candidate from that reduced champion set
+
+So bundle recompilation from champions is expected; what should not happen is recompiling directly
+from the entire raw candidate pool or treating every replayed candidate as a fresh publish event.
+Likewise, a large request/context delta should first create a new context-group or prompt-family
+champion path, and only then compete at the family/bundle level. The code now reflects that in two
+places:
+
+- prompt-family assignment is no longer exact-question-only, but uses prompt similarity to keep
+  close variants together and split larger prompt deltas into a new family path
+- trainer-candidate rows can preserve benchmark context so global bundle benchmarking follows the
+  champion set instead of collapsing back to repo-local evaluation
 
 ## Tensions And Open Work
 

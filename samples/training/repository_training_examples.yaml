@@ -1,8 +1,6 @@
 - question: What does this repository research?
   expected_answer: >-
-    This repository researches repository-grounded question answering and RAG
-    workflows over repository files, with shared utilities, notebooks,
-    evaluation, and Azure deployment support.
+    It researches repository-grounded RAG over repository files.
   tags:
     - repo
     - rag
@@ -71,8 +69,7 @@
     - docs/architecture/package-api.md
 - question: How do you build the publication PDF locally?
   expected_answer: >-
-    Run make paper-build to regenerate the publication inventories and build
-    the committed publication PDFs locally.
+    Use make paper-build to build the publication PDF locally.
   tags:
     - publication
     - build
