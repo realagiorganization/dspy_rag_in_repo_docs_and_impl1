@@ -73,6 +73,13 @@ jobs:
           AZURE_OPENAI_DEPLOYMENT_NAME: ${{ vars.AZURE_OPENAI_DEPLOYMENT_NAME }}
           AZURE_OPENAI_API_VERSION: ${{ vars.AZURE_OPENAI_API_VERSION }}
           AZURE_OPENAI_MODEL_NAME: ${{ vars.AZURE_OPENAI_MODEL_NAME }}
+          DSPY_MODEL: ${{ vars.DSPY_MODEL }}
+          DSPY_API_BASE: ${{ vars.DSPY_API_BASE }}
+          DSPY_API_VERSION: ${{ vars.DSPY_API_VERSION || vars.AZURE_OPENAI_API_VERSION }}
+          DSPY_API_KEY: ${{ secrets.DSPY_API_KEY || secrets.AZURE_OPENAI_API_KEY }}
+          DSPY_MODEL_TYPE: ${{ vars.DSPY_MODEL_TYPE || 'chat' }}
+          DSPY_TEMPERATURE: ${{ vars.DSPY_TEMPERATURE }}
+          DSPY_MAX_TOKENS: ${{ vars.DSPY_MAX_TOKENS }}
         run: uv run pytest tests/test_live_azure_integration.py -q
 
       - name: Build wheel and source distribution

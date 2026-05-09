@@ -65,6 +65,48 @@ def test_resolve_dspy_lm_config_uses_repo_azure_env(monkeypatch: pytest.MonkeyPa
     assert config.api_version == "2024-10-21"
 
 
+def test_resolve_dspy_lm_config_prefers_dspy_model_with_shared_azure_transport(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DSPY_MODEL", "azure/dspy-helper")
+    monkeypatch.delenv("DSPY_API_KEY", raising=False)
+    monkeypatch.delenv("DSPY_API_BASE", raising=False)
+    monkeypatch.delenv("DSPY_API_VERSION", raising=False)
+    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT_NAME", "repo-rag-ft")
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "secret")
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+
+    config = resolve_dspy_lm_config()
+
+    assert config is not None
+    assert config.model == "azure/dspy-helper"
+    assert config.api_key == "secret"
+    assert config.api_base == "https://example.openai.azure.com"
+    assert config.api_version == "2024-10-21"
+
+
+def test_resolve_dspy_lm_config_prefers_full_dspy_env_over_repo_azure_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DSPY_MODEL", "azure/dspy-helper")
+    monkeypatch.setenv("DSPY_API_KEY", "dspy-secret")
+    monkeypatch.setenv("DSPY_API_BASE", "https://dspy-helper.openai.azure.com/")
+    monkeypatch.setenv("DSPY_API_VERSION", "2025-03-01-preview")
+    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT_NAME", "repo-rag-ft")
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "secret")
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+
+    config = resolve_dspy_lm_config()
+
+    assert config is not None
+    assert config.model == "azure/dspy-helper"
+    assert config.api_key == "dspy-secret"
+    assert config.api_base == "https://dspy-helper.openai.azure.com"
+    assert config.api_version == "2025-03-01-preview"
+
+
 def test_resolve_dspy_lm_config_uses_chat_completions_uri(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT_NAME", "repo-rag-ft")
     monkeypatch.setenv("AZURE_OPENAI_API_KEY", "secret")
@@ -300,6 +342,29 @@ def test_repository_answer_metric_accepts_live_repo_summary_style_answer() -> No
     assert repository_answer_metric(Example(), Prediction()) is True
 
 
+def test_repository_answer_metric_accepts_benchmark_context_grounded_summary() -> None:
+    class Example:
+        answer = (
+            "The requested deliverable is already present in the repository, with a demo GIF "
+            "embedded in the README and stored under docs/assets."
+        )
+        expected_sources = ()
+        benchmark_context = (
+            "# national-debt-relief\n## Demo\n"
+            "![Automated demo walkthrough](docs/assets/national-debt-relief-demo.gif)\n"
+            "Automated walkthrough of the wireframe.",
+        )
+
+    class Prediction:
+        answer = (
+            "This appears to already be done in the repository because the README embeds the demo "
+            "GIF at docs/assets/national-debt-relief-demo.gif."
+        )
+        context_sources = ("README.md",)
+
+    assert repository_answer_metric(Example(), Prediction()) is True
+
+
 def test_evaluate_repository_program_reports_pass_rate() -> None:
     class FakeProgram:
         def __call__(self, *, question: str) -> object:
@@ -370,7 +435,32 @@ def test_evaluate_repository_program_uses_benchmark_context_when_available() -> 
 
     assert summary["case_count"] == 1
     assert summary["pass_count"] == 1
+    assert summary["skipped_count"] == 0
     assert summary["results"][0]["benchmark_context_sources"] == ["README.md"]
+
+
+def test_evaluate_repository_program_skips_contextless_trainer_candidates() -> None:
+    class FakeProgram:
+        def __call__(self, *, question: str) -> object:
+            raise AssertionError(f"unexpected live retrieval call for {question}")
+
+    summary = evaluate_repository_program(
+        FakeProgram(),
+        Path("."),
+        [
+            TrainingExample(
+                question="External trainer row without preserved context",
+                expected_answer="Some historical execution answer.",
+                tags=("trainer-candidate", "candidate"),
+            )
+        ],
+    )
+
+    assert summary["case_count"] == 0
+    assert summary["pass_count"] == 0
+    assert summary["skipped_count"] == 1
+    assert summary["results"][0]["passed"] is None
+    assert summary["results"][0]["skip_reason"] == "missing-benchmark-context"
 
 
 def test_repository_rag_program_includes_source_paths_in_generation_context(

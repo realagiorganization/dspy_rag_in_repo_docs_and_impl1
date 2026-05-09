@@ -457,6 +457,7 @@ def test_run_bundle_publish_promote_and_rollback_mirror_to_remote_blob_store(
         connection_string=None,
         trace_container="repo-rag-training-traces",
         bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
         queue_name="repo-rag-training",
     )
 
@@ -776,6 +777,52 @@ def test_run_trace_enqueue_and_drain_round_trip(tmp_path: Path) -> None:
     assert imported_payload["outcome"]["acceptance_status"] == "accepted"
     processed_item_path = tmp_path / drained["items"][0]["processed_queue_item_path"]
     assert processed_item_path.exists()
+
+
+def test_run_trace_enqueue_records_batch_trace_mirror(tmp_path: Path) -> None:
+    external_trace_path = tmp_path / "external-trace.json"
+    external_trace_path.write_text(
+        json.dumps(
+            {
+                "trace_record_kind": "repo-rag-trace-record",
+                "source_command": "ask",
+                "source_command_status": "success",
+                "question": "How are turn traces mirrored by batch?",
+                "sources": ["docs/planning/per-turn-dspy-mediation-contract.md"],
+                "trace": {
+                    "schema_version": 1,
+                    "trace_kind": "repo-rag-runtime",
+                    "question": "How are turn traces mirrored by batch?",
+                    "mode": "baseline",
+                    "retrieval_mode": "idf-rerank",
+                    "sources": ["docs/planning/per-turn-dspy-mediation-contract.md"],
+                    "source_count": 1,
+                    "context_count": 1,
+                    "context_field": "context",
+                    "mcp_candidate_count": 0,
+                    "answer_length": 33,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    queued = json.loads(
+        run_trace_enqueue(
+            tmp_path,
+            trace_path=external_trace_path,
+            queue_name="dataset",
+            trace_name="worker-demo",
+            batch_name="20260508T223000Z",
+        )
+    )
+
+    assert queued["command"] == "trace-enqueue"
+    assert queued["batch_name"] == "20260508T223000Z"
+    batch_trace_path = tmp_path / queued["batch_trace_path"]
+    assert batch_trace_path.exists()
+    batch_payload = json.loads(batch_trace_path.read_text(encoding="utf-8"))
+    assert batch_payload["batch_name"] == "20260508T223000Z"
 
 
 def test_versioned_training_run_name_returns_high_resolution_timestamp_only() -> None:
@@ -1811,6 +1858,7 @@ def test_run_trainer_cycle_uploads_remote_bundle_when_publish_succeeds(
             connection_string=None,
             trace_container="repo-rag-training-traces",
             bundle_container="repo-rag-bundles",
+            champion_container="repo-rag-champions",
             queue_name="repo-rag-training",
         ),
     )

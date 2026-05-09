@@ -13,6 +13,9 @@ Read this file as the top-level map. Then drop into the more specific docs:
   [docs/planning/dataset-integration-plan.md](../planning/dataset-integration-plan.md) for the
   current execution plans that turn the research lab into a reusable runtime plus `dataset`
   integration target.
+- [docs/planning/per-turn-dspy-mediation-contract.md](../planning/per-turn-dspy-mediation-contract.md)
+  for the current contract that defines how DSPy is supposed to work inside the `codex exec`
+  pipeline.
 - [publication/README.md](../../publication/README.md) and
   [publication/repository-rag-lab-article.pdf](../../publication/repository-rag-lab-article.pdf) for
   the publication-style walkthrough.
@@ -223,7 +226,24 @@ PVC snapshot write. The latest local worker-artifact review now also proves one 
 `fresh -> resumed` transition with `resume_command_mode=explicit-session-id`,
 `resumed_run_count=1`, and a prompt-token drop from `2568062` on the fresh baseline to `103760`
 on the resumed lane, so the dominant execution-memory blocker has moved from session persistence
-to MCP-guided discovery quality. A further local slice now supports divergent
+to MCP-guided discovery quality.
+
+That same worker line now has a second architectural correction: DSPy is no longer modeled as
+“optimize the initial user prompt and hope the rest of the autonomous rollout follows”. The active
+target contract is the one in
+[docs/planning/per-turn-dspy-mediation-contract.md](../planning/per-turn-dspy-mediation-contract.md):
+every outbound Codex turn must flow through the same proxy path, the proxy must gate DSPy
+mediation on champion prompt-family support, unsupported turns must pass through unchanged but
+still become candidate traces, and trainer-side champion replacement is allowed to use only
+`hits / total` plus prompt-family semantic similarity thresholds `0.8` and `0.6`. A newly
+clarified part of that same contract is that every outbound Codex turn must first be rewritten
+from `original_prompt` into `reformulated_prompt`, and the reformulated form becomes the
+prompt-family, champion, trace, and final DSPy-program surface rather than remaining hidden.
+The same contract now treats the observable per-turn `command_trace` as equally important
+lineage: when the sequence is available it must be preserved beside the reformulated prompt in
+the trace and champion state, even though not every turn exposes a controllable command path.
+
+A further local slice now supports divergent
 task-family forks: operators or prompts can supply `DATASET_CODEX_SESSION_LANE`,
 `codex_session_lane`, or `session_lane`, and when that lane is new but the base repository lane
 already has a durable snapshot the worker restores from the base lane, resumes Codex, and records
@@ -683,6 +703,20 @@ The trainer now treats that as a real champion refresh instead of a mere support
 That matters because global bundle publication depends on the compile-facing champion set carrying
 the freshest benchmark context, not just the freshest family/question identity.
 
+Another publication-edge correction follows from the same universal-bundle contract: external
+trainer-candidate champions are only fair benchmark cases when they carry preserved benchmark
+context. If a historical champion row has neither repo-local expected sources nor stored benchmark
+context, it is champion state but not a replayable benchmark. The bundle gate now treats those rows
+as skipped rather than failed, while context-backed external rows may pass through a
+context-grounded answer match instead of needing to mimic the old worker execution answer verbatim.
+
+One more upstream contamination edge also matters: some imported trainer-candidate rows do carry
+stored benchmark context, but that context still does not support the preserved expected answer.
+Those rows are now pruned during trace import, champion-index reload, and combined training-example
+materialization so that the compile-facing champion set keeps only replayable context-backed cases,
+while older contextless historical rows still remain trainer state and are skipped later by the
+bundle benchmark contract.
+
 ## Tensions And Open Work
 
 The narrative is coherent, but not complete. The main open tensions are:
@@ -691,6 +725,9 @@ The narrative is coherent, but not complete. The main open tensions are:
 - notebook execution is well observed, but notebook conclusions still depend on the quality of the
   underlying corpus and benchmarks
 - deployment handoff is documented, but live remote deployment is intentionally outside repo scope
+- the runtime now has a first-class contract for a dedicated DSPy helper model selected through
+  `DSPY_MODEL`, with explicit precedence over generic `AZURE_OPENAI_*` fallbacks and mirrored
+  delivery through the dataset worker manifest plus GitHub Actions env path
 - verification evidence is strong, but the index docs must be kept synchronized so the narrative
   does not drift behind the latest audit and CI state; the current CI contract is stricter than
   the local MCP/debug loop alone and now explicitly depends on `uv run mypy src tests`,

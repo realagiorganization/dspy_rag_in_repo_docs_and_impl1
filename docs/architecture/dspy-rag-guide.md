@@ -3,7 +3,9 @@
 This file centralizes the repository's DSPy-related code, data, notebooks, tests, and workflow
 surfaces. Use it as the main map for how repository content becomes retrieval context, how
 training and evaluation samples are prepared, how the optional DSPy execution path works today,
-and where true DSPy optimizer-driven development still needs to be added.
+and how the `codex exec` runtime is being moved from coarse prompt-time augmentation toward
+per-turn DSPy mediation under
+[docs/planning/per-turn-dspy-mediation-contract.md](per-turn-dspy-mediation-contract.md).
 
 ## Table Of Contents
 
@@ -25,6 +27,19 @@ and where true DSPy optimizer-driven development still needs to be added.
 
 The repository now has both an optional DSPy runtime path and a real compile-save-reload DSPy
 program path.
+
+The active target contract for the `codex exec` runtime is now narrower and more explicit than the
+older “inject one helpful repo block” model:
+
+- `codex exec` stays the primary orchestrator
+- the proxy must inspect every outbound Codex turn, not only the initial user prompt
+- the proxy must first rewrite `original_prompt` into `reformulated_prompt`
+- DSPy mediation is allowed only when the current turn has champion prompt-family support for that
+  `reformulated_prompt`
+- unsupported turns pass through unchanged but still become trainer candidates
+- champion replacement is allowed to use only `hits / total` plus prompt-family similarity
+  thresholds `0.8` and `0.6`
+- per-turn traces are accumulated locally and handed off as one batch after the run finishes
 
 Present now:
 
@@ -98,6 +113,11 @@ The baseline path above is runnable as-is. The DSPy path can now resolve LM conf
 - repository Azure variables such as `AZURE_OPENAI_DEPLOYMENT_NAME` and `AZURE_OPENAI_ENDPOINT`
 - `OPENAI_API_KEY` for the default OpenAI fallback model
 
+When both `DSPY_*` and generic Azure variables are present, the DSPy runtime prefers
+`DSPY_MODEL`. That lets the Codex proxy and trainer use one dedicated helper deployment such as
+`DSPY_MODEL=azure/gpt-4.1-mini` while still reusing the shared `AZURE_OPENAI_*` transport values
+unless `DSPY_API_BASE`, `DSPY_API_VERSION`, or `DSPY_API_KEY` override them explicitly.
+
 Once a program is compiled, `make ask-dspy` will automatically reuse the latest saved artifact
 when LM configuration is available. You can still point the runtime at an explicit saved artifact
 directly:
@@ -135,12 +155,19 @@ For downstream worker integration, the key new surface is the shared machine-rea
 
 For the containerized `dataset` worker, `codex` now stays the primary executor while
 `repo-rag serve-codex-proxy` acts as a transport-level mediation layer in front of Azure Codex
-Responses traffic. In the normal path that proxy runs `RAG -> DSPy` together, and if either layer
-is weak it degrades only that layer to heuristics before finally falling back to direct pass-through.
-The proxy no longer injects every preview blindly: it now classifies trivial vs deep tasks, keeps a
-strict developer-block token budget, prefers top-k essential file hints over long evidence dumps,
-persists mediation cache entries on disk, and suppresses low-signal injections entirely when repo
-grounding would only add boilerplate.
+Responses traffic. The current target is no longer “improve only the first prompt”. The target is:
+
+- intercept every outbound Codex request
+- extract the latest turn `original_prompt`
+- rewrite it into `reformulated_prompt`
+- check champion prompt-family support on that reformulated prompt
+- run DSPy mediation only for supported reformulated families
+- preserve the turn `command_trace` when the step sequence is observable
+- record every turn as a per-turn DSPy trace candidate
+- batch those traces after the run for trainer ingestion
+
+The proxy still keeps its token-budget and low-signal suppression behavior for injected developer
+messages, but those transport details are subordinate to the per-turn DSPy contract above.
 
 Those JSON surfaces now carry a shared envelope:
 

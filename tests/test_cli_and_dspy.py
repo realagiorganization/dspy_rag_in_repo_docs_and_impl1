@@ -1236,6 +1236,7 @@ def test_cli_main_trace_enqueue_command(
         trace_path: Path,
         queue_name: str = "default",
         trace_name: str | None = None,
+        batch_name: str | None = None,
         outcome_path: Path | None = None,
     ) -> str:
         return json.dumps(
@@ -1254,6 +1255,7 @@ def test_cli_main_trace_enqueue_command(
                 "trace_path": str(trace_path),
                 "queue_name": queue_name,
                 "trace_name": trace_name,
+                "batch_name": batch_name,
                 "outcome_path": str(outcome_path) if outcome_path is not None else None,
             }
         )
@@ -1268,6 +1270,7 @@ def test_cli_main_trace_enqueue_command(
                 "root": str(tmp_path),
                 "trace_path": "external.json",
                 "trace_name": "queued-demo",
+                "batch_name": "20260508T223000Z",
                 "queue_name": "dataset",
                 "outcome_path": "accepted.json",
             },
@@ -1280,6 +1283,7 @@ def test_cli_main_trace_enqueue_command(
     output = capsys.readouterr().out
     assert '"command": "trace-enqueue"' in output
     assert '"queue_item_path": "artifacts/traces/queued/dataset/demo.json"' in output
+    assert '"batch_name": "20260508T223000Z"' in output
     assert '"queue_name": "dataset"' in output
 
 

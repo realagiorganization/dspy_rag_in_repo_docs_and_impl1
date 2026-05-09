@@ -14,11 +14,15 @@ from typing import Literal
 from .azure_artifacts import (
     AzureArtifactConfig,
     AzureArtifactStore,
+    batched_trace_blob_name,
     bundle_blob_names,
     bundle_channel_blob_name,
+    champion_blob_names,
+    champion_current_blob_name,
     decode_queue_message,
     failed_trace_blob_name,
     processed_trace_blob_name,
+    repo_rag_champion_container,
     queued_trace_blob_name,
     repo_rag_bundle_container,
     repo_rag_trace_container,
@@ -53,6 +57,7 @@ DEFAULT_TRAINER_TRAINING_CANDIDATES_SUMMARY_PATH = (
     DEFAULT_TRAINER_SERVICE_DIR / "training-candidates-summary.json"
 )
 DEFAULT_TRAINER_CHAMPION_INDEX_PATH = DEFAULT_TRAINER_SERVICE_DIR / "champion-index.json"
+DEFAULT_REMOTE_CHAMPION_CACHE_DIR = DEFAULT_TRAINER_SERVICE_DIR / "remote-champions"
 DEFAULT_TRAINER_RECOVERED_TRACES_DIR = DEFAULT_TRAINER_SERVICE_DIR / "recovered-imported-traces"
 DEFAULT_TRAINER_GENERATED_TRAINING_PATH = DEFAULT_TRAINER_SERVICE_DIR / "generated-training.yaml"
 DEFAULT_TRAINER_GENERATED_TRAINING_SUMMARY_PATH = (
@@ -86,6 +91,14 @@ class RuntimeTraceContext:
     answer_length: int | None = None
     context_field: str = "context"
     evidence_items: Sequence[Mapping[str, object]] = ()
+    command_trace: Sequence[Mapping[str, object]] = ()
+    original_prompt: str | None = None
+    reformulated_prompt: str | None = None
+    prompt_family_id: str | None = None
+    prompt_family_similarity: float | None = None
+    prompt_family_band: str | None = None
+    mediation_metric_hits: int | None = None
+    mediation_metric_total: int | None = None
 
 
 def _relative_to_root(path: Path, root: Path) -> str:
@@ -188,6 +201,14 @@ def _int_or_none(value: object) -> int | None:
     if not isinstance(value, int):
         return None
     return int(value)
+
+
+def _float_or_none(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
 
 
 def _utc_now_isoformat() -> str:
@@ -594,6 +615,94 @@ def fetch_remote_bundle(
     }
 
 
+def _utc_timestamp_token() -> str:
+    return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+
+
+def upload_remote_champion_index(
+    root: Path,
+    *,
+    champion_index_path: Path,
+) -> dict[str, object] | None:
+    """Upload one champion index into the remote champion container when configured."""
+
+    config = resolve_azure_artifact_config()
+    if config is None or not config.champions_enabled:
+        return None
+    payload = load_json_object(champion_index_path)
+    resolved_root = root.resolve()
+    resolved_champion_index_path = champion_index_path.resolve()
+    store = AzureArtifactStore(config)
+    container = repo_rag_champion_container(config)
+    champion_version = _utc_timestamp_token()
+    blob_map = champion_blob_names(champion_version)
+    current_payload = {
+        "schema_version": 1,
+        "champion_state_kind": "repo-rag-champion-state",
+        "updated_at": _utc_now_isoformat(),
+        "current_version": champion_version,
+        "current_champion_index_blob": blob_map["champion_index"],
+        "current_prompt_family_count": len(payload.get("prompt_families", []))
+        if isinstance(payload.get("prompt_families"), list)
+        else 0,
+    }
+    store.upload_text(
+        container,
+        blob_map["champion_index"],
+        resolved_champion_index_path.read_text(encoding="utf-8"),
+    )
+    store.upload_json(container, blob_map["current"], current_payload)
+    return {
+        "storage_backend": "azure-blob",
+        "champion_container": container,
+        "champion_version": champion_version,
+        "remote_champion_blobs": blob_map,
+        "champion_index_path": _relative_to_root(resolved_champion_index_path, resolved_root),
+    }
+
+
+def fetch_remote_champion_index(root: Path) -> dict[str, object] | None:
+    """Download the current remote champion index into a local cache when configured."""
+
+    resolved_root = root.resolve()
+    config = resolve_azure_artifact_config()
+    if config is None or not config.champions_enabled:
+        return None
+    store = AzureArtifactStore(config)
+    container = repo_rag_champion_container(config)
+    current_blob = champion_current_blob_name()
+    if not store.blob_exists(container, current_blob):
+        return None
+    current_payload = store.download_json(container, current_blob)
+    champion_version = _string_or_none(current_payload.get("current_version"))
+    champion_blob = _string_or_none(current_payload.get("current_champion_index_blob"))
+    if champion_version is None or champion_blob is None:
+        return None
+    cache_dir = resolved_root / DEFAULT_REMOTE_CHAMPION_CACHE_DIR / champion_version
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    champion_index_path = cache_dir / "champion-index.json"
+    current_path = cache_dir / "current.json"
+    champion_index_path.write_text(
+        store.download_text(container, champion_blob),
+        encoding="utf-8",
+    )
+    current_path.write_text(
+        json.dumps(current_payload, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return {
+        "champion_found": True,
+        "storage_backend": "azure-blob",
+        "champion_container": container,
+        "champion_version": champion_version,
+        "current_blob": current_blob,
+        "champion_index_blob": champion_blob,
+        "cache_dir": _relative_to_root(cache_dir, resolved_root),
+        "champion_index_path": _relative_to_root(champion_index_path, resolved_root),
+        "current_state_path": _relative_to_root(current_path, resolved_root),
+    }
+
+
 def published_bundle_record_path(root: Path, bundle_version: str) -> Path:
     """Return the publish-record path for one bundle version."""
 
@@ -974,6 +1083,14 @@ def build_runtime_trace(trace: RuntimeTraceContext) -> dict[str, object]:
         "evidence_count": len(evidence_fingerprints),
         "mcp_candidate_count": trace.mcp_candidate_count,
         "answer_length": trace.answer_length,
+        "command_trace": _mapping_list(trace.command_trace),
+        "original_prompt": trace.original_prompt,
+        "reformulated_prompt": trace.reformulated_prompt,
+        "prompt_family_id": trace.prompt_family_id,
+        "prompt_family_similarity": trace.prompt_family_similarity,
+        "prompt_family_band": trace.prompt_family_band,
+        "mediation_metric_hits": trace.mediation_metric_hits,
+        "mediation_metric_total": trace.mediation_metric_total,
     }
     return payload
 
@@ -1007,6 +1124,9 @@ def _normalize_runtime_trace(payload: Mapping[str, object]) -> dict[str, object]
     evidence_count = _int_or_none(payload.get("evidence_count"))
     mcp_candidate_count = _int_or_none(payload.get("mcp_candidate_count"))
     answer_length = _int_or_none(payload.get("answer_length"))
+    prompt_family_similarity = _float_or_none(payload.get("prompt_family_similarity"))
+    mediation_metric_hits = _int_or_none(payload.get("mediation_metric_hits"))
+    mediation_metric_total = _int_or_none(payload.get("mediation_metric_total"))
     sources = _string_list(payload.get("sources"))
     evidence_fingerprints = _dedupe_string_list(_string_list(payload.get("evidence_fingerprints")))
     return {
@@ -1034,17 +1154,28 @@ def _normalize_runtime_trace(payload: Mapping[str, object]) -> dict[str, object]
         else len(evidence_fingerprints),
         "mcp_candidate_count": mcp_candidate_count if mcp_candidate_count is not None else 0,
         "answer_length": answer_length,
+        "command_trace": _mapping_list(payload.get("command_trace")),
+        "original_prompt": _string_or_none(payload.get("original_prompt")),
+        "reformulated_prompt": _string_or_none(payload.get("reformulated_prompt")),
+        "prompt_family_id": _string_or_none(payload.get("prompt_family_id")),
+        "prompt_family_similarity": prompt_family_similarity,
+        "prompt_family_band": _string_or_none(payload.get("prompt_family_band")),
+        "mediation_metric_hits": mediation_metric_hits,
+        "mediation_metric_total": mediation_metric_total,
     }
 
 
 def _trace_record_snapshot(payload: Mapping[str, object]) -> dict[str, object]:
     return {
         "question": _string_or_none(payload.get("question")),
+        "original_prompt": _string_or_none(payload.get("original_prompt")),
+        "reformulated_prompt": _string_or_none(payload.get("reformulated_prompt")),
         "answer": _string_or_none(payload.get("answer")),
         "response_text": _string_or_none(payload.get("response_text")),
         "sources": _string_list(payload.get("sources")),
         "context": _list_or_empty(payload.get("context")),
         "retrieved_context": _list_or_empty(payload.get("retrieved_context")),
+        "command_trace": _list_or_empty(payload.get("command_trace")),
         "warnings": _string_list(payload.get("source_warnings") or payload.get("warnings")),
         "artifact_metadata": _mapping_or_none(
             payload.get("source_artifact_metadata") or payload.get("artifact_metadata")
@@ -1126,11 +1257,14 @@ def normalize_trace_record_payload(payload: Mapping[str, object]) -> dict[str, o
             raise ValueError("Trace record payload must include a `trace` object.")
         snapshot = {
             "question": _string_or_none(payload.get("question")),
+            "original_prompt": _string_or_none(payload.get("original_prompt")),
+            "reformulated_prompt": _string_or_none(payload.get("reformulated_prompt")),
             "answer": _string_or_none(payload.get("answer")),
             "response_text": _string_or_none(payload.get("response_text")),
             "sources": _string_list(payload.get("sources")),
             "context": _list_or_empty(payload.get("context")),
             "retrieved_context": _list_or_empty(payload.get("retrieved_context")),
+            "command_trace": _list_or_empty(payload.get("command_trace")),
             "warnings": _string_list(payload.get("source_warnings") or payload.get("warnings")),
             "artifact_metadata": _mapping_or_none(
                 payload.get("source_artifact_metadata") or payload.get("artifact_metadata")
@@ -1154,6 +1288,14 @@ def normalize_trace_record_payload(payload: Mapping[str, object]) -> dict[str, o
             "snapshot": {
                 **snapshot,
                 "question": snapshot["question"] or normalized_trace["question"],
+                "original_prompt": (
+                    snapshot["original_prompt"]
+                    or _string_or_none(normalized_trace.get("original_prompt"))
+                ),
+                "reformulated_prompt": (
+                    snapshot["reformulated_prompt"]
+                    or _string_or_none(normalized_trace.get("reformulated_prompt"))
+                ),
                 "sources": snapshot["sources"] or normalized_trace["sources"],
             },
             "trace": normalized_trace,
@@ -1188,11 +1330,16 @@ def normalize_trace_record_payload(payload: Mapping[str, object]) -> dict[str, o
             "source_root": None,
             "snapshot": {
                 "question": normalized_trace["question"],
+                "original_prompt": _string_or_none(normalized_trace.get("original_prompt")),
+                "reformulated_prompt": _string_or_none(
+                    normalized_trace.get("reformulated_prompt")
+                ),
                 "answer": None,
                 "response_text": None,
                 "sources": _string_list(normalized_trace.get("sources")),
                 "context": [],
                 "retrieved_context": [],
+                "command_trace": [],
                 "warnings": [],
                 "artifact_metadata": {
                     "input_paths": [],
@@ -1230,6 +1377,11 @@ def _trace_queue_dir(root: Path, queue_name: str, *, processed: bool) -> Path:
     return root / base_dir / safe_queue_name
 
 
+def _trace_batch_dir(root: Path, batch_name: str) -> Path:
+    safe_batch_name = _sanitize_name(batch_name, default="batch")
+    return root / DEFAULT_TRACES_DIR / "batches" / safe_batch_name
+
+
 def _build_trace_record(
     root: Path,
     normalized_payload: Mapping[str, object],
@@ -1259,11 +1411,16 @@ def _build_trace_record(
         "source_root": _string_or_none(normalized_payload.get("source_root")),
         "question": _string_or_none(snapshot.get("question"))
         or _string_or_none(trace.get("question")),
+        "original_prompt": _string_or_none(snapshot.get("original_prompt"))
+        or _string_or_none(trace.get("original_prompt")),
+        "reformulated_prompt": _string_or_none(snapshot.get("reformulated_prompt"))
+        or _string_or_none(trace.get("reformulated_prompt")),
         "answer": _string_or_none(snapshot.get("answer")),
         "response_text": _string_or_none(snapshot.get("response_text")),
         "sources": _string_list(snapshot.get("sources")) or _string_list(trace.get("sources")),
         "context": _list_or_empty(snapshot.get("context")),
         "retrieved_context": _list_or_empty(snapshot.get("retrieved_context")),
+        "command_trace": _list_or_empty(snapshot.get("command_trace")),
         "source_warnings": _string_list(snapshot.get("warnings")),
         "source_artifact_metadata": _mapping_or_none(snapshot.get("artifact_metadata"))
         or {
@@ -1423,6 +1580,7 @@ def queue_trace_record(
     *,
     queue_name: str = "default",
     trace_name: str | None = None,
+    batch_name: str | None = None,
     outcome: Mapping[str, object] | None = None,
     source_trace_path: Path | None = None,
     source_outcome_path: Path | None = None,
@@ -1439,6 +1597,11 @@ def queue_trace_record(
     safe_trace_name = _sanitize_name(
         trace_name or _default_trace_name(normalized_payload),
         default="trace-record",
+    )
+    safe_batch_name = (
+        _sanitize_name(batch_name, default="batch")
+        if isinstance(batch_name, str) and batch_name
+        else None
     )
     normalized_queue_name = queue_dir.name
     queued_at = _utc_now_isoformat()
@@ -1463,6 +1626,8 @@ def queue_trace_record(
         "source_outcome_path": (
             str(source_outcome_path) if source_outcome_path is not None else None
         ),
+        "batch_name": safe_batch_name,
+        "batch_trace_path": None,
         "trace_payload": payload,
         "outcome": normalized_outcome,
     }
@@ -1472,6 +1637,10 @@ def queue_trace_record(
         container = repo_rag_trace_container(config)
         normalized_queue_name = repo_rag_trace_queue_name(config, fallback=normalized_queue_name)
         file_name = queue_item_path.name
+        if safe_batch_name:
+            batch_blob_name = batched_trace_blob_name(safe_batch_name, file_name)
+            queue_item["batch_trace_path"] = batch_blob_name
+            store.upload_json(container, batch_blob_name, queue_item)
         blob_name = queued_trace_blob_name(normalized_queue_name, file_name)
         store.upload_json(container, blob_name, queue_item)
         queue_message = {
@@ -1494,6 +1663,12 @@ def queue_trace_record(
             "queue_message": message_info,
         }
 
+    if safe_batch_name:
+        batch_dir = _trace_batch_dir(resolved_root, safe_batch_name)
+        batch_dir.mkdir(parents=True, exist_ok=True)
+        batch_trace_path = batch_dir / queue_item_path.name
+        queue_item["batch_trace_path"] = _relative_to_root(batch_trace_path, resolved_root)
+        batch_trace_path.write_text(f"{json.dumps(queue_item, indent=2)}\n", encoding="utf-8")
     queue_item_path.write_text(f"{json.dumps(queue_item, indent=2)}\n", encoding="utf-8")
     return {
         **queue_item,

@@ -450,6 +450,7 @@ def build_parser() -> argparse.ArgumentParser:
     trace_enqueue_parser.add_argument("--root", default=".")
     trace_enqueue_parser.add_argument("--trace-path", required=True)
     trace_enqueue_parser.add_argument("--trace-name")
+    trace_enqueue_parser.add_argument("--batch-name")
     trace_enqueue_parser.add_argument("--queue-name", default="default")
     trace_enqueue_parser.add_argument("--outcome-path")
     add_output_argument(trace_enqueue_parser, default="json")
@@ -1108,6 +1109,7 @@ def main() -> int:
                 root,
                 trace_path=Path(args.trace_path),
                 trace_name=args.trace_name,
+                batch_name=args.batch_name,
                 queue_name=args.queue_name,
                 outcome_path=Path(args.outcome_path) if args.outcome_path else None,
             ),

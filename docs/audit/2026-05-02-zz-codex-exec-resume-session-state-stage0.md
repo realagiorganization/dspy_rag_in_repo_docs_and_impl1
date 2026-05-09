@@ -935,6 +935,41 @@ session subtree was being deleted upstream before the execution workflow began.
 - `cargo build --manifest-path rust-cli/Cargo.toml`
   - `pass`
 
+## 2026-05-08 ACR cloud-build fallback correction after `layer does not exist`
+
+The next ACR build failure was no longer a Docker Hub import error. The user reported:
+
+- `failed to export image: failed to create image: failed to get layer ... layer does not exist`
+
+The build script itself explained the likely root cause. After a `429` from `az acr import`, the
+fallback path in `../dataset/build_and_push_images.sh` was reusing:
+
+- `repo-rag-runtime:<latest-tag>`
+- `queue-initializer:<latest-tag>`
+
+as `PYTHON_BASE_IMAGE`.
+
+That is the wrong abstraction boundary. Those are application images, not the cached mirrored
+Python base tags under:
+
+- `mirror/dockerhub/library/python:3.11-slim-bookworm`
+- `mirror/dockerhub/library/python:3.11-slim`
+
+The repository now contains a corrected fallback:
+
+1. if public import fails, first reuse the exact cached mirror tag in
+   `mirror/dockerhub/library/python`
+2. only then fall back within that same mirror repository to the latest cached tag
+3. never use `repo-rag-runtime` or `queue-initializer` application images as a Python base-image
+   substitute
+
+This removes the self-referential base-image path that could produce unstable ACR layer graphs.
+
+Verification executed for this correction:
+
+- `bash -n /home/standard/Desktop/realagi_work/dataset/build_and_push_images.sh`
+  - `pass`
+
 ## 2026-05-07 latest AKS artifact review after tool-first MCP prompt hardening
 
 ### Artifact set reviewed

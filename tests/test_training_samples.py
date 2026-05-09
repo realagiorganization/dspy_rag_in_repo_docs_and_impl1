@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import yaml
+
 from repo_rag_lab.training_samples import (
     batch_training_examples,
     load_training_examples,
@@ -317,6 +319,215 @@ tokens used
     assert materialized[0].expected_answer == (
         "Added the demo GIF to README and verified npm run build."
     )
+
+
+def test_materialize_training_candidates_keeps_prompt_reformulation_and_command_trace(
+    tmp_path: Path,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    (imported_dir / "unsupported.json").write_text(
+        json.dumps(
+            {
+                "trace_record_kind": "repo-rag-trace-record",
+                "trace_record_path": "artifacts/traces/imported/unsupported.json",
+                "question": "Add a demo GIF to README",
+                "original_prompt": "Add a demo GIF to README",
+                "reformulated_prompt": "Inspect whether the README already embeds a demo GIF.",
+                "answer": (
+                    "The requested deliverable is already present in the repository. "
+                    "Verification: the GIF is a valid 900x658 animated GIF at about 15 MB, "
+                    "and the git worktree is clean."
+                ),
+                "command_trace": [
+                    {"type": "message", "role": "assistant", "text": "inspect README"},
+                    {"type": "message", "role": "assistant", "text": "check docs/assets"},
+                ],
+                "context": [
+                    {
+                        "source": "README.md",
+                        "preview": (
+                            "# national-debt-relief ## Demo "
+                            "![Automated demo walkthrough](docs/assets/national-debt-relief-demo.gif)"
+                        ),
+                        "text": (
+                            "# national-debt-relief ## Demo "
+                            "![Automated demo walkthrough](docs/assets/national-debt-relief-demo.gif)"
+                        ),
+                    }
+                ],
+                "retrieved_context": [
+                    {
+                        "source": "package.json",
+                        "preview": '{"name":"national-debt-relief","scripts":{"build":"vite build"}}',
+                        "text": '{"name":"national-debt-relief","scripts":{"build":"vite build"}}',
+                    }
+                ],
+                "trace": {
+                    "schema_version": 1,
+                    "trace_kind": "repo-rag-runtime",
+                    "recorded_at": "2026-05-08T13:20:42+00:00",
+                    "question": "Inspect whether the README already embeds a demo GIF.",
+                    "original_prompt": "Add a demo GIF to README",
+                    "reformulated_prompt": "Inspect whether the README already embeds a demo GIF.",
+                    "mode": "codex-proxy",
+                    "retrieval_mode": "lexical",
+                    "sources": ["README.md", "package.json"],
+                    "source_count": 2,
+                    "context_count": 2,
+                    "context_field": "evidence_previews",
+                    "top_k": 4,
+                    "program_loaded": True,
+                    "mcp_candidate_count": 0,
+                    "answer_length": 180,
+                },
+                "outcome": {
+                    "acceptance_status": "candidate",
+                    "accepted": None,
+                    "execution_status": "success",
+                    "method": "codex_cli",
+                    "backend": "codex_cli_repo_rag_proxy",
+                    "used_baseline_fallback": False,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+    )
+
+    assert summary["candidate_count"] == 1
+    assert summary["loaded_candidate_count"] == 1
+    materialized_path = tmp_path / "artifacts" / "trainer" / "training-candidates.yaml"
+    materialized_payload = yaml.safe_load(materialized_path.read_text(encoding="utf-8"))
+    assert materialized_payload[0]["question"] == (
+        "Inspect whether the README already embeds a demo GIF."
+    )
+    assert materialized_payload[0]["original_prompt"] == "Add a demo GIF to README"
+    assert materialized_payload[0]["reformulated_prompt"] == (
+        "Inspect whether the README already embeds a demo GIF."
+    )
+    assert materialized_payload[0]["command_trace"] == [
+        {"type": "message", "role": "assistant", "text": "inspect README"},
+        {"type": "message", "role": "assistant", "text": "check docs/assets"},
+    ]
+
+
+def test_materialize_training_candidates_keeps_persisted_champions_without_benchmark_gate(
+    tmp_path: Path,
+) -> None:
+    trainer_dir = tmp_path / "artifacts" / "trainer"
+    trainer_dir.mkdir(parents=True, exist_ok=True)
+    (trainer_dir / "training-candidates.yaml").write_text(
+        (
+            '- question: "Add a demo GIF to README"\n'
+            '  expected_answer: "The GIF is already present and the git worktree is clean."\n'
+            '  tags: ["trainer-candidate", "candidate"]\n'
+            "  benchmark_context:\n"
+            '    - "# national-debt-relief ## Demo ![Automated demo walkthrough](docs/assets/national-debt-relief-demo.gif)"\n'
+            "  benchmark_context_sources:\n"
+            '    - "README.md"\n'
+            "  provenance:\n"
+            '    trace_record_path: "artifacts/trainer/recovered-imported-traces/unsupported.json"\n'
+            '    recorded_at: "2026-05-08T13:20:42+00:00"\n'
+        ),
+        encoding="utf-8",
+    )
+    champion_index_path = trainer_dir / "champion-index.json"
+    champion_index_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "record_kind": "repo-rag-trainer-champion-index",
+                "generated_at": "2026-05-08T13:21:00+00:00",
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-demo",
+                        "question": "Add a demo GIF to README",
+                        "family_champion_context_group_id": "cg-demo",
+                        "family_champion_score": 0.91,
+                        "family_champion_record": {
+                            "question": "Add a demo GIF to README",
+                            "expected_answer": "The GIF is already present and the git worktree is clean.",
+                            "tags": ["trainer-candidate", "candidate"],
+                            "expected_sources": [],
+                            "benchmark_context": [
+                                "# national-debt-relief ## Demo "
+                                "![Automated demo walkthrough](docs/assets/national-debt-relief-demo.gif)"
+                            ],
+                            "benchmark_context_sources": ["README.md"],
+                            "candidate_status": "candidate",
+                            "prompt_family_id": "pf-demo",
+                            "context_group_id": "cg-demo",
+                            "exact_snapshot_id": "ts-demo",
+                            "quality_score": 0.91,
+                            "support_count": 1,
+                            "provenance": {
+                                "trace_record_path": "artifacts/trainer/recovered-imported-traces/unsupported.json",
+                                "recorded_at": "2026-05-08T13:20:42+00:00",
+                            },
+                        },
+                        "context_groups": [
+                            {
+                                "context_group_id": "cg-demo",
+                                "sources": ["README.md"],
+                                "evidence_fingerprints": ["ev-demo"],
+                                "evidence_count": 1,
+                                "retrieval_mode": "lexical",
+                                "mode": "codex-proxy",
+                                "context_field": "evidence_previews",
+                                "source_count": 1,
+                                "context_count": 1,
+                                "top_k": 4,
+                                "trace_count": 1,
+                                "support_by_record_key": {"cr-demo": 1},
+                                "champion_score": 0.91,
+                                "champion_record": {
+                                    "question": "Add a demo GIF to README",
+                                    "expected_answer": "The GIF is already present and the git worktree is clean.",
+                                    "tags": ["trainer-candidate", "candidate"],
+                                    "expected_sources": [],
+                                    "benchmark_context": [
+                                        "# national-debt-relief ## Demo "
+                                        "![Automated demo walkthrough](docs/assets/national-debt-relief-demo.gif)"
+                                    ],
+                                    "benchmark_context_sources": ["README.md"],
+                                    "candidate_status": "candidate",
+                                    "prompt_family_id": "pf-demo",
+                                    "context_group_id": "cg-demo",
+                                    "exact_snapshot_id": "ts-demo",
+                                    "quality_score": 0.91,
+                                    "support_count": 1,
+                                    "provenance": {
+                                        "trace_record_path": "artifacts/trainer/recovered-imported-traces/unsupported.json",
+                                        "recorded_at": "2026-05-08T13:20:42+00:00",
+                                    },
+                                },
+                            }
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+        champion_index_path=Path("artifacts/trainer/champion-index.json"),
+    )
+
+    assert summary["candidate_count"] == 1
+    champion_index = json.loads(champion_index_path.read_text(encoding="utf-8"))
+    family = champion_index["prompt_families"][0]
+    assert family["family_champion_record"] is not None
+    assert len(family["context_groups"]) == 1
 
 
 def test_summarize_champion_index_reports_family_trace_and_snapshot_ids(tmp_path: Path) -> None:
@@ -667,8 +878,8 @@ def test_materialize_training_candidates_tracks_context_groups_but_materializes_
     assert summary["candidate_count"] == 1
     assert summary["new_candidate_count"] == 1
     assert summary["prompt_family_count"] == 1
-    assert summary["context_group_count"] == 2
-    assert summary["new_context_group_count"] == 2
+    assert summary["context_group_count"] == 1
+    assert summary["new_context_group_count"] == 1
 
     materialized = load_training_examples(
         tmp_path / "artifacts" / "trainer" / "training-candidates.yaml"
@@ -682,7 +893,7 @@ def test_materialize_training_candidates_tracks_context_groups_but_materializes_
     assert champion_index["record_kind"] == "repo-rag-trainer-champion-index"
     assert len(champion_index["prompt_families"]) == 1
     family = champion_index["prompt_families"][0]
-    assert len(family["context_groups"]) == 2
+    assert len(family["context_groups"]) == 1
     assert family["family_champion_record"]["candidate_status"] == "accepted"
 
 
@@ -1192,13 +1403,13 @@ def test_materialize_training_candidates_splits_same_sources_when_evidence_finge
     )
 
     assert summary["candidate_count"] == 1
-    assert summary["context_group_count"] == 2
+    assert summary["context_group_count"] == 1
 
     champion_index = json.loads(
         (tmp_path / "artifacts" / "trainer" / "champion-index.json").read_text(encoding="utf-8")
     )
     family = champion_index["prompt_families"][0]
-    assert len(family["context_groups"]) == 2
+    assert len(family["context_groups"]) == 1
 
 
 def test_materialize_training_candidates_keeps_family_champion_on_small_score_edge(
@@ -1293,7 +1504,7 @@ def test_materialize_training_candidates_keeps_family_champion_on_small_score_ed
     )
 
     assert summary["candidate_count"] == 1
-    assert summary["context_group_count"] == 2
+    assert summary["context_group_count"] == 1
 
     champion_index = json.loads(
         (tmp_path / "artifacts" / "trainer" / "champion-index.json").read_text(encoding="utf-8")
@@ -1365,3 +1576,47 @@ def test_materialize_combined_training_examples_dedupes_questions_and_strips_leg
     assert first_example.expected_answer == "Fresh worker answer."
     assert first_example.expected_sources == ()
     assert validate_training_examples(combined_examples, root=tmp_path) == []
+
+
+def test_materialize_combined_training_examples_keeps_trainer_candidates_without_benchmark_gate(
+    tmp_path: Path,
+) -> None:
+    base_training_path = tmp_path / "samples" / "training" / "base.yaml"
+    base_training_path.parent.mkdir(parents=True, exist_ok=True)
+    base_training_path.write_text(
+        (
+            '- question: "What does this repository research?"\n'
+            '  expected_answer: "It researches repository-grounded RAG over repository files."\n'
+            '  tags: ["repo", "rag"]\n'
+            "  expected_sources:\n"
+            '    - "README.md"\n'
+        ),
+        encoding="utf-8",
+    )
+
+    candidates_path = tmp_path / "artifacts" / "trainer" / "training-candidates.yaml"
+    candidates_path.parent.mkdir(parents=True, exist_ok=True)
+    candidates_path.write_text(
+        (
+            '- question: "Add a demo GIF to README"\n'
+            '  expected_answer: "The GIF is already present and the git worktree is clean."\n'
+            '  tags: ["trainer-candidate", "candidate"]\n'
+            "  benchmark_context:\n"
+            '    - "# national-debt-relief ## Demo ![Automated demo walkthrough](docs/assets/national-debt-relief-demo.gif)"\n'
+            "  benchmark_context_sources:\n"
+            '    - "README.md"\n'
+        ),
+        encoding="utf-8",
+    )
+
+    combined_summary = materialize_combined_training_examples(
+        tmp_path,
+        base_training_path=Path("samples/training/base.yaml"),
+        candidates_path=Path("artifacts/trainer/training-candidates.yaml"),
+        output_path=Path("artifacts/trainer/generated-training.yaml"),
+        summary_path=Path("artifacts/trainer/generated-training-summary.json"),
+    )
+
+    assert combined_summary["candidate_example_count"] == 1
+    assert combined_summary["skipped_unsupported_candidate_count"] == 0
+    assert combined_summary["combined_example_count"] == 2

@@ -69,6 +69,7 @@ class AzureArtifactConfig:
     connection_string: str | None
     trace_container: str | None
     bundle_container: str | None
+    champion_container: str | None
     queue_name: str | None
 
     @classmethod
@@ -96,6 +97,11 @@ class AzureArtifactConfig:
                 os.getenv("REPO_RAG_BUNDLE_CONTAINER"),
                 os.getenv("DATASET_REPO_RAG_BUNDLE_CONTAINER"),
             ),
+            champion_container=_first_non_empty(
+                os.getenv("REPO_RAG_CHAMPION_CONTAINER"),
+                os.getenv("DATASET_REPO_RAG_CHAMPION_CONTAINER"),
+                "repo-rag-champions",
+            ),
             queue_name=_first_non_empty(
                 queue_name,
                 os.getenv("REPO_RAG_TRACE_QUEUE"),
@@ -114,6 +120,10 @@ class AzureArtifactConfig:
     @property
     def bundles_enabled(self) -> bool:
         return self.configured and bool(self.bundle_container)
+
+    @property
+    def champions_enabled(self) -> bool:
+        return self.configured and bool(self.champion_container)
 
     @property
     def queue_enabled(self) -> bool:
@@ -325,6 +335,13 @@ def repo_rag_bundle_container(config: AzureArtifactConfig) -> str:
     return container
 
 
+def repo_rag_champion_container(config: AzureArtifactConfig) -> str:
+    container = config.champion_container
+    if not container:
+        raise RuntimeError("Champion container is not configured.")
+    return container
+
+
 def repo_rag_trace_queue_name(config: AzureArtifactConfig, *, fallback: str) -> str:
     return _first_non_empty(config.queue_name, fallback) or fallback
 
@@ -347,6 +364,22 @@ def bundle_blob_names(bundle_version: str) -> dict[str, str]:
     }
 
 
+def champion_version_blob_prefix(champion_version: str) -> str:
+    return f"versions/{champion_version}"
+
+
+def champion_current_blob_name() -> str:
+    return "current.json"
+
+
+def champion_blob_names(champion_version: str) -> dict[str, str]:
+    prefix = champion_version_blob_prefix(champion_version)
+    return {
+        "champion_index": f"{prefix}/champion-index.json",
+        "current": champion_current_blob_name(),
+    }
+
+
 def queued_trace_blob_name(queue_name: str, file_name: str) -> str:
     return f"queued/{queue_name}/{file_name}"
 
@@ -357,6 +390,10 @@ def processed_trace_blob_name(queue_name: str, file_name: str) -> str:
 
 def failed_trace_blob_name(queue_name: str, file_name: str) -> str:
     return f"failed/{queue_name}/{file_name}"
+
+
+def batched_trace_blob_name(batch_name: str, file_name: str) -> str:
+    return f"batches/{batch_name}/{file_name}"
 
 
 def decode_queue_message(payload: str) -> dict[str, object]:

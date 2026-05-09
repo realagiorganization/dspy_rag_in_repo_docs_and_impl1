@@ -147,3 +147,183 @@ What this stage does solve immediately:
   trainer compile example by arrival order alone
 - trainer-side recompile gating now keys off meaningful family-champion change instead of raw trace
   replay
+
+## Latest Live Artifact Inspection
+
+Fresh `dataset/artifacts` evidence from the latest worker run shows a mixed live result.
+
+Confirmed from run artifacts:
+
+- retrieval no longer injected `prompt_artifacts/...` into the repo-rag evidence shortlist
+- `repo_rag_codex_proxy_last.json` reported only repo/docs sources:
+  - `README.md`
+  - `docs/USAGE.md`
+  - `docs/AGENTS.md`
+  - `docs/ASSUMPTIONS.md`
+- `execution.log` recorded the expected cleanup and off-repo prompt-trace path:
+  - `Removed stale runtime scaffolding from .../prompt_artifacts`
+  - `Persisted prompt trace at /tmp/artifacts/.../prompt_artifacts/...`
+- trusted downstream handoff succeeded:
+  - `trace_handoff_status = queued`
+  - `trusted_trace_handoff_summary.json` reported `queued = 1`, `failed = 0`
+
+Still not working in that live run:
+
+- `repo_rag_backend.json` reported:
+  - `bundle_resolved = false`
+  - `bundle_version = null`
+- `repo_rag_codex_proxy_last.json` reported:
+  - `mediation_mode = rag_heuristic_dspy`
+  - `dspy_status = heuristic`
+- `repo_rag_trace.json` reported:
+  - `program_loaded = false`
+  - `program_path = null`
+
+One remaining nuance from `codex_response.txt`:
+
+- `prompt_artifacts/*` still appeared in the model transcript, but only as deleted legacy files in
+  `git status` output (`D prompt_artifacts/...`), not as retrieved repo-rag evidence
+- this means retrieval isolation worked, but the cached repository checkout still contained tracked
+  stale prompt-artifact paths that the autonomous Codex session noticed later through its own
+  repository inspection
+
+## Additional Verification
+
+Repository-local checks rerun in this turn:
+
+- `uv run python -m compileall src tests` -> `pass`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q` -> `pass` (`41 passed`)
+- `uv run repo-rag smoke-test` -> `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml` -> `pass`
+
+Artifact-inspection commands executed in this turn:
+
+- `tar -xOf /home/standard/Desktop/realagi_work/dataset/artifacts/all_artifacts.tar.gz execution_artifacts/prompt-worker-0-rehydrated/artifacts/prompts_shards_of_lokar_game-p00000-355cca/repo_rag_backend.json | jq ...`
+- `tar -xOf /home/standard/Desktop/realagi_work/dataset/artifacts/all_artifacts.tar.gz execution_artifacts/prompt-worker-0-rehydrated/artifacts/prompts_shards_of_lokar_game-p00000-355cca/repo_rag_codex_proxy_last.json | jq ...`
+- `tar -xOf /home/standard/Desktop/realagi_work/dataset/artifacts/all_artifacts.tar.gz execution_artifacts/prompt-worker-0-rehydrated/artifacts/prompts_shards_of_lokar_game-p00000-355cca/repo_rag_trace.json | jq ...`
+- `tar -xOf /home/standard/Desktop/realagi_work/dataset/artifacts/all_artifacts.tar.gz execution_artifacts/trusted_trace_handoff_summary.json | jq .`
+- `tar -xOf /home/standard/Desktop/realagi_work/dataset/artifacts/all_artifacts.tar.gz execution_artifacts/prompt-worker-0-lnj5r/execution.log | rg -n "prompt_artifacts|_context_repos|repo_rag|bundle|stable|codex exec|Persisted prompt trace|Removing stale"`
+- `tar -xOf /home/standard/Desktop/realagi_work/dataset/artifacts/all_artifacts.tar.gz execution_artifacts/prompt-worker-0-rehydrated/artifacts/prompts_shards_of_lokar_game-p00000-355cca/codex_response.txt | rg -n "prompt_artifacts|_context_repos|\\.repo_rag_cache|README\\.md|docs/USAGE\\.md|docs/AGENTS\\.md|docs/ASSUMPTIONS\\.md"`
+
+Verification categories still not covered in this turn:
+
+- lint: no dedicated lint command was run
+- type checking: no dedicated type-check suite was run
+- coverage: no coverage tool was run
+- UI / Godot runtime integration: not exercised
+- live AKS redeploy / post-fix worker rerun with a successfully resolved DSPy bundle: still not
+  confirmed
+
+## Latest Live Trainer Queue State
+
+Fresh live inspection after the latest worker run shows that the newest queued trace is stuck
+because the live trainer workload is crashing before it can drain the queue.
+
+Observed live state:
+
+- `repo-rag-trainer-service` in namespace `repo-rag` is `CrashLoopBackOff`
+- the queued blob is still present:
+  - `queued/repo-rag-training/20260502T174448Z-prompts_shards_of_lokar_game-p00000-355cca.json`
+- the trainer CronJob last scheduled at `2026-05-02T17:45:00Z`, but its newest Job hit
+  `BackoffLimitExceeded`
+- the CronJob status still reports `lastSuccessfulTime: 2026-05-02T12:47:27Z`, so no successful
+  trainer drain/publish cycle has happened since the newer deployment wiring was applied
+
+Root cause from live logs:
+
+- both `trainer-service` and the generated `trainer-cycle` Job are launched with
+  `--min-new-candidates-for-recompile 1`
+- the live image `llmpromptsacr.azurecr.io/repo-rag-runtime:20260502-135903` exits immediately
+  with:
+  - `repo-rag: error: unrecognized arguments: --min-new-candidates-for-recompile 1`
+
+That means the cluster manifests were updated, but the running image still contains an older
+`repo-rag` CLI build that does not recognize the new argument. The result is straightforward:
+
+- worker-side trusted handoff succeeds
+- the trace lands in `queued/...`
+- trainer service crashes on startup
+- trainer cycle Jobs also fail
+- the queued trace remains queued
+
+Live commands executed in this turn:
+
+- `kubectl get pods,deploy,cronjob -n repo-rag -o wide`
+- `az storage blob list --account-name ... --container-name repo-rag-training-traces --prefix queued/repo-rag-training/ --num-results 20 --auth-mode key --output table`
+- `az storage blob list --account-name ... --container-name repo-rag-training-traces --prefix processed/repo-rag-training/ --num-results 10 --auth-mode key --output table`
+- `kubectl logs -n repo-rag deployment/repo-rag-trainer-service --tail=200`
+- `kubectl logs -n repo-rag deployment/repo-rag-trainer-service --previous --tail=200`
+- `kubectl describe pod -n repo-rag repo-rag-trainer-service-5c587db4bd-cdtl7`
+- `kubectl get cronjob repo-rag-trainer-cycle -n repo-rag -o yaml`
+- `kubectl get job -n repo-rag repo-rag-trainer-cycle-29629065 -o yaml`
+
+Immediate deployment blocker now confirmed:
+
+- the trainer image in AKS must be rebuilt from code that already includes
+  `--min-new-candidates-for-recompile`, then redeployed, before queued traces will start draining
+  again
+
+## Latest Live Token-Cost Diagnosis
+
+Fresh `dataset/artifacts` from the newest worker run show that retrieval quality and token spend
+are now decoupled:
+
+- `repo_rag_codex_proxy_last.json` still reported clean repo-rag evidence:
+  - `README.md`
+  - `docs/USAGE.md`
+  - `docs/AGENTS.md`
+  - `docs/ASSUMPTIONS.md`
+- `repo_rag_outcome.json` reported:
+  - `prompt_tokens = 1058957`
+  - `completion_tokens = 0`
+  - `total_tokens = 1058957`
+- `repo_rag_trace.json` still reported:
+  - `bundle_version = null`
+  - `program_loaded = false`
+  - `retrieval_mode = rag_heuristic_dspy`
+
+That means DSPy still contributed no runtime savings in this live run because the worker again fell
+back to heuristic mode instead of loading a compiled bundle.
+
+The large token bill does **not** come from the repo-rag retrieval shortlist. The retrieved context
+was only four sources with three evidence previews. The large bill comes from the long-running
+`codex exec` transcript itself:
+
+- `codex_response.txt` was `2115734` bytes
+- the transcript explicitly includes the autonomous execution contract requiring
+  `DEVPLAN.md`, `AGENTS.md`, `ENVS.md`, `USAGE.md`, `README.md`, and `ASSUMPTIONS.md` on every run
+- the model then opened and revisited those docs repeatedly during its own repo exploration and
+  diff loops
+
+Measured directly from `codex_response.txt`:
+
+- `# Environment Variables` appeared `3` times
+- `docs/ENVS.md` appeared `72` times
+- `diff --git a/docs/ENVS.md b/docs/ENVS.md` appeared `14` times
+- `diff --git a/docs/USAGE.md b/docs/USAGE.md` appeared `18` times
+- `diff --git a/docs/AGENTS.md b/docs/AGENTS.md` appeared `10` times
+
+The transcript shows at least three direct full-file reads of `docs/ENVS.md`:
+
+- line `157`: `sed -n '1,260p' docs/ENVS.md`
+- line `24281`: `sed -n '1,220p' docs/ENVS.md`
+- line `37694`: `sed -n '1,220p' docs/ENVS.md`
+
+So the current cost story is:
+
+- repo-rag retrieval no longer injects obviously wrong garbage like `prompt_artifacts/...`
+- but the worker prompt contract still forces a broad documentation-maintenance workflow
+- `codex exec` then repeatedly reads and diffs those docs, and that growing transcript dominates
+  input-token spend
+
+Additional artifact-inspection commands executed in this turn:
+
+- `tar -xOf .../repo_rag_outcome.json | jq '{backend,bundle_version,token_usage,warnings,artifact_metadata}'`
+- `tar -xOf .../repo_rag_codex_proxy_last.json | jq '{mediation_mode,rag_status,dspy_status,sources,evidence_previews,warnings}'`
+- `tar -xOf .../repo_rag_trace.json | jq '{answer_length,source_count,context_count,evidence_count,sources,evidence_fingerprints,retrieval_mode,bundle_version,program_loaded}'`
+- `tar -xOf .../codex_response.txt | rg -n '^# Environment Variables|docs/ENVS.md|ENVS.md|prompt_artifacts|docs/USAGE.md|docs/AGENTS.md|docs/ASSUMPTIONS.md'`
+- `tar -xOf .../codex_response.txt | grep -o '# Environment Variables' | wc -l`
+- `tar -xOf .../codex_response.txt | grep -o 'docs/ENVS.md' | wc -l`
+- `tar -xOf .../codex_response.txt | grep -o 'diff --git a/docs/ENVS.md b/docs/ENVS.md' | wc -l`
+- `tar -xOf .../codex_response.txt | grep -o 'diff --git a/docs/USAGE.md b/docs/USAGE.md' | wc -l`
+- `tar -xOf .../codex_response.txt | grep -o 'diff --git a/docs/AGENTS.md b/docs/AGENTS.md' | wc -l`

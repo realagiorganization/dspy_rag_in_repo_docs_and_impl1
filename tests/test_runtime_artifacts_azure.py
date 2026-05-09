@@ -11,6 +11,7 @@ from repo_rag_lab.azure_artifacts import (
     AzureArtifactConfig,
     AzureArtifactStore,
     AzureQueueMessage,
+    batched_trace_blob_name,
     bundle_blob_names,
     bundle_channel_blob_name,
     bundle_version_blob_prefix,
@@ -306,6 +307,7 @@ def test_queue_trace_record_and_drain_trace_queue_use_azure_blob_queue(
         connection_string=None,
         trace_container="repo-rag-training-traces",
         bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
         queue_name="repo-rag-training",
     )
 
@@ -331,12 +333,22 @@ def test_queue_trace_record_and_drain_trace_queue_use_azure_blob_queue(
         _sample_trace_payload(),
         queue_name="dataset",
         trace_name="worker-demo",
+        batch_name="20260508T223000Z",
         outcome={"acceptance_status": "accepted", "accepted": True, "execution_status": "success"},
     )
 
     assert queued["storage_backend"] == "azure-blob-queue"
     assert queued["trace_container"] == "repo-rag-training-traces"
+    assert queued["batch_name"] == "20260508T223000Z"
+    assert queued["batch_trace_path"] == batched_trace_blob_name(
+        "20260508T223000Z",
+        Path(str(queued["queue_item_path"])).name,
+    )
     assert str(queued["queue_item_path"]).startswith("queued/repo-rag-training/")
+    assert store.blob_exists(
+        "repo-rag-training-traces",
+        str(queued["batch_trace_path"]),
+    )
     assert store.messages
 
     drained = drain_trace_queue(tmp_path, queue_name="dataset")
@@ -369,6 +381,7 @@ def test_drain_trace_queue_skips_stale_failed_blob_messages(
         connection_string=None,
         trace_container="repo-rag-training-traces",
         bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
         queue_name="repo-rag-training",
     )
 
@@ -428,6 +441,7 @@ def test_drain_trace_queue_skips_stale_missing_queued_blob_messages(
         connection_string=None,
         trace_container="repo-rag-training-traces",
         bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
         queue_name="repo-rag-training",
     )
 
@@ -487,6 +501,7 @@ def test_restore_processed_trace_records_rebuilds_local_ledger_from_azure_proces
         connection_string=None,
         trace_container="repo-rag-training-traces",
         bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
         queue_name="repo-rag-training",
     )
 
@@ -553,6 +568,7 @@ def test_fetch_remote_bundle_downloads_bundle_assets(
         connection_string=None,
         trace_container="repo-rag-training-traces",
         bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
         queue_name="repo-rag-training",
     )
     bundle_version = "stable-42"
@@ -735,6 +751,7 @@ def test_azure_artifact_store_supports_account_url_credentials(
         connection_string=None,
         trace_container="repo-rag-training-traces",
         bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
         queue_name="repo-rag-training",
     )
     store = AzureArtifactStore(config)
@@ -764,6 +781,7 @@ def test_azure_artifact_helper_and_error_paths(
         connection_string=None,
         trace_container="repo-rag-training-traces",
         bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
         queue_name=None,
     )
     store = AzureArtifactStore(config)
@@ -784,6 +802,7 @@ def test_azure_artifact_helper_and_error_paths(
         connection_string="UseDevelopmentStorage=true",
         trace_container=None,
         bundle_container=None,
+        champion_container=None,
         queue_name=None,
     )
     with pytest.raises(RuntimeError):
@@ -798,6 +817,7 @@ def test_azure_artifact_helper_and_error_paths(
                 connection_string=None,
                 trace_container=None,
                 bundle_container=None,
+                champion_container=None,
                 queue_name=None,
             )
         )
@@ -839,6 +859,7 @@ def test_azure_artifact_helper_and_error_paths(
                 connection_string=None,
                 trace_container=None,
                 bundle_container="repo-rag-bundles",
+                champion_container="repo-rag-champions",
                 queue_name="repo-rag-training",
             )
         )
@@ -850,6 +871,7 @@ def test_azure_artifact_helper_and_error_paths(
                 connection_string=None,
                 trace_container="repo-rag-training-traces",
                 bundle_container=None,
+                champion_container="repo-rag-champions",
                 queue_name="repo-rag-training",
             )
         )
