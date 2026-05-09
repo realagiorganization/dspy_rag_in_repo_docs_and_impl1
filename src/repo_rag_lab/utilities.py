@@ -1342,13 +1342,17 @@ def _trainer_pending_recompile_summary(
         reason = "no-published-bundle"
     elif bundle_record_hashes:
         pending_record_hashes = [
-            record_hash for record_hash in champion_record_hashes if record_hash not in bundle_record_hashes
+            record_hash
+            for record_hash in champion_record_hashes
+            if record_hash not in bundle_record_hashes
         ]
         pending_recompile = bool(pending_record_hashes)
         reason = "champion-record-hash-drift" if pending_recompile else reason
     elif bundle_snapshot_ids:
         pending_snapshot_ids = [
-            snapshot_id for snapshot_id in champion_snapshot_ids if snapshot_id not in bundle_snapshot_ids
+            snapshot_id
+            for snapshot_id in champion_snapshot_ids
+            if snapshot_id not in bundle_snapshot_ids
         ]
         pending_recompile = bool(pending_snapshot_ids)
         reason = "champion-snapshot-drift" if pending_recompile else reason
@@ -1360,7 +1364,9 @@ def _trainer_pending_recompile_summary(
         reason = "prompt-family-drift" if pending_recompile else reason
     elif bundle_trace_paths:
         pending_trace_paths = [
-            trace_path for trace_path in champion_trace_paths if trace_path not in bundle_trace_paths
+            trace_path
+            for trace_path in champion_trace_paths
+            if trace_path not in bundle_trace_paths
         ]
         pending_recompile = bool(pending_trace_paths)
         reason = "champion-trace-path-drift" if pending_recompile else reason

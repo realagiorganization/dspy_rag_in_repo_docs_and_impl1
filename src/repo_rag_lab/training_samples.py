@@ -111,9 +111,7 @@ def normalize_training_examples(records: list[dict[str, Any]]) -> list[TrainingE
             if str(source).strip()
         )
         benchmark_context = tuple(
-            str(text).strip()
-            for text in record.get("benchmark_context", [])
-            if str(text).strip()
+            str(text).strip() for text in record.get("benchmark_context", []) if str(text).strip()
         )
         benchmark_context_sources = tuple(
             str(source).strip()
@@ -171,9 +169,7 @@ def summarize_training_examples(examples: list[TrainingExample]) -> dict[str, An
     return {
         "example_count": len(examples),
         "benchmark_count": sum(
-            1
-            for example in examples
-            if example.expected_sources or example.benchmark_context
+            1 for example in examples if example.expected_sources or example.benchmark_context
         ),
         "questions": [example.question for example in examples],
         "unique_tags": unique_tags,
@@ -648,7 +644,9 @@ def resolve_prompt_family_support(question: str, champion_index_path: Path) -> P
         band = "match"
     elif best_similarity >= PROMPT_FAMILY_SOFT_THRESHOLD:
         band = "heuristic"
-    supported = bool(best_family is not None and _matches_prompt_family(normalized_question, best_family))
+    supported = bool(
+        best_family is not None and _matches_prompt_family(normalized_question, best_family)
+    )
     prompt_family_id = (
         str(best_family.get("prompt_family_id") or "").strip()
         if isinstance(best_family, Mapping)
@@ -1056,7 +1054,7 @@ def _seed_champion_index_from_existing_records(
                     }
                 ],
             }
-    )
+        )
     index_payload["prompt_families"] = families
     return index_payload
 
@@ -1372,16 +1370,12 @@ def _normalize_materialized_candidate_record(record: Mapping[str, Any]) -> dict[
     original_prompt = str(record.get("original_prompt") or "").strip()
     reformulated_prompt = str(record.get("reformulated_prompt") or "").strip()
     normalized: dict[str, Any] = {
-        "question": str(
-            record.get("question") or reformulated_prompt or original_prompt
-        ).strip(),
+        "question": str(record.get("question") or reformulated_prompt or original_prompt).strip(),
         "expected_answer": normalized_answer,
         "tags": tags,
         "expected_sources": expected_sources,
         "benchmark_context": [
-            str(text).strip()
-            for text in record.get("benchmark_context", [])
-            if str(text).strip()
+            str(text).strip() for text in record.get("benchmark_context", []) if str(text).strip()
         ],
         "benchmark_context_sources": [
             str(source).strip()
@@ -1573,12 +1567,10 @@ def _merge_equivalent_candidate_records(
     candidate_serialized = _serialize_candidate_record(candidate_record)
     current_richness = _candidate_benchmark_context_richness(current_serialized)
     candidate_richness = _candidate_benchmark_context_richness(candidate_serialized)
-    prefer_candidate = (
-        candidate_richness > current_richness
-        or (
-            candidate_richness == current_richness
-            and _candidate_recorded_at(candidate_serialized) > _candidate_recorded_at(current_serialized)
-        )
+    prefer_candidate = candidate_richness > current_richness or (
+        candidate_richness == current_richness
+        and _candidate_recorded_at(candidate_serialized)
+        > _candidate_recorded_at(current_serialized)
     )
     merged = dict(candidate_serialized if prefer_candidate else current_serialized)
     current_hits, current_total, _ = _record_metric(current_serialized)
@@ -1662,7 +1654,9 @@ def _training_candidate_from_trace_record(
     context_snapshot = _trace_context_snapshot(payload, trace_mapping, outcome_mapping)
     original_prompt = str(context_snapshot.get("original_prompt") or "").strip()
     reformulated_prompt = str(context_snapshot.get("reformulated_prompt") or "").strip()
-    question = str(context_snapshot.get("question") or reformulated_prompt or original_prompt).strip()
+    question = str(
+        context_snapshot.get("question") or reformulated_prompt or original_prompt
+    ).strip()
     command_trace = _ordered_unique_command_trace(context_snapshot.get("command_trace", []))
     if not question:
         return None, "missing-question"
@@ -2080,7 +2074,9 @@ def materialize_combined_training_examples(
             if isinstance(record, Mapping)
         ]
         candidate_records = [
-            record for record in raw_candidate_records if _trainer_candidate_record_is_supported(record)
+            record
+            for record in raw_candidate_records
+            if _trainer_candidate_record_is_supported(record)
         ]
         skipped_candidate_records = len(raw_candidate_records) - len(candidate_records)
 

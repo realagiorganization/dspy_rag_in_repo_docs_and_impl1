@@ -307,9 +307,7 @@ def _hybrid_ranked_chunks(
         semantic_chunks[index] for index, _ in semantic_rankings[: max(top_k, candidate_pool_size)]
     ]
     lexical_positions = {chunk: position for position, chunk in enumerate(lexical_pool, start=1)}
-    lexical_scores = {
-        chunk: max(0.0, value) for value, chunk in lexical_scored_pool if value > 0.0
-    }
+    lexical_scores = {chunk: max(0.0, value) for value, chunk in lexical_scored_pool if value > 0.0}
     max_lexical_score = max(lexical_scores.values(), default=0.0)
     semantic_positions = {chunk: position for position, chunk in enumerate(semantic_pool, start=1)}
     semantic_scores = {
@@ -341,8 +339,7 @@ def _hybrid_ranked_chunks(
             )
             + (semantic_scores.get(chunk, 0.0) * 0.05)
             + (
-                (lexical_scores.get(chunk, 0.0) / max_lexical_score)
-                * _HYBRID_LEXICAL_SCORE_WEIGHT
+                (lexical_scores.get(chunk, 0.0) / max_lexical_score) * _HYBRID_LEXICAL_SCORE_WEIGHT
                 if max_lexical_score > 0.0
                 else 0.0
             )

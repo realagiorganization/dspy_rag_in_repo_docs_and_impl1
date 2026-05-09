@@ -1331,9 +1331,7 @@ def normalize_trace_record_payload(payload: Mapping[str, object]) -> dict[str, o
             "snapshot": {
                 "question": normalized_trace["question"],
                 "original_prompt": _string_or_none(normalized_trace.get("original_prompt")),
-                "reformulated_prompt": _string_or_none(
-                    normalized_trace.get("reformulated_prompt")
-                ),
+                "reformulated_prompt": _string_or_none(normalized_trace.get("reformulated_prompt")),
                 "answer": None,
                 "response_text": None,
                 "sources": _string_list(normalized_trace.get("sources")),

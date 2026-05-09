@@ -917,9 +917,7 @@ class _CodexProxyHandler(BaseHTTPRequestHandler):
             turn_state = extract_codex_turn_state(payload)
             original_prompt = str(turn_state.get("original_prompt") or "").strip()
             command_trace = [
-                step
-                for step in turn_state.get("command_trace", [])
-                if isinstance(step, Mapping)
+                step for step in turn_state.get("command_trace", []) if isinstance(step, Mapping)
             ]
             if original_prompt:
                 mediation = runtime.build_mediation(original_prompt, command_trace)
