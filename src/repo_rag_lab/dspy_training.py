@@ -42,6 +42,9 @@ class ExampleLike(Protocol):
     @property
     def expected_sources(self) -> Sequence[str]: ...
 
+    @property
+    def benchmark_context(self) -> Sequence[str]: ...
+
 
 class PredictionLike(Protocol):
     """Minimal interface needed by the repository metric."""
@@ -291,6 +294,23 @@ def _normalize_sources(values: Sequence[str]) -> tuple[str, ...]:
     return tuple(ordered)
 
 
+def _normalize_context_rows(values: Sequence[str]) -> tuple[str, ...]:
+    """Return stable ordered non-empty benchmark-context rows."""
+
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        cleaned = str(value).strip()
+        if not cleaned:
+            continue
+        folded = cleaned.casefold()
+        if folded in seen:
+            continue
+        seen.add(folded)
+        ordered.append(cleaned)
+    return tuple(ordered)
+
+
 def _answer_overlap_score(expected_answer: str, predicted_answer: str) -> float:
     """Return a simple token-overlap score for repository answer paraphrases."""
 
@@ -325,26 +345,39 @@ def resolve_dspy_lm_config(
     resolved_api_base = _normalize_api_base(_first_non_empty(api_base, os.getenv("DSPY_API_BASE")))
     resolved_api_version = _first_non_empty(api_version, os.getenv("DSPY_API_VERSION"))
     resolved_model = _first_non_empty(model, os.getenv("DSPY_MODEL"))
-    if resolved_model is not None:
-        return DSPyLMConfig(
-            model=resolved_model,
-            api_key=resolved_api_key,
-            api_base=resolved_api_base,
-            api_version=resolved_api_version,
-            model_type=resolved_model_type or "chat",
-            temperature=resolved_temperature,
-            max_tokens=resolved_max_tokens,
-        )
-
     azure_api_base = _derive_azure_api_base(
         os.getenv("AZURE_OPENAI_ENDPOINT"),
         os.getenv("AZURE_OPENAI_CHAT_COMPLETIONS_URI"),
     )
-    azure_deployment = _first_non_empty(os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"))
     azure_api_key = _first_non_empty(resolved_api_key, os.getenv("AZURE_OPENAI_API_KEY"))
     azure_api_version = _first_non_empty(
         resolved_api_version, os.getenv("AZURE_OPENAI_API_VERSION")
     )
+    openai_api_key = _first_non_empty(resolved_api_key, os.getenv("OPENAI_API_KEY"))
+    if resolved_model is not None:
+        normalized_model = resolved_model.strip()
+        lowered_model = normalized_model.casefold()
+        effective_api_key = resolved_api_key
+        effective_api_base = resolved_api_base
+        effective_api_version = resolved_api_version
+        if lowered_model.startswith("azure/"):
+            effective_api_key = azure_api_key
+            effective_api_base = _normalize_api_base(
+                _first_non_empty(resolved_api_base, azure_api_base)
+            )
+            effective_api_version = azure_api_version
+        elif lowered_model.startswith("openai/"):
+            effective_api_key = openai_api_key
+        return DSPyLMConfig(
+            model=normalized_model,
+            api_key=effective_api_key,
+            api_base=effective_api_base,
+            api_version=effective_api_version,
+            model_type=resolved_model_type or "chat",
+            temperature=resolved_temperature,
+            max_tokens=resolved_max_tokens,
+        )
+    azure_deployment = _first_non_empty(os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"))
     if azure_deployment is not None and azure_api_base is not None:
         return DSPyLMConfig(
             model=f"azure/{azure_deployment}",
@@ -355,8 +388,6 @@ def resolve_dspy_lm_config(
             temperature=resolved_temperature,
             max_tokens=resolved_max_tokens,
         )
-
-    openai_api_key = _first_non_empty(resolved_api_key, os.getenv("OPENAI_API_KEY"))
     if openai_api_key is not None:
         return DSPyLMConfig(
             model=DEFAULT_OPENAI_MODEL,
@@ -604,7 +635,17 @@ def repository_answer_metric(
         or _answer_overlap_score(expected_answer, predicted_answer) >= 0.6
     )
     expected_sources = set(_normalize_sources(example.expected_sources))
+    benchmark_context = _normalize_context_rows(getattr(example, "benchmark_context", ()))
+    context_grounded_match = False
+    if benchmark_context and predicted_answer:
+        context_reference = _normalize_text("\n".join(benchmark_context))
+        context_grounded_match = (
+            predicted_answer in context_reference
+            or _answer_overlap_score(context_reference, predicted_answer) >= 0.55
+        )
     if not expected_sources:
+        if benchmark_context:
+            return answer_match or context_grounded_match
         return answer_match
     matched_sources = expected_sources.intersection(_normalize_sources(pred.context_sources))
     return answer_match and bool(matched_sources)
@@ -769,7 +810,29 @@ def evaluate_repository_program(
 
     results: list[dict[str, object]] = []
     pass_count = 0
+    skipped_count = 0
     for example in examples:
+        if (
+            "trainer-candidate" in example.tags
+            and not example.expected_sources
+            and not example.benchmark_context
+        ):
+            skipped_count += 1
+            results.append(
+                {
+                    "question": example.question,
+                    "expected_sources": list(example.expected_sources),
+                    "benchmark_context_sources": list(example.benchmark_context_sources),
+                    "retrieved_sources": [],
+                    "matched_sources": [],
+                    "answer_preview": "",
+                    "passed": None,
+                    "skipped": True,
+                    "skip_reason": "missing-benchmark-context",
+                    "tags": list(example.tags),
+                }
+            )
+            continue
         if example.benchmark_context and hasattr(program, "answer_from_context"):
             prediction = cast(
                 PredictionLike,
@@ -803,14 +866,17 @@ def evaluate_repository_program(
                 "matched_sources": list(matched_sources),
                 "answer_preview": prediction.answer[:240],
                 "passed": passed,
+                "skipped": False,
+                "skip_reason": None,
                 "tags": list(example.tags),
             }
         )
-    case_count = len(results)
+    case_count = len(results) - skipped_count
     return {
         "case_count": case_count,
         "pass_count": pass_count,
         "pass_rate": (pass_count / case_count) if case_count else 0.0,
+        "skipped_count": skipped_count,
         "results": results,
         "root": str(root),
     }

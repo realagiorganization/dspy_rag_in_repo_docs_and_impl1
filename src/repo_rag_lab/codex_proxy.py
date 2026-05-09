@@ -19,16 +19,26 @@ import httpx
 
 from .azure_runtime import resolve_azure_openai_runtime
 from .corpus import build_corpus_manifest, write_corpus_manifest
-from .dspy_training import resolve_dspy_lm_config
+from .dspy_training import configure_dspy_lm, resolve_dspy_lm_config
 from .dspy_workflow import RepositoryRAG
 from .retrieval import RetrievalMode
 from .runtime_artifacts import (
+    DEFAULT_TRAINER_CHAMPION_INDEX_PATH,
+    RuntimeTraceContext,
+    build_runtime_trace,
     fetch_remote_bundle,
+    fetch_remote_champion_index,
     inspect_bundle_channel,
     resolve_bundle_manifest,
     resolve_bundle_version_for_program,
 )
+from .training_samples import resolve_prompt_family_support
 from .workflow import ask_repository
+
+try:
+    import dspy as _dspy
+except ImportError:  # pragma: no cover - optional runtime dependency during scaffolding
+    _dspy = None
 
 _DEFAULT_SNIPPET_LIMIT = 280
 _DEFAULT_PREVIEW_COUNT = 4
@@ -64,9 +74,13 @@ class CodexMediationResult:
     """Describe one repo-grounded mediation pass for a Codex request."""
 
     question: str
+    original_prompt: str
+    reformulated_prompt: str
+    reformulation_status: str
     mediation_mode: str
     rag_status: str
     dspy_status: str
+    dspy_lm_model: str | None
     summary: str
     retrieval_mode: str
     sources: list[str]
@@ -75,6 +89,9 @@ class CodexMediationResult:
     program_path: str | None
     evidence_previews: list[dict[str, str]]
     developer_message: str
+    prompt_family_id: str | None = None
+    prompt_family_similarity: float = 0.0
+    prompt_family_band: str = "new"
     task_classification: str = "deep"
     budget_tokens: int = _DEFAULT_TOKEN_BUDGET
     estimated_tokens: int = 0
@@ -166,6 +183,7 @@ def _dedupe_previews(previews: list[dict[str, str]]) -> list[dict[str, str]]:
 
 def _build_budgeted_message(
     *,
+    reformulated_prompt: str,
     mediation_mode: str,
     rag_status: str,
     dspy_status: str,
@@ -186,6 +204,7 @@ def _build_budgeted_message(
         f"Task class: {task_classification}",
         f"RAG: {rag_status}",
         f"DSPy: {dspy_status}",
+        f"Reformulated prompt: {_truncate_text(reformulated_prompt, limit=max(96, budget_tokens * 2))}",
         "",
         "Summary:",
         trimmed_summary,
@@ -286,9 +305,18 @@ def _result_from_payload(payload: dict[str, object]) -> CodexMediationResult | N
         )
         return CodexMediationResult(
             question=str(payload.get("question") or ""),
+            original_prompt=str(payload.get("original_prompt") or ""),
+            reformulated_prompt=str(payload.get("reformulated_prompt") or ""),
+            reformulation_status=str(payload.get("reformulation_status") or "identity"),
             mediation_mode=str(payload.get("mediation_mode") or "heuristic"),
             rag_status=str(payload.get("rag_status") or "failed"),
             dspy_status=str(payload.get("dspy_status") or "disabled"),
+            dspy_lm_model=(
+                str(payload.get("dspy_lm_model")).strip()
+                if payload.get("dspy_lm_model") is not None
+                else None
+            )
+            or None,
             summary=str(payload.get("summary") or ""),
             retrieval_mode=str(payload.get("retrieval_mode") or "lexical"),
             sources=sources,
@@ -307,6 +335,14 @@ def _result_from_payload(payload: dict[str, object]) -> CodexMediationResult | N
             or None,
             evidence_previews=evidence_previews,
             developer_message=str(payload.get("developer_message") or ""),
+            prompt_family_id=(
+                str(payload.get("prompt_family_id")).strip()
+                if payload.get("prompt_family_id") is not None
+                else None
+            )
+            or None,
+            prompt_family_similarity=float(payload.get("prompt_family_similarity") or 0.0),
+            prompt_family_band=str(payload.get("prompt_family_band") or "new"),
             task_classification=str(payload.get("task_classification") or "deep"),
             budget_tokens=budget_tokens,
             estimated_tokens=estimated_tokens,
@@ -331,35 +367,139 @@ def _extract_text_from_content(content: object) -> str:
     return "\n".join(parts).strip()
 
 
-def extract_codex_task_text(payload: Mapping[str, object]) -> str:
-    """Extract the latest user-facing task text from one Responses payload."""
+def _command_trace_step(item: Mapping[str, object]) -> dict[str, str] | None:
+    """Extract one compact command-trace step from a Responses input item."""
+
+    step: dict[str, str] = {}
+    item_type = str(item.get("type") or "").strip()
+    role = str(item.get("role") or "").strip()
+    if item_type:
+        step["type"] = item_type
+    if role:
+        step["role"] = role
+    text = _extract_text_from_content(item.get("content"))
+    if text:
+        step["text"] = text
+    for key in ("name", "command", "tool_name", "call_id", "arguments", "output"):
+        value = item.get(key)
+        if not isinstance(value, str):
+            continue
+        cleaned = value.strip()
+        if cleaned:
+            step[key] = cleaned
+    return step or None
+
+
+def extract_codex_turn_state(payload: Mapping[str, object]) -> dict[str, object]:
+    """Extract the current outbound prompt plus its visible command-trace lineage."""
 
     raw_input = payload.get("input")
     if isinstance(raw_input, str):
-        return raw_input.strip()
+        cleaned = raw_input.strip()
+        return {
+            "original_prompt": cleaned,
+            "command_trace": (
+                [{"type": "message", "role": "user", "text": cleaned}] if cleaned else []
+            ),
+        }
     if not isinstance(raw_input, list):
-        return ""
+        return {"original_prompt": "", "command_trace": []}
 
     user_messages: list[str] = []
     fallback_messages: list[str] = []
+    command_trace: list[dict[str, str]] = []
     for item in raw_input:
-        if not isinstance(item, dict):
+        if not isinstance(item, Mapping):
             continue
         role = str(item.get("role") or "").strip().lower()
-        if item.get("type") != "message":
-            continue
-        text = _extract_text_from_content(item.get("content"))
-        if not text:
-            continue
-        if role == "user":
-            user_messages.append(text)
-        elif role in {"developer", "system", "assistant"}:
-            fallback_messages.append(text)
+        item_type = str(item.get("type") or "").strip().lower()
+        step = _command_trace_step(item)
+        text = step.get("text", "").strip() if isinstance(step, dict) else ""
+        if item_type == "message":
+            if role == "user" and text:
+                user_messages.append(text)
+            elif role in {"developer", "system"} and text:
+                fallback_messages.append(text)
+        if role not in {"developer", "system"} and step is not None:
+            command_trace.append(step)
     if user_messages:
-        return user_messages[-1]
-    if fallback_messages:
-        return fallback_messages[-1]
-    return ""
+        original_prompt = user_messages[-1]
+    elif fallback_messages:
+        original_prompt = fallback_messages[-1]
+    else:
+        original_prompt = ""
+    return {
+        "original_prompt": original_prompt,
+        "command_trace": command_trace,
+    }
+
+
+def extract_codex_task_text(payload: Mapping[str, object]) -> str:
+    """Extract the latest user-facing task text from one Responses payload."""
+
+    return str(extract_codex_turn_state(payload).get("original_prompt") or "").strip()
+
+
+def reformulate_codex_prompt(
+    original_prompt: str,
+    *,
+    lm_config: object | None,
+) -> tuple[str, str]:
+    """Return the reformulated DSPy helper prompt for one outbound Codex turn."""
+
+    cleaned = " ".join(original_prompt.split()).strip()
+    if not cleaned:
+        return "", "empty"
+    if lm_config is None or _dspy is None:
+        return cleaned, "identity"
+    try:
+        dspy_module = _dspy
+        assert dspy_module is not None
+        configure_dspy_lm(lm_config)
+
+        class PromptReformulationSignature(dspy_module.Signature):
+            """Rewrite one software-agent prompt into a compact mediation query."""
+
+            original_prompt = dspy_module.InputField()
+            reformulated_prompt = dspy_module.OutputField(
+                desc=(
+                    "A concise reformulation for repository-grounded DSPy mediation. Preserve "
+                    "the requested task, files, tests, commands, failures, and constraints. Do "
+                    "not solve the task."
+                )
+            )
+
+        reformulator = dspy_module.Predict(PromptReformulationSignature)
+        prediction = reformulator(original_prompt=cleaned)
+        reformulated = " ".join(str(getattr(prediction, "reformulated_prompt", "")).split()).strip()
+        if not reformulated:
+            return cleaned, "identity"
+        return reformulated, "dspy"
+    except Exception:
+        return cleaned, "identity"
+
+
+def _resolve_champion_index_path(repository_root: Path, bundle_root: Path) -> Path | None:
+    """Resolve the champion-index path used for prompt-family support lookups."""
+
+    direct_candidates = [
+        bundle_root.resolve() / DEFAULT_TRAINER_CHAMPION_INDEX_PATH,
+        repository_root.resolve() / DEFAULT_TRAINER_CHAMPION_INDEX_PATH,
+    ]
+    for candidate in direct_candidates:
+        if candidate.is_file():
+            return candidate
+    for cache_root in (bundle_root.resolve(), repository_root.resolve()):
+        remote_payload = fetch_remote_champion_index(cache_root)
+        if not isinstance(remote_payload, dict):
+            continue
+        champion_index_path = str(remote_payload.get("champion_index_path") or "").strip()
+        if not champion_index_path:
+            continue
+        resolved = cache_root / champion_index_path
+        if resolved.is_file():
+            return resolved
+    return None
 
 
 def _heuristic_sources(root: Path) -> list[Path]:
@@ -469,7 +609,8 @@ def build_codex_mediation(
     """Build one combined repo-grounded mediation block for Codex."""
 
     resolved_root = repository_root.resolve()
-    task_classification = _classify_task(question)
+    original_prompt = " ".join(question.split()).strip()
+    task_classification = _classify_task(original_prompt)
     effective_budget = (
         max(120, trivial_token_budget)
         if task_classification == "trivial"
@@ -478,8 +619,62 @@ def build_codex_mediation(
     effective_essentials = 1 if task_classification == "trivial" else max(1, essentials_count)
 
     warnings: list[str] = []
+    lm_config = resolve_dspy_lm_config() if prefer_dspy else None
+    reformulated_prompt, reformulation_status = reformulate_codex_prompt(
+        original_prompt,
+        lm_config=lm_config,
+    )
+    active_prompt = reformulated_prompt or original_prompt
+    champion_index_path = _resolve_champion_index_path(resolved_root, bundle_root.resolve())
+    prompt_family_id: str | None = None
+    prompt_family_similarity = 0.0
+    prompt_family_band = "new"
+    supported_family = False
+    if champion_index_path is not None:
+        support = resolve_prompt_family_support(active_prompt, champion_index_path)
+        prompt_family_id = support.prompt_family_id
+        prompt_family_similarity = support.similarity
+        prompt_family_band = support.band
+        supported_family = support.supported
+    else:
+        warnings.append("Champion index was unavailable; request will pass through unchanged.")
+
+    if not supported_family:
+        warnings.append(
+            "No champion prompt-family support was found for the reformulated prompt; "
+            "the original request will pass through unchanged."
+        )
+        return CodexMediationResult(
+            question=active_prompt,
+            original_prompt=original_prompt,
+            reformulated_prompt=active_prompt,
+            reformulation_status=reformulation_status,
+            mediation_mode="passthrough",
+            rag_status="skipped",
+            dspy_status="skipped",
+            dspy_lm_model=str(getattr(lm_config, "model", "") or "").strip() or None,
+            summary=(
+                "No champion prompt-family support was found for the reformulated prompt, so "
+                "the proxy did not inject DSPy mediation for this turn."
+            ),
+            retrieval_mode=str(retrieval_mode or "lexical"),
+            sources=[],
+            warnings=warnings,
+            bundle_version=bundle_version,
+            program_path=None,
+            evidence_previews=[],
+            developer_message="",
+            prompt_family_id=prompt_family_id,
+            prompt_family_similarity=prompt_family_similarity,
+            prompt_family_band=prompt_family_band,
+            task_classification=task_classification,
+            budget_tokens=effective_budget,
+            estimated_tokens=0,
+            injected=False,
+        )
+
     rag_answer = ask_repository(
-        question=question,
+        question=active_prompt,
         root=resolved_root,
         retrieval_mode=retrieval_mode,
     )
@@ -507,7 +702,7 @@ def build_codex_mediation(
         sources = [item["source"] for item in previews]
         rag_status = "heuristic" if previews else "failed"
         rag_summary = (
-            f"No lexical repo-RAG evidence matched the task {question!r}; "
+            f"No lexical repo-RAG evidence matched the task {active_prompt!r}; "
             "fall back to the heuristic file shortlist."
         )
         if rag_status == "heuristic":
@@ -518,12 +713,12 @@ def build_codex_mediation(
             )
 
     dspy_status = "disabled"
+    dspy_lm_model = str(getattr(lm_config, "model", "") or "").strip() or None
     summary = rag_summary
     program_path_text: str | None = None
     resolved_bundle_version: str | None = bundle_version
     if prefer_dspy:
         try:
-            lm_config = resolve_dspy_lm_config()
             if lm_config is None:
                 raise RuntimeError("DSPy LM configuration is unavailable.")
             program_path, resolved_bundle_version = _resolve_program_path_and_bundle_version(
@@ -542,7 +737,7 @@ def build_codex_mediation(
                 require_configured_lm=True,
                 retrieval_mode=retrieval_mode,
             )
-            dspy_result = runner(question)
+            dspy_result = runner(active_prompt)
             if not dspy_result.answer.strip():
                 raise RuntimeError("DSPy produced an empty answer.")
             dspy_status = "success"
@@ -585,6 +780,7 @@ def build_codex_mediation(
     injected = False
     if not low_signal:
         developer_message, estimated_tokens = _build_budgeted_message(
+            reformulated_prompt=active_prompt,
             mediation_mode=mediation_mode,
             rag_status=rag_status,
             dspy_status=dspy_status,
@@ -603,10 +799,14 @@ def build_codex_mediation(
         )
 
     return CodexMediationResult(
-        question=question,
+        question=active_prompt,
+        original_prompt=original_prompt,
+        reformulated_prompt=active_prompt,
+        reformulation_status=reformulation_status,
         mediation_mode=mediation_mode,
         rag_status=rag_status,
         dspy_status=dspy_status,
+        dspy_lm_model=dspy_lm_model,
         summary=summary,
         retrieval_mode=effective_retrieval_mode,
         sources=sources[: max(1, effective_essentials + 1)],
@@ -615,6 +815,9 @@ def build_codex_mediation(
         program_path=program_path_text,
         evidence_previews=previews[: max(1, effective_essentials)],
         developer_message=developer_message,
+        prompt_family_id=prompt_family_id,
+        prompt_family_similarity=prompt_family_similarity,
+        prompt_family_band=prompt_family_band,
         task_classification=task_classification,
         budget_tokens=effective_budget,
         estimated_tokens=estimated_tokens,
@@ -711,10 +914,17 @@ class _CodexProxyHandler(BaseHTTPRequestHandler):
 
         outbound_payload_bytes = request_body
         if isinstance(payload, dict):
-            task = extract_codex_task_text(payload)
-            if task:
-                mediation = runtime.build_mediation(task)
+            turn_state = extract_codex_turn_state(payload)
+            original_prompt = str(turn_state.get("original_prompt") or "").strip()
+            command_trace = [
+                step
+                for step in turn_state.get("command_trace", [])
+                if isinstance(step, Mapping)
+            ]
+            if original_prompt:
+                mediation = runtime.build_mediation(original_prompt, command_trace)
                 runtime.persist_status(mediation)
+                runtime.persist_turn_trace(mediation, command_trace=command_trace)
                 if mediation.injected and mediation.developer_message.strip():
                     payload = augment_responses_payload(
                         payload,
@@ -793,6 +1003,13 @@ class _CodexProxyRuntime:
         self.api_version = runtime.api_version
         self.client = httpx.Client(timeout=None)
         self._mediation_cache: dict[str, CodexMediationResult] = {}
+        self.turn_trace_batch_name = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+        self.turn_trace_dir = (
+            self.config.artifact_dir / "repo_rag_turn_traces" / self.turn_trace_batch_name
+        )
+        self.turn_trace_dir.mkdir(parents=True, exist_ok=True)
+        self.turn_trace_manifest_path = self.turn_trace_dir / "manifest.json"
+        self._turn_trace_entries: list[str] = []
         self.cache_dir = (
             config.cache_dir.resolve()
             if config.cache_dir is not None
@@ -815,7 +1032,13 @@ class _CodexProxyRuntime:
         except OSError:
             return "unreadable-profile"
 
-    def _cache_key(self, task: str) -> str:
+    def _cache_key(self, original_prompt: str, command_trace: list[Mapping[str, str]]) -> str:
+        command_trace_token = json.dumps(
+            command_trace,
+            sort_keys=True,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
         identity = "|".join(
             [
                 str(self.config.repository_root),
@@ -829,7 +1052,8 @@ class _CodexProxyRuntime:
                 str(self.config.trivial_token_budget),
                 self.corpus_fingerprint,
                 self.retrieval_profile_fingerprint,
-                task.strip(),
+                original_prompt.strip(),
+                command_trace_token,
             ]
         )
         return hashlib.sha256(identity.encode("utf-8")).hexdigest()
@@ -837,8 +1061,12 @@ class _CodexProxyRuntime:
     def _cache_path_for_key(self, cache_key: str) -> Path:
         return self.cache_dir / f"{cache_key}.json"
 
-    def _load_cached_mediation(self, task: str) -> CodexMediationResult | None:
-        cache_path = self._cache_path_for_key(self._cache_key(task))
+    def _load_cached_mediation(
+        self,
+        original_prompt: str,
+        command_trace: list[Mapping[str, str]],
+    ) -> CodexMediationResult | None:
+        cache_path = self._cache_path_for_key(self._cache_key(original_prompt, command_trace))
         if not cache_path.is_file():
             return None
         if self.cache_ttl_seconds > 0:
@@ -856,9 +1084,13 @@ class _CodexProxyRuntime:
             return None
         return CodexMediationResult(
             question=cached.question,
+            original_prompt=cached.original_prompt,
+            reformulated_prompt=cached.reformulated_prompt,
+            reformulation_status=cached.reformulation_status,
             mediation_mode=cached.mediation_mode,
             rag_status=cached.rag_status,
             dspy_status=cached.dspy_status,
+            dspy_lm_model=cached.dspy_lm_model,
             summary=cached.summary,
             retrieval_mode=cached.retrieval_mode,
             sources=cached.sources,
@@ -867,6 +1099,9 @@ class _CodexProxyRuntime:
             program_path=cached.program_path,
             evidence_previews=cached.evidence_previews,
             developer_message=cached.developer_message,
+            prompt_family_id=cached.prompt_family_id,
+            prompt_family_similarity=cached.prompt_family_similarity,
+            prompt_family_band=cached.prompt_family_band,
             task_classification=cached.task_classification,
             budget_tokens=cached.budget_tokens,
             estimated_tokens=cached.estimated_tokens,
@@ -874,8 +1109,13 @@ class _CodexProxyRuntime:
             cache_hit=True,
         )
 
-    def _store_cached_mediation(self, task: str, mediation: CodexMediationResult) -> None:
-        cache_path = self._cache_path_for_key(self._cache_key(task))
+    def _store_cached_mediation(
+        self,
+        original_prompt: str,
+        command_trace: list[Mapping[str, str]],
+        mediation: CodexMediationResult,
+    ) -> None:
+        cache_path = self._cache_path_for_key(self._cache_key(original_prompt, command_trace))
         temp_path = cache_path.with_suffix(".json.tmp")
         payload = {
             "schema_version": 1,
@@ -885,16 +1125,21 @@ class _CodexProxyRuntime:
         temp_path.write_text(f"{json.dumps(payload, indent=2)}\n", encoding="utf-8")
         temp_path.replace(cache_path)
 
-    def build_mediation(self, task: str) -> CodexMediationResult:
-        cached = self._mediation_cache.get(task)
+    def build_mediation(
+        self,
+        original_prompt: str,
+        command_trace: list[Mapping[str, str]],
+    ) -> CodexMediationResult:
+        cache_key = self._cache_key(original_prompt, command_trace)
+        cached = self._mediation_cache.get(cache_key)
         if cached is not None:
             return cached
-        cached_disk = self._load_cached_mediation(task)
+        cached_disk = self._load_cached_mediation(original_prompt, command_trace)
         if cached_disk is not None:
-            self._mediation_cache[task] = cached_disk
+            self._mediation_cache[cache_key] = cached_disk
             return cached_disk
         mediation = build_codex_mediation(
-            task,
+            original_prompt,
             repository_root=self.config.repository_root,
             bundle_root=self.config.bundle_root,
             prefer_dspy=self.config.prefer_dspy,
@@ -907,9 +1152,104 @@ class _CodexProxyRuntime:
             low_signal_min_sources=self.config.low_signal_min_sources,
             retrieval_mode=self.config.retrieval_mode,
         )
-        self._mediation_cache[task] = mediation
-        self._store_cached_mediation(task, mediation)
+        self._mediation_cache[cache_key] = mediation
+        self._store_cached_mediation(original_prompt, command_trace, mediation)
         return mediation
+
+    def persist_turn_trace(
+        self,
+        mediation: CodexMediationResult,
+        *,
+        command_trace: list[Mapping[str, str]],
+    ) -> Path:
+        metric_hits = 1 if mediation.dspy_status == "success" else 0
+        metric_total = 1
+        trace_payload = {
+            "command": "codex-proxy-turn-mediation",
+            "command_status": "success",
+            "question": mediation.reformulated_prompt or mediation.question,
+            "original_prompt": mediation.original_prompt,
+            "reformulated_prompt": mediation.reformulated_prompt,
+            "answer": mediation.summary,
+            "sources": mediation.sources,
+            "context": [],
+            "retrieved_context": [
+                {
+                    "source": preview.get("source"),
+                    "preview": preview.get("text"),
+                    "text": preview.get("text"),
+                }
+                for preview in mediation.evidence_previews
+            ],
+            "command_trace": list(command_trace),
+            "trace": build_runtime_trace(
+                RuntimeTraceContext(
+                    question=mediation.reformulated_prompt or mediation.question,
+                    mode="codex-proxy-turn-mediation",
+                    retrieval_mode=mediation.retrieval_mode,
+                    sources=mediation.sources,
+                    context_count=len(mediation.evidence_previews),
+                    top_k=self.config.dspy_top_k,
+                    provider="codex-proxy",
+                    program_loaded=mediation.dspy_status == "success",
+                    program_path=mediation.program_path,
+                    bundle_version=mediation.bundle_version,
+                    overlay_path=None,
+                    mcp_candidate_count=0,
+                    answer_length=len(mediation.summary),
+                    context_field="evidence_previews",
+                    evidence_items=mediation.evidence_previews,
+                    command_trace=command_trace,
+                    original_prompt=mediation.original_prompt,
+                    reformulated_prompt=mediation.reformulated_prompt,
+                    prompt_family_id=mediation.prompt_family_id,
+                    prompt_family_similarity=mediation.prompt_family_similarity,
+                    prompt_family_band=mediation.prompt_family_band,
+                    mediation_metric_hits=metric_hits,
+                    mediation_metric_total=metric_total,
+                )
+            ),
+            "outcome": {
+                "acceptance_status": "candidate",
+                "accepted": None,
+                "execution_status": "success",
+                "method": "codex_proxy_mediation",
+                "backend": "repo_rag_codex_proxy",
+                "used_baseline_fallback": mediation.dspy_status != "success",
+            },
+            "mediation": mediation.to_payload(),
+        }
+        trace_name = hashlib.sha256(
+            json.dumps(
+                [
+                    mediation.original_prompt,
+                    mediation.reformulated_prompt,
+                    command_trace,
+                    mediation.bundle_version,
+                ],
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()[:16]
+        turn_index = len(self._turn_trace_entries)
+        trace_path = self.turn_trace_dir / f"{turn_index}-{trace_name}.json"
+        trace_path.write_text(f"{json.dumps(trace_payload, indent=2)}\n", encoding="utf-8")
+        relative_path = trace_path.relative_to(self.config.artifact_dir).as_posix()
+        if relative_path not in self._turn_trace_entries:
+            self._turn_trace_entries.append(relative_path)
+        manifest = {
+            "schema_version": 1,
+            "batch_kind": "repo-rag-codex-proxy-turn-trace-batch",
+            "batch_name": self.turn_trace_batch_name,
+            "trace_dir": self.turn_trace_dir.relative_to(self.config.artifact_dir).as_posix(),
+            "trace_paths": list(self._turn_trace_entries),
+        }
+        self.turn_trace_manifest_path.write_text(
+            f"{json.dumps(manifest, indent=2)}\n",
+            encoding="utf-8",
+        )
+        return trace_path
 
     def persist_status(self, mediation: CodexMediationResult) -> None:
         self.persist_raw_status(mediation.to_payload())
@@ -1014,6 +1354,7 @@ __all__ = [
     "augment_responses_payload",
     "build_codex_mediation",
     "extract_codex_task_text",
+    "extract_codex_turn_state",
     "running_codex_proxy",
     "serve_codex_proxy",
 ]

@@ -18,6 +18,7 @@ from repo_rag_lab.codex_proxy import (
     augment_responses_payload,
     build_codex_mediation,
     extract_codex_task_text,
+    extract_codex_turn_state,
     running_codex_proxy,
 )
 from repo_rag_lab.retrieval import Chunk, RetrievalMode
@@ -74,6 +75,42 @@ def test_extract_codex_task_text_prefers_latest_user_message() -> None:
     }
 
     assert extract_codex_task_text(_payload_mapping(payload)) == "second task"
+
+
+def test_extract_codex_turn_state_captures_command_trace() -> None:
+    payload = {
+        "input": [
+            {
+                "type": "message",
+                "role": "developer",
+                "content": [{"type": "input_text", "text": "rules"}],
+            },
+            {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "first task"}],
+            },
+            {
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": "run pytest -q"}],
+            },
+            {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "second task"}],
+            },
+        ]
+    }
+
+    state = extract_codex_turn_state(_payload_mapping(payload))
+
+    assert state["original_prompt"] == "second task"
+    assert state["command_trace"] == [
+        {"type": "message", "role": "user", "text": "first task"},
+        {"type": "message", "role": "assistant", "text": "run pytest -q"},
+        {"type": "message", "role": "user", "text": "second task"},
+    ]
 
 
 def test_augment_responses_payload_inserts_developer_message_after_existing_developers() -> None:
@@ -141,7 +178,10 @@ def test_running_codex_proxy_forwards_sse_and_injects_mediation(
         def log_message(self, format: str, *args: object) -> None:
             del format, args
 
-    upstream = HTTPServer(("127.0.0.1", 0), UpstreamHandler)
+    try:
+        upstream = HTTPServer(("127.0.0.1", 0), UpstreamHandler)
+    except PermissionError:
+        pytest.skip("Sandbox does not allow local HTTPServer sockets.")
     upstream_thread = threading.Thread(target=upstream.serve_forever, daemon=True)
     upstream_thread.start()
     upstream_port = upstream.server_address[1]
@@ -153,9 +193,13 @@ def test_running_codex_proxy_forwards_sse_and_injects_mediation(
 
     mediation = CodexMediationResult(
         question="inspect repo",
+        original_prompt="inspect repo",
+        reformulated_prompt="inspect repo",
+        reformulation_status="identity",
         mediation_mode="dspy_rag",
         rag_status="success",
         dspy_status="success",
+        dspy_lm_model="azure/dspy-helper",
         summary="use README first",
         retrieval_mode="hybrid-vector",
         sources=["README.md"],
@@ -219,6 +263,9 @@ def test_running_codex_proxy_forwards_sse_and_injects_mediation(
     assert isinstance(input_items, list)
     assert input_items[1]["role"] == "developer"
     assert input_items[1]["content"][0]["text"] == "repo-rag mediation block"
+    turn_trace_dir = tmp_path / "artifacts" / "repo_rag_turn_traces"
+    manifest_paths = list(turn_trace_dir.glob("*/manifest.json"))
+    assert len(manifest_paths) == 1
 
 
 def test_build_codex_mediation_suppresses_low_signal(
@@ -247,6 +294,19 @@ def test_build_codex_mediation_suppresses_low_signal(
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy._build_heuristic_previews",
         fake_build_heuristic_previews,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_champion_index_path",
+        lambda *args, **kwargs: repo / "artifacts" / "trainer" / "champion-index.json",
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.resolve_prompt_family_support",
+        lambda *args, **kwargs: SimpleNamespace(
+            prompt_family_id="pf-demo",
+            similarity=1.0,
+            band="match",
+            supported=True,
+        ),
     )
 
     mediation = build_codex_mediation(
@@ -347,7 +407,10 @@ def test_running_codex_proxy_uses_budgeted_disk_cache(
         def log_message(self, format: str, *args: object) -> None:
             del format, args
 
-    upstream = HTTPServer(("127.0.0.1", 0), UpstreamHandler)
+    try:
+        upstream = HTTPServer(("127.0.0.1", 0), UpstreamHandler)
+    except PermissionError:
+        pytest.skip("Sandbox does not allow local HTTPServer sockets.")
     upstream_thread = threading.Thread(target=upstream.serve_forever, daemon=True)
     upstream_thread.start()
     upstream_port = upstream.server_address[1]
@@ -357,6 +420,19 @@ def test_running_codex_proxy_uses_budgeted_disk_cache(
     monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
     monkeypatch.setattr("repo_rag_lab.codex_proxy.resolve_dspy_lm_config", lambda: None)
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_champion_index_path",
+        lambda *args, **kwargs: repo / "artifacts" / "trainer" / "champion-index.json",
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.resolve_prompt_family_support",
+        lambda *args, **kwargs: SimpleNamespace(
+            prompt_family_id="pf-demo",
+            similarity=1.0,
+            band="match",
+            supported=True,
+        ),
+    )
 
     repo = tmp_path / "repo"
     repo.mkdir()

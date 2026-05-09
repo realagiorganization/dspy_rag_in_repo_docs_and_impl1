@@ -1041,6 +1041,7 @@ def run_trace_enqueue(
     trace_path: Path,
     queue_name: str = "default",
     trace_name: str | None = None,
+    batch_name: str | None = None,
     outcome_path: Path | None = None,
     outcome_text: str | None = None,
 ) -> str:
@@ -1053,19 +1054,24 @@ def run_trace_enqueue(
         payload,
         queue_name=queue_name,
         trace_name=trace_name,
+        batch_name=batch_name,
         outcome=outcome,
         source_trace_path=trace_path,
         source_outcome_path=outcome_path,
     )
     queue_item_path = str(queue_item.get("queue_item_path") or "")
+    batch_trace_path = str(queue_item.get("batch_trace_path") or "")
+    generated_paths = [queue_item_path]
+    if batch_trace_path:
+        generated_paths.append(batch_trace_path)
     return _json_command_payload(
         "trace-enqueue",
         root=root,
         payload=queue_item,
         artifact_metadata=_artifact_metadata(
             input_paths=[trace_path, outcome_path] if outcome_path is not None else [trace_path],
-            generated_paths=[queue_item_path],
-            related_paths=["artifacts/traces/queued"],
+            generated_paths=generated_paths,
+            related_paths=["artifacts/traces/queued", "artifacts/traces/batches"],
         ),
     )
 

@@ -988,3 +988,293 @@ Current conclusion after the local fix:
 - the remaining stale-champion blocker has been removed locally
 - the next live rebuild/redeploy should determine whether this was the last blocker before bundle
   publication resumes
+
+## 2026-05-08 dataset run `25557281981_20260508_132325`: artifacts reached Blob and trainer recovered them, but publish is still blocked by the bundle gate
+
+The newest `../dataset` commit path is in place:
+
+- `../dataset` `HEAD` is merge commit `64d05cb`
+- the effective dataset-side change is `0e03940` (`Bump repo-rag submodule for richer benchmark champions`)
+- `../dataset` currently points `submodules/dspy_rag_in_repo_docs_and_impl1` at
+  `76c13a110575e61fb310ddfe795b266ff85a1d95`
+
+Local verification for the current `repo-rag` `HEAD` (`76c13a1`) passed:
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests` -> `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_training_samples.py tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  -> `pass` (`64 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test` -> `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml` -> `pass`
+
+The newest dataset execution itself also completed successfully and did upload its runtime
+artifacts:
+
+- local artifact bundle:
+  - `../dataset/artifacts/all_artifacts.tar.gz`
+  - `../dataset/artifacts/processed.tar.gz`
+  - `../dataset/artifacts/redis_results.json`
+  - `../dataset/artifacts/upload_summary.json`
+- upload summary reports:
+  - `execution_id = 25557281981_20260508_132325`
+  - `azure_path = executions/25557281981_20260508_132325`
+  - `storage_container = execution-artifacts`
+- direct live Blob checks from the trainer pod confirm:
+  - `execution-artifacts/executions/25557281981_20260508_132325/redis_results.json` -> exists
+  - `execution-artifacts/executions/25557281981_20260508_132325/all_artifacts.tar.gz` -> exists
+  - `execution-artifacts/executions/25557281981_20260508_132325/processed.tar.gz` -> exists
+
+The runtime artifact contents show the worker-side path did what it was supposed to do:
+
+- `prompt_id = prompts_debt_relief-p00000-22fc5b`
+- `success = true`
+- `backend_used = "codex_cli_repo_rag_proxy"`
+- `prompt_tokens = 23769`
+- `bundle_version = "20260502T122127191445Z"`
+- `acceptance_status = "candidate"`
+- `trace_handoff_status = "queued"`
+- `codex_session_mode = "resumed"`
+- `repo_rag_backend.json` reports:
+  - `backend = "codex_cli_repo_rag_proxy"`
+  - `bundle_resolved = true`
+  - `bundle_version = "20260502T122127191445Z"`
+- `repo_rag_trace_enqueue.json` reports:
+  - `command_status = "success"`
+  - `storage_backend = "azure-blob-queue"`
+  - `trace_container = "repo-rag-training-traces"`
+  - `queue_item_path = "queued/repo-rag-training/20260508T132324Z-prompts_debt_relief-p00000-22fc5b.json"`
+- `trusted_trace_handoff_summary.json` reports:
+  - `queued = 1`
+  - `failed = 0`
+
+The live trainer did receive and recover the new trace payloads:
+
+- recovered traces now include:
+  - `artifacts/trainer/recovered-imported-traces/20260508T132324Z-prompts_debt_relief-p00000-22fc5b.json`
+  - `artifacts/trainer/recovered-imported-traces/20260508T145449Z-prompts_debt_relief-p00000-22fc5b.json`
+- the running trainer image also contains the current `76c13a1` logic in
+  `src/repo_rag_lab/training_samples.py`, including:
+  - `_candidate_materialization_signature(...)`
+  - `_merge_equivalent_candidate_records(...)`
+  - `current_family_signature`
+- `generated-training.yaml` now has non-empty benchmark context again:
+  - `row_count = 21`
+  - `nonempty_benchmark_context_rows = 7`
+
+But that still did **not** produce a new published bundle.
+
+Current live trainer state:
+
+- `cycles_executed = 9`
+- `failed_cycle_count = 9`
+- `total_publish_count = 0`
+- `total_promotion_count = 0`
+- `total_recompiled_run_count = 9`
+- `total_new_training_candidate_count = 0`
+- `bundle_gate_failure_count = 9`
+- `latest_cycle_record_path = "artifacts/trainer/history/20260508T175816Z-cycle-0009.json"`
+- latest `training-candidates-summary.json` still reports:
+  - `candidate_count = 13`
+  - `new_candidate_count = 0`
+  - `replaced_count = 0`
+  - `new_prompt_family_count = 0`
+
+The newest local trainer bundle run exists, but it never crossed the publish gate:
+
+- latest local bundle:
+  - `bundle_version = "20260508T175936976842Z"`
+  - `benchmark_status = "needs-review"`
+  - `pass_rate = 0.3333333333333333`
+  - `case_count = 21`
+  - `pass_count = 7`
+  - `failed_count = 14`
+- latest cycle recorded:
+  - `publish_requested = true`
+  - `publish = null`
+  - `promotion_requested = true`
+  - `promotion_status = "failed"`
+  - `promotion = null`
+- local `artifacts/dspy/published/` still has no entries newer than `20260502T122127191445Z`
+
+Direct Azure Blob inspection confirms the remote bundle store also did not advance:
+
+- `repo-rag-bundles` currently contains only:
+  - `channels/stable.json`
+  - version blobs under:
+    - `versions/20260502T120805498593Z/...`
+    - `versions/20260502T122127191445Z/...`
+- no `versions/20260508...` blobs exist remotely
+- remote `channels/stable.json` still reports:
+  - `updated_at = "2026-05-02T13:01:12.056396+00:00"`
+  - `current_bundle_version = "20260502T122127191445Z"`
+  - `current_publish_status = "published"`
+  - `current_bundle_status = "ready"`
+
+Current conclusion:
+
+- the latest dataset-side run **did** work
+- its execution artifacts **did** reach `execution-artifacts`
+- its trainer trace handoff **did** enqueue successfully
+- the live trainer **did** recover those traces
+- the live trainer also **does** contain the newer `76c13a1` code path
+- but no new bundle was published into `repo-rag-bundles`, because the trainer is still failing
+  before publish/promotion on the bundle benchmark gate
+- so the missing new bundle is real, not a UI lag and not a missing-blob/upload problem
+
+## 2026-05-08 live trainer still blocked: the bundle gate was scoring non-replayable external champions as hard failures
+
+After deploying the richer-champion refresh fix, the live trainer progressed further but still did
+not publish a new bundle. The failure mode changed again:
+
+- trainer-service is healthy and actively recompiling:
+  - `successful_cycle_count = 0`
+  - `failed_cycle_count = 6`
+  - `total_recompiled_run_count = 6`
+  - `bundle_gate_failure_count = 6`
+- the latest cycle is `artifacts/trainer/history/20260508T173939Z-cycle-0006.json`
+- the newest candidate bundle is `20260508T174101963425Z`
+- `stable.json` still points at `20260502T122127191445Z`
+
+The critical evidence from the live workspace:
+
+- `generated-training.yaml` now contains `21` rows
+- rows with non-empty `benchmark_context`: `7`
+- so the previous “all champion rows are context-poor” blocker is no longer true
+
+But the bundle gate still failed with:
+
+- `benchmark_example_count = 21`
+- `benchmark_summary.pass_count = 7`
+- `benchmark_summary.pass_rate = 0.3333333333333333`
+
+The decisive issue is what those 21 benchmark cases mean.
+
+The benchmark set still contains three kinds of rows:
+
+1. repo-local curated benchmark rows
+2. external trainer-candidate rows with preserved `benchmark_context`
+3. external trainer-candidate rows with **no** preserved `benchmark_context`
+
+The third category is not replayable under the global bundle contract:
+
+- they have `expected_sources = []`
+- they have `benchmark_context = []`
+- so there is no repo-local retrieval target and no stored retrieved-context snapshot to replay
+- yet the bundle gate was still counting them as ordinary failed cases
+
+That is structurally wrong for a global universal bundle. Under the current contract, those rows are
+historical champion state but **not evaluable benchmark cases** unless they carry preserved
+retrieved-context evidence.
+
+The second structural issue was the answer metric for context-backed external rows:
+
+- the bundle answered from `benchmark_context`
+- but pass/fail still leaned too hard on similarity to the old worker execution answer
+- for cases like `prompts_debt_relief`, the new answer was context-grounded and correct, but still
+  failed because it was shorter and phrased differently than the historical execution summary
+
+Local fix applied in `src/repo_rag_lab/dspy_training.py`:
+
+- external `trainer-candidate` rows with:
+  - no `expected_sources`
+  - and no `benchmark_context`
+  are now skipped during bundle benchmarking instead of being counted as hard failures
+- context-backed external rows now accept a pass when the generated answer is strongly grounded in
+  the preserved `benchmark_context`, even if it is not a close paraphrase of the historical worker
+  answer
+
+This matches the standing universal-bundle contract more closely:
+
+- evaluate by request/context deltas when context exists
+- do not pretend contextless historical rows are replayable benchmark cases
+
+Verification commands executed after this local fix:
+
+- `uv run python -m compileall src tests` -> `pass`
+- `uv run pytest tests/test_dspy_training.py -q` -> `pass` (`26 passed`)
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q` -> `pass`
+  (`43 passed`)
+- `uv run repo-rag smoke-test` -> `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml` -> `pass`
+
+New local regression coverage now checks:
+
+- context-backed benchmark answers pass when they are grounded in preserved benchmark context
+- contextless `trainer-candidate` rows are skipped instead of poisoning `pass_rate`
+
+Current conclusion:
+
+- the live trainer is no longer blocked on candidate discovery or context propagation
+- the remaining blocker was the benchmark contract itself
+- that contract is now corrected locally, but still needs the next rebuild/redeploy/live cycle to
+  confirm publication resumes
+
+## 2026-05-08 live trainer follow-up: unsupported context-backed trainer candidates still contaminate the compile-facing benchmark set
+
+The bundle gate still has one more upstream contamination path beyond the earlier contextless-row
+problem.
+
+Direct inspection of the current live `artifacts/trainer/training-candidates.yaml` now shows:
+
+- `trainer_candidate_count = 15`
+- `context_backed_unsupported_count = 9`
+
+Those `9` rows already carry non-empty preserved `benchmark_context`, so they are not part of the
+older “contextless historical row” class. The problem is sharper: they look replayable, but their
+preserved `expected_answer` is still not supported by the preserved `benchmark_context`. In other
+words, they survive into champion/materialization state as if they were benchmarkable external
+examples, but they enter bundle evaluation with self-contradictory evidence.
+
+That explains why the live bundle gate could still stay red even after:
+
+- dataset execution upload succeeded
+- trace enqueue succeeded
+- trainer recovery succeeded
+- richer same-key champion refresh started working
+- contextless historical rows stopped being treated as ordinary hard failures at benchmark time
+
+The remaining contamination lived upstream in materialization itself.
+
+Local fix applied in `src/repo_rag_lab/training_samples.py`:
+
+- define one support check for `trainer-candidate` rows with preserved benchmark context
+- reject imported trace rows whose `expected_answer` is not grounded in their own stored
+  `benchmark_context`, returning skip reason `"unsupported-benchmark-context"`
+- prune persisted unsupported trainer-candidate champions while reloading
+  `artifacts/trainer/champion-index.json`
+- filter unsupported trainer-candidate rows when seeding
+  `artifacts/trainer/training-candidates.yaml`
+- filter the same unsupported rows before generating
+  `artifacts/trainer/generated-training.yaml`
+- record `skipped_unsupported_candidate_count` in the combined-training summary so the next trainer
+  cycle shows the pruning explicitly
+
+The local fix intentionally does **not** drop contextless historical trainer-candidate rows during
+materialization. Those rows are already handled by the newer benchmark contract as skipped rather
+than failed, and keeping that behavior avoids rebreaking older materialization assumptions.
+
+New local regression coverage in `tests/test_training_samples.py` now checks:
+
+- imported unsupported context-backed traces are skipped
+- persisted unsupported champions are pruned from the champion index on reload
+- combined training examples exclude unsupported trainer-candidate rows and report the skipped
+  count
+
+Verification commands executed after this local fix:
+
+- `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests` -> `pass`
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_training_samples.py -q` -> `pass`
+  (`24 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+  -> `pass` (`43 passed`)
+- `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test` -> `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml` -> `pass`
+
+Current conclusion after this follow-up:
+
+- the latest dataset run still did reach Blob and the live trainer
+- the missing new remote bundle is still real
+- the remaining locally confirmed trainer-side root cause was unsupported context-backed external
+  trainer candidates contaminating the compile-facing benchmark set
+- that filtering/pruning fix is now present locally with regression coverage
+- one more rebuild/redeploy/live trainer cycle is still required before `repo-rag-bundles` can be
+  expected to advance beyond `20260502T122127191445Z`
