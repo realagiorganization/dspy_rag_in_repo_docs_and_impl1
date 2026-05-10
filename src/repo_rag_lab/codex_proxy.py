@@ -606,6 +606,19 @@ def _resolve_bundle_family_registry(
         )
         if isinstance(family_registry, Mapping):
             return dict(family_registry)
+        try:
+            remote_bundle = fetch_remote_bundle(
+                bundle_root,
+                bundle_version=bundle_version,
+                channel=None,
+            )
+        except Exception:
+            remote_bundle = None
+        remote_family_registry = (
+            remote_bundle.get("family_registry") if isinstance(remote_bundle, dict) else None
+        )
+        if isinstance(remote_family_registry, Mapping):
+            return dict(remote_family_registry)
         return None
     channel_state = inspect_bundle_channel(bundle_root, channel=bundle_channel)
     current_bundle = (

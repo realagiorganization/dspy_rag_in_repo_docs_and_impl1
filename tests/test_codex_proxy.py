@@ -48,6 +48,23 @@ def _resolve_program_path_and_bundle_version(
     )
 
 
+def _resolve_bundle_family_registry(
+    *,
+    bundle_root: Path,
+    bundle_version: str | None,
+    bundle_channel: str,
+) -> dict[str, object] | None:
+    resolver = cast(
+        Callable[..., dict[str, object] | None],
+        codex_proxy_module.__dict__["_resolve_bundle_family_registry"],
+    )
+    return resolver(
+        bundle_root=bundle_root,
+        bundle_version=bundle_version,
+        bundle_channel=bundle_channel,
+    )
+
+
 def test_extract_codex_task_text_prefers_latest_user_message() -> None:
     payload = {
         "input": [
@@ -742,6 +759,62 @@ def test_resolve_program_path_and_bundle_version_uses_local_bundle_root_without_
 
     assert resolved_program_path == program_path.resolve()
     assert resolved_bundle_version == "stable-42"
+
+
+def test_resolve_bundle_family_registry_fetches_remote_bundle_for_explicit_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bundle_root = tmp_path / "bundle-root"
+    bundle_root.mkdir()
+    captured: dict[str, object] = {}
+
+    def fake_fetch_remote_bundle(
+        root: Path,
+        *,
+        bundle_version: str | None = None,
+        channel: str | None = None,
+    ) -> dict[str, object]:
+        captured["root"] = root
+        captured["bundle_version"] = bundle_version
+        captured["channel"] = channel
+        return {
+            "bundle_version": "stable-42",
+            "family_registry": {
+                "family_count": 1,
+                "families": [
+                    {
+                        "prompt_family_id": "docs-refresh",
+                        "family_father_question": "Inspect repository documentation",
+                    }
+                ],
+            },
+        }
+
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.fetch_remote_bundle",
+        fake_fetch_remote_bundle,
+    )
+
+    registry = _resolve_bundle_family_registry(
+        bundle_root=bundle_root,
+        bundle_version="stable-42",
+        bundle_channel="stable",
+    )
+
+    assert registry == {
+        "family_count": 1,
+        "families": [
+            {
+                "prompt_family_id": "docs-refresh",
+                "family_father_question": "Inspect repository documentation",
+            }
+        ],
+    }
+    assert captured == {
+        "root": bundle_root,
+        "bundle_version": "stable-42",
+        "channel": None,
+    }
 
 
 def test_running_codex_proxy_uses_budgeted_disk_cache(
