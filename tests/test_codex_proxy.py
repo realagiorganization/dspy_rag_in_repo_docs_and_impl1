@@ -946,6 +946,80 @@ def test_resolve_program_path_and_bundle_version_uses_mirror_fallback_for_explic
     assert resolved_bundle_version == "stable-42"
 
 
+def test_resolve_program_path_and_bundle_version_uses_latest_staged_version_without_channel(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    bundle_root = tmp_path / "bundle-root"
+    program_path = bundle_root / "versions" / "stable-99" / "program.json"
+    program_path.parent.mkdir(parents=True)
+    program_path.write_text('{"program":"demo"}\n', encoding="utf-8")
+
+    def fake_fetch_remote_bundle(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+
+    def fail_repository_rag(*args: object, **kwargs: object) -> NoReturn:
+        del args, kwargs
+        pytest.fail("RepositoryRAG fallback should not run")
+
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.fetch_remote_bundle", fake_fetch_remote_bundle)
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.RepositoryRAG", fail_repository_rag)
+
+    resolved_program_path, resolved_bundle_version = _resolve_program_path_and_bundle_version(
+        repository_root=repository_root,
+        bundle_root=bundle_root,
+        bundle_version=None,
+        bundle_channel="stable",
+    )
+
+    assert resolved_program_path == program_path.resolve()
+    assert resolved_bundle_version == "stable-99"
+
+
+def test_resolve_bundle_family_registry_uses_latest_staged_bundle_without_channel(
+    tmp_path: Path,
+) -> None:
+    bundle_root = tmp_path / "bundle-root"
+    version_dir = bundle_root / "versions" / "stable-99"
+    version_dir.mkdir(parents=True)
+    (version_dir / "bundle.json").write_text(
+        json.dumps(
+            {
+                "bundle_version": "stable-99",
+                "family_registry": {
+                    "family_count": 1,
+                    "families": [
+                        {
+                            "prompt_family_id": "docs-refresh",
+                            "family_father_question": "Inspect repository documentation",
+                        }
+                    ],
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    registry = _resolve_bundle_family_registry(
+        bundle_root=bundle_root,
+        bundle_version=None,
+        bundle_channel="stable",
+    )
+
+    assert registry == {
+        "family_count": 1,
+        "families": [
+            {
+                "prompt_family_id": "docs-refresh",
+                "family_father_question": "Inspect repository documentation",
+            }
+        ],
+    }
+
+
 def test_resolve_bundle_family_registry_fetches_remote_bundle_for_explicit_version(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

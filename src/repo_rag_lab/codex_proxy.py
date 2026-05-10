@@ -607,6 +607,52 @@ def _resolve_family_state_path(repository_root: Path, bundle_root: Path) -> Path
     return None
 
 
+def _available_staged_bundle_versions(bundle_root: Path) -> list[str]:
+    """Return staged bundle versions discoverable from the local bundle mirror."""
+
+    resolved_root = bundle_root.resolve()
+    versions: set[str] = set()
+    versions_dir = resolved_root / "versions"
+    if versions_dir.is_dir():
+        for candidate in versions_dir.iterdir():
+            if not candidate.is_dir():
+                continue
+            if (candidate / "program.json").is_file() or (candidate / "bundle.json").is_file():
+                versions.add(candidate.name)
+    remote_dir = resolved_root / "artifacts" / "dspy" / "remote"
+    if remote_dir.is_dir():
+        for candidate in remote_dir.iterdir():
+            if not candidate.is_dir():
+                continue
+            if (candidate / "program.json").is_file() or (candidate / "bundle.json").is_file():
+                versions.add(candidate.name)
+    return sorted(versions, reverse=True)
+
+
+def _load_staged_bundle_manifest(
+    *,
+    bundle_root: Path,
+    bundle_version: str | None,
+) -> dict[str, object] | None:
+    """Load one staged bundle manifest directly from the local mirror."""
+
+    if bundle_version is None:
+        return None
+    resolved_root = bundle_root.resolve()
+    candidates = (
+        resolved_root / "versions" / bundle_version / "bundle.json",
+        resolved_root / "artifacts" / "dspy" / "remote" / bundle_version / "bundle.json",
+    )
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        try:
+            return load_bundle_manifest(candidate)
+        except Exception:
+            continue
+    return None
+
+
 def _resolve_bundle_version_hint(
     *,
     bundle_root: Path,
@@ -618,7 +664,11 @@ def _resolve_bundle_version_hint(
     if bundle_version is not None:
         return bundle_version
     channel_state = inspect_bundle_channel(bundle_root, channel=bundle_channel)
-    return str(channel_state.get("current_bundle_version") or "").strip() or None
+    resolved_bundle_version = str(channel_state.get("current_bundle_version") or "").strip()
+    if resolved_bundle_version:
+        return resolved_bundle_version
+    staged_versions = _available_staged_bundle_versions(bundle_root)
+    return staged_versions[0] if staged_versions else None
 
 
 def _staged_bundle_program_candidates(
@@ -693,7 +743,10 @@ def _resolve_bundle_family_registry(
                 bundle_version=bundle_version,
             )
         except ValueError:
-            local_bundle = None
+            local_bundle = _load_staged_bundle_manifest(
+                bundle_root=bundle_root,
+                bundle_version=bundle_version,
+            )
         family_registry = (
             local_bundle.get("family_registry") if isinstance(local_bundle, dict) else None
         )
@@ -714,6 +767,11 @@ def _resolve_bundle_family_registry(
             return dict(remote_family_registry)
         return None
     channel_state = inspect_bundle_channel(bundle_root, channel=bundle_channel)
+    staged_bundle_version = _resolve_bundle_version_hint(
+        bundle_root=bundle_root,
+        bundle_version=None,
+        bundle_channel=bundle_channel,
+    )
     current_bundle = (
         channel_state.get("current_bundle") if channel_state.get("channel_found") else None
     )
@@ -729,6 +787,18 @@ def _resolve_bundle_family_registry(
             family_registry = local_bundle_payload.get("family_registry")
             if isinstance(family_registry, Mapping):
                 return dict(family_registry)
+    if staged_bundle_version is not None:
+        staged_bundle_payload = _load_staged_bundle_manifest(
+            bundle_root=bundle_root,
+            bundle_version=staged_bundle_version,
+        )
+        family_registry = (
+            staged_bundle_payload.get("family_registry")
+            if isinstance(staged_bundle_payload, Mapping)
+            else None
+        )
+        if isinstance(family_registry, Mapping):
+            return dict(family_registry)
     try:
         remote_bundle = fetch_remote_bundle(
             bundle_root,
@@ -902,6 +972,14 @@ def _resolve_program_path_and_bundle_version(
         ):
             if candidate.is_file():
                 return candidate.resolve(), resolved_bundle_version
+        if resolved_bundle_version is None:
+            for staged_bundle_version in _available_staged_bundle_versions(bundle_root):
+                for candidate in _staged_bundle_program_candidates(
+                    bundle_root=bundle_root,
+                    bundle_version=staged_bundle_version,
+                ):
+                    if candidate.is_file():
+                        return candidate.resolve(), staged_bundle_version
     try:
         remote_bundle = fetch_remote_bundle(
             bundle_root,
