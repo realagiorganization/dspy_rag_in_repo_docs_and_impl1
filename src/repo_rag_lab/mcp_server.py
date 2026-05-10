@@ -1275,18 +1275,18 @@ def read_json_rpc_message(stream: BinaryIO) -> dict[str, object] | None:
         _log_mcp_debug(f"body-bytes {content_length}")
         return _decode_json_rpc_payload(body)
 
-    headers: dict[str, str] = {}
+    legacy_headers: dict[str, str] = {}
     while True:
         line = stream.readline()
         if line == b"":
             _log_mcp_debug("eof-before-headers")
             return None
-        if not headers and line.lstrip().startswith(b"{"):
+        if not legacy_headers and line.lstrip().startswith(b"{"):
             _remember_stream_protocol(stream, "line")
             _log_mcp_debug(f"line-bytes {len(line.rstrip())}")
             return _decode_json_rpc_payload(line.rstrip(b"\r\n"))
         if line in {b"\r\n", b"\n"}:
-            if headers:
+            if legacy_headers:
                 break
             continue
         _log_mcp_debug(f"header-line {line.decode('utf-8', errors='ignore').rstrip()}")
@@ -1294,12 +1294,12 @@ def read_json_rpc_message(stream: BinaryIO) -> dict[str, object] | None:
         if separator != ":":
             _log_mcp_debug("invalid-header-line")
             raise ValueError("Invalid JSON-RPC header line.")
-        headers[key.strip().lower()] = value.strip()
+        legacy_headers[key.strip().lower()] = value.strip()
 
-    if "content-length" not in headers:
+    if "content-length" not in legacy_headers:
         _log_mcp_debug("missing-content-length")
         raise ValueError("Missing Content-Length header.")
-    content_length = int(headers["content-length"])
+    content_length = int(legacy_headers["content-length"])
     body = bytearray()
     while len(body) < content_length:
         chunk = stream.read(content_length - len(body))

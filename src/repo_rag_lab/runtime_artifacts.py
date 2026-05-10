@@ -789,7 +789,7 @@ def upload_remote_bundle(
                 )
         remote_family_artifact_blobs[prompt_family_id] = family_blob_map
     store.upload_json(container, bundle_blob_map["published"], published_record)
-    payload = {
+    payload: dict[str, object] = {
         "storage_backend": "azure-blob",
         "bundle_container": container,
         "remote_bundle_blobs": bundle_blob_map,
@@ -1008,18 +1008,16 @@ def upload_remote_family_state(
     container = repo_rag_family_state_container(config)
     family_state_version = _utc_timestamp_token()
     blob_map = family_state_blob_names(family_state_version)
+    prompt_families = payload.get("prompt_families")
+    prompt_family_count = len(prompt_families) if isinstance(prompt_families, list) else 0
     current_payload = {
         "schema_version": 1,
         "family_state_kind": "repo-rag-family-state",
         "updated_at": _utc_now_isoformat(),
         "current_version": family_state_version,
         "current_family_state_blob": blob_map["family_state"],
-        "current_family_count": len(payload.get("prompt_families", []))
-        if isinstance(payload.get("prompt_families"), list)
-        else 0,
-        "current_prompt_family_count": len(payload.get("prompt_families", []))
-        if isinstance(payload.get("prompt_families"), list)
-        else 0,
+        "current_family_count": prompt_family_count,
+        "current_prompt_family_count": prompt_family_count,
     }
     family_state_text = resolved_family_state_path.read_text(encoding="utf-8")
     remote_family_member_blobs: dict[str, dict[str, object]] = {}

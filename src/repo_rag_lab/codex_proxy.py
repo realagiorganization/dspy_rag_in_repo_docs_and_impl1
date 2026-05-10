@@ -19,7 +19,7 @@ import httpx
 
 from .azure_runtime import resolve_azure_openai_runtime
 from .corpus import build_corpus_manifest, write_corpus_manifest
-from .dspy_training import configure_dspy_lm, resolve_dspy_lm_config
+from .dspy_training import DSPyLMConfig, configure_dspy_lm, resolve_dspy_lm_config
 from .dspy_workflow import RepositoryRAG
 from .retrieval import RetrievalMode
 from .runtime_artifacts import (
@@ -352,7 +352,7 @@ def _result_from_payload(payload: dict[str, object]) -> CodexMediationResult | N
                 else None
             )
             or None,
-            prompt_family_similarity=float(payload.get("prompt_family_similarity") or 0.0),
+            prompt_family_similarity=_float_or_none(payload.get("prompt_family_similarity")) or 0.0,
             prompt_family_band=str(payload.get("prompt_family_band") or "new"),
             family_runtime_hit_rate=_float_or_none(payload.get("family_runtime_hit_rate")),
             family_artifact_hit_rate=_float_or_none(payload.get("family_artifact_hit_rate")),
@@ -519,7 +519,7 @@ def extract_codex_task_text(payload: Mapping[str, object]) -> str:
 def reformulate_codex_prompt(
     original_prompt: str,
     *,
-    lm_config: object | None,
+    lm_config: DSPyLMConfig | None,
 ) -> tuple[str, str]:
     """Return the reformulated DSPy helper prompt for one outbound Codex turn."""
 
@@ -529,15 +529,14 @@ def reformulate_codex_prompt(
     if lm_config is None or _dspy is None:
         return cleaned, "identity"
     try:
-        dspy_module = _dspy
-        assert dspy_module is not None
+        assert _dspy is not None
         configure_dspy_lm(lm_config)
 
-        class PromptReformulationSignature(dspy_module.Signature):
+        class PromptReformulationSignature(_dspy.Signature):
             """Rewrite one software-agent prompt into a compact mediation query."""
 
-            original_prompt = dspy_module.InputField()
-            reformulated_prompt = dspy_module.OutputField(
+            original_prompt = _dspy.InputField()
+            reformulated_prompt = _dspy.OutputField(
                 desc=(
                     "A concise reformulation for repository-grounded DSPy mediation. Preserve "
                     "the requested task, files, tests, commands, failures, and constraints. Do "
@@ -545,7 +544,7 @@ def reformulate_codex_prompt(
                 )
             )
 
-        reformulator = dspy_module.Predict(PromptReformulationSignature)
+        reformulator = _dspy.Predict(PromptReformulationSignature)
         prediction = reformulator(original_prompt=cleaned)
         reformulated = " ".join(str(getattr(prediction, "reformulated_prompt", "")).split()).strip()
         if not reformulated:
@@ -1214,9 +1213,13 @@ class _CodexProxyHandler(BaseHTTPRequestHandler):
         if isinstance(payload, dict):
             turn_state = extract_codex_turn_state(payload)
             original_prompt = str(turn_state.get("original_prompt") or "").strip()
-            command_trace = [
-                step for step in turn_state.get("command_trace", []) if isinstance(step, Mapping)
-            ]
+            command_trace_value = turn_state.get("command_trace")
+            if isinstance(command_trace_value, list):
+                command_trace = [
+                    step for step in command_trace_value if isinstance(step, Mapping)
+                ]
+            else:
+                command_trace = []
             if original_prompt:
                 mediation = runtime.build_mediation(original_prompt, command_trace)
                 runtime.persist_status(mediation, command_trace=command_trace)

@@ -7,6 +7,7 @@ import json
 import os
 import threading
 import time
+from collections.abc import Iterable
 from importlib.metadata import PackageNotFoundError
 from pathlib import Path
 from typing import Any, cast
@@ -775,15 +776,18 @@ def test_read_json_rpc_message_preserves_buffered_followup_messages_from_pipe(
     original_select = mcp_server.select.select
 
     def fake_select(
-        read_fds: object,
-        write_fds: object,
-        error_fds: object,
-        timeout: object,
-    ) -> tuple[object, object, object]:
+        read_fds: Iterable[object],
+        write_fds: Iterable[object],
+        error_fds: Iterable[object],
+        timeout: float | None,
+    ) -> tuple[list[object], list[object], list[object]]:
         nonlocal select_calls
         select_calls += 1
         if select_calls == 1:
-            return original_select(read_fds, write_fds, error_fds, timeout)
+            return cast(
+                tuple[list[object], list[object], list[object]],
+                original_select(read_fds, write_fds, error_fds, timeout),
+            )
         raise AssertionError(
             "select() should not run again when the next MCP frame is already buffered"
         )

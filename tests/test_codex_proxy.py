@@ -360,7 +360,7 @@ def test_build_codex_mediation_suppresses_low_signal(
     )
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy._resolve_family_state_path",
-        lambda *args, **kwargs: repo / "artifacts" / "trainer" / "family-state.json",
+        lambda *args, **kwargs: tmp_path / "artifacts" / "trainer" / "family-state.json",
     )
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy.resolve_prompt_family_support",
@@ -872,7 +872,7 @@ def test_running_codex_proxy_uses_budgeted_disk_cache(
     monkeypatch.setattr("repo_rag_lab.codex_proxy.resolve_dspy_lm_config", lambda: None)
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy._resolve_family_state_path",
-        lambda *args, **kwargs: repo / "artifacts" / "trainer" / "family-state.json",
+        lambda *args, **kwargs: tmp_path / "artifacts" / "trainer" / "family-state.json",
     )
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy.resolve_prompt_family_support",

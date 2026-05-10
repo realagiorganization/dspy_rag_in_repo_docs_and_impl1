@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -1055,9 +1055,10 @@ def _seed_champion_index_from_existing_records(
 
     families: list[dict[str, Any]] = []
     for prompt_family_id in family_order:
-        record = family_by_id[prompt_family_id].get("seed_record")
-        if not isinstance(record, Mapping):
+        record_value = family_by_id[prompt_family_id].get("seed_record")
+        if not isinstance(record_value, Mapping):
             continue
+        record = cast(Mapping[str, Any], record_value)
         question = _normalize_question_text(record.get("question"))
         sources = _normalized_source_tokens(record.get("expected_sources", []))
         context_group_id = str(

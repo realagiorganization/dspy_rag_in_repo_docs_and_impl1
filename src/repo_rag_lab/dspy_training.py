@@ -1521,22 +1521,30 @@ def train_repository_program(
             training_config=training_config,
             lm_config=lm_config,
         )
-    benchmark_summary = compiled_artifact["benchmark_summary"]
+    benchmark_summary = cast(dict[str, object], compiled_artifact["benchmark_summary"])
     family_artifact_registry = _compile_family_artifacts(
         resolved_root,
         training_config=training_config,
         lineage_metadata=training_config.lineage_metadata,
         lm_config=lm_config,
     )
-    compiled_program_summary = compiled_artifact.get("compiled_program_summary")
-    if not isinstance(compiled_program_summary, dict):
+    compiled_program_summary_value = compiled_artifact.get("compiled_program_summary")
+    if not isinstance(compiled_program_summary_value, dict):
         compiled_program = compiled_artifact["compiled_program"]
+        trainset_size_value = compiled_artifact.get("trainset_size")
+        trainset_size = (
+            int(trainset_size_value)
+            if isinstance(trainset_size_value, (int, str))
+            else 0
+        )
         compiled_program_summary = {
             "program_type": compiled_program.__class__.__name__,
-            "trainset_size": int(compiled_artifact["trainset_size"]),
+            "trainset_size": trainset_size,
             "top_k": training_config.top_k,
             "artifact_source": str(compiled_artifact.get("artifact_source") or "recompiled"),
         }
+    else:
+        compiled_program_summary = cast(dict[str, object], compiled_program_summary_value)
     relative_program_path = str(artifact_paths.program_path.relative_to(resolved_root))
     relative_metadata_path = str(artifact_paths.metadata_path.relative_to(resolved_root))
     metadata = {
