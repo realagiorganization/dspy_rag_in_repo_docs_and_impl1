@@ -657,9 +657,7 @@ def resolve_prompt_family_support_from_payload(
                 best_family = family
                 best_similarity = similarity
     band = "match" if best_similarity >= PROMPT_FAMILY_MATCH_THRESHOLD else "new"
-    supported = bool(
-        best_family is not None and best_similarity >= PROMPT_FAMILY_MATCH_THRESHOLD
-    )
+    supported = bool(best_family is not None and best_similarity >= PROMPT_FAMILY_MATCH_THRESHOLD)
     prompt_family_id = (
         str(best_family.get("prompt_family_id") or "").strip()
         if isinstance(best_family, Mapping)
@@ -719,9 +717,9 @@ def _refresh_prompt_family_summary(family_payload: dict[str, Any], question: str
         family_payload["family_father_question"] = str(father_record.get("question") or "").strip()
         family_payload["family_father_similarity_mean"] = father_similarity_mean
         family_payload["question"] = str(father_record.get("question") or "").strip()
-        family_payload["normalized_question"] = str(
-            father_record.get("question") or ""
-        ).strip().casefold()
+        family_payload["normalized_question"] = (
+            str(father_record.get("question") or "").strip().casefold()
+        )
         return
     family_payload["family_father_record"] = None
     family_payload["family_father_similarity_mean"] = None

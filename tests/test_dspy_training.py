@@ -504,9 +504,7 @@ def test_evaluate_repository_program_passes_prompt_lineage_when_supported() -> N
                 expected_sources=("README.md",),
                 original_prompt="Add a demo GIF to README",
                 reformulated_prompt="Inspect whether the README already embeds a demo GIF.",
-                command_trace=(
-                    {"type": "message", "role": "assistant", "text": "inspect README"},
-                ),
+                command_trace=({"type": "message", "role": "assistant", "text": "inspect README"},),
             )
         ],
     )
@@ -1462,8 +1460,7 @@ def test_train_repository_program_carries_forward_global_program_for_dirty_famil
     carried_program_path = tmp_path / result.program_path
     assert carried_program_path.exists()
     assert (
-        carried_program_path.read_text(encoding="utf-8")
-        == '{"program":"previous-global-dirty"}\n'
+        carried_program_path.read_text(encoding="utf-8") == '{"program":"previous-global-dirty"}\n'
     )
     metadata = json.loads((tmp_path / result.metadata_path).read_text(encoding="utf-8"))
     compiled_program_summary = metadata["compiled_program_summary"]

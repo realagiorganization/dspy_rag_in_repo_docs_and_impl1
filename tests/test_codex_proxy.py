@@ -153,8 +153,7 @@ def test_extract_codex_turn_state_strips_dataset_execution_envelope() -> None:
             "type": "message",
             "role": "user",
             "text": (
-                "In https://github.com/acme/repo\n\n"
-                "Add an automated demo GIF of this wireframe."
+                "In https://github.com/acme/repo\n\nAdd an automated demo GIF of this wireframe."
             ),
         }
     ]
@@ -572,9 +571,7 @@ def test_build_codex_mediation_executes_family_runtime_artifact_with_prompt_line
     assert captured["original_prompt"] == (
         "Investigate the failing pytest target and fix the broken test."
     )
-    assert captured["reformulated_prompt"] == (
-        "Run the failing pytest target and inspect stderr."
-    )
+    assert captured["reformulated_prompt"] == ("Run the failing pytest target and inspect stderr.")
     assert captured["command_trace"] == command_trace
 
 

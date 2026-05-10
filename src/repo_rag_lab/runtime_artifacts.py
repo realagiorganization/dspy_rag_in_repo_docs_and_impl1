@@ -263,11 +263,7 @@ def _bundle_family_entry(family_payload: Mapping[str, object]) -> dict[str, obje
                 else "family-runtime-artifact-missing"
             ),
             "artifact_ready": False,
-            "artifact_source": (
-                "family_runtime_record"
-                if runtime_record is not None
-                else None
-            ),
+            "artifact_source": ("family_runtime_record" if runtime_record is not None else None),
             **runtime_metric,
         }
     return {
@@ -524,9 +520,7 @@ def build_bundle_manifest(
     lineage = _mapping_or_none(metadata.get("lineage"))
     family_artifact_registry = _mapping_or_none(metadata.get("family_artifact_registry"))
     family_state_path = (
-        _string_or_none(lineage.get("family_state_path"))
-        if isinstance(lineage, Mapping)
-        else None
+        _string_or_none(lineage.get("family_state_path")) if isinstance(lineage, Mapping) else None
     ) or (
         _string_or_none(lineage.get("champion_index_path"))
         if isinstance(lineage, Mapping)
@@ -929,9 +923,13 @@ def fetch_remote_bundle(
         if not bool(runtime_artifact.get("artifact_ready")):
             continue
         family_blob_map = _family_artifact_blob_names(resolved_bundle_version, prompt_family_id)
-        local_family_dir = cache_dir / "families" / _sanitize_name(
-            prompt_family_id,
-            default="family",
+        local_family_dir = (
+            cache_dir
+            / "families"
+            / _sanitize_name(
+                prompt_family_id,
+                default="family",
+            )
         )
         local_family_dir.mkdir(parents=True, exist_ok=True)
         downloaded_any = False
@@ -1059,6 +1057,8 @@ def upload_remote_family_state(
         "remote_family_member_blobs": remote_family_member_blobs,
         "family_state_path": _relative_to_root(resolved_family_state_path, resolved_root),
     }
+
+
 def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
     """Download the current remote family-state index into a local cache when configured."""
 
@@ -1166,6 +1166,8 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
         "cached_family_member_paths": cached_family_member_paths,
         "remote_family_member_blobs": remote_family_member_blobs,
     }
+
+
 def published_bundle_record_path(root: Path, bundle_version: str) -> Path:
     """Return the publish-record path for one bundle version."""
 

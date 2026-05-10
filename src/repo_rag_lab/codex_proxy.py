@@ -791,8 +791,7 @@ def _resolve_program_path_and_bundle_version(
             program_path = (bundle_root / program_path_text).resolve()
             if program_path.is_file():
                 resolved_version = (
-                    str(remote_bundle.get("bundle_version") or bundle_version or "").strip()
-                    or None
+                    str(remote_bundle.get("bundle_version") or bundle_version or "").strip() or None
                 )
                 return program_path, resolved_version
     runner = RepositoryRAG(repository_root, top_k=4)

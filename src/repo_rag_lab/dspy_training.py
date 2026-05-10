@@ -699,7 +699,9 @@ def _command_trace_prompt_text(command_trace: Sequence[Mapping[str, object]]) ->
                 or step.get("summary")
                 or step.get("output")
                 or ""
-            ).strip().split()
+            )
+            .strip()
+            .split()
         )
         if role and text:
             rows.append(f"{role}: {text}")

@@ -1246,9 +1246,7 @@ def _trainer_pending_recompile_summary(
     """Return whether the current family state has drifted past the published bundle."""
 
     resolved_root = root.resolve()
-    family_state_path_text = str(
-        training_candidates.get("family_state_path") or ""
-    ).strip()
+    family_state_path_text = str(training_candidates.get("family_state_path") or "").strip()
     if not family_state_path_text:
         return {
             "pending_recompile": False,
@@ -1297,9 +1295,7 @@ def _trainer_pending_recompile_summary(
         if isinstance(family_summary.get("dirty_family_ids"), list)
         else []
     )
-    dirty_family_count = int(
-        family_summary.get("dirty_family_count") or len(dirty_family_ids) or 0
-    )
+    dirty_family_count = int(family_summary.get("dirty_family_count") or len(dirty_family_ids) or 0)
     family_candidate_count = int(
         family_summary.get("family_candidate_count") or family_summary.get("candidate_count") or 0
     )

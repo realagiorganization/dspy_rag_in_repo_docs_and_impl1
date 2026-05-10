@@ -364,12 +364,10 @@ def test_materialize_training_candidates_keeps_prompt_reformulation_and_command_
                     {
                         "source": "package.json",
                         "preview": (
-                            '{"name":"national-debt-relief",'
-                            '"scripts":{"build":"vite build"}}'
+                            '{"name":"national-debt-relief","scripts":{"build":"vite build"}}'
                         ),
                         "text": (
-                            '{"name":"national-debt-relief",'
-                            '"scripts":{"build":"vite build"}}'
+                            '{"name":"national-debt-relief","scripts":{"build":"vite build"}}'
                         ),
                     }
                 ],
@@ -645,8 +643,7 @@ def test_materialize_training_candidates_keeps_persisted_champions_without_bench
                             "support_count": 1,
                             "provenance": {
                                 "trace_record_path": (
-                                    "artifacts/trainer/recovered-imported-traces/"
-                                    "unsupported.json"
+                                    "artifacts/trainer/recovered-imported-traces/unsupported.json"
                                 ),
                                 "recorded_at": "2026-05-08T13:20:42+00:00",
                             },
@@ -853,14 +850,16 @@ def test_summarize_family_state_matches_champion_compat_summary(tmp_path: Path) 
 
     assert family_summary["family_trace_record_paths"] == ["artifacts/traces/imported/demo.json"]
     assert "champion_trace_record_paths" not in family_summary
-    assert compat_summary["family_trace_record_paths"] == (
-        family_summary["family_trace_record_paths"]
+    assert (
+        compat_summary["family_trace_record_paths"] == (family_summary["family_trace_record_paths"])
     )
-    assert compat_summary["champion_trace_record_paths"] == (
-        family_summary["family_trace_record_paths"]
+    assert (
+        compat_summary["champion_trace_record_paths"]
+        == (family_summary["family_trace_record_paths"])
     )
-    assert compat_summary["champion_exact_snapshot_ids"] == (
-        family_summary["family_exact_snapshot_ids"]
+    assert (
+        compat_summary["champion_exact_snapshot_ids"]
+        == (family_summary["family_exact_snapshot_ids"])
     )
     assert compat_summary["champion_record_hashes"] == family_summary["family_record_hashes"]
 
