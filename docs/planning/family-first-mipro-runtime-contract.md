@@ -205,6 +205,8 @@ Not implemented yet:
   transitional full global compile before later dirty-family cycles can reuse the global object
 - live AKS confirmation that the worker-side final turn-metric enrichment survives the full export
   and queue path
+- live AKS confirmation that the staged bundle mirror plus synthesized family registry now activate
+  the family runtime artifact without falling back to heuristic mediation
 
 ## Work Plan
 
@@ -290,3 +292,9 @@ Not implemented yet:
     Stage 21 locally: trainer materialization, remote family-state upload/fetch, and proxy
     resolution now write and prefer only `family-state.json`; older `champion-index.json`
     snapshots remain readable as fallback input when the new family-state file is absent.
+22. Close the remaining live runtime gaps found in AKS run `25629990035`.
+    Stage 22 locally: proxy now strips forwarded Discord tails, synthesizes family registry
+    support from `family-state.json` when bundle-local registry data is absent, resolves staged
+    mirror `program.json` / `families/<id>/program.json` paths without requiring trainer-side
+    artifact paths, and the deploy-stage trusted handoff now skips itself when the worker already
+    completed a successful per-turn batch enqueue/import.
