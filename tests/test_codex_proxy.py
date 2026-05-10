@@ -151,6 +151,7 @@ def test_extract_codex_turn_state_strips_dataset_execution_envelope() -> None:
                             "[1] (2026-05-06T14:36:10.829+00:00 | user | id=1) "
                             "In https://github.com/acme/repo\n\n"
                             "Add an automated demo GIF of this wireframe.\n\n"
+                            "[forwarded] @Tyler ATTTENTION. @|DT| drybox\n\n"
                             "EXECUTION CONTEXT:\n"
                             "- You are running in an automated container environment\n\n"
                             "AUTONOMOUS EXECUTION CONTRACT:\n"
@@ -594,6 +595,145 @@ def test_build_codex_mediation_executes_family_runtime_artifact_with_prompt_line
     assert captured["command_trace"] == command_trace
 
 
+def test_build_codex_mediation_synthesizes_family_registry_from_family_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "README.md").write_text("repo summary\n", encoding="utf-8")
+    bundle_root = tmp_path / "bundle-root"
+    family_state_path = bundle_root / "artifacts" / "trainer" / "family-state.json"
+    family_state_path.parent.mkdir(parents=True)
+    family_program_path = (
+        bundle_root
+        / "versions"
+        / "stable-42"
+        / "families"
+        / "pf-demo"
+        / "program.json"
+    )
+    family_program_path.parent.mkdir(parents=True)
+    family_program_path.write_text('{"program":"family-demo"}\n', encoding="utf-8")
+    global_program_path = bundle_root / "versions" / "stable-42" / "program.json"
+    global_program_path.write_text('{"program":"global-demo"}\n', encoding="utf-8")
+    family_state_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "family_state_kind": "repo-rag-family-state",
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-demo",
+                        "family_father_question": (
+                            "Run the failing pytest target and inspect stderr."
+                        ),
+                        "family_father_record": {
+                            "question": "Run the failing pytest target and inspect stderr."
+                        },
+                        "family_runtime_record": {
+                            "question": "Run the failing pytest target and inspect stderr.",
+                            "metric_hits": 4,
+                            "metric_total": 5,
+                            "metric_ratio": 0.8,
+                        },
+                        "family_runtime_artifact": {
+                            "artifact_kind": "compiled-family-program",
+                            "artifact_ready": True,
+                            "program_path": "artifacts/dspy/missing/pf-demo/program.json",
+                            "metadata_path": "artifacts/dspy/missing/pf-demo/metadata.json",
+                            "hit_rate": 1.0,
+                        },
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_ask_repository(
+        question: str,
+        root: Path,
+        retrieval_mode: RetrievalMode | None = None,
+    ) -> SimpleNamespace:
+        del retrieval_mode
+        assert question == "Run the failing pytest target and inspect stderr."
+        return SimpleNamespace(
+            context=[Chunk(source=root / "README.md", text="Repository summary text.")],
+            summary="Repository summary text.",
+            retrieval_mode="lexical",
+        )
+
+    class FakeRepositoryRAG:
+        def __init__(
+            self,
+            root: Path,
+            top_k: int = 4,
+            *,
+            program_path: Path | None = None,
+            lm_config: object | None = None,
+            require_configured_lm: bool = False,
+            retrieval_mode: RetrievalMode | None = None,
+        ) -> None:
+            del root, top_k, lm_config, require_configured_lm, retrieval_mode
+            captured["program_path"] = program_path
+
+        def __call__(
+            self,
+            question: str,
+            *,
+            original_prompt: str | None = None,
+            reformulated_prompt: str | None = None,
+            command_trace: object = (),
+        ) -> SimpleNamespace:
+            captured["question"] = question
+            captured["original_prompt"] = original_prompt
+            captured["reformulated_prompt"] = reformulated_prompt
+            captured["command_trace"] = command_trace
+            return SimpleNamespace(answer="Family-state DSPy answer.", retrieval_mode="lexical")
+
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.ask_repository", fake_ask_repository)
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.RepositoryRAG", FakeRepositoryRAG)
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.resolve_dspy_lm_config",
+        lambda: SimpleNamespace(model="azure/dspy-helper"),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.reformulate_codex_prompt",
+        lambda prompt, *, lm_config=None: (
+            "Run the failing pytest target and inspect stderr.",
+            "success",
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_bundle_family_registry",
+        lambda **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_program_path_and_bundle_version",
+        lambda **kwargs: (global_program_path, "stable-42"),
+    )
+
+    mediation = build_codex_mediation(
+        "Investigate the failing pytest target and fix the broken test.",
+        repository_root=repo,
+        bundle_root=bundle_root,
+        prefer_dspy=True,
+        bundle_version="stable-42",
+    )
+
+    assert mediation.dspy_status == "success"
+    assert mediation.prompt_family_id == "pf-demo"
+    assert mediation.family_runtime_hit_rate == 0.8
+    assert mediation.family_artifact_hit_rate == 1.0
+    assert mediation.family_artifact_selected is True
+    assert mediation.program_path == "versions/stable-42/families/pf-demo/program.json"
+    assert captured["program_path"] == family_program_path.resolve()
+
+
 def test_build_codex_mediation_skips_family_artifact_when_hit_rate_drops(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -756,6 +896,49 @@ def test_resolve_program_path_and_bundle_version_uses_local_bundle_root_without_
         repository_root=repository_root,
         bundle_root=bundle_root,
         bundle_version=None,
+        bundle_channel="stable",
+    )
+
+    assert resolved_program_path == program_path.resolve()
+    assert resolved_bundle_version == "stable-42"
+
+
+def test_resolve_program_path_and_bundle_version_uses_mirror_fallback_for_explicit_bundle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    bundle_root = tmp_path / "bundle-root"
+    version_dir = bundle_root / "versions" / "stable-42"
+    version_dir.mkdir(parents=True)
+    (version_dir / "bundle.json").write_text(
+        json.dumps(
+            {
+                "bundle_version": "stable-42",
+                "program_path": "artifacts/dspy/missing/program.json",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    program_path = version_dir / "program.json"
+    program_path.write_text('{"program":"demo"}\n', encoding="utf-8")
+
+    def fake_fetch_remote_bundle(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+
+    def fail_repository_rag(*args: object, **kwargs: object) -> NoReturn:
+        del args, kwargs
+        pytest.fail("RepositoryRAG fallback should not run")
+
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.fetch_remote_bundle", fake_fetch_remote_bundle)
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.RepositoryRAG", fail_repository_rag)
+
+    resolved_program_path, resolved_bundle_version = _resolve_program_path_and_bundle_version(
+        repository_root=repository_root,
+        bundle_root=bundle_root,
+        bundle_version="stable-42",
         bundle_channel="stable",
     )
 

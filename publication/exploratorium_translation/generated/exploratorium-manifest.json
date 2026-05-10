@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-05-10T10:52:53Z",
-  "tracked_file_count": 387,
-  "summarized_file_count": 384,
+  "generated_at": "2026-05-10T14:43:52Z",
+  "tracked_file_count": 389,
+  "summarized_file_count": 386,
   "excluded_generated_file_count": 3,
   "explicit_link_count": 90,
   "machine_link_occurrence_count": 2632,
@@ -273,20 +273,20 @@
     {
       "path": "FILES.csv",
       "kind": "generic",
-      "byte_size": 49166,
+      "byte_size": 49525,
       "line_count": null,
       "url_count": 0,
-      "summary_en": "Tracked repository file, 49166 bytes of binary data, 0 explicit URLs. Opening line: No non-empty preview line.",
-      "summary_ru": "\u041e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u0435\u043c\u044b\u0439 \u0444\u0430\u0439\u043b \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u044f, 49166 \u0431\u0430\u0439\u0442 \u0431\u0438\u043d\u0430\u0440\u043d\u044b\u0445 \u0434\u0430\u043d\u043d\u044b\u0445, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041f\u0435\u0440\u0432\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430: No non-empty preview line."
+      "summary_en": "Tracked repository file, 49525 bytes of binary data, 0 explicit URLs. Opening line: No non-empty preview line.",
+      "summary_ru": "\u041e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u0435\u043c\u044b\u0439 \u0444\u0430\u0439\u043b \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u044f, 49525 \u0431\u0430\u0439\u0442 \u0431\u0438\u043d\u0430\u0440\u043d\u044b\u0445 \u0434\u0430\u043d\u043d\u044b\u0445, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041f\u0435\u0440\u0432\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430: No non-empty preview line."
     },
     {
       "path": "FILES.md",
       "kind": "markdown",
-      "byte_size": 55689,
-      "line_count": 398,
+      "byte_size": 56080,
+      "line_count": 400,
       "url_count": 1,
-      "summary_en": "Markdown document, 398 lines, 1 explicit URLs. Lead heading: Repository File Inventory.",
-      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 398 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository File Inventory."
+      "summary_en": "Markdown document, 400 lines, 1 explicit URLs. Lead heading: Repository File Inventory.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 400 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository File Inventory."
     },
     {
       "path": "Makefile",
@@ -381,11 +381,11 @@
     {
       "path": "docs/architecture/research-narrative.md",
       "kind": "markdown",
-      "byte_size": 70136,
-      "line_count": 932,
+      "byte_size": 71096,
+      "line_count": 944,
       "url_count": 0,
-      "summary_en": "Markdown document, 932 lines, 0 explicit URLs. Lead heading: Repository Research Narrative.",
-      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 932 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository Research Narrative."
+      "summary_en": "Markdown document, 944 lines, 0 explicit URLs. Lead heading: Repository Research Narrative.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 944 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository Research Narrative."
     },
     {
       "path": "docs/archive/repo-completeness-checklist.md",
@@ -1495,6 +1495,24 @@
       "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 106 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 9."
     },
     {
+      "path": "docs/audit/2026-05-10-aks-run-25625638264-family-first-runtime-gap.md",
+      "kind": "markdown",
+      "byte_size": 8472,
+      "line_count": 246,
+      "url_count": 0,
+      "summary_en": "Markdown document, 246 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-10 AKS run 25625638264 family-first runtime gap.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 246 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-10 AKS run 25625638264 family-first runtime gap."
+    },
+    {
+      "path": "docs/audit/2026-05-10-family-first-runtime-fixes-after-run-25625638264.md",
+      "kind": "markdown",
+      "byte_size": 12143,
+      "line_count": 261,
+      "url_count": 0,
+      "summary_en": "Markdown document, 261 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-10 family-first runtime fixes after run 25625638264.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 261 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-10 family-first runtime fixes after run 25625638264."
+    },
+    {
       "path": "docs/audit/README.md",
       "kind": "markdown",
       "byte_size": 433,
@@ -1578,11 +1596,11 @@
     {
       "path": "docs/planning/family-first-mipro-runtime-contract.md",
       "kind": "markdown",
-      "byte_size": 17117,
-      "line_count": 293,
+      "byte_size": 17803,
+      "line_count": 301,
       "url_count": 0,
-      "summary_en": "Markdown document, 293 lines, 0 explicit URLs. Lead heading: Family-First DSPy / MIPROv2 Contract.",
-      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 293 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Family-First DSPy / MIPROv2 Contract."
+      "summary_en": "Markdown document, 301 lines, 0 explicit URLs. Lead heading: Family-First DSPy / MIPROv2 Contract.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 301 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Family-First DSPy / MIPROv2 Contract."
     },
     {
       "path": "docs/planning/per-turn-dspy-mediation-contract.md",
@@ -2586,11 +2604,11 @@
     {
       "path": "src/repo_rag_lab/codex_proxy.py",
       "kind": "python",
-      "byte_size": 64025,
-      "line_count": 1660,
+      "byte_size": 69123,
+      "line_count": 1804,
       "url_count": 0,
-      "summary_en": "Python module, 1660 lines, 0 explicit URLs. Module intent: Local streaming proxy that injects repo-RAG + DSPy mediation for Codex.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1660 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Local streaming proxy that injects repo-RAG + DSPy mediation for Codex."
+      "summary_en": "Python module, 1804 lines, 0 explicit URLs. Module intent: Local streaming proxy that injects repo-RAG + DSPy mediation for Codex.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1804 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Local streaming proxy that injects repo-RAG + DSPy mediation for Codex."
     },
     {
       "path": "src/repo_rag_lab/corpus.py",
@@ -2604,11 +2622,11 @@
     {
       "path": "src/repo_rag_lab/dspy_training.py",
       "kind": "python",
-      "byte_size": 61196,
-      "line_count": 1603,
+      "byte_size": 61656,
+      "line_count": 1613,
       "url_count": 0,
-      "summary_en": "Python module, 1603 lines, 0 explicit URLs. Module intent: DSPy training and artifact helpers for repository-grounded RAG.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1603 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: DSPy training and artifact helpers for repository-grounded RAG."
+      "summary_en": "Python module, 1613 lines, 0 explicit URLs. Module intent: DSPy training and artifact helpers for repository-grounded RAG.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1613 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: DSPy training and artifact helpers for repository-grounded RAG."
     },
     {
       "path": "src/repo_rag_lab/dspy_workflow.py",
@@ -2658,11 +2676,11 @@
     {
       "path": "src/repo_rag_lab/mcp_server.py",
       "kind": "python",
-      "byte_size": 49908,
-      "line_count": 1340,
+      "byte_size": 50399,
+      "line_count": 1361,
       "url_count": 0,
-      "summary_en": "Python module, 1340 lines, 0 explicit URLs. Module intent: Minimal stdio MCP server for bounded repo-RAG operations.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1340 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Minimal stdio MCP server for bounded repo-RAG operations."
+      "summary_en": "Python module, 1361 lines, 0 explicit URLs. Module intent: Minimal stdio MCP server for bounded repo-RAG operations.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1361 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Minimal stdio MCP server for bounded repo-RAG operations."
     },
     {
       "path": "src/repo_rag_lab/mcp_stdio.py",
@@ -2739,7 +2757,7 @@
     {
       "path": "src/repo_rag_lab/runtime_artifacts.py",
       "kind": "python",
-      "byte_size": 103988,
+      "byte_size": 103966,
       "line_count": 2380,
       "url_count": 0,
       "summary_en": "Python module, 2380 lines, 0 explicit URLs. Module intent: Versioned bundle, overlay, and runtime-trace helpers.",
@@ -2793,20 +2811,20 @@
     {
       "path": "src/repo_rag_lab/training_samples.py",
       "kind": "python",
-      "byte_size": 100347,
-      "line_count": 2486,
+      "byte_size": 94604,
+      "line_count": 2335,
       "url_count": 0,
-      "summary_en": "Python module, 2486 lines, 0 explicit URLs. Module intent: Helpers for loading and summarizing starter DSPy training examples.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 2486 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Helpers for loading and summarizing starter DSPy training examples."
+      "summary_en": "Python module, 2335 lines, 0 explicit URLs. Module intent: Helpers for loading and summarizing starter DSPy training examples.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 2335 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Helpers for loading and summarizing starter DSPy training examples."
     },
     {
       "path": "src/repo_rag_lab/utilities.py",
       "kind": "python",
-      "byte_size": 105258,
-      "line_count": 2586,
+      "byte_size": 105181,
+      "line_count": 2582,
       "url_count": 1,
-      "summary_en": "Python module, 2586 lines, 1 explicit URLs. Module intent: User-facing utility helpers shared by the CLI, tests, and notebooks.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 2586 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: User-facing utility helpers shared by the CLI, tests, and notebooks."
+      "summary_en": "Python module, 2582 lines, 1 explicit URLs. Module intent: User-facing utility helpers shared by the CLI, tests, and notebooks.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 2582 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: User-facing utility helpers shared by the CLI, tests, and notebooks."
     },
     {
       "path": "src/repo_rag_lab/verification.py",
@@ -3207,20 +3225,20 @@
     {
       "path": "tests/test_codex_proxy.py",
       "kind": "python",
-      "byte_size": 32010,
-      "line_count": 893,
+      "byte_size": 41156,
+      "line_count": 1148,
       "url_count": 5,
-      "summary_en": "Python module, 893 lines, 5 explicit URLs. Module intent: No module docstring detected.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 893 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 5. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
+      "summary_en": "Python module, 1148 lines, 5 explicit URLs. Module intent: No module docstring detected.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1148 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 5. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
     },
     {
       "path": "tests/test_dspy_training.py",
       "kind": "python",
-      "byte_size": 66024,
-      "line_count": 1642,
+      "byte_size": 66652,
+      "line_count": 1653,
       "url_count": 11,
-      "summary_en": "Python module, 1642 lines, 11 explicit URLs. Module intent: No module docstring detected.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1642 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 11. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
+      "summary_en": "Python module, 1653 lines, 11 explicit URLs. Module intent: No module docstring detected.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1653 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 11. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
     },
     {
       "path": "tests/test_exploratorium_translation.py",
@@ -3297,11 +3315,11 @@
     {
       "path": "tests/test_mcp_server.py",
       "kind": "python",
-      "byte_size": 26258,
-      "line_count": 788,
+      "byte_size": 26557,
+      "line_count": 799,
       "url_count": 0,
-      "summary_en": "Python module, 788 lines, 0 explicit URLs. Module intent: No module docstring detected.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 788 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
+      "summary_en": "Python module, 799 lines, 0 explicit URLs. Module intent: No module docstring detected.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 799 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
     },
     {
       "path": "tests/test_mcp_stdio.py",
@@ -3360,7 +3378,7 @@
     {
       "path": "tests/test_retrieval.py",
       "kind": "python",
-      "byte_size": 13365,
+      "byte_size": 13362,
       "line_count": 389,
       "url_count": 0,
       "summary_en": "Python module, 389 lines, 0 explicit URLs. Module intent: No module docstring detected.",
@@ -3369,11 +3387,11 @@
     {
       "path": "tests/test_runtime_artifacts_azure.py",
       "kind": "python",
-      "byte_size": 48961,
-      "line_count": 1303,
+      "byte_size": 49137,
+      "line_count": 1305,
       "url_count": 4,
-      "summary_en": "Python module, 1303 lines, 4 explicit URLs. Module intent: No module docstring detected.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1303 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 4. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
+      "summary_en": "Python module, 1305 lines, 4 explicit URLs. Module intent: No module docstring detected.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1305 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 4. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
     },
     {
       "path": "tests/test_rust_lookup.py",
@@ -3396,16 +3414,16 @@
     {
       "path": "tests/test_training_samples.py",
       "kind": "python",
-      "byte_size": 72921,
-      "line_count": 1871,
+      "byte_size": 72842,
+      "line_count": 1870,
       "url_count": 0,
-      "summary_en": "Python module, 1871 lines, 0 explicit URLs. Module intent: No module docstring detected.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1871 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
+      "summary_en": "Python module, 1870 lines, 0 explicit URLs. Module intent: No module docstring detected.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1870 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
     },
     {
       "path": "tests/test_utilities.py",
       "kind": "python",
-      "byte_size": 96986,
+      "byte_size": 97012,
       "line_count": 2473,
       "url_count": 6,
       "summary_en": "Python module, 2473 lines, 6 explicit URLs. Module intent: No module docstring detected.",

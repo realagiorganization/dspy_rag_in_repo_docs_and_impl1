@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import threading
 import time
 from collections.abc import Iterator, Mapping, Sequence
@@ -25,6 +26,7 @@ from .retrieval import RetrievalMode
 from .runtime_artifacts import (
     DEFAULT_TRAINER_FAMILY_STATE_PATH,
     RuntimeTraceContext,
+    build_bundle_family_registry,
     build_runtime_trace,
     fetch_remote_bundle,
     fetch_remote_family_state,
@@ -52,6 +54,7 @@ _DEFAULT_TRIVIAL_TOKEN_BUDGET = 280
 _DEFAULT_CACHE_TTL_SECONDS = 3600
 _TASK_TOKEN_DEEP_THRESHOLD = 10
 _LOW_SIGNAL_SUMMARY_LIMIT = 40
+_FORWARDED_DISCORD_TAIL_PATTERN = re.compile(r"(?is)\s*\[forwarded\]\s*@.*$")
 _REPO_GROUNDING_HINTS = {
     "repo",
     "repository",
@@ -385,6 +388,25 @@ def _extract_text_from_content(content: object) -> str:
     return "\n".join(parts).strip()
 
 
+def _sanitize_bundle_token(name: str, *, default: str) -> str:
+    """Return one filesystem-safe bundle token."""
+
+    parts = [part for part in re.split(r"[^A-Za-z0-9._-]+", str(name).strip()) if part]
+    if parts:
+        return "-".join(parts)
+    return default
+
+
+def _strip_forwarded_discord_tail(text: str) -> str:
+    """Remove the Discord forwarding tail that should not participate in mediation."""
+
+    cleaned = str(text or "").strip()
+    if not cleaned:
+        return ""
+    stripped = _FORWARDED_DISCORD_TAIL_PATTERN.sub("", cleaned).strip()
+    return stripped or cleaned
+
+
 def _strip_dataset_execution_envelope(text: str) -> str:
     """Remove dataset-specific execution scaffolding from one Codex user prompt."""
 
@@ -435,8 +457,9 @@ def _strip_dataset_execution_envelope(text: str) -> str:
         normalized_lines.append(stripped)
     while normalized_lines and normalized_lines[-1] == "":
         normalized_lines.pop()
-    result = "\n".join(normalized_lines).strip()
-    return result or str(text or "").strip()
+    result = _strip_forwarded_discord_tail("\n".join(normalized_lines).strip())
+    fallback = _strip_forwarded_discord_tail(str(text or "").strip())
+    return result or fallback
 
 
 def _command_trace_step(item: Mapping[str, object]) -> dict[str, str] | None:
@@ -584,6 +607,77 @@ def _resolve_family_state_path(repository_root: Path, bundle_root: Path) -> Path
     return None
 
 
+def _resolve_bundle_version_hint(
+    *,
+    bundle_root: Path,
+    bundle_version: str | None,
+    bundle_channel: str,
+) -> str | None:
+    """Return the best-known bundle version for staged bundle-store lookups."""
+
+    if bundle_version is not None:
+        return bundle_version
+    channel_state = inspect_bundle_channel(bundle_root, channel=bundle_channel)
+    return str(channel_state.get("current_bundle_version") or "").strip() or None
+
+
+def _staged_bundle_program_candidates(
+    *,
+    bundle_root: Path,
+    bundle_version: str | None,
+) -> list[Path]:
+    """Return canonical staged program.json candidates for one bundle version."""
+
+    if bundle_version is None:
+        return []
+    resolved_root = bundle_root.resolve()
+    return [
+        resolved_root / "versions" / bundle_version / "program.json",
+        resolved_root / "artifacts" / "dspy" / "remote" / bundle_version / "program.json",
+    ]
+
+
+def _staged_family_program_candidates(
+    *,
+    bundle_root: Path,
+    bundle_version: str | None,
+    prompt_family_id: str | None,
+) -> list[Path]:
+    """Return canonical staged family program candidates for one bundle version."""
+
+    if bundle_version is None or not prompt_family_id:
+        return []
+    resolved_root = bundle_root.resolve()
+    safe_family_id = _sanitize_bundle_token(prompt_family_id, default="family")
+    return [
+        resolved_root / "versions" / bundle_version / "families" / safe_family_id / "program.json",
+        resolved_root
+        / "artifacts"
+        / "dspy"
+        / "remote"
+        / bundle_version
+        / "families"
+        / safe_family_id
+        / "program.json",
+    ]
+
+
+def _build_family_registry_from_state_path(
+    *,
+    bundle_root: Path,
+    family_state_path: Path,
+) -> dict[str, object] | None:
+    """Synthesize one bundle-style family registry from a persisted family-state file."""
+
+    try:
+        return build_bundle_family_registry(
+            bundle_root.resolve(),
+            family_state_path=family_state_path.resolve(),
+        )
+    except Exception:
+        return None
+
+
 def _resolve_bundle_family_registry(
     *,
     bundle_root: Path,
@@ -660,34 +754,41 @@ def _resolve_family_runtime_program_path(
     bundle_root: Path,
     family_registry: Mapping[str, object] | None,
     prompt_family_id: str | None,
+    bundle_version: str | None,
 ) -> Path | None:
     """Resolve the matched family's runtime program path from the bundle registry."""
 
-    if not isinstance(family_registry, Mapping) or not prompt_family_id:
+    if not prompt_family_id:
         return None
-    raw_families = family_registry.get("families")
-    if not isinstance(raw_families, list):
-        return None
-    for family in raw_families:
-        if not isinstance(family, Mapping):
-            continue
-        family_id = str(family.get("prompt_family_id") or "").strip()
-        if family_id != prompt_family_id:
-            continue
-        runtime_artifact = family.get("runtime_artifact")
-        if not isinstance(runtime_artifact, Mapping):
-            return None
-        if not bool(runtime_artifact.get("artifact_ready")):
-            return None
-        program_path_text = str(runtime_artifact.get("program_path") or "").strip()
-        if not program_path_text:
-            return None
-        resolved_program_path = Path(program_path_text)
-        if not resolved_program_path.is_absolute():
-            resolved_program_path = bundle_root / resolved_program_path
-        if resolved_program_path.is_file():
-            return resolved_program_path
-        return None
+    raw_families = family_registry.get("families") if isinstance(family_registry, Mapping) else None
+    if isinstance(raw_families, list):
+        for family in raw_families:
+            if not isinstance(family, Mapping):
+                continue
+            family_id = str(family.get("prompt_family_id") or "").strip()
+            if family_id != prompt_family_id:
+                continue
+            runtime_artifact = family.get("runtime_artifact")
+            if not isinstance(runtime_artifact, Mapping):
+                break
+            if not bool(runtime_artifact.get("artifact_ready")):
+                break
+            program_path_text = str(runtime_artifact.get("program_path") or "").strip()
+            if not program_path_text:
+                break
+            resolved_program_path = Path(program_path_text)
+            if not resolved_program_path.is_absolute():
+                resolved_program_path = bundle_root / resolved_program_path
+            if resolved_program_path.is_file():
+                return resolved_program_path
+            break
+    for candidate in _staged_family_program_candidates(
+        bundle_root=bundle_root,
+        bundle_version=bundle_version,
+        prompt_family_id=prompt_family_id,
+    ):
+        if candidate.is_file():
+            return candidate.resolve()
     return None
 
 
@@ -775,8 +876,17 @@ def _resolve_program_path_and_bundle_version(
             local_program_path = (bundle_root / local_program_path_text).resolve()
             if local_program_path.is_file():
                 return local_program_path, bundle_version
+        for candidate in _staged_bundle_program_candidates(
+            bundle_root=bundle_root,
+            bundle_version=bundle_version,
+        ):
+            if candidate.is_file():
+                return candidate.resolve(), bundle_version
     else:
         channel_state = inspect_bundle_channel(bundle_root, channel=bundle_channel)
+        resolved_bundle_version = (
+            str(channel_state.get("current_bundle_version") or "").strip() or None
+        )
         local_program_path_text = (
             channel_state.get("current_program_path")
             if channel_state.get("channel_found")
@@ -785,10 +895,13 @@ def _resolve_program_path_and_bundle_version(
         if isinstance(local_program_path_text, str) and local_program_path_text.strip():
             local_program_path = (bundle_root / local_program_path_text).resolve()
             if local_program_path.is_file():
-                resolved_version = (
-                    str(channel_state.get("current_bundle_version") or "").strip() or None
-                )
-                return local_program_path, resolved_version
+                return local_program_path, resolved_bundle_version
+        for candidate in _staged_bundle_program_candidates(
+            bundle_root=bundle_root,
+            bundle_version=resolved_bundle_version,
+        ):
+            if candidate.is_file():
+                return candidate.resolve(), resolved_bundle_version
     try:
         remote_bundle = fetch_remote_bundle(
             bundle_root,
@@ -842,14 +955,16 @@ def build_codex_mediation(
     effective_essentials = 1 if task_classification == "trivial" else max(1, essentials_count)
 
     warnings: list[str] = []
+    resolved_bundle_root = bundle_root.resolve()
     lm_config = resolve_dspy_lm_config() if prefer_dspy else None
     reformulated_prompt, reformulation_status = reformulate_codex_prompt(
         original_prompt,
         lm_config=lm_config,
     )
     active_prompt = reformulated_prompt or original_prompt
+    family_state_path: Path | None = None
     family_registry = _resolve_bundle_family_registry(
-        bundle_root=bundle_root.resolve(),
+        bundle_root=resolved_bundle_root,
         bundle_version=bundle_version,
         bundle_channel=bundle_channel,
     )
@@ -870,9 +985,20 @@ def build_codex_mediation(
         prompt_family_band = support.band
         supported_family = support.supported
     else:
-        family_state_path = _resolve_family_state_path(resolved_root, bundle_root.resolve())
+        family_state_path = _resolve_family_state_path(resolved_root, resolved_bundle_root)
         if family_state_path is not None:
-            support = resolve_prompt_family_support(active_prompt, family_state_path)
+            synthesized_family_registry = _build_family_registry_from_state_path(
+                bundle_root=resolved_bundle_root,
+                family_state_path=family_state_path,
+            )
+            if isinstance(synthesized_family_registry, Mapping):
+                family_registry = synthesized_family_registry
+                support = resolve_prompt_family_support_from_payload(
+                    active_prompt,
+                    {"prompt_families": family_registry.get("families", [])},
+                )
+            else:
+                support = resolve_prompt_family_support(active_prompt, family_state_path)
             prompt_family_id = support.prompt_family_id
             prompt_family_similarity = support.similarity
             prompt_family_band = support.band
@@ -973,7 +1099,11 @@ def build_codex_mediation(
     dspy_lm_model = str(getattr(lm_config, "model", "") or "").strip() or None
     summary = rag_summary
     program_path_text: str | None = None
-    resolved_bundle_version: str | None = bundle_version
+    resolved_bundle_version: str | None = _resolve_bundle_version_hint(
+        bundle_root=resolved_bundle_root,
+        bundle_version=bundle_version,
+        bundle_channel=bundle_channel,
+    )
     if prefer_dspy:
         try:
             if lm_config is None:
@@ -991,16 +1121,17 @@ def build_codex_mediation(
                 )
             family_program_path = (
                 _resolve_family_runtime_program_path(
-                    bundle_root=bundle_root.resolve(),
+                    bundle_root=resolved_bundle_root,
                     family_registry=family_registry,
                     prompt_family_id=prompt_family_id,
+                    bundle_version=resolved_bundle_version,
                 )
                 if use_family_artifact
                 else None
             )
             global_program_path, resolved_bundle_version = _resolve_program_path_and_bundle_version(
                 repository_root=resolved_root,
-                bundle_root=bundle_root.resolve(),
+                bundle_root=resolved_bundle_root,
                 bundle_version=bundle_version,
                 bundle_channel=bundle_channel,
             )
@@ -1041,8 +1172,8 @@ def build_codex_mediation(
                 or effective_retrieval_mode
             )
             program_path_text = (
-                program_path.relative_to(bundle_root.resolve()).as_posix()
-                if program_path.is_relative_to(bundle_root.resolve())
+                program_path.relative_to(resolved_bundle_root).as_posix()
+                if program_path.is_relative_to(resolved_bundle_root)
                 else str(program_path)
             )
         except Exception as exc:

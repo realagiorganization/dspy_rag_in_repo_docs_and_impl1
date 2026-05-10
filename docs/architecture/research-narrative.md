@@ -898,6 +898,18 @@ that same value explicitly unless an operator overrides it. That does not yet pr
 drop on its own, but it removes the earlier repo-wide resume-lane default that allowed unrelated
 prompt runs in one repository to keep inflating the same resumed conversation state.
 
+The next hotfix pass on `2026-05-10` closes the remaining local gaps from AKS run
+`25629990035_20260510_134639`. The proxy now treats the staged worker mirror as a first-class
+bundle store: if `bundle.json` still references the original trainer-side `artifacts/dspy/...`
+paths, the runtime can still activate `versions/<bundle_version>/program.json` and
+`versions/<bundle_version>/families/<family_id>/program.json` directly. When the bundle-local
+`family_registry` is missing, the proxy now synthesizes one from `family-state.json` so family
+lookup can still proceed instead of collapsing straight into heuristic-only mediation. The same
+pass also strips the Discord forwarding tail from every prompt-lineage field and teaches the
+deploy-stage trusted handoff to stand down once the worker already emitted a successful per-turn
+batch enqueue/import summary, so the family-first compact trace path is no longer doubled by the
+runner-side legacy queue upload.
+
 ## Tensions And Open Work
 
 The narrative is coherent, but not complete. The main open tensions are:
