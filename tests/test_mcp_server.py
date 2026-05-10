@@ -784,10 +784,7 @@ def test_read_json_rpc_message_preserves_buffered_followup_messages_from_pipe(
         nonlocal select_calls
         select_calls += 1
         if select_calls == 1:
-            return cast(
-                tuple[list[object], list[object], list[object]],
-                original_select(read_fds, write_fds, error_fds, timeout),
-            )
+            return original_select(read_fds, write_fds, error_fds, timeout)
         raise AssertionError(
             "select() should not run again when the next MCP frame is already buffered"
         )

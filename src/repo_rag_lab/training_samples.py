@@ -456,23 +456,6 @@ def _string_match_similarity(left: object, right: object) -> float:
     return 1.0 if normalized_left == normalized_right else 0.0
 
 
-def _count_similarity(left: object, right: object) -> float:
-    """Return a bounded similarity score for two optional integer-like values."""
-
-    left_value = _coerce_int(left)
-    right_value = _coerce_int(right)
-    if left_value is None and right_value is None:
-        return 1.0
-    if left_value is None or right_value is None:
-        return 0.5
-    if left_value == right_value:
-        return 1.0
-    upper = max(abs(left_value), abs(right_value))
-    if upper == 0:
-        return 1.0
-    return min(abs(left_value), abs(right_value)) / upper
-
-
 def _trace_context_snapshot(
     payload: Mapping[str, Any],
     trace_mapping: Mapping[str, Any],
@@ -689,12 +672,6 @@ def resolve_prompt_family_support(question: str, family_state_path: Path) -> Pro
     return resolve_prompt_family_support_from_payload(question, index_payload)
 
 
-def _matches_prompt_family(question: str, family_payload: Mapping[str, Any]) -> bool:
-    """Return whether one question should join an existing prompt family."""
-
-    return _prompt_family_similarity(question, family_payload) >= PROMPT_FAMILY_MATCH_THRESHOLD
-
-
 def _refresh_prompt_family_summary(family_payload: dict[str, Any], question: str) -> None:
     """Update one prompt-family summary so routing follows the current family father."""
 
@@ -875,64 +852,6 @@ def _extract_benchmark_context(
         context_texts.append(text)
         context_sources.append(source)
     return context_texts, context_sources
-
-
-def _context_similarity(
-    candidate_snapshot: Mapping[str, Any], group_payload: Mapping[str, Any]
-) -> float:
-    """Return a soft similarity score between one trace snapshot and one stored context group."""
-
-    candidate_sources = _normalized_source_tokens(candidate_snapshot.get("sources", []))
-    group_sources = _normalized_source_tokens(group_payload.get("sources", []))
-    source_overlap = _jaccard_similarity(candidate_sources, group_sources)
-    candidate_evidence = _normalized_source_tokens(
-        candidate_snapshot.get("evidence_fingerprints", [])
-    )
-    group_evidence = _normalized_source_tokens(group_payload.get("evidence_fingerprints", []))
-    evidence_overlap = _jaccard_similarity(candidate_evidence, group_evidence)
-    retrieval_mode_score = _string_match_similarity(
-        candidate_snapshot.get("retrieval_mode"),
-        group_payload.get("retrieval_mode"),
-    )
-    mode_score = _string_match_similarity(candidate_snapshot.get("mode"), group_payload.get("mode"))
-    context_field_score = _string_match_similarity(
-        candidate_snapshot.get("context_field"),
-        group_payload.get("context_field"),
-    )
-    source_count_score = _count_similarity(
-        candidate_snapshot.get("source_count"),
-        group_payload.get("source_count"),
-    )
-    context_count_score = _count_similarity(
-        candidate_snapshot.get("context_count"),
-        group_payload.get("context_count"),
-    )
-    top_k_score = _count_similarity(candidate_snapshot.get("top_k"), group_payload.get("top_k"))
-    evidence_count_score = _count_similarity(
-        candidate_snapshot.get("evidence_count"),
-        group_payload.get("evidence_count"),
-    )
-    return round(
-        (0.30 * source_overlap)
-        + (0.35 * evidence_overlap)
-        + (0.10 * retrieval_mode_score)
-        + (0.10 * mode_score)
-        + (0.05 * context_field_score)
-        + (0.05 * source_count_score)
-        + (0.05 * context_count_score)
-        + (0.03 * top_k_score)
-        + (0.02 * evidence_count_score),
-        6,
-    )
-
-
-def _matches_context_group(
-    candidate_snapshot: Mapping[str, Any], group_payload: Mapping[str, Any]
-) -> bool:
-    """Return whether a trace snapshot should join an existing context group."""
-
-    del candidate_snapshot, group_payload
-    return False
 
 
 def _serialize_candidate_record(record: Mapping[str, Any]) -> dict[str, Any]:
@@ -1241,37 +1160,6 @@ def _group_support_count(group_payload: Mapping[str, Any]) -> int:
 
     try:
         return max(0, int(group_payload.get("trace_count") or 0))
-    except (TypeError, ValueError):
-        return 0
-
-
-def _group_record_support_count(group_payload: Mapping[str, Any], record: Mapping[str, Any]) -> int:
-    """Return the support count for one candidate-answer variant within a context group."""
-
-    support_mapping = group_payload.get("support_by_record_key")
-    if isinstance(support_mapping, Mapping):
-        raw_value = support_mapping.get(_candidate_record_hash(record))
-        try:
-            return max(0, int(raw_value or 0))
-        except (TypeError, ValueError):
-            return 0
-    return 0
-
-
-def _group_champion_support_count(group_payload: Mapping[str, Any]) -> int:
-    """Return the support count for the current context-group champion."""
-
-    champion_record = group_payload.get("champion_record")
-    if not isinstance(champion_record, Mapping):
-        return 0
-    return _group_record_support_count(group_payload, champion_record)
-
-
-def _group_champion_evidence_count(group_payload: Mapping[str, Any]) -> int:
-    """Return the summarized evidence count for one context-group champion."""
-
-    try:
-        return max(0, int(group_payload.get("evidence_count") or 0))
     except (TypeError, ValueError):
         return 0
 
@@ -1731,43 +1619,6 @@ def _ordered_unique_command_trace(values: object) -> list[dict[str, Any]]:
     return ordered
 
 
-def _normalize_benchmark_support_text(value: object) -> str:
-    """Return one whitespace-normalized lowercase string for context grounding checks."""
-
-    return " ".join(str(value or "").casefold().split())
-
-
-def _benchmark_context_support_score(
-    expected_answer: str,
-    benchmark_context: Sequence[object],
-) -> float:
-    """Return one overlap score between a candidate answer and its preserved benchmark context."""
-
-    normalized_answer = _normalize_benchmark_support_text(expected_answer)
-    normalized_context = _normalize_benchmark_support_text("\n".join(map(str, benchmark_context)))
-    expected_tokens = set(re.findall(r"[a-z0-9]+", normalized_answer))
-    context_tokens = set(re.findall(r"[a-z0-9]+", normalized_context))
-    if not expected_tokens or not context_tokens:
-        return 0.0
-    return len(expected_tokens.intersection(context_tokens)) / min(
-        len(expected_tokens),
-        len(context_tokens),
-    )
-
-
-def _answer_is_supported_by_benchmark_context(
-    expected_answer: str,
-    benchmark_context: Sequence[object],
-) -> bool:
-    """Return whether one trainer-candidate answer is grounded in preserved benchmark context."""
-
-    normalized_answer = _normalize_benchmark_support_text(expected_answer)
-    normalized_context = _normalize_benchmark_support_text("\n".join(map(str, benchmark_context)))
-    if not normalized_answer or not normalized_context:
-        return False
-    return normalized_answer in normalized_context
-
-
 def _trainer_candidate_record_is_supported(record: Mapping[str, Any]) -> bool:
     """Return whether one materialized trainer-candidate row is eligible for champion review."""
 
@@ -2051,7 +1902,6 @@ def materialize_training_candidates(
         )
     if (
         not resolved_family_state_path.is_file()
-        and resolved_champion_index_path is not None
         and resolved_champion_index_path != resolved_family_state_path
         and resolved_champion_index_path.is_file()
     ):

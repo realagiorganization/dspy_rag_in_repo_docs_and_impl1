@@ -112,7 +112,9 @@ class RepositoryProgram(QuestionAnsweringProgram, Protocol):
         question: str,
         context: Sequence[str],
         context_sources: Sequence[str],
-        **kwargs: object,
+        original_prompt: str | None = None,
+        reformulated_prompt: str | None = None,
+        command_trace: Sequence[Mapping[str, object]] = (),
     ) -> object: ...
 
 

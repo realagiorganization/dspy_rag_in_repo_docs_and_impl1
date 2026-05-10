@@ -1313,7 +1313,7 @@ def _trainer_pending_recompile_summary(
             resolved_bundle_path = resolved_root / resolved_bundle_path
         if resolved_bundle_path.is_file():
             current_bundle = load_json_object(resolved_bundle_path)
-    lineage = current_bundle.get("lineage") if isinstance(current_bundle, Mapping) else None
+    lineage = current_bundle.get("lineage")
     lineage_mapping = lineage if isinstance(lineage, Mapping) else {}
     bundle_trace_paths = _stable_ordered_strings(
         lineage_mapping.get("family_trace_record_paths", [])

@@ -961,7 +961,7 @@ def fetch_remote_bundle(
         f"{json.dumps(bundle_payload, indent=2)}\n",
         encoding="utf-8",
     )
-    payload = {
+    payload: dict[str, object] = {
         "bundle_found": True,
         "storage_backend": "azure-blob",
         "bundle_container": container,
