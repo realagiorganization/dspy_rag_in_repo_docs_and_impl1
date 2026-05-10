@@ -1533,9 +1533,7 @@ def train_repository_program(
         compiled_program = compiled_artifact["compiled_program"]
         trainset_size_value = compiled_artifact.get("trainset_size")
         trainset_size = (
-            int(trainset_size_value)
-            if isinstance(trainset_size_value, (int, str))
-            else 0
+            int(trainset_size_value) if isinstance(trainset_size_value, (int, str)) else 0
         )
         compiled_program_summary = {
             "program_type": compiled_program.__class__.__name__,

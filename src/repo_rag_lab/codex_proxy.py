@@ -1215,9 +1215,7 @@ class _CodexProxyHandler(BaseHTTPRequestHandler):
             original_prompt = str(turn_state.get("original_prompt") or "").strip()
             command_trace_value = turn_state.get("command_trace")
             if isinstance(command_trace_value, list):
-                command_trace = [
-                    step for step in command_trace_value if isinstance(step, Mapping)
-                ]
+                command_trace = [step for step in command_trace_value if isinstance(step, Mapping)]
             else:
                 command_trace = []
             if original_prompt:
