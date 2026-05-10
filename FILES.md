@@ -41,12 +41,12 @@ This inventory is generated from the current Git index.
 | `TODO.MD` | TODO.MD | binary |  | 6104 | Binary tracked asset at TODO.MD |
 | `config/retrieval-profile.json` | config | json | 66 | 1791 | JSON object with keys: name, retrieval_mode, rerank_candidate_pool_size |
 | `data/questions/repository.yaml` | data | yaml | 7 | 283 | - question: What does this repository research? |
-| `docs/architecture/dspy-rag-guide.md` | docs | markdown | 890 | 48685 | DSPy workflow guide for training, runtime use, and compiled programs |
+| `docs/architecture/dspy-rag-guide.md` | docs | markdown | 898 | 49246 | DSPy workflow guide for training, runtime use, and compiled programs |
 | `docs/architecture/inspired/dspy-rag-tutorial.md` | docs | markdown | 35 | 1474 | DSPy Tutorial: Basic RAG |
 | `docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md` | docs | markdown | 38 | 1555 | Implementing RAG with DSPy: Technical Guide |
 | `docs/architecture/mcp-discovery.md` | docs | markdown | 54 | 1757 | MCP Discovery Notes |
 | `docs/architecture/package-api.md` | docs | markdown | 127 | 9186 | Package API Notes |
-| `docs/architecture/research-narrative.md` | docs | markdown | 944 | 71096 | Repository research narrative tying code, docs, and verification together |
+| `docs/architecture/research-narrative.md` | docs | markdown | 956 | 72134 | Repository research narrative tying code, docs, and verification together |
 | `docs/archive/repo-completeness-checklist.md` | docs | markdown | 238 | 7450 | Archived completeness snapshot kept for workflow and lockfile policy context |
 | `docs/audit/2026-03-15-repo-state.md` | docs | markdown | 151 | 5989 | Repository audit note for 2026 03 15 repo state |
 | `docs/audit/2026-03-17-docs-and-uv-refresh.md` | docs | markdown | 79 | 3977 | Repository audit note for 2026 03 17 docs and uv refresh |
@@ -171,7 +171,9 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-05-09-family-first-mipro-contract-stage8.md` | docs | markdown | 110 | 4477 | Repository audit note for 2026 05 09 family first mipro contract stage8 |
 | `docs/audit/2026-05-09-family-first-mipro-contract-stage9.md` | docs | markdown | 106 | 4003 | Repository audit note for 2026 05 09 family first mipro contract stage9 |
 | `docs/audit/2026-05-10-aks-run-25625638264-family-first-runtime-gap.md` | docs | markdown | 246 | 8472 | Repository audit note for 2026 05 10 aks run 25625638264 family first runtime gap |
+| `docs/audit/2026-05-10-aks-run-25629990035-family-first-runtime-still-heuristic.md` | docs | markdown | 211 | 6843 | Repository audit note for 2026 05 10 aks run 25629990035 family first runtime still heuristic |
 | `docs/audit/2026-05-10-family-first-runtime-fixes-after-run-25625638264.md` | docs | markdown | 261 | 12143 | Repository audit note for 2026 05 10 family first runtime fixes after run 25625638264 |
+| `docs/audit/2026-05-10-family-first-runtime-fixes-after-run-25629990035.md` | docs | markdown | 98 | 4170 | Repository audit note for 2026 05 10 family first runtime fixes after run 25629990035 |
 | `docs/audit/README.md` | docs | markdown | 14 | 433 | Repository audit note for README |
 | `docs/guides/hushwheel-fixture-rag-guide.md` | docs | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
 | `docs/operations/azure-deployment.md` | docs | markdown | 111 | 4901 | Azure Deployment Notes |
@@ -181,7 +183,7 @@ This inventory is generated from the current Git index.
 | `docs/operations/trainer-deployment.md` | docs | markdown | 152 | 6047 | Trainer Deployment Notes |
 | `docs/planning/codex-exec-resume-plan.md` | docs | markdown | 207 | 11561 | Codex Exec Resume Plan |
 | `docs/planning/dataset-integration-plan.md` | docs | markdown | 478 | 33882 | Dataset Integration Plan |
-| `docs/planning/family-first-mipro-runtime-contract.md` | docs | markdown | 301 | 17803 | Family-First DSPy / MIPROv2 Contract |
+| `docs/planning/family-first-mipro-runtime-contract.md` | docs | markdown | 320 | 19256 | Family-First DSPy / MIPROv2 Contract |
 | `docs/planning/per-turn-dspy-mediation-contract.md` | docs | markdown | 115 | 4966 | Per-Turn DSPy Mediation Contract |
 | `docs/planning/repo-hardening-plan.md` | docs | markdown | 71 | 4545 | Repository Hardening Plan |
 | `docs/planning/trainer-context-group-champion-plan.md` | docs | markdown | 119 | 7736 | Trainer Context-Group Champion Plan |
@@ -200,8 +202,8 @@ This inventory is generated from the current Git index.
 | `publication/exploratorium_translation/README.md` | publication | markdown | 28 | 997 | Exploratorium Translation |
 | `publication/exploratorium_translation/exploratorium_translation.pdf` | publication | binary |  | 633449 | Binary tracked asset at publication/exploratorium_translation/exploratorium_translation.pdf |
 | `publication/exploratorium_translation/exploratorium_translation.tex` | publication | latex | 70 | 2573 | \documentclass[11pt]{article} |
-| `publication/exploratorium_translation/generated/exploratorium-content.tex` | publication | latex | 2458 | 785665 | % Generated by repo-rag sync-exploratorium-translation. Do not edit manually. |
-| `publication/exploratorium_translation/generated/exploratorium-manifest.json` | publication | json | 4438 | 306117 | JSON object with keys: generated_at, tracked_file_count, summarized_file_count |
+| `publication/exploratorium_translation/generated/exploratorium-content.tex` | publication | latex | 2478 | 793601 | % Generated by repo-rag sync-exploratorium-translation. Do not edit manually. |
+| `publication/exploratorium_translation/generated/exploratorium-manifest.json` | publication | json | 4474 | 308997 | JSON object with keys: generated_at, tracked_file_count, summarized_file_count |
 | `publication/references.bib` | publication | bibtex | 28 | 1252 | @inproceedings{lewis2020rag, |
 | `publication/repository-rag-lab-article.pdf` | publication | binary |  | 236232 | Binary tracked asset at publication/repository-rag-lab-article.pdf |
 | `publication/repository-rag-lab-article.tex` | publication | latex | 208 | 9526 | \documentclass[11pt]{article} |
@@ -296,7 +298,7 @@ This inventory is generated from the current Git index.
 | `src/repo_rag_lab/azure_runtime.py` | src | python | 577 | 20123 | Azure runtime normalization, live probes, and cloud-completion helpers. |
 | `src/repo_rag_lab/benchmarks.py` | src | python | 484 | 16524 | Retrieval benchmark helpers for notebook assertions and logging. |
 | `src/repo_rag_lab/cli.py` | src | python | 1339 | 58870 | Command-line entrypoints for the shared repository RAG workflows. |
-| `src/repo_rag_lab/codex_proxy.py` | src | python | 1804 | 69123 | Local streaming proxy that injects repo-RAG + DSPy mediation for Codex. |
+| `src/repo_rag_lab/codex_proxy.py` | src | python | 1882 | 72177 | Local streaming proxy that injects repo-RAG + DSPy mediation for Codex. |
 | `src/repo_rag_lab/corpus.py` | src | python | 181 | 5245 | Repository file loading helpers for the baseline text corpus. |
 | `src/repo_rag_lab/dspy_training.py` | src | python | 1613 | 61656 | DSPy training and artifact helpers for repository-grounded RAG. |
 | `src/repo_rag_lab/dspy_workflow.py` | src | python | 180 | 6518 | DSPy-backed runtime wrappers around the repository retrieval workflow. |
@@ -365,7 +367,7 @@ This inventory is generated from the current Git index.
 | `tests/test_azure_runtime.py` | tests | python | 208 | 7540 | Python module for test azure runtime |
 | `tests/test_benchmarks_and_notebook_scaffolding.py` | tests | python | 274 | 11859 | Python module for test benchmarks and notebook scaffolding |
 | `tests/test_cli_and_dspy.py` | tests | python | 1876 | 68622 | Python module for test cli and dspy |
-| `tests/test_codex_proxy.py` | tests | python | 1148 | 41156 | Python module for test codex proxy |
+| `tests/test_codex_proxy.py` | tests | python | 1222 | 43624 | Python module for test codex proxy |
 | `tests/test_dspy_training.py` | tests | python | 1653 | 66652 | Python module for test dspy training |
 | `tests/test_exploratorium_translation.py` | tests | python | 138 | 5239 | Python module for test exploratorium translation |
 | `tests/test_file_summaries.py` | tests | python | 230 | 9110 | Python module for test file summaries |

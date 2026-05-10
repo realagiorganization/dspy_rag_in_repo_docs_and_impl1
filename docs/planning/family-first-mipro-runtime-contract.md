@@ -193,6 +193,20 @@ Implemented locally in this stage:
 - explicit `champion_*` Azure/blob wrapper helpers have now been removed from the repo API surface;
   compatibility continues through fallback reads instead of separate public champion-named helper
   functions
+- bundle activation now also falls back to the latest discoverable staged version directory when a
+  local mirror exists but `channels/stable.json` or older published-manifest surfaces are missing
+  or stale
+- the dataset worker now resolves bundle versions directly from the staged
+  `.repo_rag_bundle_store` mirror before it depends on `bundle-inspect`, which reduces one more
+  live failure mode where proxy startup knew the bundle root but never learned a concrete bundle
+  version
+- the live `codex exec` prompt body is now task-first and stripped of Discord channel metadata,
+  forwarded tails, and attachment-dump noise; rich prompt metadata stays in artifacts instead of
+  being sent to the model
+- AKS defaults now enable the existing resumed-lane rollover logic through
+  `DATASET_CODEX_MAX_RESUMED_RUNS=3` and
+  `DATASET_CODEX_PROMPT_TOKEN_GROWTH_RESET_RATIO=2.0`, so repeated verification reruns of one
+  queue/slug lane do not keep compounding the same Codex transcript without bound
 
 Not implemented yet:
 
@@ -298,3 +312,8 @@ Not implemented yet:
     mirror `program.json` / `families/<id>/program.json` paths without requiring trainer-side
     artifact paths, and the deploy-stage trusted handoff now skips itself when the worker already
     completed a successful per-turn batch enqueue/import.
+23. Close the remaining live runtime gaps found in AKS run `25632110510`.
+    Stage 23 locally: proxy can now fall back to the latest staged bundle version even without
+    channel metadata, the worker resolves bundle versions directly from the staged bundle mirror,
+    the raw `codex exec` prompt is stripped down to the cleaned task plus concise repo/attachment
+    hints, and the generated AKS env now enables resumed-lane reset thresholds by default.

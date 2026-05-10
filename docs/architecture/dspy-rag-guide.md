@@ -249,6 +249,14 @@ The target trainer/runtime split for `MIPROv2` is also explicit now:
 - deployment handoff:
   - dataset / AKS provisioning exports the family-state container as a first-class storage env
   - the same handoff still mirrors champion aliases so older pods/images do not fail mid-rollout
+  - workers now also resolve bundle versions directly from the staged
+    `.repo_rag_bundle_store` mirror when channel metadata is absent, so live bundle activation is
+    no longer blocked on `stable.json` / `published.json` alone
+  - the live `codex exec` prompt body is now task-first and stripped of Discord scaffolding before
+    the execution contract is appended
+  - generated AKS env now enables the existing resumed-lane reset policy by default through
+    `DATASET_CODEX_MAX_RESUMED_RUNS=3` and
+    `DATASET_CODEX_PROMPT_TOKEN_GROWTH_RESET_RATIO=2.0`
 
 The proxy still keeps its token-budget and low-signal suppression behavior for injected developer
 messages, but those transport details are subordinate to the per-turn DSPy contract above.

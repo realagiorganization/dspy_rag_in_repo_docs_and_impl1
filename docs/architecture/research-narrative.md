@@ -910,6 +910,18 @@ deploy-stage trusted handoff to stand down once the worker already emitted a suc
 batch enqueue/import summary, so the family-first compact trace path is no longer doubled by the
 runner-side legacy queue upload.
 
+The follow-up local fix set after AKS run `25632110510_20260510_152621` addresses the last three
+execution-stage gaps that were still visible in downloaded artifacts. First, bundle activation no
+longer depends on channel metadata alone: both the proxy and the worker can now recover the latest
+staged bundle version directly from `.repo_rag_bundle_store/versions/<bundle>/...` or
+`artifacts/dspy/remote/<bundle>/...` when `stable.json` or older published-manifest surfaces are
+missing. Second, the worker now builds a task-first `codex exec` prompt body, so Discord channel
+headers, forwarded tails, and attachment-dump noise stay in persisted artifacts instead of being
+sent to the model as live context. Third, the generated AKS pod env now enables the already
+implemented resumed-lane reset policy by default through `DATASET_CODEX_MAX_RESUMED_RUNS=3` and
+`DATASET_CODEX_PROMPT_TOKEN_GROWTH_RESET_RATIO=2.0`, which should cap the repeated
+`queue_and_slug` rerun pattern that previously drove prompt-token usage back into six figures.
+
 ## Tensions And Open Work
 
 The narrative is coherent, but not complete. The main open tensions are:
