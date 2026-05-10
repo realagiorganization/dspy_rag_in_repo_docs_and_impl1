@@ -694,6 +694,85 @@ def test_fetch_remote_bundle_downloads_bundle_assets(
     assert family_program_path.read_text(encoding="utf-8") == '{"program":"family-demo"}\n'
 
 
+def test_fetch_remote_bundle_tolerates_missing_legacy_published_blob(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _FakeAzureArtifactStore()
+    config = AzureArtifactConfig(
+        account_name="acct",
+        account_key="key",
+        connection_string=None,
+        trace_container="repo-rag-training-traces",
+        bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
+        queue_name="repo-rag-training",
+    )
+    bundle_version = "stable-legacy"
+    store.upload_json(
+        "repo-rag-bundles",
+        "channels/stable.json",
+        {
+            "schema_version": 1,
+            "channel_kind": "bundle-channel",
+            "channel_name": "stable",
+            "current_bundle_version": bundle_version,
+            "current_run_name": bundle_version,
+            "current_bundle_path": f"versions/{bundle_version}/bundle.json",
+            "current_program_path": f"versions/{bundle_version}/program.json",
+            "current_metadata_path": f"versions/{bundle_version}/metadata.json",
+            "current_bundle": {"bundle_version": bundle_version},
+        },
+    )
+    store.upload_json(
+        "repo-rag-bundles",
+        f"versions/{bundle_version}/bundle.json",
+        {
+            "schema_version": 1,
+            "bundle_kind": "global",
+            "bundle_version": bundle_version,
+            "run_name": bundle_version,
+            "bundle_status": "ready",
+            "benchmark_status": "pass",
+        },
+    )
+    store.upload_text(
+        "repo-rag-bundles",
+        f"versions/{bundle_version}/metadata.json",
+        "{}\n",
+    )
+    store.upload_text(
+        "repo-rag-bundles",
+        f"versions/{bundle_version}/program.json",
+        '{"program":"demo"}\n',
+    )
+
+    def fake_resolve_azure_artifact_config(queue_name: str | None = None) -> AzureArtifactConfig:
+        del queue_name
+        return config
+
+    def fake_azure_artifact_store(cfg: AzureArtifactConfig) -> _FakeAzureArtifactStore:
+        del cfg
+        return store
+
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config",
+        fake_resolve_azure_artifact_config,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
+        fake_azure_artifact_store,
+    )
+
+    payload = fetch_remote_bundle(tmp_path, channel="stable")
+
+    assert payload is not None
+    assert payload["bundle_version"] == bundle_version
+    assert payload["publish_status"] is None
+    assert "published_bundle_path" not in payload
+    assert (tmp_path / str(payload["program_path"])).is_file()
+
+
 def test_upload_remote_bundle_uploads_family_runtime_artifacts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

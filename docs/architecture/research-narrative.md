@@ -876,6 +876,28 @@ family-state storage surfaces in their final remote container shape, remove the 
 repo-side compatibility `champion-*` aliases, and keep feeding post-run real `hits / total` back
 into trainer ingestion and live AKS validation.
 
+The first post-gap hotfix set on `2026-05-10` tightens that story in four concrete places. Bundle
+resolution now prefers the locally staged mirror and no longer treats legacy `published.json` as a
+hard requirement, so older published bundles do not force the proxy back into heuristic mode when
+`bundle.json`, `metadata.json`, and `program.json` are present. The AKS bundle staging script now
+also mirrors family `program.json` / `metadata.json` blobs into `.repo_rag_bundle_store`, which is
+the missing local substrate the family-first runtime path actually needs to execute matched family
+artifacts instead of only the global program.
+
+The same hotfix pass also addresses the trace-shape and token-growth failures that showed up in the
+downloaded AKS artifacts. Dataset-specific execution scaffolding is now stripped not only from the
+proxy's `original_prompt`, but also from the user-facing `command_trace` step before that lineage
+is persisted or exported. When the proxy did not already persist a local `repo_rag_turn_traces/`
+batch, the worker now synthesizes one compact per-turn batch from `repo_rag_codex_proxy_last.json`
+plus the final execution outcome, instead of exporting the entire `codex_response.txt` transcript
+as the trainer-facing answer payload.
+
+Finally, the session-resume contract is now explicit rather than accidental. The worker-side default
+for automatic Codex session lanes is `queue_and_slug`, and the generated AKS pod env now exports
+that same value explicitly unless an operator overrides it. That does not yet prove a live token
+drop on its own, but it removes the earlier repo-wide resume-lane default that allowed unrelated
+prompt runs in one repository to keep inflating the same resumed conversation state.
+
 ## Tensions And Open Work
 
 The narrative is coherent, but not complete. The main open tensions are:
