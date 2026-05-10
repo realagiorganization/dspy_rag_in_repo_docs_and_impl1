@@ -325,3 +325,9 @@ Not implemented yet:
     channel metadata, the worker resolves bundle versions directly from the staged bundle mirror,
     the raw `codex exec` prompt is stripped down to the cleaned task plus concise repo/attachment
     hints, and the generated AKS env now enables resumed-lane reset thresholds by default.
+24. Eliminate the stale submodule runtime-image path that kept live trainer pods on champion-era code.
+    Stage 24 locally: `../dataset/build_and_push_images.sh` and
+    `../dataset/deploy_repo_rag_trainer.sh` now prefer the sibling
+    `../dspy_rag_in_repo_docs_and_impl1` checkout over the pinned submodule whenever both are
+    available, and runtime lineage stripping now also removes `Repository checkout:` /
+    `Attachment mount:` scaffolding so family matching compares only prompt content.
