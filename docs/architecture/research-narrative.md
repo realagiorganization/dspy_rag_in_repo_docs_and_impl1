@@ -807,6 +807,12 @@ matching local cache tree for those family records. The container is therefore s
 the family-directory shape we actually want, even though the full replay-set layout is still not
 there yet.
 
+That same container is now also easier to inspect operationally. Fresh uploads write a root-level
+`family-state.json` alias plus `families/<prompt_family_id>/{family.json,father.json}` and
+`records/<snapshot>.json` mirrors beside the immutable versioned history. In other words,
+`repo-rag-training-families` no longer requires operators to descend into `versions/...` just to
+confirm that family state exists at all.
+
 The local trainer contract now mirrors that naming more honestly too. The primary persisted local
 state file is `artifacts/trainer/family-state.json`, remote fetch caches live under
 `artifacts/trainer/remote-family-state/`, and `champion-index.json` now remains only as a
@@ -921,6 +927,15 @@ sent to the model as live context. Third, the generated AKS pod env now enables 
 implemented resumed-lane reset policy by default through `DATASET_CODEX_MAX_RESUMED_RUNS=3` and
 `DATASET_CODEX_PROMPT_TOKEN_GROWTH_RESET_RATIO=2.0`, which should cap the repeated
 `queue_and_slug` rerun pattern that previously drove prompt-token usage back into six figures.
+
+The next local fix on the same date closes the remaining deploy/runtime blind spot that left live
+execution pods in heuristic mode even after trainer-side family compilation started to work.
+Remote bundle fetch now falls back to the latest immutable bundle version in Azure Blob when the
+stable channel blob is absent, and the dataset deploy-stage bundle mirror now performs that same
+lookup before it stages `.repo_rag_bundle_store`. When that fallback path resolves a version, the
+staged worker mirror also synthesizes a minimal local `channels/stable.json` pointer to the
+resolved bundle so the execution-side proxy can activate compiled family artifacts without relying
+on a separately published channel record.
 
 ## Tensions And Open Work
 

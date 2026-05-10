@@ -773,6 +773,71 @@ def test_fetch_remote_bundle_tolerates_missing_legacy_published_blob(
     assert (tmp_path / str(payload["program_path"])).is_file()
 
 
+def test_fetch_remote_bundle_falls_back_to_latest_remote_version_when_channel_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _FakeAzureArtifactStore()
+    config = AzureArtifactConfig(
+        account_name="acct",
+        account_key="key",
+        connection_string=None,
+        trace_container="repo-rag-training-traces",
+        bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
+        queue_name="repo-rag-training",
+    )
+    bundle_version = "20260510T170500Z"
+    store.upload_json(
+        "repo-rag-bundles",
+        f"versions/{bundle_version}/bundle.json",
+        {
+            "schema_version": 1,
+            "bundle_kind": "global",
+            "bundle_version": bundle_version,
+            "run_name": bundle_version,
+            "bundle_status": "ready",
+            "benchmark_status": "pass",
+        },
+    )
+    store.upload_text(
+        "repo-rag-bundles",
+        f"versions/{bundle_version}/metadata.json",
+        "{}\n",
+    )
+    store.upload_text(
+        "repo-rag-bundles",
+        f"versions/{bundle_version}/program.json",
+        '{"program":"latest-demo"}\n',
+    )
+
+    def fake_resolve_azure_artifact_config(queue_name: str | None = None) -> AzureArtifactConfig:
+        del queue_name
+        return config
+
+    def fake_azure_artifact_store(cfg: AzureArtifactConfig) -> _FakeAzureArtifactStore:
+        del cfg
+        return store
+
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config",
+        fake_resolve_azure_artifact_config,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
+        fake_azure_artifact_store,
+    )
+
+    payload = fetch_remote_bundle(tmp_path, channel="stable")
+
+    assert payload is not None
+    assert payload["bundle_version"] == bundle_version
+    assert payload["resolved_from"] == "latest-remote-version"
+    assert (tmp_path / str(payload["program_path"])).read_text(encoding="utf-8") == (
+        '{"program":"latest-demo"}\n'
+    )
+
+
 def test_upload_remote_bundle_uploads_family_runtime_artifacts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -977,13 +1042,26 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
             },
         }
     }
+    assert uploaded["remote_current_family_state_blob"] == "family-state.json"
+    assert uploaded["remote_current_family_member_blobs"] == {
+        "pf-demo": {
+            "family": "families/pf-demo/family.json",
+            "father": "families/pf-demo/father.json",
+            "record_blobs": {
+                "ts-demo": "families/pf-demo/records/ts-demo.json",
+                "ts-father": "families/pf-demo/records/ts-father.json",
+            },
+        }
+    }
     assert store.blob_exists("repo-rag-training-families", blob_map["family_state"])
+    assert store.blob_exists("repo-rag-training-families", "family-state.json")
     assert store.blob_exists("repo-rag-training-families", family_state_current_blob_name())
     current_payload = json.loads(
         store.download_text("repo-rag-training-families", family_state_current_blob_name())
     )
     assert "champion_state_kind" not in current_payload
     assert "current_champion_index_blob" not in current_payload
+    assert current_payload["current_family_state_alias_blob"] == "family-state.json"
     assert store.blob_exists(
         "repo-rag-training-families",
         f"versions/{uploaded['family_state_version']}/families/pf-demo/family.json",
@@ -995,6 +1073,12 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
     assert store.blob_exists(
         "repo-rag-training-families",
         f"versions/{uploaded['family_state_version']}/families/pf-demo/records/ts-demo.json",
+    )
+    assert store.blob_exists("repo-rag-training-families", "families/pf-demo/family.json")
+    assert store.blob_exists("repo-rag-training-families", "families/pf-demo/father.json")
+    assert store.blob_exists(
+        "repo-rag-training-families",
+        "families/pf-demo/records/ts-demo.json",
     )
 
     fetched = fetch_remote_family_state(tmp_path)
