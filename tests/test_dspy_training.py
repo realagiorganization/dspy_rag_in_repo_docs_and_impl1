@@ -10,6 +10,7 @@ from repo_rag_lab.dspy_training import (
     DEFAULT_DSPY_MODEL,
     DSPyLMConfig,
     DSPyTrainingConfig,
+    _training_examples_signature,
     build_dspy_trainset,
     build_repository_rag_program,
     describe_dspy_artifacts,
@@ -26,7 +27,7 @@ from repo_rag_lab.dspy_training import (
     train_repository_program,
 )
 from repo_rag_lab.runtime_artifacts import load_bundle_manifest
-from repo_rag_lab.training_samples import TrainingExample
+from repo_rag_lab.training_samples import TrainingExample, load_training_examples
 
 
 def test_resolve_dspy_lm_config_prefers_explicit_values(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -284,6 +285,34 @@ def test_build_dspy_trainset_marks_question_as_input() -> None:
     assert trainset[0].labels().answer == "Repository-grounded RAG workflows."
 
 
+def test_build_dspy_trainset_embeds_prompt_lineage_into_question() -> None:
+    trainset = build_dspy_trainset(
+        [
+            TrainingExample(
+                question="Inspect whether the README already embeds a demo GIF.",
+                expected_answer="The README already embeds the demo GIF.",
+                tags=("trainer-candidate",),
+                original_prompt="Add a demo GIF to README",
+                reformulated_prompt="Inspect whether the README already embeds a demo GIF.",
+                command_trace=(
+                    {"type": "message", "role": "assistant", "text": "inspect README"},
+                    {"type": "message", "role": "assistant", "text": "check docs/assets"},
+                ),
+            )
+        ]
+    )
+
+    assert len(trainset) == 1
+    assert trainset[0].inputs().question == (
+        "Question: Inspect whether the README already embeds a demo GIF.\n\n"
+        "Original prompt: Add a demo GIF to README\n\n"
+        "Command trace:\n"
+        "assistant: inspect README\n"
+        "assistant: check docs/assets"
+    )
+    assert trainset[0].labels().answer == "The README already embeds the demo GIF."
+
+
 def test_repository_answer_metric_requires_answer_and_source_match() -> None:
     class Example:
         answer = "The files are stored under docs/architecture/inspired."
@@ -439,6 +468,60 @@ def test_evaluate_repository_program_uses_benchmark_context_when_available() -> 
     assert summary["results"][0]["benchmark_context_sources"] == ["README.md"]
 
 
+def test_evaluate_repository_program_passes_prompt_lineage_when_supported() -> None:
+    captured: dict[str, object] = {}
+
+    class FakeProgram:
+        def __call__(
+            self,
+            *,
+            question: str,
+            original_prompt: str | None = None,
+            reformulated_prompt: str | None = None,
+            command_trace: object | None = None,
+        ) -> object:
+            captured["question"] = question
+            captured["original_prompt"] = original_prompt
+            captured["reformulated_prompt"] = reformulated_prompt
+            captured["command_trace"] = command_trace
+            return type(
+                "Prediction",
+                (),
+                {
+                    "answer": "Prepared the README inspection plan.",
+                    "context_sources": ["README.md"],
+                },
+            )()
+
+    summary = evaluate_repository_program(
+        FakeProgram(),
+        Path("."),
+        [
+            TrainingExample(
+                question="Inspect whether the README already embeds a demo GIF.",
+                expected_answer="Prepared the README inspection plan.",
+                tags=("trainer-candidate", "candidate"),
+                expected_sources=("README.md",),
+                original_prompt="Add a demo GIF to README",
+                reformulated_prompt="Inspect whether the README already embeds a demo GIF.",
+                command_trace=(
+                    {"type": "message", "role": "assistant", "text": "inspect README"},
+                ),
+            )
+        ],
+    )
+
+    assert summary["case_count"] == 1
+    assert summary["pass_count"] == 1
+    assert captured["original_prompt"] == "Add a demo GIF to README"
+    assert captured["reformulated_prompt"] == (
+        "Inspect whether the README already embeds a demo GIF."
+    )
+    assert captured["command_trace"] == (
+        {"type": "message", "role": "assistant", "text": "inspect README"},
+    )
+
+
 def test_evaluate_repository_program_skips_contextless_trainer_candidates() -> None:
     class FakeProgram:
         def __call__(self, *, question: str) -> object:
@@ -554,6 +637,54 @@ def test_train_repository_program_writes_artifacts(
     (tmp_path / "README.md").write_text("# sample\n", encoding="utf-8")
     samples_dir = tmp_path / "samples" / "training"
     samples_dir.mkdir(parents=True)
+    trainer_dir = tmp_path / "artifacts" / "trainer"
+    trainer_dir.mkdir(parents=True)
+    (trainer_dir / "family-state.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "record_kind": "repo-rag-trainer-champion-index",
+                "family_state_kind": "repo-rag-trainer-family-state",
+                "generated_at": "2026-05-09T19:30:00+00:00",
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-sample",
+                        "question": "What does this repository research?",
+                        "normalized_question": "what does this repository research?",
+                        "question_variants": ["What does this repository research?"],
+                        "question_variant_count": 1,
+                        "family_father_question": "What does this repository research?",
+                        "family_father_similarity_mean": 1.0,
+                        "family_father_record": {
+                            "question": "What does this repository research?",
+                            "expected_answer": "Repository-grounded RAG workflows.",
+                            "tags": ["trainer-candidate", "candidate"],
+                            "prompt_family_id": "pf-sample",
+                            "exact_snapshot_id": "ts-sample",
+                            "metric_hits": 1,
+                            "metric_total": 1,
+                            "metric_ratio": 1.0,
+                        },
+                        "family_runtime_score": 1.0,
+                        "family_runtime_record": {
+                            "question": "What does this repository research?",
+                            "expected_answer": "Repository-grounded RAG workflows.",
+                            "tags": ["trainer-candidate", "candidate"],
+                            "prompt_family_id": "pf-sample",
+                            "exact_snapshot_id": "ts-sample",
+                            "metric_hits": 1,
+                            "metric_total": 1,
+                            "metric_ratio": 1.0,
+                        },
+                        "context_groups": [],
+                    }
+                ],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     training_path = samples_dir / "sample-training.yaml"
     training_path.write_text(
         "\n".join(
@@ -646,6 +777,7 @@ def test_train_repository_program_writes_artifacts(
             lineage_metadata={
                 "imported_trace_record_paths": ["artifacts/traces/imported/demo.json"],
                 "new_candidate_count": 1,
+                "family_state_path": "artifacts/trainer/family-state.json",
             },
         ),
         lm_config=DSPyLMConfig(model="openai/test-model"),
@@ -661,6 +793,16 @@ def test_train_repository_program_writes_artifacts(
     assert metadata["run_name"] == "sample-run"
     assert metadata["bundle_version"] == "sample-version-001"
     assert metadata["run_family"] == "trainer-auto"
+    family_artifact_registry = metadata["family_artifact_registry"]
+    assert isinstance(family_artifact_registry, dict)
+    family_artifact = family_artifact_registry["pf-sample"]
+    assert family_artifact["artifact_ready"] is True
+    assert family_artifact["program_path"] == (
+        "artifacts/dspy/sample-run/families/pf-sample/program.json"
+    )
+    assert family_artifact["metadata_path"] == (
+        "artifacts/dspy/sample-run/families/pf-sample/metadata.json"
+    )
     lineage = metadata["lineage"]
     assert isinstance(lineage, dict)
     assert lineage["new_candidate_count"] == 1
@@ -684,6 +826,650 @@ def test_train_repository_program_writes_artifacts(
     assert bundle_lineage["new_candidate_count"] == 1
     assert bundle["retrieval_mode"] is None
     assert bundle["program_path"] == "artifacts/dspy/sample-run/program.json"
+    assert bundle["family_state_path"] == "artifacts/trainer/family-state.json"
+    family_registry = bundle["family_registry"]
+    assert isinstance(family_registry, dict)
+    assert family_registry["family_count"] == 1
+    families = family_registry["families"]
+    assert isinstance(families, list)
+    assert families[0]["prompt_family_id"] == "pf-sample"
+    assert families[0]["family_father_question"] == "What does this repository research?"
+    assert families[0]["family_runtime_metric"]["hit_rate"] == 1.0
+    runtime_artifact = families[0]["runtime_artifact"]
+    assert runtime_artifact["artifact_ready"] is True
+    assert runtime_artifact["artifact_kind"] == "compiled-family-program"
+    assert runtime_artifact["program_path"] == (
+        "artifacts/dspy/sample-run/families/pf-sample/program.json"
+    )
+    assert runtime_artifact["metadata_path"] == (
+        "artifacts/dspy/sample-run/families/pf-sample/metadata.json"
+    )
+
+
+def test_train_repository_program_recompiles_only_dirty_families(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / "README.md").write_text("# sample\n", encoding="utf-8")
+    samples_dir = tmp_path / "samples" / "training"
+    samples_dir.mkdir(parents=True)
+    training_path = samples_dir / "sample-training.yaml"
+    training_path.write_text(
+        "\n".join(
+            [
+                '- question: "What does this repository research?"',
+                '  expected_answer: "Repository answer"',
+                "  tags:",
+                '    - "repo"',
+                "  expected_sources:",
+                '    - "README.md"',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    trainer_dir = tmp_path / "artifacts" / "trainer"
+    trainer_dir.mkdir(parents=True)
+    family_state_path = trainer_dir / "family-state.json"
+    family_state_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "record_kind": "repo-rag-trainer-champion-index",
+                "family_state_kind": "repo-rag-trainer-family-state",
+                "generated_at": "2026-05-09T15:00:00+00:00",
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-dirty",
+                        "family_needs_recompile": True,
+                        "family_records": [
+                            {
+                                "question": "Inspect failing pytest stderr",
+                                "expected_answer": "Investigate the failing pytest stderr output.",
+                                "tags": ["trainer-candidate", "candidate"],
+                                "prompt_family_id": "pf-dirty",
+                                "exact_snapshot_id": "ts-dirty",
+                                "metric_hits": 1,
+                                "metric_total": 1,
+                                "metric_ratio": 1.0,
+                            },
+                            {
+                                "question": (
+                                    "Inspect failing pytest stderr and summarize the stack."
+                                ),
+                                "expected_answer": "Summarize the failing pytest stack trace.",
+                                "tags": ["trainer-candidate", "candidate"],
+                                "prompt_family_id": "pf-dirty",
+                                "exact_snapshot_id": "ts-dirty-2",
+                                "metric_hits": 1,
+                                "metric_total": 1,
+                                "metric_ratio": 1.0,
+                            },
+                        ],
+                        "family_runtime_record": {
+                            "question": "Inspect failing pytest stderr",
+                            "expected_answer": "Investigate the failing pytest stderr output.",
+                            "tags": ["trainer-candidate", "candidate"],
+                            "prompt_family_id": "pf-dirty",
+                            "exact_snapshot_id": "ts-dirty",
+                            "metric_hits": 1,
+                            "metric_total": 1,
+                            "metric_ratio": 1.0,
+                        },
+                        "context_groups": [
+                            {
+                                "context_group_id": "cg-dirty",
+                                "sources": ["README.md"],
+                                "evidence_fingerprints": [],
+                                "evidence_count": 0,
+                                "retrieval_mode": "lexical",
+                                "mode": "codex-proxy",
+                                "context_field": "evidence_previews",
+                                "source_count": 1,
+                                "context_count": 1,
+                                "top_k": 4,
+                                "trace_count": 1,
+                                "support_by_record_key": {},
+                                "champion_score": 1.0,
+                                "champion_record": {
+                                    "question": "Inspect failing pytest stderr",
+                                    "expected_answer": (
+                                        "Investigate the failing pytest stderr output."
+                                    ),
+                                    "tags": ["trainer-candidate", "candidate"],
+                                    "prompt_family_id": "pf-dirty",
+                                    "exact_snapshot_id": "ts-dirty",
+                                    "metric_hits": 1,
+                                    "metric_total": 1,
+                                    "metric_ratio": 1.0,
+                                },
+                            }
+                        ],
+                    },
+                    {
+                        "prompt_family_id": "pf-clean",
+                        "family_needs_recompile": False,
+                        "family_runtime_record": {
+                            "question": "Inspect docs assets",
+                            "expected_answer": "Inspect the docs assets directory.",
+                            "tags": ["trainer-candidate", "candidate"],
+                            "prompt_family_id": "pf-clean",
+                            "exact_snapshot_id": "ts-clean",
+                            "metric_hits": 1,
+                            "metric_total": 1,
+                            "metric_ratio": 1.0,
+                        },
+                        "context_groups": [
+                            {
+                                "context_group_id": "cg-clean",
+                                "sources": ["README.md"],
+                                "evidence_fingerprints": [],
+                                "evidence_count": 0,
+                                "retrieval_mode": "lexical",
+                                "mode": "codex-proxy",
+                                "context_field": "evidence_previews",
+                                "source_count": 1,
+                                "context_count": 1,
+                                "top_k": 4,
+                                "trace_count": 1,
+                                "support_by_record_key": {},
+                                "champion_score": 1.0,
+                                "champion_record": {
+                                    "question": "Inspect docs assets",
+                                    "expected_answer": "Inspect the docs assets directory.",
+                                    "tags": ["trainer-candidate", "candidate"],
+                                    "prompt_family_id": "pf-clean",
+                                    "exact_snapshot_id": "ts-clean",
+                                    "metric_hits": 1,
+                                    "metric_total": 1,
+                                    "metric_ratio": 1.0,
+                                },
+                            }
+                        ],
+                    },
+                ],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    previous_run_dir = tmp_path / "artifacts" / "dspy" / "previous-run"
+    previous_run_dir.mkdir(parents=True)
+    dirty_previous_dir = previous_run_dir / "families" / "pf-dirty"
+    clean_previous_dir = previous_run_dir / "families" / "pf-clean"
+    dirty_previous_dir.mkdir(parents=True)
+    clean_previous_dir.mkdir(parents=True)
+    (dirty_previous_dir / "program.json").write_text('{"program":"old-dirty"}\n', encoding="utf-8")
+    (dirty_previous_dir / "metadata.json").write_text(
+        '{"prompt_family_id":"pf-dirty"}\n',
+        encoding="utf-8",
+    )
+    (clean_previous_dir / "program.json").write_text('{"program":"old-clean"}\n', encoding="utf-8")
+    (clean_previous_dir / "metadata.json").write_text(
+        '{"prompt_family_id":"pf-clean"}\n',
+        encoding="utf-8",
+    )
+    (previous_run_dir / "metadata.json").write_text(
+        json.dumps(
+            {
+                "run_name": "previous-run",
+                "recorded_at": "2026-05-09T14:00:00+00:00",
+                "program_path": "artifacts/dspy/previous-run/program.json",
+                "family_artifact_registry": {
+                    "pf-dirty": {
+                        "prompt_family_id": "pf-dirty",
+                        "artifact_dir": "artifacts/dspy/previous-run/families/pf-dirty",
+                        "program_path": (
+                            "artifacts/dspy/previous-run/families/pf-dirty/program.json"
+                        ),
+                        "metadata_path": (
+                            "artifacts/dspy/previous-run/families/pf-dirty/metadata.json"
+                        ),
+                        "optimizer": "bootstrapfewshot",
+                        "training_example_count": 1,
+                        "benchmark_example_count": 1,
+                        "benchmark_summary": {"case_count": 1, "pass_rate": 1.0},
+                        "artifact_ready": True,
+                    },
+                    "pf-clean": {
+                        "prompt_family_id": "pf-clean",
+                        "artifact_dir": "artifacts/dspy/previous-run/families/pf-clean",
+                        "program_path": (
+                            "artifacts/dspy/previous-run/families/pf-clean/program.json"
+                        ),
+                        "metadata_path": (
+                            "artifacts/dspy/previous-run/families/pf-clean/metadata.json"
+                        ),
+                        "optimizer": "bootstrapfewshot",
+                        "training_example_count": 1,
+                        "benchmark_example_count": 1,
+                        "benchmark_summary": {"case_count": 1, "pass_rate": 1.0},
+                        "artifact_ready": True,
+                    },
+                },
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    compiled_paths: list[str] = []
+    compiled_example_counts: dict[str, int] = {}
+
+    def fake_configure_dspy_lm(lm_config: object) -> object:
+        del lm_config
+        return object()
+
+    def fake_compile_repository_program_artifact(
+        root: Path,
+        *,
+        artifact_paths: object,
+        examples: object,
+        benchmark_examples: object,
+        training_config: object,
+        lm_config: object,
+    ) -> dict[str, object]:
+        del benchmark_examples, training_config, lm_config
+        paths = cast(Any, artifact_paths)
+        artifact_dir = cast(Path, paths.artifact_dir)
+        program_path = cast(Path, paths.program_path)
+        relative_program_path = str(program_path.relative_to(root.resolve()))
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        program_path.write_text('{"compiled": true}\n', encoding="utf-8")
+        compiled_paths.append(relative_program_path)
+        compiled_example_counts[relative_program_path] = len(cast(list[Any], examples))
+        return {
+            "compiled_program": object(),
+            "benchmark_summary": {"case_count": 1, "pass_rate": 1.0},
+            "trainset_size": 1,
+        }
+
+    monkeypatch.setattr("repo_rag_lab.dspy_training.configure_dspy_lm", fake_configure_dspy_lm)
+    monkeypatch.setattr(
+        "repo_rag_lab.dspy_training._compile_repository_program_artifact",
+        fake_compile_repository_program_artifact,
+    )
+
+    result = train_repository_program(
+        tmp_path,
+        training_config=DSPyTrainingConfig(
+            training_path=Path("samples/training/sample-training.yaml"),
+            run_name="family-dirty-run",
+            bundle_version="family-dirty-run",
+            lineage_metadata={
+                "family_state_path": "artifacts/trainer/family-state.json",
+            },
+        ),
+        lm_config=DSPyLMConfig(model="openai/test-model"),
+    )
+
+    assert sorted(compiled_paths) == [
+        "artifacts/dspy/family-dirty-run/families/pf-dirty/program.json",
+        "artifacts/dspy/family-dirty-run/program.json",
+    ]
+    assert compiled_example_counts == {
+        "artifacts/dspy/family-dirty-run/families/pf-dirty/program.json": 2,
+        "artifacts/dspy/family-dirty-run/program.json": 1,
+    }
+    metadata = json.loads((tmp_path / result.metadata_path).read_text(encoding="utf-8"))
+    family_artifact_registry = metadata["family_artifact_registry"]
+    assert family_artifact_registry["pf-dirty"]["artifact_source"] == "recompiled"
+    assert family_artifact_registry["pf-dirty"]["program_path"] == (
+        "artifacts/dspy/family-dirty-run/families/pf-dirty/program.json"
+    )
+    assert family_artifact_registry["pf-clean"]["artifact_source"] == "carried-forward"
+    assert family_artifact_registry["pf-clean"]["program_path"] == (
+        "artifacts/dspy/previous-run/families/pf-clean/program.json"
+    )
+    bundle = load_bundle_manifest(tmp_path / result.bundle_path)
+    bundle_families = bundle["family_registry"]["families"]
+    dirty_bundle_family = next(
+        family for family in bundle_families if family["prompt_family_id"] == "pf-dirty"
+    )
+    clean_bundle_family = next(
+        family for family in bundle_families if family["prompt_family_id"] == "pf-clean"
+    )
+    assert dirty_bundle_family["runtime_artifact"]["artifact_source"] == "recompiled"
+    assert clean_bundle_family["runtime_artifact"]["artifact_source"] == "carried-forward"
+
+    updated_family_state = json.loads(family_state_path.read_text(encoding="utf-8"))
+    updated_families = {
+        family["prompt_family_id"]: family for family in updated_family_state["prompt_families"]
+    }
+    assert updated_families["pf-dirty"]["family_needs_recompile"] is False
+    assert updated_families["pf-clean"]["family_needs_recompile"] is False
+    assert updated_families["pf-dirty"]["family_runtime_artifact"]["program_path"] == (
+        "artifacts/dspy/family-dirty-run/families/pf-dirty/program.json"
+    )
+    assert updated_families["pf-clean"]["family_runtime_artifact"]["program_path"] == (
+        "artifacts/dspy/previous-run/families/pf-clean/program.json"
+    )
+
+
+def test_train_repository_program_carries_forward_global_program_when_no_dirty_families(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / "README.md").write_text("# sample\n", encoding="utf-8")
+    samples_dir = tmp_path / "samples" / "training"
+    samples_dir.mkdir(parents=True)
+    training_path = samples_dir / "sample-training.yaml"
+    training_path.write_text(
+        "\n".join(
+            [
+                '- question: "What does this repository research?"',
+                '  expected_answer: "Repository-grounded RAG workflows."',
+                "  expected_sources:",
+                '    - "README.md"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    trainer_dir = tmp_path / "artifacts" / "trainer"
+    trainer_dir.mkdir(parents=True)
+    family_state_path = trainer_dir / "family-state.json"
+    family_state_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "family_state_kind": "repo-rag-trainer-family-state",
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-clean",
+                        "family_needs_recompile": False,
+                        "family_father_record": {
+                            "question": "What does this repository research?",
+                            "expected_answer": "Repository-grounded RAG workflows.",
+                            "expected_sources": ["README.md"],
+                            "tags": ["trainer-candidate", "candidate"],
+                            "prompt_family_id": "pf-clean",
+                            "exact_snapshot_id": "ts-clean",
+                            "metric_hits": 1,
+                            "metric_total": 1,
+                            "metric_ratio": 1.0,
+                        },
+                        "context_groups": [],
+                    }
+                ],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    previous_run_dir = tmp_path / "artifacts" / "dspy" / "previous-global"
+    previous_run_dir.mkdir(parents=True)
+    (previous_run_dir / "program.json").write_text(
+        '{"program":"previous-global"}\n',
+        encoding="utf-8",
+    )
+    family_previous_dir = previous_run_dir / "families" / "pf-clean"
+    family_previous_dir.mkdir(parents=True)
+    (family_previous_dir / "program.json").write_text(
+        '{"program":"clean-family"}\n',
+        encoding="utf-8",
+    )
+    (family_previous_dir / "metadata.json").write_text(
+        '{"prompt_family_id":"pf-clean"}\n',
+        encoding="utf-8",
+    )
+    (previous_run_dir / "metadata.json").write_text(
+        json.dumps(
+            {
+                "run_name": "previous-global",
+                "recorded_at": "2026-05-09T14:00:00+00:00",
+                "program_path": "artifacts/dspy/previous-global/program.json",
+                "training_path": "samples/training/sample-training.yaml",
+                "benchmark_path": "samples/training/sample-training.yaml",
+                "optimizer": "bootstrapfewshot",
+                "top_k": 4,
+                "retrieval_mode": None,
+                "lm": {"model": "openai/test-model"},
+                "benchmark_summary": {"case_count": 1, "pass_rate": 1.0},
+                "compiled_program_summary": {
+                    "program_type": "RepositoryRAGProgram",
+                    "trainset_size": 1,
+                    "top_k": 4,
+                },
+                "family_artifact_registry": {
+                    "pf-clean": {
+                        "prompt_family_id": "pf-clean",
+                        "artifact_dir": "artifacts/dspy/previous-global/families/pf-clean",
+                        "program_path": (
+                            "artifacts/dspy/previous-global/families/pf-clean/program.json"
+                        ),
+                        "metadata_path": (
+                            "artifacts/dspy/previous-global/families/pf-clean/metadata.json"
+                        ),
+                        "optimizer": "bootstrapfewshot",
+                        "training_example_count": 1,
+                        "benchmark_example_count": 1,
+                        "benchmark_summary": {"case_count": 1, "pass_rate": 1.0},
+                        "artifact_ready": True,
+                    }
+                },
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    def fake_configure_dspy_lm(lm_config: object) -> object:
+        del lm_config
+        return object()
+
+    def fail_compile_repository_program_artifact(
+        *args: object,
+        **kwargs: object,
+    ) -> dict[str, object]:
+        del args, kwargs
+        raise AssertionError(
+            "compile should not run when global and family artifacts carry forward"
+        )
+
+    monkeypatch.setattr("repo_rag_lab.dspy_training.configure_dspy_lm", fake_configure_dspy_lm)
+    monkeypatch.setattr(
+        "repo_rag_lab.dspy_training._compile_repository_program_artifact",
+        fail_compile_repository_program_artifact,
+    )
+
+    result = train_repository_program(
+        tmp_path,
+        training_config=DSPyTrainingConfig(
+            training_path=Path("samples/training/sample-training.yaml"),
+            run_name="carry-forward-global",
+            bundle_version="carry-forward-global",
+            lineage_metadata={
+                "family_state_path": "artifacts/trainer/family-state.json",
+                "dirty_family_count": 0,
+                "dirty_family_ids": [],
+            },
+        ),
+        lm_config=DSPyLMConfig(model="openai/test-model"),
+    )
+
+    carried_program_path = tmp_path / result.program_path
+    assert carried_program_path.exists()
+    assert carried_program_path.read_text(encoding="utf-8") == '{"program":"previous-global"}\n'
+    metadata = json.loads((tmp_path / result.metadata_path).read_text(encoding="utf-8"))
+    compiled_program_summary = metadata["compiled_program_summary"]
+    assert compiled_program_summary["artifact_source"] == "carried-forward"
+    assert compiled_program_summary["program_type"] == "RepositoryRAGProgram"
+    assert compiled_program_summary["trainset_size"] == 1
+    assert metadata["benchmark_summary"]["pass_rate"] == 1.0
+
+
+def test_train_repository_program_carries_forward_global_program_for_dirty_family_cycle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / "README.md").write_text("# sample\n", encoding="utf-8")
+    samples_dir = tmp_path / "samples" / "training"
+    samples_dir.mkdir(parents=True)
+    training_path = samples_dir / "sample-training.yaml"
+    training_path.write_text(
+        "\n".join(
+            [
+                '- question: "What does this repository research?"',
+                '  expected_answer: "Repository-grounded RAG workflows."',
+                "  expected_sources:",
+                '    - "README.md"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    training_signature = _training_examples_signature(load_training_examples(training_path))
+    trainer_dir = tmp_path / "artifacts" / "trainer"
+    trainer_dir.mkdir(parents=True)
+    family_state_path = trainer_dir / "family-state.json"
+    family_state_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "family_state_kind": "repo-rag-trainer-family-state",
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-dirty",
+                        "family_needs_recompile": True,
+                        "family_father_record": {
+                            "question": "What does this repository research?",
+                            "expected_answer": "Repository-grounded RAG workflows.",
+                            "expected_sources": ["README.md"],
+                            "tags": ["trainer-candidate", "candidate"],
+                            "prompt_family_id": "pf-dirty",
+                            "exact_snapshot_id": "ts-dirty-father",
+                            "metric_hits": 1,
+                            "metric_total": 1,
+                            "metric_ratio": 1.0,
+                        },
+                        "family_records": [
+                            {
+                                "question": "What does this repository research?",
+                                "expected_answer": "Repository-grounded RAG workflows.",
+                                "expected_sources": ["README.md"],
+                                "tags": ["trainer-candidate", "candidate"],
+                                "prompt_family_id": "pf-dirty",
+                                "exact_snapshot_id": "ts-dirty-record",
+                                "metric_hits": 1,
+                                "metric_total": 1,
+                                "metric_ratio": 1.0,
+                            }
+                        ],
+                        "context_groups": [],
+                    }
+                ],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    previous_run_dir = tmp_path / "artifacts" / "dspy" / "previous-global-dirty"
+    previous_run_dir.mkdir(parents=True)
+    (previous_run_dir / "program.json").write_text(
+        '{"program":"previous-global-dirty"}\n',
+        encoding="utf-8",
+    )
+    (previous_run_dir / "metadata.json").write_text(
+        json.dumps(
+            {
+                "run_name": "previous-global-dirty",
+                "recorded_at": "2026-05-09T15:00:00+00:00",
+                "program_path": "artifacts/dspy/previous-global-dirty/program.json",
+                "training_path": "samples/training/sample-training.yaml",
+                "benchmark_path": "samples/training/sample-training.yaml",
+                "training_examples_signature": training_signature,
+                "benchmark_examples_signature": training_signature,
+                "optimizer": "bootstrapfewshot",
+                "top_k": 4,
+                "retrieval_mode": None,
+                "lm": {"model": "openai/test-model"},
+                "benchmark_summary": {"case_count": 1, "pass_rate": 1.0},
+                "compiled_program_summary": {
+                    "program_type": "RepositoryRAGProgram",
+                    "trainset_size": 1,
+                    "top_k": 4,
+                },
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    compiled_paths: list[str] = []
+
+    def fake_configure_dspy_lm(lm_config: object) -> object:
+        del lm_config
+        return object()
+
+    def fake_compile_repository_program_artifact(
+        root: Path,
+        *,
+        artifact_paths: object,
+        examples: object,
+        benchmark_examples: object,
+        training_config: object,
+        lm_config: object,
+    ) -> dict[str, object]:
+        del training_config, lm_config, root, benchmark_examples
+        resolved_artifact_paths = cast(Any, artifact_paths)
+        relative_program_path = str(resolved_artifact_paths.program_path.relative_to(tmp_path))
+        compiled_paths.append(relative_program_path)
+        artifact_dir = resolved_artifact_paths.artifact_dir
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        resolved_artifact_paths.program_path.write_text(
+            '{"compiled": true}\n',
+            encoding="utf-8",
+        )
+        return {
+            "compiled_program": object(),
+            "benchmark_summary": {"case_count": 1, "pass_rate": 1.0},
+            "trainset_size": len(cast(list[Any], examples)),
+        }
+
+    monkeypatch.setattr("repo_rag_lab.dspy_training.configure_dspy_lm", fake_configure_dspy_lm)
+    monkeypatch.setattr(
+        "repo_rag_lab.dspy_training._compile_repository_program_artifact",
+        fake_compile_repository_program_artifact,
+    )
+
+    result = train_repository_program(
+        tmp_path,
+        training_config=DSPyTrainingConfig(
+            training_path=Path("samples/training/sample-training.yaml"),
+            run_name="carry-forward-dirty-global",
+            bundle_version="carry-forward-dirty-global",
+            lineage_metadata={
+                "family_state_path": "artifacts/trainer/family-state.json",
+                "dirty_family_count": 1,
+                "dirty_family_ids": ["pf-dirty"],
+            },
+        ),
+        lm_config=DSPyLMConfig(model="openai/test-model"),
+    )
+
+    assert compiled_paths == [
+        "artifacts/dspy/carry-forward-dirty-global/families/pf-dirty/program.json"
+    ]
+    carried_program_path = tmp_path / result.program_path
+    assert carried_program_path.exists()
+    assert (
+        carried_program_path.read_text(encoding="utf-8")
+        == '{"program":"previous-global-dirty"}\n'
+    )
+    metadata = json.loads((tmp_path / result.metadata_path).read_text(encoding="utf-8"))
+    compiled_program_summary = metadata["compiled_program_summary"]
+    assert compiled_program_summary["artifact_source"] == "carried-forward"
+    assert metadata["training_examples_signature"] == training_signature
+    assert metadata["benchmark_examples_signature"] == training_signature
 
 
 def test_train_repository_program_uses_distinct_benchmark_path(tmp_path: Path) -> None:

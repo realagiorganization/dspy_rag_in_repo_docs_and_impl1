@@ -242,6 +242,23 @@ prompt-family, champion, trace, and final DSPy-program surface rather than remai
 The same contract now treats the observable per-turn `command_trace` as equally important
 lineage: when the sequence is available it must be preserved beside the reformulated prompt in
 the trace and champion state, even though not every turn exposes a controllable command path.
+The newest local family-first slice makes that contract less abstract: trainer-side family state
+now persists replay members directly as `family_records`, dirty-family compilation consumes that
+replay set instead of collapsing back to one runtime summary record, and the remote
+`repo-rag-training-families` container now mirrors versioned `family.json`, `father.json`, and
+`records/<snapshot>.json` blobs per family. That does not finish the migration yet, because the
+aggregate family-state index is still carried for compatibility, but it means the storage layout
+and compile input now already look like the family-replay contract rather than the older
+champion-only contract.
+Another immediate correction now closes a trainer-quality leak: proxy mediation no longer trusts a
+matched family artifact unconditionally. When the bundle says the family artifact's validated
+`hit_rate` is below the family's current baseline, the proxy now refuses that family artifact and
+falls back to fresh/global mediation. In the other direction, worker-side batch handoff now
+rewrites optimistic proxy per-turn draft metrics with the final run `execution_status`,
+`acceptance_status`, and real post-run `mediation_metric_hits / mediation_metric_total` before the
+turn traces are exported and queued. That matters because otherwise family replay sets would keep
+absorbing "proxy call succeeded" as if it were "full Codex run succeeded", which would poison the
+very metric the family-first contract is supposed to optimize.
 
 A further local slice now supports divergent
 task-family forks: operators or prompts can supply `DATASET_CODEX_SESSION_LANE`,
@@ -716,6 +733,148 @@ Those rows are now pruned during trace import, champion-index reload, and combin
 materialization so that the compile-facing champion set keeps only replayable context-backed cases,
 while older contextless historical rows still remain trainer state and are skipped later by the
 bundle benchmark contract.
+
+Another contract correction is now in flight locally: the target runtime/trainer model is no
+longer “one family champion is the single universal DSPy truth object.” The active design is now
+family-first:
+
+- prompt families remain the durable trainer state
+- each family gets one routing `father`
+- each family gets one runtime DSPy artifact produced offline
+- the published bundle stays monolithic, but internally should carry a family registry
+
+This changes two things immediately even before the full storage/runtime rollout is finished.
+
+First, runtime prompt-family routing is no longer supposed to use an extra soft-band branch once
+the system already pays the cost of scanning every family. The correct routing rule is:
+
+- compute prompt similarity against all family fathers
+- take the maximum
+- if the best score is at least `0.8`, route into that family
+- otherwise treat the prompt as a new-family candidate
+
+Second, the DSPy compile object itself can no longer drop prompt lineage. The repository now
+preserves `original_prompt`, `reformulated_prompt`, and `command_trace` through trainer-candidate
+materialization and composes them into the DSPy-facing question prompt used by
+`BootstrapFewShot` / `MIPROv2`, so the optimizer sees more than the stripped final reformulated
+question text alone.
+
+This is still only the first transition stage. The current compatibility code keeps the old
+`champion-*` names alive in several persisted paths and helper functions because live dataset /
+AKS wiring still expects them. But the product direction is now explicit: compatibility champions
+are an alias layer, while the intended runtime truth is `family state -> father -> family runtime
+artifact`.
+
+That alias layer is no longer only conceptual. The local repository now prefers `family_state`
+surfaces across proxy lookup, trainer summaries, remote fetch/upload wrappers, and bundle drift
+lineage, while still mirroring those same values back through `champion_*` keys so older live
+dataset / AKS wiring can keep running during the migration.
+
+The monolithic bundle also now carries its own internal `family_registry` built from the current
+family-state file. That means runtime family lookup is beginning to move where it belongs: into
+the published bundle itself. The proxy now checks that embedded registry first and only falls back
+to the external family-state file when the current bundle does not yet provide one.
+
+That family-registry step is no longer only metadata. The local trainer now compiles one
+family-scoped DSPy artifact per persisted family, stores those paths in
+`family_artifact_registry`, and the bundle upload/fetch path now moves those family
+`program.json` / `metadata.json` files beside the global compiled program. The proxy can therefore
+route into a family and execute that family's compiled artifact directly instead of always
+falling back to the global bundle program.
+
+Runtime prompt lineage is also carried further than before. Once a family match exists, the proxy
+now invokes the matched family artifact with `original_prompt`, `reformulated_prompt`, and the
+current `command_trace`, so the family runtime path sees the same lineage dimensions that already
+survive trainer-candidate materialization and DSPy compile input composition.
+
+The trainer side is now more faithful to the intended family lifecycle too. Family state carries
+an explicit `family_needs_recompile` flag, new imported traces mark the touched family dirty, and
+successful family compilation clears that flag again. That lets the compile step stop pretending
+that every family changed every cycle: dirty families are recompiled, while clean families carry
+their previous runtime-artifact references forward into the next monolithic bundle.
+
+The remote state contract has also moved one step closer to the intended storage model. Local
+Azure config resolution and remote family-state fetch/upload now treat
+`REPO_RAG_FAMILY_STATE_CONTAINER` / `repo-rag-training-families` as the primary container
+contract, and versioned uploads now write only the primary `family-state.json` blob. Older
+remote snapshots that still point at `champion-index.json` remain readable through fallback logic,
+but the family-first path no longer republishes that mirrored champion blob on new writes.
+
+That remote family-state contract is no longer only an index-level mirror either. Each upload now
+also writes one versioned `family.json` blob per prompt family under
+`versions/<family_state_version>/families/<prompt_family_id>/`, and remote fetch reconstructs a
+matching local cache tree for those family records. The container is therefore starting to expose
+the family-directory shape we actually want, even though the full replay-set layout is still not
+there yet.
+
+The local trainer contract now mirrors that naming more honestly too. The primary persisted local
+state file is `artifacts/trainer/family-state.json`, remote fetch caches live under
+`artifacts/trainer/remote-family-state/`, and `champion-index.json` now remains only as a
+fallback read source for older local snapshots that have not been migrated yet.
+
+That naming correction now reaches the operator-facing diagnostics too. Pending-recompile reasons,
+trainer-cycle warnings, and related state summaries now describe the active object as a family set
+and family drift, instead of continuing to present champion wording as the primary runtime/trainer
+contract.
+
+The deployment handoff now follows that same contract too. Dataset-side workflow env,
+repo-rag-storage secret generation, trainer deploy bootstrap, and the generated deployment-script
+templates now export `REPO_RAG_FAMILY_STATE_CONTAINER` /
+`DATASET_REPO_RAG_FAMILY_STATE_CONTAINER` as first-class storage inputs. That deployment-facing
+layer no longer emits champion-named container env vars at all; only the repo-side runtime/config
+readers still accepted those old names as fallbacks so older live environments could continue to
+boot during the transition.
+
+That reader-side compatibility has now narrowed one layer further too. Azure artifact config
+resolution no longer treats `REPO_RAG_CHAMPION_CONTAINER` /
+`DATASET_REPO_RAG_CHAMPION_CONTAINER` as valid family-state inputs. The only active env contract
+for remote family-state storage is now the family-state naming itself; champion naming remains
+only in mirrored local files, compatibility wrappers, and older machine payload fields.
+
+The remote family-state machine payloads have now been tightened in the same direction. Upload and
+fetch responses for remote family-state snapshots no longer emit `champion_container`,
+`champion_version`, `champion_found`, or `champion_index_path` as active fields. New uploads no
+longer write a mirrored `champion-index.json` beside `family-state.json`, and the API contract now
+advertises the family-state path as the only first-class result.
+
+The same cleanup now reaches newly written `current.json` blobs too. Fresh family-state snapshots
+no longer record `champion_state_kind` or `current_champion_index_blob`; those names remain only
+in fallback read logic so older snapshots can still be restored during the migration window.
+
+That cleanup now reaches trainer-side machine summaries too. `training-candidates` materialization,
+the JSON returned by `trainer-candidates`, and pending-recompile summaries no longer advertise
+`champion_index_path` or the mirrored `champion_*` family-hash/path counters as active fields.
+The active local/output path now writes only `family-state.json`, while older
+`champion-index.json` snapshots remain readable as migration input. The machine contract points
+callers only at `family_state_path` plus the family-state counters.
+
+The remaining public helper surface has narrowed too. The repo no longer exposes separate
+`repo_rag_champion_container(...)`, `upload_remote_champion_index(...)`,
+`fetch_remote_champion_index(...)`, or champion-named blob-name helpers. Compatibility now stays
+where it actually matters: fallback reads for older stored state, not mirrored active files or
+parallel public helper APIs.
+
+The global compile path is also starting to lose obviously unnecessary work. When the latest
+global DSPy artifact still matches the current training, benchmark, optimizer, retrieval, and LM
+surface, and its persisted training/benchmark example signatures still match the newly materialized
+compile-facing dataset, the new run now carries that previous global `program.json` forward
+instead of recompiling it. That means dirty-family cycles can now skip the global compile when
+they only changed family-local runtime artifacts. The remaining transition caveat is older global
+metadata that predates these signatures: that older metadata still forces one full global compile
+before later dirty-family cycles can reuse the global object safely.
+
+That also clarifies the role of `MIPROv2`. It is not supposed to sit inside the proxy as an
+online per-turn selector. It belongs in the offline trainer path:
+
+- collect family replay sets
+- recompile only dirty families
+- publish one bundle whose internal registry points from family id to father and family runtime
+  artifact
+
+The remaining implementation gap is therefore not “add more DSPy somewhere.” It is: finish the
+family-state storage surfaces in their final remote container shape, remove the remaining
+repo-side compatibility `champion-*` aliases, and keep feeding post-run real `hits / total` back
+into trainer ingestion and live AKS validation.
 
 ## Tensions And Open Work
 

@@ -15,9 +15,9 @@ from typing import Any
 import yaml
 
 from .runtime_artifacts import (
-    DEFAULT_TRAINER_CHAMPION_INDEX_PATH,
+    DEFAULT_TRAINER_FAMILY_STATE_PATH,
     load_json_object,
-    upload_remote_champion_index,
+    upload_remote_family_state,
 )
 
 
@@ -31,28 +31,35 @@ class TrainingExample:
     expected_sources: tuple[str, ...] = ()
     benchmark_context: tuple[str, ...] = ()
     benchmark_context_sources: tuple[str, ...] = ()
+    original_prompt: str = ""
+    reformulated_prompt: str = ""
+    command_trace: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True)
 class PromptFamilySupport:
-    """Describe the best current champion-family support for one prompt."""
+    """Describe the best current prompt-family support for one prompt."""
 
     question: str
     prompt_family_id: str | None
     similarity: float
     band: str
     supported: bool
-    champion_record: dict[str, Any] | None = None
+    family_father_question: str | None = None
+    family_father_record: dict[str, Any] | None = None
+    family_runtime_record: dict[str, Any] | None = None
 
 
 TRAINER_CHAMPION_INDEX_SCHEMA_VERSION = 1
 TRAINER_CHAMPION_INDEX_KIND = "repo-rag-trainer-champion-index"
+TRAINER_FAMILY_STATE_SCHEMA_VERSION = TRAINER_CHAMPION_INDEX_SCHEMA_VERSION
+TRAINER_FAMILY_STATE_KIND = "repo-rag-trainer-family-state"
 PROMPT_FAMILY_MATCH_THRESHOLD = 0.8
-PROMPT_FAMILY_SOFT_THRESHOLD = 0.6
 TRAINER_IMPORTED_ANSWER_CHAR_BUDGET = 4000
 
 _CODEX_TRANSCRIPT_BLOCK_PATTERN = re.compile(
-    r"(?ms)^codex\n(.*?)(?=^(?:user|exec|apply patch|diff --git|web search|mcp)\b|^tokens used\b|\Z)"
+    r"(?ms)^codex\n(.*?)(?=^(?:user|exec|apply patch|diff --git|web search|mcp)\b|"
+    r"^tokens used\b|\Z)"
 )
 _CODEX_STDOUT_SECTION_PATTERN = re.compile(r"(?ms)\nSTDOUT:\n(.*?)(?:\nSTDERR:\n|\Z)")
 
@@ -111,15 +118,16 @@ def normalize_training_examples(records: list[dict[str, Any]]) -> list[TrainingE
             if str(source).strip()
         )
         benchmark_context = tuple(
-            str(text).strip()
-            for text in record.get("benchmark_context", [])
-            if str(text).strip()
+            str(text).strip() for text in record.get("benchmark_context", []) if str(text).strip()
         )
         benchmark_context_sources = tuple(
             str(source).strip()
             for source in record.get("benchmark_context_sources", [])
             if str(source).strip()
         )
+        original_prompt = str(record.get("original_prompt") or "").strip()
+        reformulated_prompt = str(record.get("reformulated_prompt") or "").strip()
+        command_trace = tuple(_ordered_unique_command_trace(record.get("command_trace", [])))
         normalized.append(
             TrainingExample(
                 question=str(record["question"]).strip(),
@@ -128,6 +136,9 @@ def normalize_training_examples(records: list[dict[str, Any]]) -> list[TrainingE
                 expected_sources=expected_sources,
                 benchmark_context=benchmark_context,
                 benchmark_context_sources=benchmark_context_sources,
+                original_prompt=original_prompt,
+                reformulated_prompt=reformulated_prompt,
+                command_trace=command_trace,
             )
         )
     return normalized
@@ -171,9 +182,7 @@ def summarize_training_examples(examples: list[TrainingExample]) -> dict[str, An
     return {
         "example_count": len(examples),
         "benchmark_count": sum(
-            1
-            for example in examples
-            if example.expected_sources or example.benchmark_context
+            1 for example in examples if example.expected_sources or example.benchmark_context
         ),
         "questions": [example.question for example in examples],
         "unique_tags": unique_tags,
@@ -600,26 +609,29 @@ def _family_question_variants(family_payload: Mapping[str, Any]) -> list[str]:
     if isinstance(stored_variants, list):
         for variant in stored_variants:
             _append_variant(variant)
-    champion_record = family_payload.get("family_champion_record")
-    if isinstance(champion_record, Mapping):
-        _append_variant(champion_record.get("question"))
+    for record in _family_candidate_records(family_payload):
+        _append_variant(record.get("question"))
     return variants
 
 
 def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) -> float:
-    """Return the best prompt similarity between one question and one prompt family."""
+    """Return the prompt similarity between one question and the family father."""
 
-    return max(
-        (
-            _question_similarity(question, variant)
-            for variant in _family_question_variants(family_payload)
-        ),
-        default=0.0,
+    family_father_question = _normalize_question_text(
+        family_payload.get("family_father_question")
+        or family_payload.get("question")
+        or family_payload.get("normalized_question")
     )
+    if not family_father_question:
+        return 0.0
+    return _question_similarity(question, family_father_question)
 
 
-def resolve_prompt_family_support(question: str, champion_index_path: Path) -> PromptFamilySupport:
-    """Resolve the best stored prompt-family support for one prompt string."""
+def resolve_prompt_family_support_from_payload(
+    question: str,
+    payload: Mapping[str, Any],
+) -> PromptFamilySupport:
+    """Resolve the best stored prompt-family support from one in-memory family payload."""
 
     normalized_question = _normalize_question_text(question)
     if not normalized_question:
@@ -629,10 +641,11 @@ def resolve_prompt_family_support(question: str, champion_index_path: Path) -> P
             similarity=0.0,
             band="new",
             supported=False,
-            champion_record=None,
+            family_father_question=None,
+            family_father_record=None,
+            family_runtime_record=None,
         )
-    index_payload = _load_champion_index(champion_index_path)
-    families = index_payload.get("prompt_families")
+    families = payload.get("prompt_families")
     best_family: Mapping[str, Any] | None = None
     best_similarity = 0.0
     if isinstance(families, list):
@@ -643,26 +656,39 @@ def resolve_prompt_family_support(question: str, champion_index_path: Path) -> P
             if similarity > best_similarity:
                 best_family = family
                 best_similarity = similarity
-    band = "new"
-    if best_similarity > PROMPT_FAMILY_MATCH_THRESHOLD:
-        band = "match"
-    elif best_similarity >= PROMPT_FAMILY_SOFT_THRESHOLD:
-        band = "heuristic"
-    supported = bool(best_family is not None and _matches_prompt_family(normalized_question, best_family))
+    band = "match" if best_similarity >= PROMPT_FAMILY_MATCH_THRESHOLD else "new"
+    supported = bool(
+        best_family is not None and best_similarity >= PROMPT_FAMILY_MATCH_THRESHOLD
+    )
     prompt_family_id = (
         str(best_family.get("prompt_family_id") or "").strip()
         if isinstance(best_family, Mapping)
         else ""
     )
-    champion_record = _family_champion_record(best_family) if best_family is not None else None
+    family_father_question = (
+        _normalize_question_text(best_family.get("family_father_question"))
+        if isinstance(best_family, Mapping)
+        else ""
+    )
+    family_father_record = _family_father_record(best_family) if best_family is not None else None
+    family_runtime_record = _family_runtime_record(best_family) if best_family is not None else None
     return PromptFamilySupport(
         question=normalized_question,
         prompt_family_id=prompt_family_id or None,
         similarity=best_similarity,
         band=band,
         supported=supported,
-        champion_record=champion_record,
+        family_father_question=family_father_question or None,
+        family_father_record=family_father_record,
+        family_runtime_record=family_runtime_record,
     )
+
+
+def resolve_prompt_family_support(question: str, family_state_path: Path) -> PromptFamilySupport:
+    """Resolve the best stored prompt-family support for one prompt string."""
+
+    index_payload = _load_champion_index(family_state_path)
+    return resolve_prompt_family_support_from_payload(question, index_payload)
 
 
 def _matches_prompt_family(question: str, family_payload: Mapping[str, Any]) -> bool:
@@ -672,12 +698,9 @@ def _matches_prompt_family(question: str, family_payload: Mapping[str, Any]) -> 
 
 
 def _refresh_prompt_family_summary(family_payload: dict[str, Any], question: str) -> None:
-    """Update one prompt-family summary so similar prompt variants stay grouped."""
+    """Update one prompt-family summary so routing follows the current family father."""
 
     normalized_question = _normalize_question_text(question)
-    if normalized_question:
-        family_payload["question"] = normalized_question
-        family_payload["normalized_question"] = normalized_question.casefold()
     question_variants = family_payload.get("question_variants")
     if not isinstance(question_variants, list):
         question_variants = []
@@ -690,6 +713,22 @@ def _refresh_prompt_family_summary(family_payload: dict[str, Any], question: str
     )
     family_payload["question_variants"] = merged_variants
     family_payload["question_variant_count"] = len(merged_variants)
+    father_record, father_similarity_mean = _select_family_father_record(family_payload)
+    if father_record is not None:
+        family_payload["family_father_record"] = father_record
+        family_payload["family_father_question"] = str(father_record.get("question") or "").strip()
+        family_payload["family_father_similarity_mean"] = father_similarity_mean
+        family_payload["question"] = str(father_record.get("question") or "").strip()
+        family_payload["normalized_question"] = str(
+            father_record.get("question") or ""
+        ).strip().casefold()
+        return
+    family_payload["family_father_record"] = None
+    family_payload["family_father_similarity_mean"] = None
+    family_payload["family_father_question"] = normalized_question or None
+    if normalized_question:
+        family_payload["question"] = normalized_question
+        family_payload["normalized_question"] = normalized_question.casefold()
 
 
 def _find_or_create_prompt_family(
@@ -708,10 +747,10 @@ def _find_or_create_prompt_family(
         if family_payload is None:
             continue
         similarity = _prompt_family_similarity(question, family_payload)
-        if similarity > best_similarity and _matches_prompt_family(question, family_payload):
+        if similarity > best_similarity:
             best_family = family_payload
             best_similarity = similarity
-    if best_family is not None:
+    if best_family is not None and best_similarity >= PROMPT_FAMILY_MATCH_THRESHOLD:
         _refresh_prompt_family_summary(best_family, question)
         return best_family, False
 
@@ -727,13 +766,22 @@ def _find_or_create_prompt_family(
         prompt_family_id = candidate_id
     family_payload = {
         "prompt_family_id": prompt_family_id,
+        "family_needs_recompile": True,
         "question": "",
         "normalized_question": "",
         "question_variants": [],
         "question_variant_count": 0,
+        "family_father_question": None,
+        "family_father_similarity_mean": None,
+        "family_father_record": None,
+        "family_runtime_artifact": None,
+        "family_runtime_context_group_id": None,
+        "family_runtime_score": None,
+        "family_runtime_record": None,
         "family_champion_context_group_id": None,
         "family_champion_score": None,
         "family_champion_record": None,
+        "family_records": [],
         "context_groups": [],
     }
     _refresh_prompt_family_summary(family_payload, question)
@@ -919,8 +967,9 @@ def _fresh_champion_index() -> dict[str, Any]:
     """Return an empty champion-index payload."""
 
     return {
-        "schema_version": TRAINER_CHAMPION_INDEX_SCHEMA_VERSION,
+        "schema_version": TRAINER_FAMILY_STATE_SCHEMA_VERSION,
         "record_kind": TRAINER_CHAMPION_INDEX_KIND,
+        "family_state_kind": TRAINER_FAMILY_STATE_KIND,
         "generated_at": datetime.now(UTC).isoformat(),
         "prompt_families": [],
     }
@@ -941,6 +990,7 @@ def _load_champion_index(path: Path) -> dict[str, Any]:
     for family in families:
         if not isinstance(family, dict):
             continue
+        family["family_needs_recompile"] = bool(family.get("family_needs_recompile"))
         _refresh_prompt_family_summary(family, family.get("question") or "")
         context_groups = family.get("context_groups")
         if not isinstance(context_groups, list):
@@ -970,6 +1020,10 @@ def _load_champion_index(path: Path) -> dict[str, Any]:
             group["champion_record"] = normalized_record
             normalized_groups.append(group)
         family["context_groups"] = normalized_groups
+        normalized_family_records = _family_replay_records(family)
+        if not normalized_family_records:
+            normalized_family_records = _family_candidate_records(family)
+        family["family_records"] = normalized_family_records
         _refresh_family_champion(family)
         champion_record = _family_champion_record(family)
         if champion_record is not None:
@@ -1032,9 +1086,18 @@ def _seed_champion_index_from_existing_records(
                 "question_variant_count": len(
                     _family_question_variants(family_by_id[prompt_family_id])
                 ),
+                "family_needs_recompile": True,
+                "family_father_question": None,
+                "family_father_similarity_mean": None,
+                "family_father_record": None,
+                "family_runtime_artifact": None,
+                "family_runtime_context_group_id": context_group_id,
+                "family_runtime_score": metric_ratio,
+                "family_runtime_record": champion_record,
                 "family_champion_context_group_id": context_group_id,
                 "family_champion_score": metric_ratio,
                 "family_champion_record": champion_record,
+                "family_records": [champion_record],
                 "context_groups": [
                     {
                         "context_group_id": context_group_id,
@@ -1056,7 +1119,8 @@ def _seed_champion_index_from_existing_records(
                     }
                 ],
             }
-    )
+        )
+        _refresh_family_champion(families[-1])
     index_payload["prompt_families"] = families
     return index_payload
 
@@ -1068,6 +1132,109 @@ def _family_champion_record(family_payload: Mapping[str, Any]) -> dict[str, Any]
     if not isinstance(record, Mapping):
         return None
     return _serialize_candidate_record(record)
+
+
+def _family_replay_records(family_payload: Mapping[str, Any] | None) -> list[dict[str, Any]]:
+    """Return persisted replay-set records for one family in stable deduplicated order."""
+
+    if not isinstance(family_payload, Mapping):
+        return []
+    raw_records = family_payload.get("family_records")
+    if not isinstance(raw_records, list):
+        return []
+    records: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for value in raw_records:
+        if not isinstance(value, Mapping):
+            continue
+        normalized = _serialize_candidate_record(value)
+        if not _trainer_candidate_record_is_supported(normalized):
+            continue
+        key = str(normalized.get("exact_snapshot_id") or _candidate_record_hash(normalized)).strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        records.append(normalized)
+    return records
+
+
+def _family_runtime_record(family_payload: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """Return the current family runtime record, falling back to legacy champion state."""
+
+    if not isinstance(family_payload, Mapping):
+        return None
+    record = family_payload.get("family_runtime_record")
+    if isinstance(record, Mapping):
+        return _serialize_candidate_record(record)
+    return _family_champion_record(family_payload)
+
+
+def _family_candidate_records(family_payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Return stable unique family-level candidate records for father selection."""
+
+    records: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def _append_record(value: object) -> None:
+        if not isinstance(value, Mapping):
+            return
+        normalized = _serialize_candidate_record(value)
+        key = str(normalized.get("exact_snapshot_id") or _candidate_record_hash(normalized)).strip()
+        if not key or key in seen:
+            return
+        seen.add(key)
+        records.append(normalized)
+
+    for record in _family_replay_records(family_payload):
+        _append_record(record)
+    groups = family_payload.get("context_groups")
+    if isinstance(groups, list):
+        for group in groups:
+            if not isinstance(group, Mapping):
+                continue
+            _append_record(group.get("champion_record"))
+    _append_record(family_payload.get("family_runtime_record"))
+    _append_record(family_payload.get("family_champion_record"))
+    _append_record(family_payload.get("family_father_record"))
+    return records
+
+
+def _select_family_father_record(
+    family_payload: Mapping[str, Any],
+) -> tuple[dict[str, Any] | None, float | None]:
+    """Return the family record whose question is most central to the family."""
+
+    candidate_records = _family_candidate_records(family_payload)
+    best_record: dict[str, Any] | None = None
+    best_mean: float | None = None
+    for record in candidate_records:
+        question = _normalize_question_text(record.get("question"))
+        if not question:
+            continue
+        similarities = [
+            _question_similarity(question, _normalize_question_text(other.get("question")))
+            for other in candidate_records
+            if _normalize_question_text(other.get("question"))
+        ]
+        if not similarities:
+            continue
+        mean_similarity = round(sum(similarities) / len(similarities), 6)
+        if best_mean is None or mean_similarity > best_mean:
+            best_record = record
+            best_mean = mean_similarity
+    return best_record, best_mean
+
+
+def _family_father_record(family_payload: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """Return the current routing father record for one family."""
+
+    if not isinstance(family_payload, Mapping):
+        return None
+    record = family_payload.get("family_father_record")
+    if isinstance(record, Mapping):
+        return _serialize_candidate_record(record)
+    father_record, _ = _select_family_father_record(family_payload)
+    return father_record
 
 
 def _group_support_count(group_payload: Mapping[str, Any]) -> int:
@@ -1121,6 +1288,27 @@ def _refresh_family_champion(family_payload: dict[str, Any]) -> tuple[bool, str 
 
     groups = family_payload.get("context_groups")
     if not isinstance(groups, list) or not groups:
+        fallback_record = _family_runtime_record(family_payload) or _family_champion_record(
+            family_payload
+        )
+        if fallback_record is not None:
+            family_payload["family_runtime_record"] = fallback_record
+            family_payload["family_runtime_score"] = float(
+                fallback_record.get("metric_ratio")
+                or fallback_record.get("quality_score")
+                or family_payload.get("family_runtime_score")
+                or family_payload.get("family_champion_score")
+                or 0.0
+            )
+            family_payload["family_champion_record"] = fallback_record
+            family_payload["family_champion_score"] = float(
+                family_payload.get("family_runtime_score") or 0.0
+            )
+            _refresh_prompt_family_summary(family_payload, fallback_record.get("question") or "")
+            return False, None, None
+        family_payload["family_runtime_context_group_id"] = None
+        family_payload["family_runtime_score"] = None
+        family_payload["family_runtime_record"] = None
         family_payload["family_champion_context_group_id"] = None
         family_payload["family_champion_score"] = None
         family_payload["family_champion_record"] = None
@@ -1136,6 +1324,27 @@ def _refresh_family_champion(family_payload: dict[str, Any]) -> tuple[bool, str 
         reverse=True,
     )
     if not ranked_groups:
+        fallback_record = _family_runtime_record(family_payload) or _family_champion_record(
+            family_payload
+        )
+        if fallback_record is not None:
+            family_payload["family_runtime_record"] = fallback_record
+            family_payload["family_runtime_score"] = float(
+                fallback_record.get("metric_ratio")
+                or fallback_record.get("quality_score")
+                or family_payload.get("family_runtime_score")
+                or family_payload.get("family_champion_score")
+                or 0.0
+            )
+            family_payload["family_champion_record"] = fallback_record
+            family_payload["family_champion_score"] = float(
+                family_payload.get("family_runtime_score") or 0.0
+            )
+            _refresh_prompt_family_summary(family_payload, fallback_record.get("question") or "")
+            return False, None, None
+        family_payload["family_runtime_context_group_id"] = None
+        family_payload["family_runtime_score"] = None
+        family_payload["family_runtime_record"] = None
         family_payload["family_champion_context_group_id"] = None
         family_payload["family_champion_score"] = None
         family_payload["family_champion_record"] = None
@@ -1170,6 +1379,9 @@ def _refresh_family_champion(family_payload: dict[str, Any]) -> tuple[bool, str 
     best_group_id = str(best_group.get("context_group_id") or "") or None
     best_record = _serialize_candidate_record(best_group.get("champion_record", {}))
     best_snapshot_id = str(best_record.get("exact_snapshot_id") or "") or None
+    family_payload["family_runtime_context_group_id"] = best_group_id
+    family_payload["family_runtime_score"] = float(best_group.get("champion_score") or 0.0)
+    family_payload["family_runtime_record"] = best_record
     family_payload["family_champion_context_group_id"] = best_group_id
     family_payload["family_champion_score"] = float(best_group.get("champion_score") or 0.0)
     family_payload["family_champion_record"] = best_record
@@ -1188,40 +1400,52 @@ def _materialize_family_champion_records(index_payload: Mapping[str, Any]) -> li
     for family in families:
         if not isinstance(family, Mapping):
             continue
-        champion_record = _family_champion_record(family)
-        if champion_record is None:
+        runtime_record = _family_runtime_record(family)
+        if runtime_record is None:
             continue
-        records.append(champion_record)
+        records.append(runtime_record)
     return records
 
 
-def summarize_champion_index(path: Path) -> dict[str, Any]:
-    """Return one compact summary of the current family champion set."""
+def summarize_family_state(path: Path) -> dict[str, Any]:
+    """Return one compact summary of the current family-state runtime set."""
 
     index_payload = _load_champion_index(path)
     prompt_family_ids: list[str] = []
-    champion_trace_record_paths: list[str] = []
-    champion_exact_snapshot_ids: list[str] = []
-    champion_record_hashes: list[str] = []
+    family_trace_record_paths: list[str] = []
+    family_exact_snapshot_ids: list[str] = []
+    family_record_hashes: list[str] = []
+    dirty_family_ids: list[str] = []
     seen_family_ids: set[str] = set()
     seen_trace_paths: set[str] = set()
     seen_snapshot_ids: set[str] = set()
     seen_record_hashes: set[str] = set()
+    seen_dirty_family_ids: set[str] = set()
     families = index_payload.get("prompt_families")
-    champion_records: list[dict[str, Any]] = []
+    family_records: list[dict[str, Any]] = []
     if isinstance(families, list):
         for family in families:
             if not isinstance(family, Mapping):
                 continue
             prompt_family_id = str(family.get("prompt_family_id") or "").strip()
-            champion_record = _family_champion_record(family)
-            if champion_record is None:
-                continue
-            champion_records.append(champion_record)
+            if (
+                bool(family.get("family_needs_recompile"))
+                and prompt_family_id
+                and prompt_family_id not in seen_dirty_family_ids
+            ):
+                seen_dirty_family_ids.add(prompt_family_id)
+                dirty_family_ids.append(prompt_family_id)
+            replay_records = _family_replay_records(family)
+            if replay_records:
+                family_records.extend(replay_records)
+            else:
+                runtime_record = _family_runtime_record(family)
+                if runtime_record is not None:
+                    family_records.append(runtime_record)
             if prompt_family_id and prompt_family_id not in seen_family_ids:
                 seen_family_ids.add(prompt_family_id)
                 prompt_family_ids.append(prompt_family_id)
-    for record in champion_records:
+    for record in family_records:
         prompt_family_id = str(record.get("prompt_family_id") or "").strip()
         if prompt_family_id and prompt_family_id not in seen_family_ids:
             seen_family_ids.add(prompt_family_id)
@@ -1231,21 +1455,36 @@ def summarize_champion_index(path: Path) -> dict[str, Any]:
             trace_record_path = str(provenance.get("trace_record_path") or "").strip()
             if trace_record_path and trace_record_path not in seen_trace_paths:
                 seen_trace_paths.add(trace_record_path)
-                champion_trace_record_paths.append(trace_record_path)
+                family_trace_record_paths.append(trace_record_path)
         snapshot_id = str(record.get("exact_snapshot_id") or "").strip()
         if snapshot_id and snapshot_id not in seen_snapshot_ids:
             seen_snapshot_ids.add(snapshot_id)
-            champion_exact_snapshot_ids.append(snapshot_id)
+            family_exact_snapshot_ids.append(snapshot_id)
         record_hash = _candidate_record_hash(record)
         if record_hash not in seen_record_hashes:
             seen_record_hashes.add(record_hash)
-            champion_record_hashes.append(record_hash)
+            family_record_hashes.append(record_hash)
     return {
-        "candidate_count": len(champion_records),
+        "candidate_count": len(family_records),
+        "family_candidate_count": len(family_records),
+        "dirty_family_count": len(dirty_family_ids),
+        "dirty_family_ids": dirty_family_ids,
         "prompt_family_ids": prompt_family_ids,
-        "champion_trace_record_paths": champion_trace_record_paths,
-        "champion_exact_snapshot_ids": champion_exact_snapshot_ids,
-        "champion_record_hashes": champion_record_hashes,
+        "family_trace_record_paths": family_trace_record_paths,
+        "family_exact_snapshot_ids": family_exact_snapshot_ids,
+        "family_record_hashes": family_record_hashes,
+    }
+
+
+def summarize_champion_index(path: Path) -> dict[str, Any]:
+    """Compatibility wrapper that returns the family-state summary."""
+
+    summary = summarize_family_state(path)
+    return {
+        **summary,
+        "champion_trace_record_paths": list(summary.get("family_trace_record_paths", [])),
+        "champion_exact_snapshot_ids": list(summary.get("family_exact_snapshot_ids", [])),
+        "champion_record_hashes": list(summary.get("family_record_hashes", [])),
     }
 
 
@@ -1372,16 +1611,12 @@ def _normalize_materialized_candidate_record(record: Mapping[str, Any]) -> dict[
     original_prompt = str(record.get("original_prompt") or "").strip()
     reformulated_prompt = str(record.get("reformulated_prompt") or "").strip()
     normalized: dict[str, Any] = {
-        "question": str(
-            record.get("question") or reformulated_prompt or original_prompt
-        ).strip(),
+        "question": str(record.get("question") or reformulated_prompt or original_prompt).strip(),
         "expected_answer": normalized_answer,
         "tags": tags,
         "expected_sources": expected_sources,
         "benchmark_context": [
-            str(text).strip()
-            for text in record.get("benchmark_context", [])
-            if str(text).strip()
+            str(text).strip() for text in record.get("benchmark_context", []) if str(text).strip()
         ],
         "benchmark_context_sources": [
             str(source).strip()
@@ -1525,7 +1760,7 @@ def _answer_is_supported_by_benchmark_context(
     expected_answer: str,
     benchmark_context: Sequence[object],
 ) -> bool:
-    """Return whether one trainer-candidate answer is grounded in its preserved benchmark context."""
+    """Return whether one trainer-candidate answer is grounded in preserved benchmark context."""
 
     normalized_answer = _normalize_benchmark_support_text(expected_answer)
     normalized_context = _normalize_benchmark_support_text("\n".join(map(str, benchmark_context)))
@@ -1573,12 +1808,10 @@ def _merge_equivalent_candidate_records(
     candidate_serialized = _serialize_candidate_record(candidate_record)
     current_richness = _candidate_benchmark_context_richness(current_serialized)
     candidate_richness = _candidate_benchmark_context_richness(candidate_serialized)
-    prefer_candidate = (
-        candidate_richness > current_richness
-        or (
-            candidate_richness == current_richness
-            and _candidate_recorded_at(candidate_serialized) > _candidate_recorded_at(current_serialized)
-        )
+    prefer_candidate = candidate_richness > current_richness or (
+        candidate_richness == current_richness
+        and _candidate_recorded_at(candidate_serialized)
+        > _candidate_recorded_at(current_serialized)
     )
     merged = dict(candidate_serialized if prefer_candidate else current_serialized)
     current_hits, current_total, _ = _record_metric(current_serialized)
@@ -1662,7 +1895,9 @@ def _training_candidate_from_trace_record(
     context_snapshot = _trace_context_snapshot(payload, trace_mapping, outcome_mapping)
     original_prompt = str(context_snapshot.get("original_prompt") or "").strip()
     reformulated_prompt = str(context_snapshot.get("reformulated_prompt") or "").strip()
-    question = str(context_snapshot.get("question") or reformulated_prompt or original_prompt).strip()
+    question = str(
+        context_snapshot.get("question") or reformulated_prompt or original_prompt
+    ).strip()
     command_trace = _ordered_unique_command_trace(context_snapshot.get("command_trace", []))
     if not question:
         return None, "missing-question"
@@ -1742,13 +1977,51 @@ def _training_candidate_from_trace_record(
     return candidate_record, None
 
 
+def _upsert_family_replay_record(
+    family_payload: dict[str, Any],
+    record: Mapping[str, Any],
+) -> None:
+    """Persist or refresh one replay-set record inside one family payload."""
+
+    normalized = _serialize_candidate_record(record)
+    if not _trainer_candidate_record_is_supported(normalized):
+        return
+    raw_records = family_payload.get("family_records")
+    if not isinstance(raw_records, list):
+        raw_records = []
+        family_payload["family_records"] = raw_records
+    candidate_key = str(
+        normalized.get("exact_snapshot_id") or _candidate_record_hash(normalized)
+    ).strip()
+    if not candidate_key:
+        raw_records.append(normalized)
+        return
+    for index, existing in enumerate(raw_records):
+        if not isinstance(existing, Mapping):
+            continue
+        existing_normalized = _serialize_candidate_record(existing)
+        existing_key = str(
+            existing_normalized.get("exact_snapshot_id")
+            or _candidate_record_hash(existing_normalized)
+        ).strip()
+        if existing_key != candidate_key:
+            continue
+        raw_records[index] = _merge_equivalent_candidate_records(
+            existing_normalized,
+            normalized,
+        )
+        return
+    raw_records.append(normalized)
+
+
 def materialize_training_candidates(
     root: Path,
     *,
     trace_paths: Sequence[Path | str] | None = None,
     output_path: Path,
     summary_path: Path,
-    champion_index_path: Path = DEFAULT_TRAINER_CHAMPION_INDEX_PATH,
+    family_state_path: Path | None = DEFAULT_TRAINER_FAMILY_STATE_PATH,
+    champion_index_path: Path | None = None,
     include_statuses: Sequence[str] = ("accepted", "candidate"),
     seed_existing_output: bool = True,
 ) -> dict[str, Any]:
@@ -1759,11 +2032,31 @@ def materialize_training_candidates(
     resolved_summary_path = (
         summary_path if summary_path.is_absolute() else resolved_root / summary_path
     )
-    resolved_champion_index_path = (
-        champion_index_path
-        if champion_index_path.is_absolute()
-        else resolved_root / champion_index_path
+    effective_family_state_path = family_state_path or DEFAULT_TRAINER_FAMILY_STATE_PATH
+    resolved_family_state_path = (
+        effective_family_state_path
+        if effective_family_state_path.is_absolute()
+        else resolved_root / effective_family_state_path
     )
+    existing_family_state_path = resolved_family_state_path
+    resolved_champion_index_path = None
+    if champion_index_path is not None:
+        resolved_champion_index_path = (
+            champion_index_path
+            if champion_index_path.is_absolute()
+            else resolved_root / champion_index_path
+        )
+    else:
+        resolved_champion_index_path = (
+            resolved_root / "artifacts" / "trainer" / "champion-index.json"
+        )
+    if (
+        not resolved_family_state_path.is_file()
+        and resolved_champion_index_path is not None
+        and resolved_champion_index_path != resolved_family_state_path
+        and resolved_champion_index_path.is_file()
+    ):
+        existing_family_state_path = resolved_champion_index_path
     candidate_paths: list[Path]
     if trace_paths:
         candidate_paths = []
@@ -1817,7 +2110,7 @@ def materialize_training_candidates(
                 )
             ]
 
-    champion_index = _load_champion_index(resolved_champion_index_path)
+    champion_index = _load_champion_index(existing_family_state_path)
     if not champion_index.get("prompt_families") and existing_records:
         champion_index = _seed_champion_index_from_existing_records(existing_records)
     families_payload = champion_index.get("prompt_families")
@@ -1844,6 +2137,11 @@ def materialize_training_candidates(
                 snapshot_id = str(champion_record.get("exact_snapshot_id") or "").strip()
                 if snapshot_id:
                     seen_snapshot_ids.add(snapshot_id)
+    preexisting_dirty_family_ids = {
+        str(family_payload.get("prompt_family_id") or "").strip()
+        for family_payload in family_by_id.values()
+        if bool(family_payload.get("family_needs_recompile"))
+    }
 
     duplicate_count = 0
     replaced_count = 0
@@ -1877,6 +2175,7 @@ def materialize_training_candidates(
         if created_family:
             new_prompt_family_count += 1
         prompt_family_id = str(family_payload.get("prompt_family_id") or "").strip()
+        family_payload["family_needs_recompile"] = True
 
         previous_family_record = _family_champion_record(family_payload)
         previous_family_key = (
@@ -1913,6 +2212,7 @@ def materialize_training_candidates(
         candidate_support = int(support_mapping.get(record_hash) or 0) + 1
         support_mapping[record_hash] = candidate_support
         serialized_record["support_count"] = candidate_support
+        _upsert_family_replay_record(family_payload, serialized_record)
 
         current_group_record = context_group.get("champion_record")
         current_group_score = float(context_group.get("champion_score") or 0.0)
@@ -1966,15 +2266,17 @@ def materialize_training_candidates(
     champion_index["prompt_families"] = [family_by_id[family_id] for family_id in family_order]
     merged_records = _materialize_family_champion_records(champion_index)
 
-    resolved_champion_index_path.parent.mkdir(parents=True, exist_ok=True)
-    resolved_champion_index_path.write_text(
-        json.dumps(champion_index, indent=2) + "\n",
+    family_state_text = json.dumps(champion_index, indent=2) + "\n"
+    resolved_family_state_path.parent.mkdir(parents=True, exist_ok=True)
+    resolved_family_state_path.write_text(
+        family_state_text,
         encoding="utf-8",
     )
-    remote_champion_state = upload_remote_champion_index(
+    remote_family_state = upload_remote_family_state(
         resolved_root,
-        champion_index_path=resolved_champion_index_path,
+        family_state_path=resolved_family_state_path,
     )
+    family_state_summary = summarize_family_state(resolved_family_state_path)
     resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
     resolved_output_path.write_text(
         yaml.safe_dump(merged_records, sort_keys=False, allow_unicode=False),
@@ -1982,12 +2284,26 @@ def materialize_training_candidates(
     )
     summary: dict[str, Any] = {
         "candidate_count": len(merged_records),
+        "family_candidate_count": int(family_state_summary.get("family_candidate_count") or 0),
+        "dirty_family_count": int(family_state_summary.get("dirty_family_count") or 0),
+        "dirty_family_ids": list(family_state_summary.get("dirty_family_ids", [])),
+        "preexisting_dirty_family_count": len(preexisting_dirty_family_ids),
+        "preexisting_dirty_family_ids": sorted(preexisting_dirty_family_ids),
         "new_candidate_count": new_candidate_count,
         "input_trace_count": len(candidate_paths),
         "loaded_candidate_count": len(loaded_records),
         "duplicate_count": duplicate_count,
         "replaced_count": replaced_count,
+        "family_count": len(family_by_id),
         "prompt_family_count": len(family_by_id),
+        "prompt_family_ids": list(family_state_summary.get("prompt_family_ids", [])),
+        "family_trace_record_paths": list(
+            family_state_summary.get("family_trace_record_paths", [])
+        ),
+        "family_exact_snapshot_ids": list(
+            family_state_summary.get("family_exact_snapshot_ids", [])
+        ),
+        "family_record_hashes": list(family_state_summary.get("family_record_hashes", [])),
         "new_prompt_family_count": max(
             new_prompt_family_count,
             max(0, len(family_by_id) - prompt_family_count_before),
@@ -2012,14 +2328,14 @@ def materialize_training_candidates(
             if resolved_output_path.is_relative_to(resolved_root)
             else str(resolved_output_path)
         ),
-        "champion_index_path": (
-            str(resolved_champion_index_path.relative_to(resolved_root))
-            if resolved_champion_index_path.is_relative_to(resolved_root)
-            else str(resolved_champion_index_path)
+        "family_state_path": (
+            str(resolved_family_state_path.relative_to(resolved_root))
+            if resolved_family_state_path.is_relative_to(resolved_root)
+            else str(resolved_family_state_path)
         ),
     }
-    if remote_champion_state is not None:
-        summary["remote_champion_state"] = remote_champion_state
+    if remote_family_state is not None:
+        summary["remote_family_state"] = remote_family_state
     resolved_summary_path.parent.mkdir(parents=True, exist_ok=True)
     resolved_summary_path.write_text(
         json.dumps(summary, indent=2) + "\n",
@@ -2080,7 +2396,9 @@ def materialize_combined_training_examples(
             if isinstance(record, Mapping)
         ]
         candidate_records = [
-            record for record in raw_candidate_records if _trainer_candidate_record_is_supported(record)
+            record
+            for record in raw_candidate_records
+            if _trainer_candidate_record_is_supported(record)
         ]
         skipped_candidate_records = len(raw_candidate_records) - len(candidate_records)
 

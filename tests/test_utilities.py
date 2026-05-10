@@ -11,6 +11,7 @@ from typing import cast
 import pytest
 import yaml
 
+import repo_rag_lab.utilities as utilities_module
 from repo_rag_lab.azure_artifacts import AzureArtifactConfig
 from repo_rag_lab.dspy_training import DSPyLMConfig
 from repo_rag_lab.utilities import (
@@ -96,7 +97,7 @@ def _materialize_training_candidates_stub(
             "new_candidate_count": new_candidate_count,
             "prompt_family_count": prompt_family_count,
             "context_group_count": context_group_count,
-            "champion_index_path": "artifacts/trainer/champion-index.json",
+            "family_state_path": "artifacts/trainer/family-state.json",
             "output_path": "artifacts/trainer/training-candidates.yaml",
             "summary_path": "artifacts/trainer/training-candidates-summary.json",
         }
@@ -919,7 +920,7 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
             "new_candidate_count": 1,
             "prompt_family_count": 1,
             "context_group_count": 1,
-            "champion_index_path": "artifacts/trainer/champion-index.json",
+            "family_state_path": "artifacts/trainer/family-state.json",
             "output_path": "artifacts/trainer/training-candidates.yaml",
             "summary_path": "artifacts/trainer/training-candidates-summary.json",
         }
@@ -1101,7 +1102,7 @@ def test_run_trainer_cycle_blocks_promotion_when_gate_fails(
             "new_candidate_count": 0,
             "prompt_family_count": 0,
             "context_group_count": 0,
-            "champion_index_path": "artifacts/trainer/champion-index.json",
+            "family_state_path": "artifacts/trainer/family-state.json",
             "output_path": "artifacts/trainer/training-candidates.yaml",
             "summary_path": "artifacts/trainer/training-candidates-summary.json",
         }
@@ -1210,7 +1211,7 @@ def test_run_trainer_cycle_blocks_publish_when_bundle_benchmark_gate_fails(
             "new_candidate_count": 1,
             "prompt_family_count": 1,
             "context_group_count": 1,
-            "champion_index_path": "artifacts/trainer/champion-index.json",
+            "family_state_path": "artifacts/trainer/family-state.json",
             "output_path": "artifacts/trainer/training-candidates.yaml",
             "summary_path": "artifacts/trainer/training-candidates-summary.json",
         }
@@ -1363,9 +1364,9 @@ def test_run_trainer_cycle_recompiles_when_published_bundle_lags_current_champio
     json.loads(run_bundle_publish(tmp_path, run_name="stable-run"))
     json.loads(run_bundle_promote(tmp_path, channel="stable", run_name="stable-run"))
 
-    champion_index_path = tmp_path / "artifacts" / "trainer" / "champion-index.json"
-    champion_index_path.parent.mkdir(parents=True, exist_ok=True)
-    champion_index_path.write_text(
+    family_state_path = tmp_path / "artifacts" / "trainer" / "family-state.json"
+    family_state_path.parent.mkdir(parents=True, exist_ok=True)
+    family_state_path.write_text(
         json.dumps(
             {
                 "schema_version": 1,
@@ -1545,11 +1546,65 @@ def test_run_trainer_cycle_recompiles_when_published_bundle_lags_current_champio
     assert payload["training_candidates"]["new_candidate_count"] == 0
     assert payload["recompile_threshold_met"] is False
     assert payload["pending_recompile"]["pending_recompile"] is True
-    assert payload["pending_recompile"]["reason"] == "champion-trace-path-drift"
+    assert payload["pending_recompile"]["reason"] == "family-trace-path-drift"
     assert payload["pending_recompile"]["current_bundle_version"] == "stable-run"
     assert payload["recompile"]["recompile_status"] == "compiled"
     assert payload["publish_requested"] is True
     assert payload["publish"]["bundle_version"] == "20260507T180000Z"
+
+
+def test_trainer_pending_recompile_summary_prefers_dirty_family_flags(tmp_path: Path) -> None:
+    family_state_path = tmp_path / "artifacts" / "trainer" / "family-state.json"
+    family_state_path.parent.mkdir(parents=True, exist_ok=True)
+    family_state_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "record_kind": "repo-rag-trainer-champion-index",
+                "family_state_kind": "repo-rag-trainer-family-state",
+                "generated_at": "2026-05-09T18:00:00+00:00",
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-dirty",
+                        "family_needs_recompile": True,
+                        "family_runtime_record": {
+                            "question": "Inspect failing pytest stderr",
+                            "expected_answer": "Investigate the failing pytest stderr output.",
+                            "tags": ["trainer-candidate", "candidate"],
+                            "prompt_family_id": "pf-dirty",
+                            "exact_snapshot_id": "ts-dirty",
+                            "metric_hits": 1,
+                            "metric_total": 1,
+                            "metric_ratio": 1.0,
+                            "provenance": {
+                                "trace_record_path": (
+                                    "artifacts/trainer/recovered-imported-traces/dirty.json"
+                                )
+                            },
+                        },
+                        "context_groups": [],
+                    }
+                ],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    summary = utilities_module._trainer_pending_recompile_summary(
+        tmp_path,
+        training_candidates={
+            "family_state_path": "artifacts/trainer/family-state.json",
+        },
+        channel="stable",
+    )
+
+    assert summary["pending_recompile"] is True
+    assert summary["reason"] == "dirty-families"
+    assert summary["dirty_family_count"] == 1
+    assert summary["dirty_family_ids"] == ["pf-dirty"]
+    assert summary["pending_prompt_family_ids"] == ["pf-dirty"]
 
 
 def test_run_trainer_cycle_does_not_fail_promotion_without_new_bundle_candidate(
@@ -1970,10 +2025,10 @@ def test_run_trainer_candidates_materializes_yaml_from_imported_traces(tmp_path:
     assert payload["new_candidate_count"] == 1
     output_path = tmp_path / payload["output_path"]
     summary_path = tmp_path / payload["summary_path"]
-    champion_index_path = tmp_path / payload["champion_index_path"]
+    family_state_path = tmp_path / payload["family_state_path"]
     assert output_path.exists()
     assert summary_path.exists()
-    assert champion_index_path.exists()
+    assert family_state_path.exists()
     materialized = yaml.safe_load(output_path.read_text(encoding="utf-8"))
     assert materialized[0]["question"] == "How do you build the publication PDF locally?"
     assert materialized[0]["expected_sources"] == []
@@ -1982,8 +2037,8 @@ def test_run_trainer_candidates_materializes_yaml_from_imported_traces(tmp_path:
         "README.md",
         "publication/README.md",
     ]
-    champion_index = json.loads(champion_index_path.read_text(encoding="utf-8"))
-    assert champion_index["record_kind"] == "repo-rag-trainer-champion-index"
+    family_state = json.loads(family_state_path.read_text(encoding="utf-8"))
+    assert family_state["family_state_kind"] == "repo-rag-trainer-family-state"
 
 
 def test_run_trainer_recompile_merges_candidates_and_reports_training_result(
@@ -2086,7 +2141,7 @@ def test_run_trainer_service_writes_state_and_history(
                     "new_candidate_count": 1,
                     "prompt_family_count": 1,
                     "context_group_count": 2,
-                    "champion_index_path": "artifacts/trainer/champion-index.json",
+                    "family_state_path": "artifacts/trainer/family-state.json",
                 },
                 "publish": {"published_bundle_path": "artifacts/dspy/published/demo.json"},
                 "promotion": {"channel_path": "artifacts/dspy/channels/stable.json"},
@@ -2125,7 +2180,7 @@ def test_run_trainer_service_writes_state_and_history(
                     "new_candidate_count": 0,
                     "prompt_family_count": 1,
                     "context_group_count": 2,
-                    "champion_index_path": "artifacts/trainer/champion-index.json",
+                    "family_state_path": "artifacts/trainer/family-state.json",
                 },
                 "publish": None,
                 "promotion": None,

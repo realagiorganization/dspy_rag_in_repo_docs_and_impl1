@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-05-08-zz-per-turn-dspy-mediation-contract-stage0.md`
+- `2026-05-09-family-first-mipro-contract-stage21.md`
 
 ## Usage
 

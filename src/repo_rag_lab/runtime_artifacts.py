@@ -17,14 +17,15 @@ from .azure_artifacts import (
     batched_trace_blob_name,
     bundle_blob_names,
     bundle_channel_blob_name,
-    champion_blob_names,
-    champion_current_blob_name,
+    bundle_version_blob_prefix,
     decode_queue_message,
     failed_trace_blob_name,
+    family_state_blob_names,
+    family_state_current_blob_name,
     processed_trace_blob_name,
-    repo_rag_champion_container,
     queued_trace_blob_name,
     repo_rag_bundle_container,
+    repo_rag_family_state_container,
     repo_rag_trace_container,
     repo_rag_trace_queue_name,
 )
@@ -56,8 +57,8 @@ DEFAULT_TRAINER_TRAINING_CANDIDATES_PATH = DEFAULT_TRAINER_SERVICE_DIR / "traini
 DEFAULT_TRAINER_TRAINING_CANDIDATES_SUMMARY_PATH = (
     DEFAULT_TRAINER_SERVICE_DIR / "training-candidates-summary.json"
 )
-DEFAULT_TRAINER_CHAMPION_INDEX_PATH = DEFAULT_TRAINER_SERVICE_DIR / "champion-index.json"
-DEFAULT_REMOTE_CHAMPION_CACHE_DIR = DEFAULT_TRAINER_SERVICE_DIR / "remote-champions"
+DEFAULT_TRAINER_FAMILY_STATE_PATH = DEFAULT_TRAINER_SERVICE_DIR / "family-state.json"
+DEFAULT_REMOTE_FAMILY_STATE_CACHE_DIR = DEFAULT_TRAINER_SERVICE_DIR / "remote-family-state"
 DEFAULT_TRAINER_RECOVERED_TRACES_DIR = DEFAULT_TRAINER_SERVICE_DIR / "recovered-imported-traces"
 DEFAULT_TRAINER_GENERATED_TRAINING_PATH = DEFAULT_TRAINER_SERVICE_DIR / "generated-training.yaml"
 DEFAULT_TRAINER_GENERATED_TRAINING_SUMMARY_PATH = (
@@ -97,6 +98,9 @@ class RuntimeTraceContext:
     prompt_family_id: str | None = None
     prompt_family_similarity: float | None = None
     prompt_family_band: str | None = None
+    family_runtime_hit_rate: float | None = None
+    family_artifact_hit_rate: float | None = None
+    family_artifact_selected: bool | None = None
     mediation_metric_hits: int | None = None
     mediation_metric_total: int | None = None
 
@@ -215,6 +219,260 @@ def _utc_now_isoformat() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _family_runtime_metric_payload(record: Mapping[str, object]) -> dict[str, object]:
+    """Return the normalized metric payload for one family runtime record."""
+
+    hits = _int_or_none(record.get("metric_hits"))
+    total = _int_or_none(record.get("metric_total"))
+    ratio = _float_or_none(record.get("metric_ratio"))
+    if ratio is None and hits is not None and total is not None and total > 0:
+        ratio = round(max(0, min(hits, total)) / total, 6)
+    return {
+        "metric_hits": hits,
+        "metric_total": total,
+        "hit_rate": ratio,
+    }
+
+
+def _bundle_family_entry(family_payload: Mapping[str, object]) -> dict[str, object] | None:
+    """Return the bundle-registry entry for one persisted prompt family."""
+
+    prompt_family_id = _string_or_none(family_payload.get("prompt_family_id"))
+    if prompt_family_id is None:
+        return None
+    father_record = _mapping_or_none(family_payload.get("family_father_record"))
+    runtime_record = _mapping_or_none(
+        family_payload.get("family_runtime_record")
+    ) or _mapping_or_none(family_payload.get("family_champion_record"))
+    father_question = _string_or_none(family_payload.get("family_father_question"))
+    if father_question is None and father_record is not None:
+        father_question = _string_or_none(father_record.get("question"))
+    question_variants = _string_list(family_payload.get("question_variants"))
+    runtime_metric = (
+        _family_runtime_metric_payload(runtime_record) if runtime_record is not None else {}
+    )
+    persisted_runtime_artifact = _mapping_or_none(family_payload.get("family_runtime_artifact"))
+    runtime_artifact: dict[str, object]
+    if persisted_runtime_artifact is not None:
+        runtime_artifact = persisted_runtime_artifact
+    else:
+        runtime_artifact = {
+            "artifact_kind": (
+                "family-runtime-record-placeholder"
+                if runtime_record is not None
+                else "family-runtime-artifact-missing"
+            ),
+            "artifact_ready": False,
+            "artifact_source": (
+                "family_runtime_record"
+                if runtime_record is not None
+                else None
+            ),
+            **runtime_metric,
+        }
+    return {
+        "prompt_family_id": prompt_family_id,
+        "question": _string_or_none(family_payload.get("question")),
+        "normalized_question": _string_or_none(family_payload.get("normalized_question")),
+        "question_variants": question_variants,
+        "question_variant_count": _int_or_none(family_payload.get("question_variant_count")),
+        "family_father_question": father_question,
+        "family_father_similarity_mean": _float_or_none(
+            family_payload.get("family_father_similarity_mean")
+        ),
+        "family_father_record": father_record,
+        "family_runtime_record": runtime_record,
+        "family_runtime_score": _float_or_none(family_payload.get("family_runtime_score")),
+        "family_runtime_metric": runtime_metric or None,
+        "runtime_artifact": runtime_artifact,
+    }
+
+
+def build_bundle_family_registry(
+    root: Path,
+    *,
+    family_state_path: Path,
+    family_artifact_registry: Mapping[str, object] | None = None,
+) -> dict[str, object] | None:
+    """Build the monolithic bundle's internal family registry from one family-state file."""
+
+    resolved_root = root.resolve()
+    resolved_family_state_path = family_state_path.resolve()
+    if not resolved_family_state_path.is_file():
+        return None
+    payload = load_json_object(resolved_family_state_path)
+    raw_families = payload.get("prompt_families")
+    if not isinstance(raw_families, list):
+        return None
+    families: list[dict[str, object]] = []
+    for family in raw_families:
+        normalized = _mapping_or_none(family)
+        if normalized is None:
+            continue
+        entry = _bundle_family_entry(normalized)
+        if entry is not None:
+            if isinstance(family_artifact_registry, Mapping):
+                family_id = _string_or_none(entry.get("prompt_family_id"))
+                family_artifact_payload = (
+                    _mapping_or_none(family_artifact_registry.get(family_id))
+                    if family_id is not None
+                    else None
+                )
+                if family_artifact_payload is not None:
+                    runtime_artifact = _mapping_or_none(entry.get("runtime_artifact")) or {}
+                    benchmark_summary = _mapping_or_none(
+                        family_artifact_payload.get("benchmark_summary")
+                    )
+                    runtime_artifact.update(
+                        {
+                            "artifact_kind": "compiled-family-program",
+                            "artifact_ready": bool(
+                                family_artifact_payload.get("artifact_ready", True)
+                            ),
+                            "artifact_source": _string_or_none(
+                                family_artifact_payload.get("artifact_source")
+                            )
+                            or "family_artifact_registry",
+                            "program_path": _string_or_none(
+                                family_artifact_payload.get("program_path")
+                            ),
+                            "metadata_path": _string_or_none(
+                                family_artifact_payload.get("metadata_path")
+                            ),
+                            "optimizer": _string_or_none(family_artifact_payload.get("optimizer")),
+                            "training_example_count": _int_or_none(
+                                family_artifact_payload.get("training_example_count")
+                            ),
+                            "benchmark_example_count": _int_or_none(
+                                family_artifact_payload.get("benchmark_example_count")
+                            ),
+                            "benchmark_summary": benchmark_summary,
+                            "hit_rate": (
+                                _float_or_none(benchmark_summary.get("pass_rate"))
+                                if benchmark_summary is not None
+                                else _float_or_none(runtime_artifact.get("hit_rate"))
+                            ),
+                        }
+                    )
+                    entry["runtime_artifact"] = runtime_artifact
+            families.append(entry)
+    return {
+        "schema_version": 1,
+        "registry_kind": "repo-rag-family-registry",
+        "family_state_path": _relative_to_root(resolved_family_state_path, resolved_root),
+        "family_count": len(families),
+        "prompt_family_count": len(families),
+        "families": families,
+    }
+
+
+def _family_artifact_blob_names(bundle_version: str, prompt_family_id: str) -> dict[str, str]:
+    """Return the remote blob names for one family runtime artifact."""
+
+    prefix = bundle_version_blob_prefix(bundle_version)
+    safe_family_id = _sanitize_name(prompt_family_id, default="family")
+    family_prefix = f"{prefix}/families/{safe_family_id}"
+    return {
+        "program": f"{family_prefix}/program.json",
+        "metadata": f"{family_prefix}/metadata.json",
+    }
+
+
+def _family_state_member_blob_names(
+    family_state_version: str,
+    prompt_family_id: str,
+) -> dict[str, str]:
+    """Return the remote blob names for one persisted family-state member."""
+
+    safe_family_id = _sanitize_name(prompt_family_id, default="family")
+    family_prefix = f"versions/{family_state_version}/families/{safe_family_id}"
+    return {
+        "family": f"{family_prefix}/family.json",
+        "father": f"{family_prefix}/father.json",
+        "records_prefix": f"{family_prefix}/records",
+    }
+
+
+def _family_state_record_token(record: Mapping[str, object]) -> str:
+    """Return a stable file token for one persisted family replay-set record."""
+
+    exact_snapshot_id = _string_or_none(record.get("exact_snapshot_id"))
+    if exact_snapshot_id is not None:
+        return _sanitize_name(exact_snapshot_id, default="record")
+    record_token = json.dumps(
+        {str(key): value for key, value in record.items()},
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return hashlib.sha1(record_token.encode("utf-8")).hexdigest()[:16]
+
+
+def _family_state_records_from_payload(
+    family_payload: Mapping[str, object],
+) -> list[dict[str, object]]:
+    """Return stable deduplicated replay-set records known for one persisted family."""
+
+    records: list[dict[str, object]] = []
+    seen: set[str] = set()
+
+    def _append_record(value: object) -> None:
+        record = _mapping_or_none(value)
+        if record is None:
+            return
+        token = _family_state_record_token(record)
+        if token in seen:
+            return
+        seen.add(token)
+        records.append(record)
+
+    raw_family_records = family_payload.get("family_records")
+    if isinstance(raw_family_records, list):
+        for value in raw_family_records:
+            _append_record(value)
+    raw_context_groups = family_payload.get("context_groups")
+    if isinstance(raw_context_groups, list):
+        for group in raw_context_groups:
+            group_mapping = _mapping_or_none(group)
+            if group_mapping is None:
+                continue
+            _append_record(group_mapping.get("champion_record"))
+    _append_record(family_payload.get("family_runtime_record"))
+    _append_record(family_payload.get("family_champion_record"))
+    _append_record(family_payload.get("family_father_record"))
+    return records
+
+
+def _bundle_family_runtime_artifacts(
+    bundle_payload: Mapping[str, object],
+) -> list[tuple[str, dict[str, object]]]:
+    """Return bundle family runtime-artifact payloads keyed by family id."""
+
+    family_registry = bundle_payload.get("family_registry")
+    registry_mapping = family_registry if isinstance(family_registry, Mapping) else {}
+    raw_families = registry_mapping.get("families")
+    if not isinstance(raw_families, list):
+        return []
+    artifacts: list[tuple[str, dict[str, object]]] = []
+    for family in raw_families:
+        if not isinstance(family, Mapping):
+            continue
+        prompt_family_id = _string_or_none(family.get("prompt_family_id"))
+        runtime_artifact_value = family.get("runtime_artifact")
+        if prompt_family_id is None or not isinstance(runtime_artifact_value, Mapping):
+            continue
+        if isinstance(runtime_artifact_value, dict):
+            artifacts.append((prompt_family_id, runtime_artifact_value))
+            continue
+        runtime_artifact = _mapping_or_none(runtime_artifact_value)
+        if runtime_artifact is None:
+            continue
+        if isinstance(family, dict):
+            family["runtime_artifact"] = runtime_artifact
+        artifacts.append((prompt_family_id, runtime_artifact))
+    return artifacts
+
+
 def bundle_manifest_path(metadata_path: Path) -> Path:
     """Return the bundle-manifest path that belongs to ``metadata_path``."""
 
@@ -263,6 +521,38 @@ def build_bundle_manifest(
     benchmark_summary = _mapping_or_none(metadata.get("benchmark_summary"))
     compiled_program_summary = _mapping_or_none(metadata.get("compiled_program_summary"))
     lm = _mapping_or_none(metadata.get("lm"))
+    lineage = _mapping_or_none(metadata.get("lineage"))
+    family_artifact_registry = _mapping_or_none(metadata.get("family_artifact_registry"))
+    family_state_path = (
+        _string_or_none(lineage.get("family_state_path"))
+        if isinstance(lineage, Mapping)
+        else None
+    ) or (
+        _string_or_none(lineage.get("champion_index_path"))
+        if isinstance(lineage, Mapping)
+        else None
+    )
+    family_count = None
+    if isinstance(lineage, Mapping):
+        raw_family_count = lineage.get("family_count")
+        if not isinstance(raw_family_count, int):
+            raw_family_count = lineage.get("prompt_family_count")
+        if isinstance(raw_family_count, int):
+            family_count = raw_family_count
+    family_registry = None
+    if family_state_path is not None:
+        resolved_family_state_path = Path(family_state_path)
+        if not resolved_family_state_path.is_absolute():
+            resolved_family_state_path = resolved_root / resolved_family_state_path
+        family_registry = build_bundle_family_registry(
+            resolved_root,
+            family_state_path=resolved_family_state_path,
+            family_artifact_registry=family_artifact_registry,
+        )
+        if family_registry is not None and family_count is None:
+            raw_registry_count = family_registry.get("family_count")
+            if isinstance(raw_registry_count, int):
+                family_count = raw_registry_count
     retrieval_profile_path = (
         str(DEFAULT_RETRIEVAL_PROFILE_PATH)
         if (resolved_root / DEFAULT_RETRIEVAL_PROFILE_PATH).is_file()
@@ -296,9 +586,13 @@ def build_bundle_manifest(
         "benchmark_status": benchmark_status,
         "benchmark_summary": benchmark_summary,
         "compiled_program_summary": compiled_program_summary,
+        "family_artifact_registry": family_artifact_registry,
         "lm": lm,
         "run_family": _string_or_none(metadata.get("run_family")),
-        "lineage": _mapping_or_none(metadata.get("lineage")),
+        "lineage": lineage,
+        "family_state_path": family_state_path,
+        "family_count": family_count,
+        "family_registry": family_registry,
         "provenance": {
             "source": "repo-rag",
             "retrieval_profile_path": retrieval_profile_path,
@@ -460,6 +754,7 @@ def upload_remote_bundle(
     bundle_path = resolved_root / bundle_path_text
     metadata_path = resolved_root / metadata_path_text
     program_path = resolved_root / program_path_text if program_path_text is not None else None
+    bundle_payload = load_bundle_manifest(bundle_path)
 
     store.upload_text(container, bundle_blob_map["bundle"], bundle_path.read_text(encoding="utf-8"))
     store.upload_text(
@@ -473,12 +768,41 @@ def upload_remote_bundle(
             bundle_blob_map["program"],
             program_path.read_text(encoding="utf-8"),
         )
+    remote_family_artifact_blobs: dict[str, dict[str, str]] = {}
+    for prompt_family_id, runtime_artifact in _bundle_family_runtime_artifacts(bundle_payload):
+        if not bool(runtime_artifact.get("artifact_ready")):
+            continue
+        artifact_program_path_text = _string_or_none(runtime_artifact.get("program_path"))
+        if artifact_program_path_text is None:
+            continue
+        artifact_program_path = resolved_root / artifact_program_path_text
+        if not artifact_program_path.is_file():
+            continue
+        family_blob_map = _family_artifact_blob_names(bundle_version, prompt_family_id)
+        store.upload_text(
+            container,
+            family_blob_map["program"],
+            artifact_program_path.read_text(encoding="utf-8"),
+        )
+        artifact_metadata_path_text = _string_or_none(runtime_artifact.get("metadata_path"))
+        if artifact_metadata_path_text is not None:
+            artifact_metadata_path = resolved_root / artifact_metadata_path_text
+            if artifact_metadata_path.is_file():
+                store.upload_text(
+                    container,
+                    family_blob_map["metadata"],
+                    artifact_metadata_path.read_text(encoding="utf-8"),
+                )
+        remote_family_artifact_blobs[prompt_family_id] = family_blob_map
     store.upload_json(container, bundle_blob_map["published"], published_record)
-    return {
+    payload = {
         "storage_backend": "azure-blob",
         "bundle_container": container,
         "remote_bundle_blobs": bundle_blob_map,
     }
+    if remote_family_artifact_blobs:
+        payload["remote_family_artifact_blobs"] = remote_family_artifact_blobs
+    return payload
 
 
 def upload_remote_bundle_channel(
@@ -592,8 +916,47 @@ def fetch_remote_bundle(
             encoding="utf-8",
         )
     bundle_payload = load_bundle_manifest(local_paths["bundle_path"])
+    remote_family_artifact_blobs: dict[str, dict[str, str]] = {}
+    for prompt_family_id, runtime_artifact in _bundle_family_runtime_artifacts(bundle_payload):
+        if not bool(runtime_artifact.get("artifact_ready")):
+            continue
+        family_blob_map = _family_artifact_blob_names(resolved_bundle_version, prompt_family_id)
+        local_family_dir = cache_dir / "families" / _sanitize_name(
+            prompt_family_id,
+            default="family",
+        )
+        local_family_dir.mkdir(parents=True, exist_ok=True)
+        downloaded_any = False
+        if store.blob_exists(container, family_blob_map["program"]):
+            local_program_path = local_family_dir / "program.json"
+            local_program_path.write_text(
+                store.download_text(container, family_blob_map["program"]),
+                encoding="utf-8",
+            )
+            runtime_artifact["program_path"] = _relative_to_root(local_program_path, resolved_root)
+            downloaded_any = True
+        if store.blob_exists(container, family_blob_map["metadata"]):
+            local_metadata_path = local_family_dir / "metadata.json"
+            local_metadata_path.write_text(
+                store.download_text(container, family_blob_map["metadata"]),
+                encoding="utf-8",
+            )
+            runtime_artifact["metadata_path"] = _relative_to_root(
+                local_metadata_path,
+                resolved_root,
+            )
+            downloaded_any = True
+        runtime_artifact["artifact_ready"] = downloaded_any and bool(
+            _string_or_none(runtime_artifact.get("program_path"))
+        )
+        if downloaded_any:
+            remote_family_artifact_blobs[prompt_family_id] = family_blob_map
+    local_paths["bundle_path"].write_text(
+        f"{json.dumps(bundle_payload, indent=2)}\n",
+        encoding="utf-8",
+    )
     published_payload = load_json_object(local_paths["published_bundle_path"])
-    return {
+    payload = {
         "bundle_found": True,
         "storage_backend": "azure-blob",
         "bundle_container": container,
@@ -613,96 +976,188 @@ def fetch_remote_bundle(
         "run_name": _string_or_none(bundle_payload.get("run_name")),
         "publish_status": _string_or_none(published_payload.get("publish_status")),
     }
+    if remote_family_artifact_blobs:
+        payload["remote_family_artifact_blobs"] = remote_family_artifact_blobs
+    return payload
 
 
 def _utc_timestamp_token() -> str:
     return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
-def upload_remote_champion_index(
+def upload_remote_family_state(
     root: Path,
     *,
-    champion_index_path: Path,
+    family_state_path: Path,
 ) -> dict[str, object] | None:
-    """Upload one champion index into the remote champion container when configured."""
+    """Upload one family-state index into the remote family-state container when configured."""
 
     config = resolve_azure_artifact_config()
-    if config is None or not config.champions_enabled:
+    if config is None or not config.family_state_enabled:
         return None
-    payload = load_json_object(champion_index_path)
+    payload = load_json_object(family_state_path)
     resolved_root = root.resolve()
-    resolved_champion_index_path = champion_index_path.resolve()
+    resolved_family_state_path = family_state_path.resolve()
     store = AzureArtifactStore(config)
-    container = repo_rag_champion_container(config)
-    champion_version = _utc_timestamp_token()
-    blob_map = champion_blob_names(champion_version)
+    container = repo_rag_family_state_container(config)
+    family_state_version = _utc_timestamp_token()
+    blob_map = family_state_blob_names(family_state_version)
     current_payload = {
         "schema_version": 1,
-        "champion_state_kind": "repo-rag-champion-state",
+        "family_state_kind": "repo-rag-family-state",
         "updated_at": _utc_now_isoformat(),
-        "current_version": champion_version,
-        "current_champion_index_blob": blob_map["champion_index"],
+        "current_version": family_state_version,
+        "current_family_state_blob": blob_map["family_state"],
+        "current_family_count": len(payload.get("prompt_families", []))
+        if isinstance(payload.get("prompt_families"), list)
+        else 0,
         "current_prompt_family_count": len(payload.get("prompt_families", []))
         if isinstance(payload.get("prompt_families"), list)
         else 0,
     }
+    family_state_text = resolved_family_state_path.read_text(encoding="utf-8")
+    remote_family_member_blobs: dict[str, dict[str, object]] = {}
+    for family_payload in _mapping_list(payload.get("prompt_families")):
+        prompt_family_id = _string_or_none(family_payload.get("prompt_family_id"))
+        if prompt_family_id is None:
+            continue
+        family_blob_map = _family_state_member_blob_names(family_state_version, prompt_family_id)
+        store.upload_json(container, family_blob_map["family"], family_payload)
+        father_record = _mapping_or_none(family_payload.get("family_father_record"))
+        if father_record is not None:
+            store.upload_json(container, family_blob_map["father"], father_record)
+        record_blob_map: dict[str, str] = {}
+        for record in _family_state_records_from_payload(family_payload):
+            record_token = _family_state_record_token(record)
+            record_blob_name = f"{family_blob_map['records_prefix']}/{record_token}.json"
+            store.upload_json(container, record_blob_name, record)
+            record_blob_map[record_token] = record_blob_name
+        remote_family_member_blobs[prompt_family_id] = {
+            "family": family_blob_map["family"],
+            "father": family_blob_map["father"],
+            "record_blobs": record_blob_map,
+        }
     store.upload_text(
         container,
-        blob_map["champion_index"],
-        resolved_champion_index_path.read_text(encoding="utf-8"),
+        blob_map["family_state"],
+        family_state_text,
     )
     store.upload_json(container, blob_map["current"], current_payload)
     return {
         "storage_backend": "azure-blob",
-        "champion_container": container,
-        "champion_version": champion_version,
-        "remote_champion_blobs": blob_map,
-        "champion_index_path": _relative_to_root(resolved_champion_index_path, resolved_root),
+        "family_state_container": container,
+        "family_state_version": family_state_version,
+        "remote_family_state_blobs": blob_map,
+        "remote_family_member_blobs": remote_family_member_blobs,
+        "family_state_path": _relative_to_root(resolved_family_state_path, resolved_root),
     }
-
-
-def fetch_remote_champion_index(root: Path) -> dict[str, object] | None:
-    """Download the current remote champion index into a local cache when configured."""
+def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
+    """Download the current remote family-state index into a local cache when configured."""
 
     resolved_root = root.resolve()
     config = resolve_azure_artifact_config()
-    if config is None or not config.champions_enabled:
+    if config is None or not config.family_state_enabled:
         return None
     store = AzureArtifactStore(config)
-    container = repo_rag_champion_container(config)
-    current_blob = champion_current_blob_name()
+    container = repo_rag_family_state_container(config)
+    current_blob = family_state_current_blob_name()
     if not store.blob_exists(container, current_blob):
         return None
     current_payload = store.download_json(container, current_blob)
-    champion_version = _string_or_none(current_payload.get("current_version"))
-    champion_blob = _string_or_none(current_payload.get("current_champion_index_blob"))
-    if champion_version is None or champion_blob is None:
+    family_state_version = _string_or_none(current_payload.get("current_version"))
+    family_state_blob = _string_or_none(current_payload.get("current_family_state_blob")) or (
+        _string_or_none(current_payload.get("current_champion_index_blob"))
+    )
+    if family_state_version is None or family_state_blob is None:
         return None
-    cache_dir = resolved_root / DEFAULT_REMOTE_CHAMPION_CACHE_DIR / champion_version
+    cache_dir = resolved_root / DEFAULT_REMOTE_FAMILY_STATE_CACHE_DIR / family_state_version
     cache_dir.mkdir(parents=True, exist_ok=True)
-    champion_index_path = cache_dir / "champion-index.json"
+    family_state_path = cache_dir / "family-state.json"
     current_path = cache_dir / "current.json"
-    champion_index_path.write_text(
-        store.download_text(container, champion_blob),
+    family_state_text = store.download_text(container, family_state_blob)
+    family_state_path.write_text(
+        family_state_text,
         encoding="utf-8",
     )
     current_path.write_text(
         json.dumps(current_payload, indent=2) + "\n",
         encoding="utf-8",
     )
+    cached_family_paths: dict[str, str] = {}
+    cached_family_member_paths: dict[str, dict[str, object]] = {}
+    remote_family_member_blobs: dict[str, dict[str, object]] = {}
+    family_state_payload = json.loads(family_state_text)
+    raw_prompt_families = (
+        family_state_payload.get("prompt_families")
+        if isinstance(family_state_payload, Mapping)
+        else []
+    )
+    for family_payload in _mapping_list(raw_prompt_families):
+        prompt_family_id = _string_or_none(family_payload.get("prompt_family_id"))
+        if prompt_family_id is None:
+            continue
+        family_blob_map = _family_state_member_blob_names(family_state_version, prompt_family_id)
+        family_dir = cache_dir / "families" / _sanitize_name(prompt_family_id, default="family")
+        family_dir.mkdir(parents=True, exist_ok=True)
+        local_family_path = family_dir / "family.json"
+        if store.blob_exists(container, family_blob_map["family"]):
+            family_text = store.download_text(container, family_blob_map["family"])
+        else:
+            family_text = f"{json.dumps(family_payload, indent=2)}\n"
+        local_family_path.write_text(family_text, encoding="utf-8")
+        cached_family_paths[prompt_family_id] = _relative_to_root(local_family_path, resolved_root)
+        local_member_paths: dict[str, object] = {
+            "family": _relative_to_root(local_family_path, resolved_root)
+        }
+        remote_member_blobs: dict[str, object] = {
+            "family": family_blob_map["family"],
+            "father": family_blob_map["father"],
+            "record_blobs": {},
+        }
+        father_record = _mapping_or_none(family_payload.get("family_father_record"))
+        local_father_path = family_dir / "father.json"
+        if store.blob_exists(container, family_blob_map["father"]):
+            father_text = store.download_text(container, family_blob_map["father"])
+            local_father_path.write_text(father_text, encoding="utf-8")
+            local_member_paths["father"] = _relative_to_root(local_father_path, resolved_root)
+        elif father_record is not None:
+            local_father_path.write_text(
+                f"{json.dumps(father_record, indent=2)}\n",
+                encoding="utf-8",
+            )
+            local_member_paths["father"] = _relative_to_root(local_father_path, resolved_root)
+        record_paths: list[str] = []
+        record_blob_map: dict[str, str] = {}
+        for record in _family_state_records_from_payload(family_payload):
+            record_token = _family_state_record_token(record)
+            record_blob_name = f"{family_blob_map['records_prefix']}/{record_token}.json"
+            local_record_path = family_dir / "records" / f"{record_token}.json"
+            local_record_path.parent.mkdir(parents=True, exist_ok=True)
+            if store.blob_exists(container, record_blob_name):
+                record_text = store.download_text(container, record_blob_name)
+            else:
+                record_text = f"{json.dumps(record, indent=2)}\n"
+            local_record_path.write_text(record_text, encoding="utf-8")
+            record_paths.append(_relative_to_root(local_record_path, resolved_root))
+            record_blob_map[record_token] = record_blob_name
+        local_member_paths["record_paths"] = record_paths
+        remote_member_blobs["record_blobs"] = record_blob_map
+        cached_family_member_paths[prompt_family_id] = local_member_paths
+        remote_family_member_blobs[prompt_family_id] = remote_member_blobs
     return {
-        "champion_found": True,
+        "family_state_found": True,
         "storage_backend": "azure-blob",
-        "champion_container": container,
-        "champion_version": champion_version,
+        "family_state_container": container,
+        "family_state_version": family_state_version,
         "current_blob": current_blob,
-        "champion_index_blob": champion_blob,
+        "family_state_blob": family_state_blob,
         "cache_dir": _relative_to_root(cache_dir, resolved_root),
-        "champion_index_path": _relative_to_root(champion_index_path, resolved_root),
+        "family_state_path": _relative_to_root(family_state_path, resolved_root),
         "current_state_path": _relative_to_root(current_path, resolved_root),
+        "cached_family_paths": cached_family_paths,
+        "cached_family_member_paths": cached_family_member_paths,
+        "remote_family_member_blobs": remote_family_member_blobs,
     }
-
-
 def published_bundle_record_path(root: Path, bundle_version: str) -> Path:
     """Return the publish-record path for one bundle version."""
 
@@ -1089,6 +1544,9 @@ def build_runtime_trace(trace: RuntimeTraceContext) -> dict[str, object]:
         "prompt_family_id": trace.prompt_family_id,
         "prompt_family_similarity": trace.prompt_family_similarity,
         "prompt_family_band": trace.prompt_family_band,
+        "family_runtime_hit_rate": trace.family_runtime_hit_rate,
+        "family_artifact_hit_rate": trace.family_artifact_hit_rate,
+        "family_artifact_selected": trace.family_artifact_selected,
         "mediation_metric_hits": trace.mediation_metric_hits,
         "mediation_metric_total": trace.mediation_metric_total,
     }
@@ -1125,6 +1583,8 @@ def _normalize_runtime_trace(payload: Mapping[str, object]) -> dict[str, object]
     mcp_candidate_count = _int_or_none(payload.get("mcp_candidate_count"))
     answer_length = _int_or_none(payload.get("answer_length"))
     prompt_family_similarity = _float_or_none(payload.get("prompt_family_similarity"))
+    family_runtime_hit_rate = _float_or_none(payload.get("family_runtime_hit_rate"))
+    family_artifact_hit_rate = _float_or_none(payload.get("family_artifact_hit_rate"))
     mediation_metric_hits = _int_or_none(payload.get("mediation_metric_hits"))
     mediation_metric_total = _int_or_none(payload.get("mediation_metric_total"))
     sources = _string_list(payload.get("sources"))
@@ -1160,6 +1620,13 @@ def _normalize_runtime_trace(payload: Mapping[str, object]) -> dict[str, object]
         "prompt_family_id": _string_or_none(payload.get("prompt_family_id")),
         "prompt_family_similarity": prompt_family_similarity,
         "prompt_family_band": _string_or_none(payload.get("prompt_family_band")),
+        "family_runtime_hit_rate": family_runtime_hit_rate,
+        "family_artifact_hit_rate": family_artifact_hit_rate,
+        "family_artifact_selected": (
+            payload.get("family_artifact_selected")
+            if isinstance(payload.get("family_artifact_selected"), bool)
+            else None
+        ),
         "mediation_metric_hits": mediation_metric_hits,
         "mediation_metric_total": mediation_metric_total,
     }
@@ -1331,9 +1798,7 @@ def normalize_trace_record_payload(payload: Mapping[str, object]) -> dict[str, o
             "snapshot": {
                 "question": normalized_trace["question"],
                 "original_prompt": _string_or_none(normalized_trace.get("original_prompt")),
-                "reformulated_prompt": _string_or_none(
-                    normalized_trace.get("reformulated_prompt")
-                ),
+                "reformulated_prompt": _string_or_none(normalized_trace.get("reformulated_prompt")),
                 "answer": None,
                 "response_text": None,
                 "sources": _string_list(normalized_trace.get("sources")),

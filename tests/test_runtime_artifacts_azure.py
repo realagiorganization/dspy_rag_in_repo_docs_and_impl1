@@ -17,20 +17,26 @@ from repo_rag_lab.azure_artifacts import (
     bundle_version_blob_prefix,
     decode_queue_message,
     failed_trace_blob_name,
+    family_state_blob_names,
+    family_state_current_blob_name,
     normalize_artifact_metadata_paths,
     processed_trace_blob_name,
     queued_trace_blob_name,
     repo_rag_bundle_container,
+    repo_rag_family_state_container,
     repo_rag_trace_container,
     repo_rag_trace_queue_name,
 )
 from repo_rag_lab.runtime_artifacts import (
     drain_trace_queue,
     fetch_remote_bundle,
+    fetch_remote_family_state,
     inspect_bundle_channel,
     queue_trace_record,
     resolve_bundle_manifest,
     restore_processed_trace_records,
+    upload_remote_bundle,
+    upload_remote_family_state,
 )
 
 
@@ -598,6 +604,25 @@ def test_fetch_remote_bundle_downloads_bundle_assets(
             "run_name": bundle_version,
             "bundle_status": "ready",
             "benchmark_status": "pass",
+            "family_registry": {
+                "schema_version": 1,
+                "registry_kind": "repo-rag-family-registry",
+                "families": [
+                    {
+                        "prompt_family_id": "pf-demo",
+                        "runtime_artifact": {
+                            "artifact_kind": "compiled-family-program",
+                            "artifact_ready": True,
+                            "program_path": (
+                                f"versions/{bundle_version}/families/pf-demo/program.json"
+                            ),
+                            "metadata_path": (
+                                f"versions/{bundle_version}/families/pf-demo/metadata.json"
+                            ),
+                        },
+                    }
+                ],
+            },
         },
     )
     store.upload_text(
@@ -614,6 +639,16 @@ def test_fetch_remote_bundle_downloads_bundle_assets(
         "repo-rag-bundles",
         f"versions/{bundle_version}/published.json",
         {"publish_status": "published", "bundle_version": bundle_version},
+    )
+    store.upload_text(
+        "repo-rag-bundles",
+        f"versions/{bundle_version}/families/pf-demo/program.json",
+        '{"program":"family-demo"}\n',
+    )
+    store.upload_text(
+        "repo-rag-bundles",
+        f"versions/{bundle_version}/families/pf-demo/metadata.json",
+        '{"prompt_family_id":"pf-demo"}\n',
     )
 
     def fake_resolve_azure_artifact_config(queue_name: str | None = None) -> AzureArtifactConfig:
@@ -640,6 +675,276 @@ def test_fetch_remote_bundle_downloads_bundle_assets(
     program_path = tmp_path / str(payload["program_path"])
     assert program_path.exists()
     assert program_path.read_text(encoding="utf-8") == '{"program":"demo"}\n'
+    bundle_payload = json.loads(
+        (tmp_path / str(payload["bundle_path"])).read_text(encoding="utf-8")
+    )
+    family_registry = bundle_payload["family_registry"]
+    families = family_registry["families"]
+    assert families[0]["prompt_family_id"] == "pf-demo"
+    runtime_artifact = families[0]["runtime_artifact"]
+    assert runtime_artifact["artifact_ready"] is True
+    assert runtime_artifact["program_path"] == (
+        f"artifacts/dspy/remote/{bundle_version}/families/pf-demo/program.json"
+    )
+    assert runtime_artifact["metadata_path"] == (
+        f"artifacts/dspy/remote/{bundle_version}/families/pf-demo/metadata.json"
+    )
+    family_program_path = tmp_path / str(runtime_artifact["program_path"])
+    assert family_program_path.exists()
+    assert family_program_path.read_text(encoding="utf-8") == '{"program":"family-demo"}\n'
+
+
+def test_upload_remote_bundle_uploads_family_runtime_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _FakeAzureArtifactStore()
+    config = AzureArtifactConfig(
+        account_name="acct",
+        account_key="key",
+        connection_string=None,
+        trace_container="repo-rag-training-traces",
+        bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
+        queue_name="repo-rag-training",
+    )
+    bundle_dir = tmp_path / "artifacts" / "dspy" / "sample-run"
+    family_dir = bundle_dir / "families" / "pf-demo"
+    family_dir.mkdir(parents=True)
+    bundle_path = bundle_dir / "bundle.json"
+    metadata_path = bundle_dir / "metadata.json"
+    program_path = bundle_dir / "program.json"
+    family_program_path = family_dir / "program.json"
+    family_metadata_path = family_dir / "metadata.json"
+    bundle_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "bundle_kind": "global",
+                "bundle_version": "stable-42",
+                "run_name": "sample-run",
+                "bundle_status": "ready",
+                "program_path": "artifacts/dspy/sample-run/program.json",
+                "metadata_path": "artifacts/dspy/sample-run/metadata.json",
+                "family_registry": {
+                    "schema_version": 1,
+                    "registry_kind": "repo-rag-family-registry",
+                    "families": [
+                        {
+                            "prompt_family_id": "pf-demo",
+                            "runtime_artifact": {
+                                "artifact_kind": "compiled-family-program",
+                                "artifact_ready": True,
+                                "program_path": (
+                                    "artifacts/dspy/sample-run/families/pf-demo/program.json"
+                                ),
+                                "metadata_path": (
+                                    "artifacts/dspy/sample-run/families/pf-demo/metadata.json"
+                                ),
+                            },
+                        }
+                    ],
+                },
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    metadata_path.write_text('{"run_name":"sample-run"}\n', encoding="utf-8")
+    program_path.write_text('{"program":"global"}\n', encoding="utf-8")
+    family_program_path.write_text('{"program":"family"}\n', encoding="utf-8")
+    family_metadata_path.write_text('{"prompt_family_id":"pf-demo"}\n', encoding="utf-8")
+
+    def fake_azure_artifact_store(cfg: AzureArtifactConfig) -> _FakeAzureArtifactStore:
+        del cfg
+        return store
+
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
+        fake_azure_artifact_store,
+    )
+
+    payload = upload_remote_bundle(
+        tmp_path,
+        published_record={
+            "bundle_version": "stable-42",
+            "bundle_path": "artifacts/dspy/sample-run/bundle.json",
+            "metadata_path": "artifacts/dspy/sample-run/metadata.json",
+            "program_path": "artifacts/dspy/sample-run/program.json",
+        },
+        config=config,
+    )
+
+    remote_family_blobs = payload["remote_family_artifact_blobs"]
+    assert remote_family_blobs == {
+        "pf-demo": {
+            "program": "versions/stable-42/families/pf-demo/program.json",
+            "metadata": "versions/stable-42/families/pf-demo/metadata.json",
+        }
+    }
+    assert (
+        store.download_text(
+            "repo-rag-bundles",
+            "versions/stable-42/families/pf-demo/program.json",
+        )
+        == '{"program":"family"}\n'
+    )
+    assert (
+        store.download_text(
+            "repo-rag-bundles",
+            "versions/stable-42/families/pf-demo/metadata.json",
+        )
+        == '{"prompt_family_id":"pf-demo"}\n'
+    )
+
+
+def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _FakeAzureArtifactStore()
+    config = AzureArtifactConfig(
+        account_name="acct",
+        account_key="key",
+        connection_string=None,
+        trace_container="repo-rag-training-traces",
+        bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
+        queue_name="repo-rag-training",
+        family_state_container="repo-rag-training-families",
+    )
+    family_state_path = tmp_path / "artifacts" / "trainer" / "family-state.json"
+    family_state_path.parent.mkdir(parents=True)
+    family_state_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "family_state_kind": "repo-rag-trainer-family-state",
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-demo",
+                        "family_father_record": {
+                            "question": "Inspect whether the README already embeds a demo GIF.",
+                            "exact_snapshot_id": "ts-father",
+                            "metric_hits": 1,
+                            "metric_total": 1,
+                            "metric_ratio": 1.0,
+                        },
+                        "family_records": [
+                            {
+                                "question": "Inspect whether the README already embeds a demo GIF.",
+                                "original_prompt": "Add a demo GIF to README",
+                                "reformulated_prompt": (
+                                    "Inspect whether the README already embeds a demo GIF."
+                                ),
+                                "command_trace": [
+                                    {
+                                        "type": "message",
+                                        "role": "assistant",
+                                        "text": "inspect README",
+                                    }
+                                ],
+                                "exact_snapshot_id": "ts-demo",
+                                "metric_hits": 1,
+                                "metric_total": 1,
+                                "metric_ratio": 1.0,
+                            }
+                        ],
+                    }
+                ],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    def fake_resolve_azure_artifact_config(queue_name: str | None = None) -> AzureArtifactConfig:
+        del queue_name
+        return config
+
+    def fake_azure_artifact_store(cfg: AzureArtifactConfig) -> _FakeAzureArtifactStore:
+        del cfg
+        return store
+
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config",
+        fake_resolve_azure_artifact_config,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
+        fake_azure_artifact_store,
+    )
+
+    uploaded = upload_remote_family_state(tmp_path, family_state_path=family_state_path)
+
+    assert uploaded is not None
+    assert uploaded["family_state_container"] == "repo-rag-training-families"
+    assert uploaded["family_state_path"] == "artifacts/trainer/family-state.json"
+    blob_map = uploaded["remote_family_state_blobs"]
+    assert blob_map == family_state_blob_names(str(uploaded["family_state_version"]))
+    assert uploaded["remote_family_member_blobs"] == {
+        "pf-demo": {
+            "family": f"versions/{uploaded['family_state_version']}/families/pf-demo/family.json",
+            "father": f"versions/{uploaded['family_state_version']}/families/pf-demo/father.json",
+            "record_blobs": {
+                "ts-demo": (
+                    f"versions/{uploaded['family_state_version']}/families/pf-demo/records/ts-demo.json"
+                ),
+                "ts-father": (
+                    f"versions/{uploaded['family_state_version']}/families/pf-demo/records/ts-father.json"
+                ),
+            },
+        }
+    }
+    assert store.blob_exists("repo-rag-training-families", blob_map["family_state"])
+    assert store.blob_exists("repo-rag-training-families", family_state_current_blob_name())
+    current_payload = json.loads(
+        store.download_text("repo-rag-training-families", family_state_current_blob_name())
+    )
+    assert "champion_state_kind" not in current_payload
+    assert "current_champion_index_blob" not in current_payload
+    assert store.blob_exists(
+        "repo-rag-training-families",
+        f"versions/{uploaded['family_state_version']}/families/pf-demo/family.json",
+    )
+    assert store.blob_exists(
+        "repo-rag-training-families",
+        f"versions/{uploaded['family_state_version']}/families/pf-demo/father.json",
+    )
+    assert store.blob_exists(
+        "repo-rag-training-families",
+        f"versions/{uploaded['family_state_version']}/families/pf-demo/records/ts-demo.json",
+    )
+
+    fetched = fetch_remote_family_state(tmp_path)
+
+    assert fetched is not None
+    assert fetched["family_state_container"] == "repo-rag-training-families"
+    assert fetched["family_state_blob"] == blob_map["family_state"]
+    assert fetched["cache_dir"] == (
+        f"artifacts/trainer/remote-family-state/{uploaded['family_state_version']}"
+    )
+    assert fetched["remote_family_member_blobs"] == uploaded["remote_family_member_blobs"]
+    cached_family_state = tmp_path / str(fetched["family_state_path"])
+    cached_family_member = tmp_path / str(fetched["cached_family_paths"]["pf-demo"])
+    cached_family_detail = fetched["cached_family_member_paths"]["pf-demo"]
+    assert isinstance(cached_family_detail, dict)
+    cached_father_path = tmp_path / str(cached_family_detail["father"])
+    cached_record_paths = [tmp_path / str(path) for path in cached_family_detail["record_paths"]]
+    assert cached_family_state.exists()
+    assert cached_family_member.exists()
+    assert cached_father_path.exists()
+    assert len(cached_record_paths) == 2
+    assert all(path.exists() for path in cached_record_paths)
+    assert cached_family_state.read_text(encoding="utf-8") == family_state_path.read_text(
+        encoding="utf-8"
+    )
+    cached_family_payload = json.loads(cached_family_member.read_text(encoding="utf-8"))
+    assert cached_family_payload["prompt_family_id"] == "pf-demo"
+    cached_father_payload = json.loads(cached_father_path.read_text(encoding="utf-8"))
+    assert cached_father_payload["exact_snapshot_id"] == "ts-father"
 
 
 def test_inspect_bundle_channel_supports_staged_worker_bundle_store_layout(
@@ -771,6 +1076,38 @@ def test_azure_artifact_store_supports_account_url_credentials(
     )
 
 
+def test_azure_artifact_config_prefers_family_state_container_envs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("REPO_RAG_AZURE_STORAGE_CONNECTION_STRING", "UseDevelopmentStorage=true")
+    monkeypatch.setenv("REPO_RAG_FAMILY_STATE_CONTAINER", "repo-rag-training-families")
+    monkeypatch.setenv("REPO_RAG_CHAMPION_CONTAINER", "repo-rag-champions-legacy")
+
+    config = AzureArtifactConfig.from_env()
+
+    assert config.family_state_container == "repo-rag-training-families"
+    assert config.champion_container == "repo-rag-training-families"
+    assert config.family_state_enabled is True
+    assert config.champions_enabled is True
+    assert repo_rag_family_state_container(config) == "repo-rag-training-families"
+
+
+def test_azure_artifact_config_ignores_champion_container_envs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("REPO_RAG_AZURE_STORAGE_CONNECTION_STRING", "UseDevelopmentStorage=true")
+    monkeypatch.delenv("REPO_RAG_FAMILY_STATE_CONTAINER", raising=False)
+    monkeypatch.delenv("DATASET_REPO_RAG_FAMILY_STATE_CONTAINER", raising=False)
+    monkeypatch.setenv("REPO_RAG_CHAMPION_CONTAINER", "repo-rag-champions-legacy")
+    monkeypatch.setenv("DATASET_REPO_RAG_CHAMPION_CONTAINER", "repo-rag-champions-dataset")
+
+    config = AzureArtifactConfig.from_env()
+
+    assert config.family_state_container == "repo-rag-training-families"
+    assert config.champion_container == "repo-rag-training-families"
+    assert repo_rag_family_state_container(config) == "repo-rag-training-families"
+
+
 def test_azure_artifact_helper_and_error_paths(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -828,10 +1165,15 @@ def test_azure_artifact_helper_and_error_paths(
     monkeypatch.delenv("AZURE_STORAGE_KEY", raising=False)
     monkeypatch.delenv("REPO_RAG_AZURE_STORAGE_CONNECTION_STRING", raising=False)
     monkeypatch.delenv("AZURE_STORAGE_CONNECTION_STRING", raising=False)
+    monkeypatch.delenv("REPO_RAG_FAMILY_STATE_CONTAINER", raising=False)
+    monkeypatch.delenv("DATASET_REPO_RAG_FAMILY_STATE_CONTAINER", raising=False)
+    monkeypatch.delenv("REPO_RAG_CHAMPION_CONTAINER", raising=False)
+    monkeypatch.delenv("DATASET_REPO_RAG_CHAMPION_CONTAINER", raising=False)
     assert AzureArtifactStore.from_env() is None
 
     assert repo_rag_trace_container(config) == "repo-rag-training-traces"
     assert repo_rag_bundle_container(config) == "repo-rag-bundles"
+    assert repo_rag_family_state_container(config) == "repo-rag-champions"
     assert repo_rag_trace_queue_name(config, fallback="dataset") == "dataset"
     assert bundle_version_blob_prefix("stable-42") == "versions/stable-42"
     assert bundle_channel_blob_name("stable") == "channels/stable.json"
@@ -840,6 +1182,10 @@ def test_azure_artifact_helper_and_error_paths(
         "metadata": "versions/stable-42/metadata.json",
         "program": "versions/stable-42/program.json",
         "published": "versions/stable-42/published.json",
+    }
+    assert family_state_blob_names("stable-42") == {
+        "family_state": "versions/stable-42/family-state.json",
+        "current": "current.json",
     }
     assert queued_trace_blob_name("dataset", "trace.json") == "queued/dataset/trace.json"
     assert processed_trace_blob_name("dataset", "trace.json") == "processed/dataset/trace.json"

@@ -716,8 +716,10 @@ def test_serve_repo_rag_mcp_skips_notification_responses(tmp_path: Path) -> None
 def test_serve_repo_rag_mcp_replies_with_line_delimited_jsonrpc(tmp_path: Path) -> None:
     input_stream = io.BytesIO(
         (
-            json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize"}) + "\n"
-            + json.dumps({"jsonrpc": "2.0", "id": 2, "method": "resources/list"}) + "\n"
+            json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize"})
+            + "\n"
+            + json.dumps({"jsonrpc": "2.0", "id": 2, "method": "resources/list"})
+            + "\n"
         ).encode("utf-8")
     )
     output_stream = io.BytesIO()

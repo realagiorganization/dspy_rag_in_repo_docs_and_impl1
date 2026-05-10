@@ -71,11 +71,17 @@ class AzureArtifactConfig:
     bundle_container: str | None
     champion_container: str | None
     queue_name: str | None
+    family_state_container: str | None = None
 
     @classmethod
     def from_env(cls, *, queue_name: str | None = None) -> AzureArtifactConfig:
         """Resolve one configuration from the supported environment variables."""
 
+        family_state_container = _first_non_empty(
+            os.getenv("REPO_RAG_FAMILY_STATE_CONTAINER"),
+            os.getenv("DATASET_REPO_RAG_FAMILY_STATE_CONTAINER"),
+            "repo-rag-training-families",
+        )
         return cls(
             account_name=_first_non_empty(
                 os.getenv("REPO_RAG_AZURE_STORAGE_ACCOUNT"),
@@ -97,11 +103,8 @@ class AzureArtifactConfig:
                 os.getenv("REPO_RAG_BUNDLE_CONTAINER"),
                 os.getenv("DATASET_REPO_RAG_BUNDLE_CONTAINER"),
             ),
-            champion_container=_first_non_empty(
-                os.getenv("REPO_RAG_CHAMPION_CONTAINER"),
-                os.getenv("DATASET_REPO_RAG_CHAMPION_CONTAINER"),
-                "repo-rag-champions",
-            ),
+            family_state_container=family_state_container,
+            champion_container=family_state_container,
             queue_name=_first_non_empty(
                 queue_name,
                 os.getenv("REPO_RAG_TRACE_QUEUE"),
@@ -122,8 +125,14 @@ class AzureArtifactConfig:
         return self.configured and bool(self.bundle_container)
 
     @property
+    def family_state_enabled(self) -> bool:
+        return self.configured and bool(
+            _first_non_empty(self.family_state_container, self.champion_container)
+        )
+
+    @property
     def champions_enabled(self) -> bool:
-        return self.configured and bool(self.champion_container)
+        return self.family_state_enabled
 
     @property
     def queue_enabled(self) -> bool:
@@ -335,10 +344,10 @@ def repo_rag_bundle_container(config: AzureArtifactConfig) -> str:
     return container
 
 
-def repo_rag_champion_container(config: AzureArtifactConfig) -> str:
-    container = config.champion_container
+def repo_rag_family_state_container(config: AzureArtifactConfig) -> str:
+    container = _first_non_empty(config.family_state_container, config.champion_container)
     if not container:
-        raise RuntimeError("Champion container is not configured.")
+        raise RuntimeError("Family-state container is not configured.")
     return container
 
 
@@ -364,19 +373,19 @@ def bundle_blob_names(bundle_version: str) -> dict[str, str]:
     }
 
 
-def champion_version_blob_prefix(champion_version: str) -> str:
-    return f"versions/{champion_version}"
+def family_state_version_blob_prefix(family_state_version: str) -> str:
+    return f"versions/{family_state_version}"
 
 
-def champion_current_blob_name() -> str:
+def family_state_current_blob_name() -> str:
     return "current.json"
 
 
-def champion_blob_names(champion_version: str) -> dict[str, str]:
-    prefix = champion_version_blob_prefix(champion_version)
+def family_state_blob_names(family_state_version: str) -> dict[str, str]:
+    prefix = family_state_version_blob_prefix(family_state_version)
     return {
-        "champion_index": f"{prefix}/champion-index.json",
-        "current": champion_current_blob_name(),
+        "family_state": f"{prefix}/family-state.json",
+        "current": family_state_current_blob_name(),
     }
 
 

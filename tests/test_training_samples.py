@@ -10,7 +10,9 @@ from repo_rag_lab.training_samples import (
     load_training_examples,
     materialize_combined_training_examples,
     materialize_training_candidates,
+    resolve_prompt_family_support,
     summarize_champion_index,
+    summarize_family_state,
     summarize_training_examples,
     validate_training_examples,
 )
@@ -228,7 +230,7 @@ tokens used
         "Added the demo GIF to README and verified npm run build."
     )
     payload = json.loads(
-        (tmp_path / "artifacts" / "trainer" / "champion-index.json").read_text(encoding="utf-8")
+        (tmp_path / "artifacts" / "trainer" / "family-state.json").read_text(encoding="utf-8")
     )
     provenance = payload["prompt_families"][0]["family_champion_record"]["provenance"]
     assert provenance["answer_normalization"]["normalization_method"] == "codex-final-block"
@@ -348,19 +350,27 @@ def test_materialize_training_candidates_keeps_prompt_reformulation_and_command_
                         "source": "README.md",
                         "preview": (
                             "# national-debt-relief ## Demo "
-                            "![Automated demo walkthrough](docs/assets/national-debt-relief-demo.gif)"
+                            "![Automated demo walkthrough]"
+                            "(docs/assets/national-debt-relief-demo.gif)"
                         ),
                         "text": (
                             "# national-debt-relief ## Demo "
-                            "![Automated demo walkthrough](docs/assets/national-debt-relief-demo.gif)"
+                            "![Automated demo walkthrough]"
+                            "(docs/assets/national-debt-relief-demo.gif)"
                         ),
                     }
                 ],
                 "retrieved_context": [
                     {
                         "source": "package.json",
-                        "preview": '{"name":"national-debt-relief","scripts":{"build":"vite build"}}',
-                        "text": '{"name":"national-debt-relief","scripts":{"build":"vite build"}}',
+                        "preview": (
+                            '{"name":"national-debt-relief",'
+                            '"scripts":{"build":"vite build"}}'
+                        ),
+                        "text": (
+                            '{"name":"national-debt-relief",'
+                            '"scripts":{"build":"vite build"}}'
+                        ),
                     }
                 ],
                 "trace": {
@@ -402,6 +412,7 @@ def test_materialize_training_candidates_keeps_prompt_reformulation_and_command_
 
     assert summary["candidate_count"] == 1
     assert summary["loaded_candidate_count"] == 1
+    assert summary["dirty_family_count"] == 1
     materialized_path = tmp_path / "artifacts" / "trainer" / "training-candidates.yaml"
     materialized_payload = yaml.safe_load(materialized_path.read_text(encoding="utf-8"))
     assert materialized_payload[0]["question"] == (
@@ -415,6 +426,167 @@ def test_materialize_training_candidates_keeps_prompt_reformulation_and_command_
         {"type": "message", "role": "assistant", "text": "inspect README"},
         {"type": "message", "role": "assistant", "text": "check docs/assets"},
     ]
+    family_state = json.loads(
+        (tmp_path / "artifacts" / "trainer" / "family-state.json").read_text(encoding="utf-8")
+    )
+    family_payload = family_state["prompt_families"][0]
+    assert summary["dirty_family_ids"] == [family_payload["prompt_family_id"]]
+    assert family_payload["family_needs_recompile"] is True
+    assert family_payload["family_father_question"] == (
+        "Inspect whether the README already embeds a demo GIF."
+    )
+    assert family_payload["family_runtime_record"]["reformulated_prompt"] == (
+        "Inspect whether the README already embeds a demo GIF."
+    )
+    family_records = family_payload["family_records"]
+    assert len(family_records) == 1
+    assert family_records[0]["exact_snapshot_id"].startswith("ts-")
+    assert family_records[0]["original_prompt"] == "Add a demo GIF to README"
+    assert family_records[0]["reformulated_prompt"] == (
+        "Inspect whether the README already embeds a demo GIF."
+    )
+
+
+def test_resolve_prompt_family_support_matches_best_family_father(tmp_path: Path) -> None:
+    trainer_dir = tmp_path / "artifacts" / "trainer"
+    trainer_dir.mkdir(parents=True, exist_ok=True)
+    family_state_path = trainer_dir / "champion-index.json"
+    family_state_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "record_kind": "repo-rag-trainer-champion-index",
+                "generated_at": "2026-05-09T18:00:00+00:00",
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-readme",
+                        "question": "Inspect whether the README already embeds a demo GIF.",
+                        "normalized_question": (
+                            "inspect whether the readme already embeds a demo gif."
+                        ),
+                        "family_father_question": (
+                            "Inspect whether the README already embeds a demo GIF."
+                        ),
+                        "family_father_record": {
+                            "question": "Inspect whether the README already embeds a demo GIF.",
+                            "expected_answer": "README already embeds the GIF.",
+                            "tags": ["trainer-candidate"],
+                        },
+                        "family_runtime_record": {
+                            "question": "Inspect whether the README already embeds a demo GIF.",
+                            "expected_answer": "README already embeds the GIF.",
+                            "tags": ["trainer-candidate"],
+                        },
+                        "family_champion_context_group_id": "cg-readme",
+                        "family_champion_score": 1.0,
+                        "family_champion_record": {
+                            "question": "Inspect whether the README already embeds a demo GIF.",
+                            "expected_answer": "README already embeds the GIF.",
+                            "tags": ["trainer-candidate"],
+                        },
+                        "context_groups": [],
+                    },
+                    {
+                        "prompt_family_id": "pf-tests",
+                        "question": "Run the failing pytest target and inspect stderr.",
+                        "normalized_question": "run the failing pytest target and inspect stderr.",
+                        "family_father_question": (
+                            "Run the failing pytest target and inspect stderr."
+                        ),
+                        "family_father_record": {
+                            "question": "Run the failing pytest target and inspect stderr.",
+                            "expected_answer": "Inspect the failing pytest output.",
+                            "tags": ["trainer-candidate"],
+                        },
+                        "family_runtime_record": {
+                            "question": "Run the failing pytest target and inspect stderr.",
+                            "expected_answer": "Inspect the failing pytest output.",
+                            "tags": ["trainer-candidate"],
+                        },
+                        "family_champion_context_group_id": "cg-tests",
+                        "family_champion_score": 1.0,
+                        "family_champion_record": {
+                            "question": "Run the failing pytest target and inspect stderr.",
+                            "expected_answer": "Inspect the failing pytest output.",
+                            "tags": ["trainer-candidate"],
+                        },
+                        "context_groups": [],
+                    },
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    support = resolve_prompt_family_support(
+        "Inspect whether the README already has a demo GIF embedded.",
+        family_state_path,
+    )
+
+    assert support.supported is True
+    assert support.band == "match"
+    assert support.prompt_family_id == "pf-readme"
+    assert support.family_father_question == (
+        "Inspect whether the README already embeds a demo GIF."
+    )
+    assert support.family_runtime_record is not None
+
+
+def test_resolve_prompt_family_support_creates_new_family_below_threshold(tmp_path: Path) -> None:
+    trainer_dir = tmp_path / "artifacts" / "trainer"
+    trainer_dir.mkdir(parents=True, exist_ok=True)
+    family_state_path = trainer_dir / "champion-index.json"
+    family_state_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "record_kind": "repo-rag-trainer-champion-index",
+                "generated_at": "2026-05-09T18:05:00+00:00",
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-readme",
+                        "question": "Inspect whether the README already embeds a demo GIF.",
+                        "normalized_question": (
+                            "inspect whether the readme already embeds a demo gif."
+                        ),
+                        "family_father_question": (
+                            "Inspect whether the README already embeds a demo GIF."
+                        ),
+                        "family_father_record": {
+                            "question": "Inspect whether the README already embeds a demo GIF.",
+                            "expected_answer": "README already embeds the GIF.",
+                            "tags": ["trainer-candidate"],
+                        },
+                        "family_runtime_record": {
+                            "question": "Inspect whether the README already embeds a demo GIF.",
+                            "expected_answer": "README already embeds the GIF.",
+                            "tags": ["trainer-candidate"],
+                        },
+                        "family_champion_context_group_id": "cg-readme",
+                        "family_champion_score": 1.0,
+                        "family_champion_record": {
+                            "question": "Inspect whether the README already embeds a demo GIF.",
+                            "expected_answer": "README already embeds the GIF.",
+                            "tags": ["trainer-candidate"],
+                        },
+                        "context_groups": [],
+                    }
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    support = resolve_prompt_family_support(
+        "Provision a new AKS cluster and rotate deployment secrets.",
+        family_state_path,
+    )
+
+    assert support.supported is False
+    assert support.band == "new"
+    assert support.prompt_family_id == "pf-readme"
 
 
 def test_materialize_training_candidates_keeps_persisted_champions_without_benchmark_gate(
@@ -428,11 +600,13 @@ def test_materialize_training_candidates_keeps_persisted_champions_without_bench
             '  expected_answer: "The GIF is already present and the git worktree is clean."\n'
             '  tags: ["trainer-candidate", "candidate"]\n'
             "  benchmark_context:\n"
-            '    - "# national-debt-relief ## Demo ![Automated demo walkthrough](docs/assets/national-debt-relief-demo.gif)"\n'
+            '    - "# national-debt-relief ## Demo '
+            '![Automated demo walkthrough](docs/assets/national-debt-relief-demo.gif)"\n'
             "  benchmark_context_sources:\n"
             '    - "README.md"\n'
             "  provenance:\n"
-            '    trace_record_path: "artifacts/trainer/recovered-imported-traces/unsupported.json"\n'
+            '    trace_record_path: "artifacts/trainer/'
+            'recovered-imported-traces/unsupported.json"\n'
             '    recorded_at: "2026-05-08T13:20:42+00:00"\n'
         ),
         encoding="utf-8",
@@ -452,12 +626,15 @@ def test_materialize_training_candidates_keeps_persisted_champions_without_bench
                         "family_champion_score": 0.91,
                         "family_champion_record": {
                             "question": "Add a demo GIF to README",
-                            "expected_answer": "The GIF is already present and the git worktree is clean.",
+                            "expected_answer": (
+                                "The GIF is already present and the git worktree is clean."
+                            ),
                             "tags": ["trainer-candidate", "candidate"],
                             "expected_sources": [],
                             "benchmark_context": [
                                 "# national-debt-relief ## Demo "
-                                "![Automated demo walkthrough](docs/assets/national-debt-relief-demo.gif)"
+                                "![Automated demo walkthrough]"
+                                "(docs/assets/national-debt-relief-demo.gif)"
                             ],
                             "benchmark_context_sources": ["README.md"],
                             "candidate_status": "candidate",
@@ -467,7 +644,10 @@ def test_materialize_training_candidates_keeps_persisted_champions_without_bench
                             "quality_score": 0.91,
                             "support_count": 1,
                             "provenance": {
-                                "trace_record_path": "artifacts/trainer/recovered-imported-traces/unsupported.json",
+                                "trace_record_path": (
+                                    "artifacts/trainer/recovered-imported-traces/"
+                                    "unsupported.json"
+                                ),
                                 "recorded_at": "2026-05-08T13:20:42+00:00",
                             },
                         },
@@ -488,12 +668,15 @@ def test_materialize_training_candidates_keeps_persisted_champions_without_bench
                                 "champion_score": 0.91,
                                 "champion_record": {
                                     "question": "Add a demo GIF to README",
-                                    "expected_answer": "The GIF is already present and the git worktree is clean.",
+                                    "expected_answer": (
+                                        "The GIF is already present and the git worktree is clean."
+                                    ),
                                     "tags": ["trainer-candidate", "candidate"],
                                     "expected_sources": [],
                                     "benchmark_context": [
                                         "# national-debt-relief ## Demo "
-                                        "![Automated demo walkthrough](docs/assets/national-debt-relief-demo.gif)"
+                                        "![Automated demo walkthrough]"
+                                        "(docs/assets/national-debt-relief-demo.gif)"
                                     ],
                                     "benchmark_context_sources": ["README.md"],
                                     "candidate_status": "candidate",
@@ -503,7 +686,10 @@ def test_materialize_training_candidates_keeps_persisted_champions_without_bench
                                     "quality_score": 0.91,
                                     "support_count": 1,
                                     "provenance": {
-                                        "trace_record_path": "artifacts/trainer/recovered-imported-traces/unsupported.json",
+                                        "trace_record_path": (
+                                            "artifacts/trainer/recovered-imported-traces/"
+                                            "unsupported.json"
+                                        ),
                                         "recorded_at": "2026-05-08T13:20:42+00:00",
                                     },
                                 },
@@ -524,7 +710,10 @@ def test_materialize_training_candidates_keeps_persisted_champions_without_bench
     )
 
     assert summary["candidate_count"] == 1
-    champion_index = json.loads(champion_index_path.read_text(encoding="utf-8"))
+    assert summary["family_state_path"] == "artifacts/trainer/family-state.json"
+    family_state_path = tmp_path / str(summary["family_state_path"])
+    assert family_state_path.exists()
+    champion_index = json.loads(family_state_path.read_text(encoding="utf-8"))
     family = champion_index["prompt_families"][0]
     assert family["family_champion_record"] is not None
     assert len(family["context_groups"]) == 1
@@ -608,14 +797,72 @@ def test_summarize_champion_index_reports_family_trace_and_snapshot_ids(tmp_path
     summary = summarize_champion_index(champion_index_path)
 
     assert summary["candidate_count"] == 1
+    assert summary["family_candidate_count"] == 1
     assert summary["prompt_family_ids"] == ["pf-goat"]
+    assert summary["family_exact_snapshot_ids"] == ["ts-goat"]
     assert summary["champion_exact_snapshot_ids"] == ["ts-goat"]
+    assert summary["family_trace_record_paths"] == [
+        "artifacts/trainer/recovered-imported-traces/"
+        "20260506T221908Z-worker-0-prompts_goat_labs-p00000-298625-"
+        "realagiorganization_goat_labs.json"
+    ]
     assert summary["champion_trace_record_paths"] == [
         "artifacts/trainer/recovered-imported-traces/"
         "20260506T221908Z-worker-0-prompts_goat_labs-p00000-298625-"
         "realagiorganization_goat_labs.json"
     ]
+    assert summary["family_record_hashes"]
     assert summary["champion_record_hashes"]
+
+
+def test_summarize_family_state_matches_champion_compat_summary(tmp_path: Path) -> None:
+    trainer_dir = tmp_path / "artifacts" / "trainer"
+    trainer_dir.mkdir(parents=True, exist_ok=True)
+    family_state_path = trainer_dir / "champion-index.json"
+    family_state_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "record_kind": "repo-rag-trainer-champion-index",
+                "family_state_kind": "repo-rag-trainer-family-state",
+                "generated_at": "2026-05-09T18:05:00+00:00",
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-demo",
+                        "family_runtime_record": {
+                            "question": "Explain the repo",
+                            "expected_answer": "It explains the repo.",
+                            "tags": ["trainer-candidate"],
+                            "prompt_family_id": "pf-demo",
+                            "exact_snapshot_id": "ts-demo",
+                            "provenance": {
+                                "trace_record_path": "artifacts/traces/imported/demo.json"
+                            },
+                        },
+                        "context_groups": [],
+                    }
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    family_summary = summarize_family_state(family_state_path)
+    compat_summary = summarize_champion_index(family_state_path)
+
+    assert family_summary["family_trace_record_paths"] == ["artifacts/traces/imported/demo.json"]
+    assert "champion_trace_record_paths" not in family_summary
+    assert compat_summary["family_trace_record_paths"] == (
+        family_summary["family_trace_record_paths"]
+    )
+    assert compat_summary["champion_trace_record_paths"] == (
+        family_summary["family_trace_record_paths"]
+    )
+    assert compat_summary["champion_exact_snapshot_ids"] == (
+        family_summary["family_exact_snapshot_ids"]
+    )
+    assert compat_summary["champion_record_hashes"] == family_summary["family_record_hashes"]
 
 
 def test_materialize_training_candidates_normalizes_legacy_worker_sources_and_duplicate_questions(
@@ -888,7 +1135,7 @@ def test_materialize_training_candidates_tracks_context_groups_but_materializes_
     assert "core gameplay loop" in materialized[0].expected_answer
 
     champion_index = json.loads(
-        (tmp_path / "artifacts" / "trainer" / "champion-index.json").read_text(encoding="utf-8")
+        (tmp_path / "artifacts" / "trainer" / "family-state.json").read_text(encoding="utf-8")
     )
     assert champion_index["record_kind"] == "repo-rag-trainer-champion-index"
     assert len(champion_index["prompt_families"]) == 1
@@ -955,7 +1202,7 @@ def test_materialize_training_candidates_accumulates_support_for_repeated_answer
     assert summary["context_group_count"] == 1
 
     champion_index = json.loads(
-        (tmp_path / "artifacts" / "trainer" / "champion-index.json").read_text(encoding="utf-8")
+        (tmp_path / "artifacts" / "trainer" / "family-state.json").read_text(encoding="utf-8")
     )
     family = champion_index["prompt_families"][0]
     group = family["context_groups"][0]
@@ -1085,7 +1332,7 @@ def test_materialize_training_candidates_refreshes_same_key_champion_with_richer
     )
     assert materialized[0].benchmark_context_sources == ("docs/USAGE.md", "README.md")
 
-    champion_index = json.loads((trainer_dir / "champion-index.json").read_text(encoding="utf-8"))
+    champion_index = json.loads((trainer_dir / "family-state.json").read_text(encoding="utf-8"))
     family = champion_index["prompt_families"][0]
     assert family["family_champion_record"]["provenance"]["trace_record_path"].endswith(
         "accepted-b.json"
@@ -1164,7 +1411,7 @@ def test_materialize_training_candidates_groups_similar_prompt_variants_into_one
     assert summary["prompt_family_count"] == 1
     assert summary["new_prompt_family_count"] == 1
     champion_index = json.loads(
-        (tmp_path / "artifacts" / "trainer" / "champion-index.json").read_text(encoding="utf-8")
+        (tmp_path / "artifacts" / "trainer" / "family-state.json").read_text(encoding="utf-8")
     )
     family = champion_index["prompt_families"][0]
     assert family["question_variant_count"] == 2
@@ -1300,7 +1547,7 @@ def test_materialize_training_candidates_keeps_gradual_source_drift_in_one_conte
     assert summary["context_group_count"] == 1
 
     champion_index = json.loads(
-        (tmp_path / "artifacts" / "trainer" / "champion-index.json").read_text(encoding="utf-8")
+        (tmp_path / "artifacts" / "trainer" / "family-state.json").read_text(encoding="utf-8")
     )
     family = champion_index["prompt_families"][0]
     group = family["context_groups"][0]
@@ -1406,7 +1653,7 @@ def test_materialize_training_candidates_splits_same_sources_when_evidence_finge
     assert summary["context_group_count"] == 1
 
     champion_index = json.loads(
-        (tmp_path / "artifacts" / "trainer" / "champion-index.json").read_text(encoding="utf-8")
+        (tmp_path / "artifacts" / "trainer" / "family-state.json").read_text(encoding="utf-8")
     )
     family = champion_index["prompt_families"][0]
     assert len(family["context_groups"]) == 1
@@ -1507,7 +1754,7 @@ def test_materialize_training_candidates_keeps_family_champion_on_small_score_ed
     assert summary["context_group_count"] == 1
 
     champion_index = json.loads(
-        (tmp_path / "artifacts" / "trainer" / "champion-index.json").read_text(encoding="utf-8")
+        (tmp_path / "artifacts" / "trainer" / "family-state.json").read_text(encoding="utf-8")
     )
     family = champion_index["prompt_families"][0]
     assert family["family_champion_record"]["expected_answer"] == supported_answer
@@ -1602,7 +1849,8 @@ def test_materialize_combined_training_examples_keeps_trainer_candidates_without
             '  expected_answer: "The GIF is already present and the git worktree is clean."\n'
             '  tags: ["trainer-candidate", "candidate"]\n'
             "  benchmark_context:\n"
-            '    - "# national-debt-relief ## Demo ![Automated demo walkthrough](docs/assets/national-debt-relief-demo.gif)"\n'
+            '    - "# national-debt-relief ## Demo '
+            '![Automated demo walkthrough](docs/assets/national-debt-relief-demo.gif)"\n'
             "  benchmark_context_sources:\n"
             '    - "README.md"\n'
         ),

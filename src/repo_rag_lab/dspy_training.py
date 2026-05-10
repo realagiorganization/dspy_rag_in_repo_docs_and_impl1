@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -17,7 +18,12 @@ from .corpus import load_documents
 from .retrieval import RetrievalMode, chunk_documents, resolve_retrieval_mode, retrieve
 from .retrieval_profile import load_retrieval_profile
 from .runtime_artifacts import write_bundle_manifest
-from .training_samples import TrainingExample, load_training_examples, validate_training_examples
+from .training_samples import (
+    TrainingExample,
+    load_training_examples,
+    normalize_training_examples,
+    validate_training_examples,
+)
 
 try:
     import dspy as _dspy
@@ -79,7 +85,7 @@ class AnswerLabelLike(Protocol):
 class QuestionAnsweringProgram(Protocol):
     """Minimal callable program surface used by evaluation helpers."""
 
-    def __call__(self, *, question: str) -> object: ...
+    def __call__(self, *, question: str, **kwargs: object) -> object: ...
 
 
 class RepositoryProgram(QuestionAnsweringProgram, Protocol):
@@ -106,6 +112,7 @@ class RepositoryProgram(QuestionAnsweringProgram, Protocol):
         question: str,
         context: Sequence[str],
         context_sources: Sequence[str],
+        **kwargs: object,
     ) -> object: ...
 
 
@@ -170,6 +177,25 @@ class DSPyArtifactPaths:
 
 
 @dataclass(frozen=True)
+class DSPyFamilyArtifactResult:
+    """Serializable summary of one family-scoped DSPy runtime artifact."""
+
+    prompt_family_id: str
+    artifact_dir: str
+    program_path: str
+    metadata_path: str
+    optimizer: str
+    training_example_count: int
+    benchmark_example_count: int
+    benchmark_summary: dict[str, object]
+    artifact_ready: bool = True
+    artifact_source: str = "recompiled"
+
+    def to_payload(self) -> dict[str, object]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class DSPyTrainingResult:
     """Serializable summary of one DSPy training run."""
 
@@ -220,6 +246,7 @@ class _EvaluationCase:
 
     answer: str
     expected_sources: tuple[str, ...] = ()
+    benchmark_context: tuple[str, ...] = ()
 
 
 def _require_dspy() -> ModuleType:
@@ -436,11 +463,48 @@ def resolve_dspy_artifact_paths(root: Path, run_name: str) -> DSPyArtifactPaths:
     )
 
 
+def resolve_family_dspy_artifact_paths(
+    root: Path,
+    *,
+    run_name: str,
+    prompt_family_id: str,
+) -> DSPyArtifactPaths:
+    """Resolve the artifact directory and file paths for one family-scoped DSPy artifact."""
+
+    safe_run_name = _sanitize_run_name(run_name)
+    safe_family_id = _sanitize_run_name(prompt_family_id)
+    artifact_dir = root / DSPY_ARTIFACTS_DIR / safe_run_name / "families" / safe_family_id
+    return DSPyArtifactPaths(
+        artifact_dir=artifact_dir,
+        program_path=artifact_dir / PROGRAM_FILENAME,
+        metadata_path=artifact_dir / METADATA_FILENAME,
+    )
+
+
 def _relative_to_root(path: Path, root: Path) -> str:
     try:
         return str(path.relative_to(root))
     except ValueError:
         return str(path)
+
+
+def _training_examples_signature(examples: Sequence[TrainingExample]) -> str:
+    """Return a stable compile-facing signature for one ordered example set."""
+
+    payload = json.dumps(
+        [asdict(example) for example in examples],
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _string_or_none(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    return cleaned or None
 
 
 def load_dspy_artifact_metadata(metadata_path: Path) -> dict[str, object]:
@@ -621,6 +685,70 @@ def _format_generation_context(context: Sequence[str], context_sources: Sequence
     return formatted
 
 
+def _command_trace_prompt_text(command_trace: Sequence[Mapping[str, object]]) -> str:
+    """Return a stable readable command-trace block for DSPy prompt composition."""
+
+    rows: list[str] = []
+    for step in command_trace:
+        role = " ".join(str(step.get("role") or "").strip().split())
+        step_type = " ".join(str(step.get("type") or "").strip().split())
+        text = " ".join(
+            str(
+                step.get("text")
+                or step.get("command")
+                or step.get("summary")
+                or step.get("output")
+                or ""
+            ).strip().split()
+        )
+        if role and text:
+            rows.append(f"{role}: {text}")
+        elif step_type and text:
+            rows.append(f"{step_type}: {text}")
+        elif text:
+            rows.append(text)
+    return "\n".join(rows).strip()
+
+
+def _compose_repository_question(
+    question: str,
+    *,
+    original_prompt: str = "",
+    reformulated_prompt: str = "",
+    command_trace: Sequence[Mapping[str, object]] = (),
+) -> str:
+    """Return the DSPy-facing question text with prompt-lineage context when available."""
+
+    normalized_question = " ".join(str(question or "").strip().split())
+    normalized_original = " ".join(str(original_prompt or "").strip().split())
+    normalized_reformulated = " ".join(str(reformulated_prompt or "").strip().split())
+    trace_text = _command_trace_prompt_text(command_trace)
+    if (
+        not trace_text
+        and (
+            not normalized_original
+            or normalized_original.casefold() == normalized_question.casefold()
+        )
+        and (
+            not normalized_reformulated
+            or normalized_reformulated.casefold() == normalized_question.casefold()
+        )
+    ):
+        return normalized_question or normalized_reformulated or normalized_original
+    primary_question = normalized_question or normalized_reformulated or normalized_original
+    sections = [f"Question: {primary_question}"]
+    if normalized_original and normalized_original.casefold() != normalized_question.casefold():
+        sections.append(f"Original prompt: {normalized_original}")
+    if (
+        normalized_reformulated
+        and normalized_reformulated.casefold() != normalized_question.casefold()
+    ):
+        sections.append(f"Reformulated prompt: {normalized_reformulated}")
+    if trace_text:
+        sections.append(f"Command trace:\n{trace_text}")
+    return "\n\n".join(section for section in sections if section.strip())
+
+
 def repository_answer_metric(
     example: ExampleLike, pred: PredictionLike, trace: object | None = None
 ) -> bool:
@@ -681,10 +809,20 @@ if _dspy is not None:
             assert dspy_module is not None
             self.respond = dspy_module.ChainOfThought(RepositoryAnswerSignature)
 
-        def forward(self, question: str) -> object:
+        def forward(
+            self,
+            question: str,
+            *,
+            original_prompt: str | None = None,
+            reformulated_prompt: str | None = None,
+            command_trace: Sequence[Mapping[str, object]] = (),
+        ) -> object:
+            retrieval_question = " ".join(
+                str(reformulated_prompt or question or original_prompt or "").strip().split()
+            )
             context, context_sources = retrieve_repository_context(
                 self.root,
-                question,
+                retrieval_question or question,
                 top_k=self.top_k,
                 retrieval_mode=self.retrieval_mode,
             )
@@ -692,6 +830,9 @@ if _dspy is not None:
                 question=question,
                 context=context,
                 context_sources=context_sources,
+                original_prompt=original_prompt,
+                reformulated_prompt=reformulated_prompt,
+                command_trace=command_trace,
             )
 
         def answer_from_context(
@@ -700,11 +841,20 @@ if _dspy is not None:
             question: str,
             context: Sequence[str],
             context_sources: Sequence[str],
+            original_prompt: str | None = None,
+            reformulated_prompt: str | None = None,
+            command_trace: Sequence[Mapping[str, object]] = (),
         ) -> object:
             generation_context = _format_generation_context(context, context_sources)
             dspy_module = _dspy
             assert dspy_module is not None
-            prediction = self.respond(question=question, context=generation_context)
+            generation_question = _compose_repository_question(
+                question,
+                original_prompt=original_prompt or "",
+                reformulated_prompt=reformulated_prompt or "",
+                command_trace=command_trace,
+            )
+            prediction = self.respond(question=generation_question, context=generation_context)
             answer = str(getattr(prediction, "answer", ""))
             return dspy_module.Prediction(
                 answer=answer,
@@ -775,9 +925,15 @@ def build_dspy_trainset(examples: Sequence[TrainingExample]) -> list[TrainsetExa
     trainset: list[TrainsetExampleLike] = []
     for example in examples:
         dspy_example = dspy_module.Example(
-            question=example.question,
+            question=_compose_repository_question(
+                example.question,
+                original_prompt=example.original_prompt,
+                reformulated_prompt=example.reformulated_prompt,
+                command_trace=example.command_trace,
+            ),
             answer=example.expected_answer,
             expected_sources=list(example.expected_sources),
+            benchmark_context=list(example.benchmark_context),
         ).with_inputs("question")
         trainset.append(dspy_example)
     return trainset
@@ -834,16 +990,41 @@ def evaluate_repository_program(
             )
             continue
         if example.benchmark_context and hasattr(program, "answer_from_context"):
-            prediction = cast(
-                PredictionLike,
-                cast(RepositoryProgram, program).answer_from_context(
-                    question=example.question,
-                    context=example.benchmark_context,
-                    context_sources=example.benchmark_context_sources,
-                ),
-            )
+            repository_program = cast(RepositoryProgram, program)
+            try:
+                prediction = cast(
+                    PredictionLike,
+                    repository_program.answer_from_context(
+                        question=example.question,
+                        context=example.benchmark_context,
+                        context_sources=example.benchmark_context_sources,
+                        original_prompt=example.original_prompt or None,
+                        reformulated_prompt=example.reformulated_prompt or None,
+                        command_trace=example.command_trace,
+                    ),
+                )
+            except TypeError:
+                prediction = cast(
+                    PredictionLike,
+                    repository_program.answer_from_context(
+                        question=example.question,
+                        context=example.benchmark_context,
+                        context_sources=example.benchmark_context_sources,
+                    ),
+                )
         else:
-            prediction = cast(PredictionLike, program(question=example.question))
+            try:
+                prediction = cast(
+                    PredictionLike,
+                    program(
+                        question=example.question,
+                        original_prompt=example.original_prompt or None,
+                        reformulated_prompt=example.reformulated_prompt or None,
+                        command_trace=example.command_trace,
+                    ),
+                )
+            except TypeError:
+                prediction = cast(PredictionLike, program(question=example.question))
         retrieved_sources = _normalize_sources(prediction.context_sources)
         matched_sources = tuple(
             source for source in retrieved_sources if source in set(example.expected_sources)
@@ -852,6 +1033,7 @@ def evaluate_repository_program(
             _EvaluationCase(
                 answer=example.expected_answer,
                 expected_sources=example.expected_sources,
+                benchmark_context=example.benchmark_context,
             ),
             prediction,
         )
@@ -879,6 +1061,405 @@ def evaluate_repository_program(
         "skipped_count": skipped_count,
         "results": results,
         "root": str(root),
+    }
+
+
+def _family_candidate_records(payload: Mapping[str, object]) -> list[dict[str, object]]:
+    """Return stable unique candidate records for one persisted prompt family."""
+
+    records: list[dict[str, object]] = []
+    seen: set[str] = set()
+
+    def _append_record(record: object) -> None:
+        if not isinstance(record, Mapping):
+            return
+        normalized = {str(key): value for key, value in record.items()}
+        identity = str(normalized.get("exact_snapshot_id") or "").strip()
+        if not identity:
+            identity = json.dumps(
+                normalized,
+                sort_keys=True,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        if identity in seen:
+            return
+        seen.add(identity)
+        records.append(normalized)
+
+    raw_family_records = payload.get("family_records")
+    if isinstance(raw_family_records, list):
+        for record in raw_family_records:
+            _append_record(record)
+    raw_context_groups = payload.get("context_groups")
+    if isinstance(raw_context_groups, list):
+        for group in raw_context_groups:
+            if not isinstance(group, Mapping):
+                continue
+            _append_record(group.get("champion_record"))
+    _append_record(payload.get("family_runtime_record"))
+    _append_record(payload.get("family_father_record"))
+    _append_record(payload.get("family_champion_record"))
+    return records
+
+
+def _family_examples_from_payload(payload: Mapping[str, object]) -> list[TrainingExample]:
+    """Return normalized DSPy training examples for one persisted prompt family."""
+
+    candidate_records = _family_candidate_records(payload)
+    if not candidate_records:
+        return []
+    return normalize_training_examples(candidate_records)
+
+
+def _compile_repository_program_artifact(
+    root: Path,
+    *,
+    artifact_paths: DSPyArtifactPaths,
+    examples: Sequence[TrainingExample],
+    benchmark_examples: Sequence[TrainingExample],
+    training_config: DSPyTrainingConfig,
+    lm_config: DSPyLMConfig,
+) -> dict[str, object]:
+    """Compile one DSPy repository program artifact and write its metadata."""
+
+    resolved_root = root.resolve()
+    artifact_paths.artifact_dir.mkdir(parents=True, exist_ok=True)
+    program = RepositoryRAGProgram(
+        resolved_root,
+        top_k=training_config.top_k,
+        retrieval_mode=training_config.retrieval_mode,
+    )
+    optimizer = _build_optimizer(training_config)
+    trainset = build_dspy_trainset(examples)
+    if training_config.optimizer.casefold() == "miprov2":
+        compiled_program = optimizer.compile(
+            program,
+            trainset=trainset,
+            valset=trainset,
+            num_trials=training_config.mipro_num_trials,
+            max_bootstrapped_demos=training_config.max_bootstrapped_demos,
+            max_labeled_demos=training_config.max_labeled_demos,
+        )
+    else:
+        compiled_program = optimizer.compile(program, trainset=trainset)
+    compiled_program.save(str(artifact_paths.program_path), save_program=False)
+    benchmark_summary = evaluate_repository_program(
+        compiled_program,
+        resolved_root,
+        benchmark_examples,
+    )
+    return {
+        "compiled_program": compiled_program,
+        "benchmark_summary": benchmark_summary,
+        "trainset_size": len(trainset),
+    }
+
+
+def _load_previous_family_artifact_registry(root: Path) -> dict[str, dict[str, object]]:
+    """Return the latest persisted family-artifact registry when one is available."""
+
+    latest_metadata_path = latest_dspy_artifact_metadata(root)
+    if latest_metadata_path is None or not latest_metadata_path.is_file():
+        return {}
+    metadata = load_dspy_artifact_metadata(latest_metadata_path)
+    registry = metadata.get("family_artifact_registry")
+    if not isinstance(registry, Mapping):
+        return {}
+    normalized_registry: dict[str, dict[str, object]] = {}
+    for family_id, payload in registry.items():
+        if not isinstance(payload, Mapping):
+            continue
+        normalized_registry[str(family_id)] = {str(key): value for key, value in payload.items()}
+    return normalized_registry
+
+
+def _artifact_path_exists(root: Path, path_text: object) -> bool:
+    """Return whether one artifact path resolves to an existing local file."""
+
+    cleaned = str(path_text or "").strip()
+    if not cleaned:
+        return False
+    resolved_path = Path(cleaned)
+    if not resolved_path.is_absolute():
+        resolved_path = root / resolved_path
+    return resolved_path.is_file()
+
+
+def _lineage_has_dirty_families(lineage_metadata: Mapping[str, object] | None) -> bool:
+    """Return whether one lineage payload reports any dirty prompt families."""
+
+    if not isinstance(lineage_metadata, Mapping):
+        return False
+    dirty_family_count = lineage_metadata.get("dirty_family_count")
+    if isinstance(dirty_family_count, int) and dirty_family_count > 0:
+        return True
+    dirty_family_ids = lineage_metadata.get("dirty_family_ids")
+    return isinstance(dirty_family_ids, list) and bool(dirty_family_ids)
+
+
+def _family_artifact_payload_is_usable(root: Path, payload: Mapping[str, object]) -> bool:
+    """Return whether one carried-forward family artifact still has a runnable local program."""
+
+    if not bool(payload.get("artifact_ready", True)):
+        return False
+    return _artifact_path_exists(root, payload.get("program_path"))
+
+
+def _update_family_artifact_state(
+    family_payload: dict[str, object],
+    artifact_payload: Mapping[str, object],
+) -> None:
+    """Persist the current family runtime artifact summary back into family state."""
+
+    family_payload["family_runtime_artifact"] = {
+        str(key): value for key, value in artifact_payload.items()
+    }
+    family_payload["family_needs_recompile"] = False
+
+
+def _compile_family_artifacts(
+    root: Path,
+    *,
+    training_config: DSPyTrainingConfig,
+    lineage_metadata: Mapping[str, object] | None,
+    lm_config: DSPyLMConfig,
+) -> dict[str, dict[str, object]]:
+    """Compile one family-scoped DSPy artifact for each persisted prompt family."""
+
+    if not isinstance(lineage_metadata, Mapping):
+        return {}
+    family_state_path_text = str(
+        lineage_metadata.get("family_state_path")
+        or lineage_metadata.get("champion_index_path")
+        or ""
+    ).strip()
+    if not family_state_path_text:
+        return {}
+    resolved_root = root.resolve()
+    resolved_family_state_path = Path(family_state_path_text)
+    if not resolved_family_state_path.is_absolute():
+        resolved_family_state_path = resolved_root / resolved_family_state_path
+    if not resolved_family_state_path.is_file():
+        return {}
+    payload = json.loads(resolved_family_state_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        return {}
+    raw_families = payload.get("prompt_families")
+    if not isinstance(raw_families, list):
+        return {}
+    previous_registry = _load_previous_family_artifact_registry(resolved_root)
+    family_results: dict[str, dict[str, object]] = {}
+    family_state_changed = False
+    for family in raw_families:
+        if not isinstance(family, Mapping):
+            continue
+        prompt_family_id = str(family.get("prompt_family_id") or "").strip()
+        if not prompt_family_id:
+            continue
+        carried_artifact = previous_registry.get(prompt_family_id)
+        needs_recompile = bool(family.get("family_needs_recompile"))
+        if (
+            not needs_recompile
+            and isinstance(carried_artifact, Mapping)
+            and _family_artifact_payload_is_usable(resolved_root, carried_artifact)
+        ):
+            normalized_carried_artifact = {
+                str(key): value for key, value in carried_artifact.items()
+            }
+            normalized_carried_artifact["artifact_source"] = "carried-forward"
+            family_results[prompt_family_id] = normalized_carried_artifact
+            if isinstance(family, dict):
+                _update_family_artifact_state(family, normalized_carried_artifact)
+                family_state_changed = True
+            continue
+        examples = _family_examples_from_payload(family)
+        if not examples:
+            continue
+        artifact_paths = resolve_family_dspy_artifact_paths(
+            resolved_root,
+            run_name=training_config.run_name,
+            prompt_family_id=prompt_family_id,
+        )
+        artifact_payload = _compile_repository_program_artifact(
+            resolved_root,
+            artifact_paths=artifact_paths,
+            examples=examples,
+            benchmark_examples=examples,
+            training_config=training_config,
+            lm_config=lm_config,
+        )
+        relative_program_path = str(artifact_paths.program_path.relative_to(resolved_root))
+        relative_metadata_path = str(artifact_paths.metadata_path.relative_to(resolved_root))
+        benchmark_summary = artifact_payload["benchmark_summary"]
+        family_metadata = {
+            "recorded_at": datetime.now(UTC).isoformat(),
+            "run_name": _sanitize_run_name(training_config.run_name),
+            "prompt_family_id": prompt_family_id,
+            "artifact_kind": "repo-rag-family-runtime-artifact",
+            "artifact_dir": str(artifact_paths.artifact_dir.relative_to(resolved_root)),
+            "program_path": relative_program_path,
+            "metadata_path": relative_metadata_path,
+            "optimizer": training_config.optimizer,
+            "top_k": training_config.top_k,
+            "retrieval_mode": training_config.retrieval_mode,
+            "lm": lm_config.as_metadata(),
+            "training_example_count": len(examples),
+            "benchmark_example_count": len(examples),
+            "benchmark_summary": benchmark_summary,
+            "family_state_path": str(resolved_family_state_path.relative_to(resolved_root)),
+        }
+        artifact_paths.metadata_path.write_text(
+            f"{json.dumps(family_metadata, indent=2)}\n",
+            encoding="utf-8",
+        )
+        family_results[prompt_family_id] = DSPyFamilyArtifactResult(
+            prompt_family_id=prompt_family_id,
+            artifact_dir=str(artifact_paths.artifact_dir.relative_to(resolved_root)),
+            program_path=relative_program_path,
+            metadata_path=relative_metadata_path,
+            optimizer=training_config.optimizer,
+            training_example_count=len(examples),
+            benchmark_example_count=len(examples),
+            benchmark_summary=cast(dict[str, object], benchmark_summary),
+            artifact_ready=artifact_paths.program_path.is_file(),
+            artifact_source="recompiled",
+        ).to_payload()
+        if isinstance(family, dict):
+            _update_family_artifact_state(family, family_results[prompt_family_id])
+            family_state_changed = True
+    if family_state_changed:
+        resolved_family_state_path.write_text(
+            f"{json.dumps(payload, indent=2)}\n",
+            encoding="utf-8",
+        )
+    return family_results
+
+
+def _global_artifact_payload_is_usable(
+    root: Path,
+    payload: Mapping[str, object],
+    *,
+    training_config: DSPyTrainingConfig,
+    lm_config: DSPyLMConfig,
+    training_path: Path,
+    benchmark_path: Path,
+    training_examples_signature: str,
+    benchmark_examples_signature: str,
+    lineage_metadata: Mapping[str, object] | None,
+) -> bool:
+    """Return whether one latest global DSPy artifact can be carried forward safely."""
+
+    previous_training_examples_signature = _string_or_none(
+        payload.get("training_examples_signature")
+    )
+    previous_benchmark_examples_signature = _string_or_none(
+        payload.get("benchmark_examples_signature")
+    )
+    signatures_compatible = (
+        previous_training_examples_signature is not None
+        and previous_benchmark_examples_signature is not None
+        and previous_training_examples_signature == training_examples_signature
+        and previous_benchmark_examples_signature == benchmark_examples_signature
+    )
+    if _lineage_has_dirty_families(lineage_metadata) and not signatures_compatible:
+        return False
+    if not _artifact_path_exists(root, payload.get("program_path")):
+        return False
+    expected_training_path = _relative_to_root(training_path, root)
+    expected_benchmark_path = _relative_to_root(benchmark_path, root)
+    if _string_or_none(payload.get("training_path")) != expected_training_path:
+        return False
+    if _string_or_none(payload.get("benchmark_path")) != expected_benchmark_path:
+        return False
+    if (
+        previous_training_examples_signature is not None
+        and previous_training_examples_signature != training_examples_signature
+    ):
+        return False
+    if (
+        previous_benchmark_examples_signature is not None
+        and previous_benchmark_examples_signature != benchmark_examples_signature
+    ):
+        return False
+    if _string_or_none(payload.get("optimizer")) != training_config.optimizer:
+        return False
+    previous_top_k = payload.get("top_k")
+    if isinstance(previous_top_k, int) and previous_top_k != training_config.top_k:
+        return False
+    previous_retrieval_mode = payload.get("retrieval_mode")
+    current_retrieval_mode = training_config.retrieval_mode
+    if isinstance(previous_retrieval_mode, str):
+        if str(current_retrieval_mode) != previous_retrieval_mode:
+            return False
+    elif current_retrieval_mode is not None and previous_retrieval_mode is not None:
+        return False
+    previous_lm = payload.get("lm")
+    if isinstance(previous_lm, Mapping):
+        previous_lm_model = _string_or_none(previous_lm.get("model"))
+        if previous_lm_model is not None and previous_lm_model != lm_config.model:
+            return False
+    return True
+
+
+def _carry_forward_global_artifact(
+    root: Path,
+    *,
+    artifact_paths: DSPyArtifactPaths,
+    training_config: DSPyTrainingConfig,
+    lm_config: DSPyLMConfig,
+    training_path: Path,
+    benchmark_path: Path,
+    training_examples_signature: str,
+    benchmark_examples_signature: str,
+    lineage_metadata: Mapping[str, object] | None,
+) -> dict[str, object] | None:
+    """Copy the latest compatible global DSPy program into the new run directory."""
+
+    latest_metadata_path = latest_dspy_artifact_metadata(root)
+    if latest_metadata_path is None or not latest_metadata_path.is_file():
+        return None
+    latest_metadata = load_dspy_artifact_metadata(latest_metadata_path)
+    if not _global_artifact_payload_is_usable(
+        root,
+        latest_metadata,
+        training_config=training_config,
+        lm_config=lm_config,
+        training_path=training_path,
+        benchmark_path=benchmark_path,
+        training_examples_signature=training_examples_signature,
+        benchmark_examples_signature=benchmark_examples_signature,
+        lineage_metadata=lineage_metadata,
+    ):
+        return None
+    program_path_text = _string_or_none(latest_metadata.get("program_path"))
+    if program_path_text is None:
+        return None
+    previous_program_path = Path(program_path_text)
+    if not previous_program_path.is_absolute():
+        previous_program_path = root / previous_program_path
+    if not previous_program_path.is_file():
+        return None
+    artifact_paths.artifact_dir.mkdir(parents=True, exist_ok=True)
+    artifact_paths.program_path.write_bytes(previous_program_path.read_bytes())
+    benchmark_summary = latest_metadata.get("benchmark_summary")
+    compiled_program_summary = latest_metadata.get("compiled_program_summary")
+    if not isinstance(benchmark_summary, dict):
+        return None
+    normalized_program_summary: dict[str, object]
+    if isinstance(compiled_program_summary, dict):
+        normalized_program_summary = dict(compiled_program_summary)
+    else:
+        normalized_program_summary = {}
+    normalized_program_summary["artifact_source"] = "carried-forward"
+    normalized_program_summary.setdefault("top_k", training_config.top_k)
+    normalized_program_summary.setdefault("program_type", "RepositoryRAGProgram")
+    return {
+        "compiled_program": None,
+        "benchmark_summary": benchmark_summary,
+        "trainset_size": normalized_program_summary.get("trainset_size") or 0,
+        "compiled_program_summary": normalized_program_summary,
+        "artifact_source": "carried-forward",
     }
 
 
@@ -913,35 +1494,47 @@ def train_repository_program(
         if benchmark_validation_issues:
             issues_text = "\n".join(f"- {issue}" for issue in benchmark_validation_issues)
             raise ValueError(f"Benchmark samples are invalid:\n{issues_text}")
+    training_examples_signature = _training_examples_signature(examples)
+    benchmark_examples_signature = _training_examples_signature(benchmark_examples)
 
     configure_dspy_lm(lm_config)
-    trainset = build_dspy_trainset(examples)
     artifact_paths = resolve_dspy_artifact_paths(resolved_root, training_config.run_name)
-    artifact_paths.artifact_dir.mkdir(parents=True, exist_ok=True)
-    program = RepositoryRAGProgram(
+    compiled_artifact = _carry_forward_global_artifact(
         resolved_root,
-        top_k=training_config.top_k,
-        retrieval_mode=training_config.retrieval_mode,
+        artifact_paths=artifact_paths,
+        training_config=training_config,
+        lm_config=lm_config,
+        training_path=training_path,
+        benchmark_path=benchmark_path,
+        training_examples_signature=training_examples_signature,
+        benchmark_examples_signature=benchmark_examples_signature,
+        lineage_metadata=training_config.lineage_metadata,
     )
-    optimizer = _build_optimizer(training_config)
-    if training_config.optimizer.casefold() == "miprov2":
-        compiled_program = optimizer.compile(
-            program,
-            trainset=trainset,
-            valset=trainset,
-            num_trials=training_config.mipro_num_trials,
-            max_bootstrapped_demos=training_config.max_bootstrapped_demos,
-            max_labeled_demos=training_config.max_labeled_demos,
+    if compiled_artifact is None:
+        compiled_artifact = _compile_repository_program_artifact(
+            resolved_root,
+            artifact_paths=artifact_paths,
+            examples=examples,
+            benchmark_examples=benchmark_examples,
+            training_config=training_config,
+            lm_config=lm_config,
         )
-    else:
-        compiled_program = optimizer.compile(program, trainset=trainset)
-
-    compiled_program.save(str(artifact_paths.program_path), save_program=False)
-    benchmark_summary = evaluate_repository_program(
-        compiled_program,
+    benchmark_summary = compiled_artifact["benchmark_summary"]
+    family_artifact_registry = _compile_family_artifacts(
         resolved_root,
-        benchmark_examples,
+        training_config=training_config,
+        lineage_metadata=training_config.lineage_metadata,
+        lm_config=lm_config,
     )
+    compiled_program_summary = compiled_artifact.get("compiled_program_summary")
+    if not isinstance(compiled_program_summary, dict):
+        compiled_program = compiled_artifact["compiled_program"]
+        compiled_program_summary = {
+            "program_type": compiled_program.__class__.__name__,
+            "trainset_size": int(compiled_artifact["trainset_size"]),
+            "top_k": training_config.top_k,
+            "artifact_source": str(compiled_artifact.get("artifact_source") or "recompiled"),
+        }
     relative_program_path = str(artifact_paths.program_path.relative_to(resolved_root))
     relative_metadata_path = str(artifact_paths.metadata_path.relative_to(resolved_root))
     metadata = {
@@ -960,6 +1553,8 @@ def train_repository_program(
         "metadata_path": relative_metadata_path,
         "training_path": str(training_path.relative_to(resolved_root)),
         "benchmark_path": str(benchmark_path.relative_to(resolved_root)),
+        "training_examples_signature": training_examples_signature,
+        "benchmark_examples_signature": benchmark_examples_signature,
         "training_example_count": len(examples),
         "benchmark_example_count": len(benchmark_examples),
         "optimizer": training_config.optimizer,
@@ -967,11 +1562,8 @@ def train_repository_program(
         "retrieval_mode": training_config.retrieval_mode,
         "lm": lm_config.as_metadata(),
         "benchmark_summary": benchmark_summary,
-        "compiled_program_summary": {
-            "program_type": compiled_program.__class__.__name__,
-            "trainset_size": len(trainset),
-            "top_k": training_config.top_k,
-        },
+        "compiled_program_summary": compiled_program_summary,
+        "family_artifact_registry": family_artifact_registry or None,
         "lineage": (
             dict(training_config.lineage_metadata)
             if isinstance(training_config.lineage_metadata, Mapping)

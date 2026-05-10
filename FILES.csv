@@ -13,7 +13,7 @@ path,top_level,kind,line_count,bytes,summary
 .dockerignore,.dockerignore,text,17,150,.git
 .env.sample,.env.sample,binary,,905,Binary tracked asset at .env.sample
 .gitattributes,.gitattributes,text,4,126,*.png filter=lfs diff=lfs merge=lfs -text
-.github/workflows/ci.yml,.github,yaml,139,3738,GitHub Actions workflow for ci
+.github/workflows/ci.yml,.github,yaml,146,4185,GitHub Actions workflow for ci
 .github/workflows/hushwheel-quality.yml,.github,yaml,104,3526,GitHub Actions workflow for hushwheel quality
 .github/workflows/pages.yml,.github,yaml,99,2424,GitHub Actions workflow for pages
 .github/workflows/publication-pdf.yml,.github,yaml,144,5549,GitHub Actions workflow for publication pdf
@@ -35,12 +35,12 @@ README.md,README.md,markdown,312,26222,"Top-level repository overview, workflow 
 TODO.MD,TODO.MD,binary,,6104,Binary tracked asset at TODO.MD
 config/retrieval-profile.json,config,json,66,1791,"JSON object with keys: name, retrieval_mode, rerank_candidate_pool_size"
 data/questions/repository.yaml,data,yaml,7,283,- question: What does this repository research?
-docs/architecture/dspy-rag-guide.md,docs,markdown,801,42274,"DSPy workflow guide for training, runtime use, and compiled programs"
+docs/architecture/dspy-rag-guide.md,docs,markdown,890,48685,"DSPy workflow guide for training, runtime use, and compiled programs"
 docs/architecture/inspired/dspy-rag-tutorial.md,docs,markdown,35,1474,DSPy Tutorial: Basic RAG
 docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md,docs,markdown,38,1555,Implementing RAG with DSPy: Technical Guide
 docs/architecture/mcp-discovery.md,docs,markdown,54,1757,MCP Discovery Notes
 docs/architecture/package-api.md,docs,markdown,127,9186,Package API Notes
-docs/architecture/research-narrative.md,docs,markdown,748,57140,"Repository research narrative tying code, docs, and verification together"
+docs/architecture/research-narrative.md,docs,markdown,910,68390,"Repository research narrative tying code, docs, and verification together"
 docs/archive/repo-completeness-checklist.md,docs,markdown,238,7450,Archived completeness snapshot kept for workflow and lockfile policy context
 docs/audit/2026-03-15-repo-state.md,docs,markdown,151,5989,Repository audit note for 2026 03 15 repo state
 docs/audit/2026-03-17-docs-and-uv-refresh.md,docs,markdown,79,3977,Repository audit note for 2026 03 17 docs and uv refresh
@@ -141,7 +141,8 @@ docs/audit/2026-05-02-hybrid-vector-retrieval-default.md,docs,markdown,385,18302
 docs/audit/2026-05-02-live-trainer-still-not-publishing-bundles.md,docs,markdown,1281,60556,Repository audit note for 2026 05 02 live trainer still not publishing bundles
 docs/audit/2026-05-02-trainer-context-group-champion-index-stage1.md,docs,markdown,330,18201,Repository audit note for 2026 05 02 trainer context group champion index stage1
 docs/audit/2026-05-02-zz-codex-exec-resume-session-state-stage0.md,docs,markdown,3866,170338,Repository audit note for 2026 05 02 zz codex exec resume session state stage0
-docs/audit/README.md,docs,markdown,14,427,Repository audit note for README
+docs/audit/2026-05-08-zz-per-turn-dspy-mediation-contract-stage0.md,docs,markdown,113,5821,Repository audit note for 2026 05 08 zz per turn dspy mediation contract stage0
+docs/audit/README.md,docs,markdown,14,420,Repository audit note for README
 docs/guides/hushwheel-fixture-rag-guide.md,docs,markdown,138,5169,RAG Guide For The Hushwheel Fixture
 docs/operations/azure-deployment.md,docs,markdown,111,4901,Azure Deployment Notes
 docs/operations/environment.md,docs,markdown,130,7589,Environment and secret reference for local runtime and deployment workflows
@@ -150,8 +151,9 @@ docs/operations/simple-end-to-end-verification-guide.md,docs,markdown,105,4111,S
 docs/operations/trainer-deployment.md,docs,markdown,152,6047,Trainer Deployment Notes
 docs/planning/codex-exec-resume-plan.md,docs,markdown,207,11561,Codex Exec Resume Plan
 docs/planning/dataset-integration-plan.md,docs,markdown,478,33882,Dataset Integration Plan
+docs/planning/per-turn-dspy-mediation-contract.md,docs,markdown,115,4966,Per-Turn DSPy Mediation Contract
 docs/planning/repo-hardening-plan.md,docs,markdown,71,4545,Repository Hardening Plan
-docs/planning/trainer-context-group-champion-plan.md,docs,markdown,114,7450,Trainer Context-Group Champion Plan
+docs/planning/trainer-context-group-champion-plan.md,docs,markdown,119,7736,Trainer Context-Group Champion Plan
 mkdocs.yml,mkdocs.yml,yaml,37,843,site_name: Repository RAG Lab
 notebooks/01_repo_rag_research.ipynb,notebooks,notebook,281,9324,Repository RAG Research Playbook
 notebooks/02_agent_workflow_checklist.ipynb,notebooks,notebook,404,17632,Agent Workflow Checklist
@@ -167,8 +169,8 @@ publication/exploratorium_translation/Makefile,publication,makefile,30,870,UV ?=
 publication/exploratorium_translation/README.md,publication,markdown,28,997,Exploratorium Translation
 publication/exploratorium_translation/exploratorium_translation.pdf,publication,binary,,633449,Binary tracked asset at publication/exploratorium_translation/exploratorium_translation.pdf
 publication/exploratorium_translation/exploratorium_translation.tex,publication,latex,70,2573,\documentclass[11pt]{article}
-publication/exploratorium_translation/generated/exploratorium-content.tex,publication,latex,2308,732643,% Generated by repo-rag sync-exploratorium-translation. Do not edit manually.
-publication/exploratorium_translation/generated/exploratorium-manifest.json,publication,json,4165,285820,"JSON object with keys: generated_at, tracked_file_count, summarized_file_count"
+publication/exploratorium_translation/generated/exploratorium-content.tex,publication,latex,2338,742477,% Generated by repo-rag sync-exploratorium-translation. Do not edit manually.
+publication/exploratorium_translation/generated/exploratorium-manifest.json,publication,json,4221,289867,"JSON object with keys: generated_at, tracked_file_count, summarized_file_count"
 publication/references.bib,publication,bibtex,28,1252,"@inproceedings{lewis2020rag,"
 publication/repository-rag-lab-article.pdf,publication,binary,,236232,Binary tracked asset at publication/repository-rag-lab-article.pdf
 publication/repository-rag-lab-article.tex,publication,latex,208,9526,\documentclass[11pt]{article}
@@ -259,35 +261,35 @@ samples/training/hushwheel_fixture_training_examples.yaml,samples,yaml,68,1852,-
 samples/training/repository_training_examples.yaml,samples,yaml,80,2504,- question: What does this repository research?
 src/repo_rag_lab/__init__.py,src,python,47,1087,Public package surface for the repository-grounded RAG lab.
 src/repo_rag_lab/azure.py,src,python,76,2592,Azure deployment manifest helpers for downstream release workflows.
-src/repo_rag_lab/azure_artifacts.py,src,python,415,15822,Azure Blob + Queue helpers for trainer-side traces and global bundle storage.
+src/repo_rag_lab/azure_artifacts.py,src,python,424,16241,Azure Blob + Queue helpers for trainer-side traces and global bundle storage.
 src/repo_rag_lab/azure_runtime.py,src,python,577,20123,"Azure runtime normalization, live probes, and cloud-completion helpers."
 src/repo_rag_lab/benchmarks.py,src,python,484,16524,Retrieval benchmark helpers for notebook assertions and logging.
 src/repo_rag_lab/cli.py,src,python,1339,58870,Command-line entrypoints for the shared repository RAG workflows.
-src/repo_rag_lab/codex_proxy.py,src,python,1350,50893,Local streaming proxy that injects repo-RAG + DSPy mediation for Codex.
+src/repo_rag_lab/codex_proxy.py,src,python,1586,61011,Local streaming proxy that injects repo-RAG + DSPy mediation for Codex.
 src/repo_rag_lab/corpus.py,src,python,181,5245,Repository file loading helpers for the baseline text corpus.
-src/repo_rag_lab/dspy_training.py,src,python,1000,36473,DSPy training and artifact helpers for repository-grounded RAG.
-src/repo_rag_lab/dspy_workflow.py,src,python,163,5888,DSPy-backed runtime wrappers around the repository retrieval workflow.
+src/repo_rag_lab/dspy_training.py,src,python,1603,61196,DSPy training and artifact helpers for repository-grounded RAG.
+src/repo_rag_lab/dspy_workflow.py,src,python,180,6518,DSPy-backed runtime wrappers around the repository retrieval workflow.
 src/repo_rag_lab/exploratorium_translation.py,src,python,1009,38049,Generate the bilingual exploratorium translation publication surfaces.
 src/repo_rag_lab/file_summaries.py,src,python,327,10564,Generate tracked repository file-summary surfaces.
 src/repo_rag_lab/github_pr_gates.py,src,python,140,3979,GitHub branch-protection helpers for required pull-request gate checks.
 src/repo_rag_lab/mcp.py,src,python,84,2947,Discovery helpers for MCP-related repository artifacts.
-src/repo_rag_lab/mcp_server.py,src,python,1346,50006,Minimal stdio MCP server for bounded repo-RAG operations.
+src/repo_rag_lab/mcp_server.py,src,python,1340,49908,Minimal stdio MCP server for bounded repo-RAG operations.
 src/repo_rag_lab/mcp_stdio.py,src,python,38,953,Lightweight stdio entrypoint for the bounded repo-RAG MCP server.
 src/repo_rag_lab/notebook_runner.py,src,python,491,16433,Monitored batch execution helpers for repository notebooks.
 src/repo_rag_lab/notebook_scaffolding.py,src,python,258,10965,High-level notebook scaffolds built from tested repository helpers.
 src/repo_rag_lab/notebook_support.py,src,python,89,2843,Helpers shared by notebooks so their setup logic stays in tested Python code.
 src/repo_rag_lab/pages_site.py,src,python,390,13635,Generate a MkDocs-ready catalog of tracked repository Markdown files.
 src/repo_rag_lab/population_samples.py,src,python,241,8376,Helpers for reviewing and batching starter corpus-population inputs.
-src/repo_rag_lab/retrieval.py,src,python,791,25563,Baseline chunking and lexical retrieval utilities for repository text.
+src/repo_rag_lab/retrieval.py,src,python,788,25533,Baseline chunking and lexical retrieval utilities for repository text.
 src/repo_rag_lab/retrieval_profile.py,src,python,236,9527,"Profile-driven retrieval weighting, exclusions, and repo-local overrides."
-src/repo_rag_lab/runtime_artifacts.py,src,python,1907,81152,"Versioned bundle, overlay, and runtime-trace helpers."
+src/repo_rag_lab/runtime_artifacts.py,src,python,2372,103601,"Versioned bundle, overlay, and runtime-trace helpers."
 src/repo_rag_lab/rust_lookup.py,src,python,295,7724,Helpers for the native Rust-backed SQLite lookup index.
 src/repo_rag_lab/semantic_retrieval.py,src,python,214,7407,Azure OpenAI embedding-backed semantic retrieval helpers.
 src/repo_rag_lab/settings.py,src,python,28,699,Shared repository path settings derived from a repository root.
 src/repo_rag_lab/todo_backlog.py,src,python,276,8434,Shared backlog rendering helpers for Markdown and LaTeX surfaces.
-src/repo_rag_lab/trainer_deployment.py,src,python,427,17783,Kubernetes manifest helpers for trainer-side repo-RAG deployment surfaces.
-src/repo_rag_lab/training_samples.py,src,python,2168,85756,Helpers for loading and summarizing starter DSPy training examples.
-src/repo_rag_lab/utilities.py,src,python,2544,103283,"User-facing utility helpers shared by the CLI, tests, and notebooks."
+src/repo_rag_lab/trainer_deployment.py,src,python,431,18027,Kubernetes manifest helpers for trainer-side repo-RAG deployment surfaces.
+src/repo_rag_lab/training_samples.py,src,python,2486,100347,Helpers for loading and summarizing starter DSPy training examples.
+src/repo_rag_lab/utilities.py,src,python,2586,105258,"User-facing utility helpers shared by the CLI, tests, and notebooks."
 src/repo_rag_lab/verification.py,src,python,163,4476,Verification helpers for Makefile and notebook contract checks.
 src/repo_rag_lab/workflow.py,src,python,503,15900,Baseline repository question-answering workflow built on file retrieval.
 tests/features/repository_rag.feature,tests,gherkin,12,377,Feature: Repository RAG
@@ -332,8 +334,8 @@ tests/fixtures/hushwheel_lexiconarium/tools/regenerate_hushwheel_fixture.py,test
 tests/test_azure_runtime.py,tests,python,208,7540,Python module for test azure runtime
 tests/test_benchmarks_and_notebook_scaffolding.py,tests,python,274,11859,Python module for test benchmarks and notebook scaffolding
 tests/test_cli_and_dspy.py,tests,python,1876,68622,Python module for test cli and dspy
-tests/test_codex_proxy.py,tests,python,512,17520,Python module for test codex proxy
-tests/test_dspy_training.py,tests,python,814,29596,Python module for test dspy training
+tests/test_codex_proxy.py,tests,python,846,30213,Python module for test codex proxy
+tests/test_dspy_training.py,tests,python,1642,66024,Python module for test dspy training
 tests/test_exploratorium_translation.py,tests,python,138,5239,Python module for test exploratorium translation
 tests/test_file_summaries.py,tests,python,230,9110,Python module for test file summaries
 tests/test_github_pr_gates.py,tests,python,183,5678,Python module for test github pr gates
@@ -342,7 +344,7 @@ tests/test_hushwheel_program_surface.py,tests,python,125,4626,Python module for 
 tests/test_live_azure_integration.py,tests,python,83,2634,Python module for test live azure integration
 tests/test_lookup_first.py,tests,python,108,3559,Python module for test lookup first
 tests/test_mcp_branches.py,tests,python,31,1077,Python module for test mcp branches
-tests/test_mcp_server.py,tests,python,786,26234,Python module for test mcp server
+tests/test_mcp_server.py,tests,python,788,26258,Python module for test mcp server
 tests/test_mcp_stdio.py,tests,python,42,988,Python module for test mcp stdio
 tests/test_notebook_runner.py,tests,python,84,3088,Python module for test notebook runner
 tests/test_pages_site.py,tests,python,225,9045,Python module for test pages site
@@ -350,11 +352,11 @@ tests/test_population_samples.py,tests,python,76,3144,Python module for test pop
 tests/test_project_surfaces.py,tests,python,484,21471,Python module for test project surfaces
 tests/test_repository_rag_bdd.py,tests,python,30,879,Python module for test repository rag bdd
 tests/test_retrieval.py,tests,python,389,13365,Python module for test retrieval
-tests/test_runtime_artifacts_azure.py,tests,python,878,31440,Python module for test runtime artifacts azure
+tests/test_runtime_artifacts_azure.py,tests,python,1224,46320,Python module for test runtime artifacts azure
 tests/test_rust_lookup.py,tests,python,95,3099,Python module for test rust lookup
 tests/test_todo_backlog.py,tests,python,103,3505,Python module for test todo backlog
-tests/test_training_samples.py,tests,python,1623,61597,Python module for test training samples
-tests/test_utilities.py,tests,python,2418,94748,Python module for test utilities
+tests/test_training_samples.py,tests,python,1871,72921,Python module for test training samples
+tests/test_utilities.py,tests,python,2473,96986,Python module for test utilities
 tests/test_verification.py,tests,python,66,3156,Python module for test verification
 tests/test_workflow.py,tests,python,99,3456,Python module for test workflow
 tests/test_workflow_live.py,tests,python,128,4292,Python module for test workflow live

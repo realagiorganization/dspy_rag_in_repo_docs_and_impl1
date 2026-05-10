@@ -392,9 +392,7 @@ def build_mcp_tool_definitions() -> list[MCPToolDefinition]:
                 "properties": {
                     "question": {
                         "type": "string",
-                        "description": (
-                            "Natural-language repository question or search target."
-                        ),
+                        "description": ("Natural-language repository question or search target."),
                     },
                     "root": {
                         "type": "string",
@@ -714,9 +712,7 @@ def _startup_context_resource_text(server_root: Path) -> str:
                 "If you need repository discovery, call MCP tool search_repo with "
                 "question=<your question> and top_k=4."
             ),
-            (
-                "Use MCP tool ask_repo for one bounded repo-grounded answer after discovery."
-            ),
+            ("Use MCP tool ask_repo for one bounded repo-grounded answer after discovery."),
             (
                 "Use shell reads only after MCP tool discovery narrowed the file set or when exact "
                 "post-edit verification is required."
@@ -1071,9 +1067,7 @@ def _decode_json_rpc_payload(payload_bytes: bytes) -> dict[str, object]:
     if not isinstance(payload, dict):
         _log_mcp_debug("payload-not-object")
         raise ValueError("JSON-RPC payload must be an object.")
-    _log_mcp_debug(
-        f"message method={payload.get('method') or ''!s} id={payload.get('id') or ''!s}"
-    )
+    _log_mcp_debug(f"message method={payload.get('method') or ''!s} id={payload.get('id') or ''!s}")
     return {str(key): value for key, value in payload.items()}
 
 
