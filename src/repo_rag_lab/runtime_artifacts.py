@@ -263,11 +263,7 @@ def _bundle_family_entry(family_payload: Mapping[str, object]) -> dict[str, obje
                 else "family-runtime-artifact-missing"
             ),
             "artifact_ready": False,
-            "artifact_source": (
-                "family_runtime_record"
-                if runtime_record is not None
-                else None
-            ),
+            "artifact_source": ("family_runtime_record" if runtime_record is not None else None),
             **runtime_metric,
         }
     return {
@@ -524,9 +520,7 @@ def build_bundle_manifest(
     lineage = _mapping_or_none(metadata.get("lineage"))
     family_artifact_registry = _mapping_or_none(metadata.get("family_artifact_registry"))
     family_state_path = (
-        _string_or_none(lineage.get("family_state_path"))
-        if isinstance(lineage, Mapping)
-        else None
+        _string_or_none(lineage.get("family_state_path")) if isinstance(lineage, Mapping) else None
     ) or (
         _string_or_none(lineage.get("champion_index_path"))
         if isinstance(lineage, Mapping)
@@ -795,7 +789,7 @@ def upload_remote_bundle(
                 )
         remote_family_artifact_blobs[prompt_family_id] = family_blob_map
     store.upload_json(container, bundle_blob_map["published"], published_record)
-    payload = {
+    payload: dict[str, object] = {
         "storage_backend": "azure-blob",
         "bundle_container": container,
         "remote_bundle_blobs": bundle_blob_map,
@@ -929,9 +923,13 @@ def fetch_remote_bundle(
         if not bool(runtime_artifact.get("artifact_ready")):
             continue
         family_blob_map = _family_artifact_blob_names(resolved_bundle_version, prompt_family_id)
-        local_family_dir = cache_dir / "families" / _sanitize_name(
-            prompt_family_id,
-            default="family",
+        local_family_dir = (
+            cache_dir
+            / "families"
+            / _sanitize_name(
+                prompt_family_id,
+                default="family",
+            )
         )
         local_family_dir.mkdir(parents=True, exist_ok=True)
         downloaded_any = False
@@ -963,7 +961,7 @@ def fetch_remote_bundle(
         f"{json.dumps(bundle_payload, indent=2)}\n",
         encoding="utf-8",
     )
-    payload = {
+    payload: dict[str, object] = {
         "bundle_found": True,
         "storage_backend": "azure-blob",
         "bundle_container": container,
@@ -1010,18 +1008,16 @@ def upload_remote_family_state(
     container = repo_rag_family_state_container(config)
     family_state_version = _utc_timestamp_token()
     blob_map = family_state_blob_names(family_state_version)
+    prompt_families = payload.get("prompt_families")
+    prompt_family_count = len(prompt_families) if isinstance(prompt_families, list) else 0
     current_payload = {
         "schema_version": 1,
         "family_state_kind": "repo-rag-family-state",
         "updated_at": _utc_now_isoformat(),
         "current_version": family_state_version,
         "current_family_state_blob": blob_map["family_state"],
-        "current_family_count": len(payload.get("prompt_families", []))
-        if isinstance(payload.get("prompt_families"), list)
-        else 0,
-        "current_prompt_family_count": len(payload.get("prompt_families", []))
-        if isinstance(payload.get("prompt_families"), list)
-        else 0,
+        "current_family_count": prompt_family_count,
+        "current_prompt_family_count": prompt_family_count,
     }
     family_state_text = resolved_family_state_path.read_text(encoding="utf-8")
     remote_family_member_blobs: dict[str, dict[str, object]] = {}
@@ -1059,6 +1055,8 @@ def upload_remote_family_state(
         "remote_family_member_blobs": remote_family_member_blobs,
         "family_state_path": _relative_to_root(resolved_family_state_path, resolved_root),
     }
+
+
 def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
     """Download the current remote family-state index into a local cache when configured."""
 
@@ -1166,6 +1164,8 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
         "cached_family_member_paths": cached_family_member_paths,
         "remote_family_member_blobs": remote_family_member_blobs,
     }
+
+
 def published_bundle_record_path(root: Path, bundle_version: str) -> Path:
     """Return the publish-record path for one bundle version."""
 

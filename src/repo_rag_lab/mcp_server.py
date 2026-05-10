@@ -51,8 +51,8 @@ MCP_STARTUP_CONTEXT_QUESTION = (
     "repository guidance current gameplay slice transmutation alchemy assumptions "
     "environment usage readme agents devplan"
 )
-_STREAM_READ_BUFFERS: "weakref.WeakKeyDictionary[object, bytearray]" = weakref.WeakKeyDictionary()
-_STREAM_PROTOCOL_MODES: "weakref.WeakKeyDictionary[object, str]" = weakref.WeakKeyDictionary()
+_STREAM_READ_BUFFERS: weakref.WeakKeyDictionary[object, bytearray] = weakref.WeakKeyDictionary()
+_STREAM_PROTOCOL_MODES: weakref.WeakKeyDictionary[object, str] = weakref.WeakKeyDictionary()
 
 
 @dataclass(frozen=True)
@@ -396,7 +396,9 @@ def build_mcp_tool_definitions() -> list[MCPToolDefinition]:
                     },
                     "root": {
                         "type": "string",
-                        "description": "Optional repository root override relative to the server root.",
+                        "description": (
+                            "Optional repository root override relative to the server root."
+                        ),
                     },
                     "retrieval_mode": {
                         "type": "string",
@@ -434,7 +436,9 @@ def build_mcp_tool_definitions() -> list[MCPToolDefinition]:
                     },
                     "root": {
                         "type": "string",
-                        "description": "Optional repository root override relative to the server root.",
+                        "description": (
+                            "Optional repository root override relative to the server root."
+                        ),
                     },
                     "retrieval_mode": {
                         "type": "string",
@@ -469,7 +473,9 @@ def build_mcp_tool_definitions() -> list[MCPToolDefinition]:
                 "properties": {
                     "root": {
                         "type": "string",
-                        "description": "Optional repository root override relative to the server root.",
+                        "description": (
+                            "Optional repository root override relative to the server root."
+                        ),
                     },
                     "run_name": {
                         "type": "string",
@@ -497,7 +503,9 @@ def build_mcp_tool_definitions() -> list[MCPToolDefinition]:
                 "properties": {
                     "root": {
                         "type": "string",
-                        "description": "Optional repository root override relative to the server root.",
+                        "description": (
+                            "Optional repository root override relative to the server root."
+                        ),
                     }
                 },
                 "additionalProperties": False,
@@ -519,7 +527,9 @@ def build_mcp_tool_definitions() -> list[MCPToolDefinition]:
                     },
                     "root": {
                         "type": "string",
-                        "description": "Optional repository root override relative to the server root.",
+                        "description": (
+                            "Optional repository root override relative to the server root."
+                        ),
                     },
                     "trace_name": {
                         "type": "string",
@@ -531,7 +541,9 @@ def build_mcp_tool_definitions() -> list[MCPToolDefinition]:
                     },
                     "outcome_path": {
                         "type": "string",
-                        "description": "Optional outcome payload path to attach to the enqueue record.",
+                        "description": (
+                            "Optional outcome payload path to attach to the enqueue record."
+                        ),
                     },
                 },
                 "required": ["trace_path"],
@@ -748,9 +760,18 @@ def _discovery_guide_resource_text(server_root: Path) -> str:
         f"- Default retrieval mode: `{profile.retrieval_mode}`",
         "",
         "Use these exact patterns:",
-        '- `call_mcp_tool("search_repo", {"question": "<your question>", "top_k": 4})` for repository discovery.',
-        '- `call_mcp_tool("ask_repo", {"question": "<your question>"})` for one concise repo-grounded answer.',
-        '- `read_mcp_resource("repo-rag://startup-context")` only if you want one optional supporting working set.',
+        (
+            '- `call_mcp_tool("search_repo", {"question": "<your question>", "top_k": 4})` '
+            "for repository discovery."
+        ),
+        (
+            '- `call_mcp_tool("ask_repo", {"question": "<your question>"})` for one concise '
+            "repo-grounded answer."
+        ),
+        (
+            '- `read_mcp_resource("repo-rag://startup-context")` only if you want one optional '
+            "supporting working set."
+        ),
         "",
         (
             "Do not interpret empty or template-only resource listings as absence of repo-rag. "
@@ -1254,18 +1275,18 @@ def read_json_rpc_message(stream: BinaryIO) -> dict[str, object] | None:
         _log_mcp_debug(f"body-bytes {content_length}")
         return _decode_json_rpc_payload(body)
 
-    headers: dict[str, str] = {}
+    legacy_headers: dict[str, str] = {}
     while True:
         line = stream.readline()
         if line == b"":
             _log_mcp_debug("eof-before-headers")
             return None
-        if not headers and line.lstrip().startswith(b"{"):
+        if not legacy_headers and line.lstrip().startswith(b"{"):
             _remember_stream_protocol(stream, "line")
             _log_mcp_debug(f"line-bytes {len(line.rstrip())}")
             return _decode_json_rpc_payload(line.rstrip(b"\r\n"))
         if line in {b"\r\n", b"\n"}:
-            if headers:
+            if legacy_headers:
                 break
             continue
         _log_mcp_debug(f"header-line {line.decode('utf-8', errors='ignore').rstrip()}")
@@ -1273,12 +1294,12 @@ def read_json_rpc_message(stream: BinaryIO) -> dict[str, object] | None:
         if separator != ":":
             _log_mcp_debug("invalid-header-line")
             raise ValueError("Invalid JSON-RPC header line.")
-        headers[key.strip().lower()] = value.strip()
+        legacy_headers[key.strip().lower()] = value.strip()
 
-    if "content-length" not in headers:
+    if "content-length" not in legacy_headers:
         _log_mcp_debug("missing-content-length")
         raise ValueError("Missing Content-Length header.")
-    content_length = int(headers["content-length"])
+    content_length = int(legacy_headers["content-length"])
     body = bytearray()
     while len(body) < content_length:
         chunk = stream.read(content_length - len(body))

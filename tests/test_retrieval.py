@@ -382,7 +382,7 @@ def test_retrieve_hybrid_vector_keeps_strong_lexical_doc_hits_ahead_of_semantic_
     )
 
     assert result.retrieval_mode == "hybrid-vector"
-    assert set(chunk.source for chunk in result.chunks) == {
+    assert {chunk.source for chunk in result.chunks} == {
         Path("docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md"),
         Path("docs/architecture/inspired/dspy-rag-tutorial.md"),
     }

@@ -1,3 +1,5 @@
+# pyright: reportPrivateUsage=false, reportUnknownLambdaType=false
+
 from __future__ import annotations
 
 import json
@@ -317,6 +319,7 @@ def test_repository_answer_metric_requires_answer_and_source_match() -> None:
     class Example:
         answer = "The files are stored under docs/architecture/inspired."
         expected_sources = ("README.md",)
+        benchmark_context = ()
 
     class Prediction:
         answer = "The files are stored under docs/architecture/inspired."
@@ -335,6 +338,7 @@ def test_repository_answer_metric_accepts_strong_paraphrase() -> None:
             "utilities and Azure deployment manifests."
         )
         expected_sources = ("README.md",)
+        benchmark_context = ()
 
     class Prediction:
         answer = (
@@ -354,6 +358,7 @@ def test_repository_answer_metric_accepts_live_repo_summary_style_answer() -> No
             "and Azure deployment support."
         )
         expected_sources = ("README.md", "src/repo_rag_lab/utilities.py")
+        benchmark_context = ()
 
     class Prediction:
         answer = (
@@ -396,7 +401,8 @@ def test_repository_answer_metric_accepts_benchmark_context_grounded_summary() -
 
 def test_evaluate_repository_program_reports_pass_rate() -> None:
     class FakeProgram:
-        def __call__(self, *, question: str) -> object:
+        def __call__(self, *, question: str, **kwargs: object) -> object:
+            del kwargs
             return type(
                 "Prediction",
                 (),
@@ -426,7 +432,8 @@ def test_evaluate_repository_program_reports_pass_rate() -> None:
 
 def test_evaluate_repository_program_uses_benchmark_context_when_available() -> None:
     class FakeProgram:
-        def __call__(self, *, question: str) -> object:
+        def __call__(self, *, question: str, **kwargs: object) -> object:
+            del kwargs
             raise AssertionError(f"unexpected live retrieval call for {question}")
 
         def answer_from_context(
@@ -465,7 +472,8 @@ def test_evaluate_repository_program_uses_benchmark_context_when_available() -> 
     assert summary["case_count"] == 1
     assert summary["pass_count"] == 1
     assert summary["skipped_count"] == 0
-    assert summary["results"][0]["benchmark_context_sources"] == ["README.md"]
+    results = cast(list[dict[str, object]], summary["results"])
+    assert results[0]["benchmark_context_sources"] == ["README.md"]
 
 
 def test_evaluate_repository_program_passes_prompt_lineage_when_supported() -> None:
@@ -476,14 +484,12 @@ def test_evaluate_repository_program_passes_prompt_lineage_when_supported() -> N
             self,
             *,
             question: str,
-            original_prompt: str | None = None,
-            reformulated_prompt: str | None = None,
-            command_trace: object | None = None,
+            **kwargs: object,
         ) -> object:
             captured["question"] = question
-            captured["original_prompt"] = original_prompt
-            captured["reformulated_prompt"] = reformulated_prompt
-            captured["command_trace"] = command_trace
+            captured["original_prompt"] = kwargs.get("original_prompt")
+            captured["reformulated_prompt"] = kwargs.get("reformulated_prompt")
+            captured["command_trace"] = kwargs.get("command_trace")
             return type(
                 "Prediction",
                 (),
@@ -504,9 +510,7 @@ def test_evaluate_repository_program_passes_prompt_lineage_when_supported() -> N
                 expected_sources=("README.md",),
                 original_prompt="Add a demo GIF to README",
                 reformulated_prompt="Inspect whether the README already embeds a demo GIF.",
-                command_trace=(
-                    {"type": "message", "role": "assistant", "text": "inspect README"},
-                ),
+                command_trace=({"type": "message", "role": "assistant", "text": "inspect README"},),
             )
         ],
     )
@@ -524,7 +528,8 @@ def test_evaluate_repository_program_passes_prompt_lineage_when_supported() -> N
 
 def test_evaluate_repository_program_skips_contextless_trainer_candidates() -> None:
     class FakeProgram:
-        def __call__(self, *, question: str) -> object:
+        def __call__(self, *, question: str, **kwargs: object) -> object:
+            del kwargs
             raise AssertionError(f"unexpected live retrieval call for {question}")
 
     summary = evaluate_repository_program(
@@ -542,8 +547,9 @@ def test_evaluate_repository_program_skips_contextless_trainer_candidates() -> N
     assert summary["case_count"] == 0
     assert summary["pass_count"] == 0
     assert summary["skipped_count"] == 1
-    assert summary["results"][0]["passed"] is None
-    assert summary["results"][0]["skip_reason"] == "missing-benchmark-context"
+    results = cast(list[dict[str, object]], summary["results"])
+    assert results[0]["passed"] is None
+    assert results[0]["skip_reason"] == "missing-benchmark-context"
 
 
 def test_repository_rag_program_includes_source_paths_in_generation_context(
@@ -702,7 +708,8 @@ def test_train_repository_program_writes_artifacts(
     )
 
     class FakeProgram:
-        def __call__(self, *, question: str) -> object:
+        def __call__(self, *, question: str, **kwargs: object) -> object:
+            del kwargs
             return type(
                 "Prediction",
                 (),
@@ -1125,16 +1132,20 @@ def test_train_repository_program_recompiles_only_dirty_families(
     assert family_artifact_registry["pf-clean"]["program_path"] == (
         "artifacts/dspy/previous-run/families/pf-clean/program.json"
     )
+    assert result.bundle_path is not None
     bundle = load_bundle_manifest(tmp_path / result.bundle_path)
-    bundle_families = bundle["family_registry"]["families"]
+    family_registry = cast(dict[str, object], bundle["family_registry"])
+    bundle_families = cast(list[dict[str, object]], family_registry["families"])
     dirty_bundle_family = next(
         family for family in bundle_families if family["prompt_family_id"] == "pf-dirty"
     )
     clean_bundle_family = next(
         family for family in bundle_families if family["prompt_family_id"] == "pf-clean"
     )
-    assert dirty_bundle_family["runtime_artifact"]["artifact_source"] == "recompiled"
-    assert clean_bundle_family["runtime_artifact"]["artifact_source"] == "carried-forward"
+    dirty_runtime_artifact = cast(dict[str, object], dirty_bundle_family["runtime_artifact"])
+    clean_runtime_artifact = cast(dict[str, object], clean_bundle_family["runtime_artifact"])
+    assert dirty_runtime_artifact["artifact_source"] == "recompiled"
+    assert clean_runtime_artifact["artifact_source"] == "carried-forward"
 
     updated_family_state = json.loads(family_state_path.read_text(encoding="utf-8"))
     updated_families = {
@@ -1462,8 +1473,7 @@ def test_train_repository_program_carries_forward_global_program_for_dirty_famil
     carried_program_path = tmp_path / result.program_path
     assert carried_program_path.exists()
     assert (
-        carried_program_path.read_text(encoding="utf-8")
-        == '{"program":"previous-global-dirty"}\n'
+        carried_program_path.read_text(encoding="utf-8") == '{"program":"previous-global-dirty"}\n'
     )
     metadata = json.loads((tmp_path / result.metadata_path).read_text(encoding="utf-8"))
     compiled_program_summary = metadata["compiled_program_summary"]
@@ -1539,7 +1549,8 @@ def test_train_repository_program_uses_distinct_benchmark_path(tmp_path: Path) -
         def set_lm(self, lm: object) -> object:
             return lm
 
-        def __call__(self, *, question: str) -> object:
+        def __call__(self, *, question: str, **kwargs: object) -> object:
+            del kwargs
             return type(
                 "Prediction",
                 (),

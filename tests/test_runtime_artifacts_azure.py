@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, cast
 
 import pytest
 
@@ -961,7 +961,7 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
     assert uploaded is not None
     assert uploaded["family_state_container"] == "repo-rag-training-families"
     assert uploaded["family_state_path"] == "artifacts/trainer/family-state.json"
-    blob_map = uploaded["remote_family_state_blobs"]
+    blob_map = cast(dict[str, str], uploaded["remote_family_state_blobs"])
     assert blob_map == family_state_blob_names(str(uploaded["family_state_version"]))
     assert uploaded["remote_family_member_blobs"] == {
         "pf-demo": {
@@ -1007,8 +1007,10 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
     )
     assert fetched["remote_family_member_blobs"] == uploaded["remote_family_member_blobs"]
     cached_family_state = tmp_path / str(fetched["family_state_path"])
-    cached_family_member = tmp_path / str(fetched["cached_family_paths"]["pf-demo"])
-    cached_family_detail = fetched["cached_family_member_paths"]["pf-demo"]
+    cached_family_paths = cast(dict[str, str], fetched["cached_family_paths"])
+    cached_family_member = tmp_path / cached_family_paths["pf-demo"]
+    cached_family_member_paths = cast(dict[str, object], fetched["cached_family_member_paths"])
+    cached_family_detail = cached_family_member_paths["pf-demo"]
     assert isinstance(cached_family_detail, dict)
     cached_father_path = tmp_path / str(cached_family_detail["father"])
     cached_record_paths = [tmp_path / str(path) for path in cached_family_detail["record_paths"]]
