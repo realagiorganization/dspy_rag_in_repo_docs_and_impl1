@@ -618,7 +618,12 @@ def test_read_json_rpc_message_does_not_reselect_after_first_header(
     buffer.seek(0)
     select_calls = 0
 
-    def fake_select(read_fds, write_fds, error_fds, timeout):
+    def fake_select(
+        read_fds: object,
+        write_fds: object,
+        error_fds: object,
+        timeout: object,
+    ) -> tuple[object, object, object]:
         nonlocal select_calls
         select_calls += 1
         if select_calls == 1:
@@ -769,7 +774,12 @@ def test_read_json_rpc_message_preserves_buffered_followup_messages_from_pipe(
     select_calls = 0
     original_select = mcp_server.select.select
 
-    def fake_select(read_fds, write_fds, error_fds, timeout):
+    def fake_select(
+        read_fds: object,
+        write_fds: object,
+        error_fds: object,
+        timeout: object,
+    ) -> tuple[object, object, object]:
         nonlocal select_calls
         select_calls += 1
         if select_calls == 1:
