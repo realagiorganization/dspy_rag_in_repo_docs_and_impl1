@@ -163,6 +163,10 @@ Implemented locally in this stage:
 - the remote `repo-rag-training-families` mirror now writes one `family.json`, one `father.json`,
   and one `records/<snapshot>.json` payload per family, so the versioned family directory already
   contains the concrete replay objects that family-scoped `MIPROv2` is supposed to optimize
+- that same remote family-state mirror now also writes operator-visible current aliases at the
+  container root: `family-state.json` plus `families/<prompt_family_id>/{family.json,father.json}`
+  and `records/<snapshot>.json`, so `repo-rag-training-families` no longer looks empty unless no
+  family state has been uploaded at all
 - proxy family routing now also checks the validated family runtime-artifact `hit_rate` against the
   current family baseline and refuses to run a degraded family artifact, falling back to
   fresh/global mediation instead
@@ -196,6 +200,10 @@ Implemented locally in this stage:
 - bundle activation now also falls back to the latest discoverable staged version directory when a
   local mirror exists but `channels/stable.json` or older published-manifest surfaces are missing
   or stale
+- remote bundle fetch and AKS deploy-stage bundle staging now also fall back to the latest remote
+  immutable bundle version when `channels/stable.json` is absent, and the staged worker mirror
+  synthesizes a minimal local `channels/stable.json` pointer to that resolved version so execution
+  pods can still activate the compiled family-first bundle
 - the dataset worker now resolves bundle versions directly from the staged
   `.repo_rag_bundle_store` mirror before it depends on `bundle-inspect`, which reduces one more
   live failure mode where proxy startup knew the bundle root but never learned a concrete bundle

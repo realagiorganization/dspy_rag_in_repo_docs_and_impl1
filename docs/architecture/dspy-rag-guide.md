@@ -245,6 +245,9 @@ The target trainer/runtime split for `MIPROv2` is also explicit now:
   - persist the shared family-state snapshot through the primary remote family-state container
   - mirror one versioned `family.json`, `father.json`, and `records/<snapshot>.json` set per
     family into that same container
+  - mirror a current operator-facing view at the container root too: `family-state.json` plus
+    `families/<family_id>/...`, so the durable family store is inspectable without walking
+    `versions/<family_state_version>/...`
   - rebuild one monolithic bundle containing the family registry
 - deployment handoff:
   - dataset / AKS provisioning exports the family-state container as a first-class storage env
@@ -252,6 +255,9 @@ The target trainer/runtime split for `MIPROv2` is also explicit now:
   - workers now also resolve bundle versions directly from the staged
     `.repo_rag_bundle_store` mirror when channel metadata is absent, so live bundle activation is
     no longer blocked on `stable.json` / `published.json` alone
+  - deploy-stage bundle staging now also falls back to the latest immutable remote bundle version
+    when the stable channel blob is absent, and synthesizes a local `channels/stable.json` pointer
+    for the staged worker mirror
   - the live `codex exec` prompt body is now task-first and stripped of Discord scaffolding before
     the execution contract is appended
   - generated AKS env now enables the existing resumed-lane reset policy by default through
