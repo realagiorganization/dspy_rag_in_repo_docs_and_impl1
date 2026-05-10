@@ -904,17 +904,25 @@ def fetch_remote_bundle(
         "program_path": cache_dir / "program.json",
         "published_bundle_path": cache_dir / "published.json",
     }
-    for key, local_path in local_paths.items():
+    for key in ("bundle_path", "metadata_path", "program_path"):
+        local_path = local_paths[key]
         blob_key = {
             "bundle_path": "bundle",
             "metadata_path": "metadata",
             "program_path": "program",
-            "published_bundle_path": "published",
         }[key]
         local_path.write_text(
             store.download_text(container, blob_map[blob_key]),
             encoding="utf-8",
         )
+    published_payload: dict[str, object] = {}
+    published_blob_name = blob_map["published"]
+    if store.blob_exists(container, published_blob_name):
+        local_paths["published_bundle_path"].write_text(
+            store.download_text(container, published_blob_name),
+            encoding="utf-8",
+        )
+        published_payload = load_json_object(local_paths["published_bundle_path"])
     bundle_payload = load_bundle_manifest(local_paths["bundle_path"])
     remote_family_artifact_blobs: dict[str, dict[str, str]] = {}
     for prompt_family_id, runtime_artifact in _bundle_family_runtime_artifacts(bundle_payload):
@@ -955,7 +963,6 @@ def fetch_remote_bundle(
         f"{json.dumps(bundle_payload, indent=2)}\n",
         encoding="utf-8",
     )
-    published_payload = load_json_object(local_paths["published_bundle_path"])
     payload = {
         "bundle_found": True,
         "storage_backend": "azure-blob",
@@ -967,15 +974,16 @@ def fetch_remote_bundle(
         "bundle_path": _relative_to_root(local_paths["bundle_path"], resolved_root),
         "metadata_path": _relative_to_root(local_paths["metadata_path"], resolved_root),
         "program_path": _relative_to_root(local_paths["program_path"], resolved_root),
-        "published_bundle_path": _relative_to_root(
-            local_paths["published_bundle_path"],
-            resolved_root,
-        ),
         "bundle_status": _string_or_none(bundle_payload.get("bundle_status")),
         "benchmark_status": _string_or_none(bundle_payload.get("benchmark_status")),
         "run_name": _string_or_none(bundle_payload.get("run_name")),
         "publish_status": _string_or_none(published_payload.get("publish_status")),
     }
+    if local_paths["published_bundle_path"].is_file():
+        payload["published_bundle_path"] = _relative_to_root(
+            local_paths["published_bundle_path"],
+            resolved_root,
+        )
     if remote_family_artifact_blobs:
         payload["remote_family_artifact_blobs"] = remote_family_artifact_blobs
     return payload

@@ -385,6 +385,60 @@ def _extract_text_from_content(content: object) -> str:
     return "\n".join(parts).strip()
 
 
+def _strip_dataset_execution_envelope(text: str) -> str:
+    """Remove dataset-specific execution scaffolding from one Codex user prompt."""
+
+    cleaned = str(text or "").strip()
+    if not cleaned:
+        return ""
+    if "\nEXECUTION CONTEXT:" in cleaned:
+        cleaned = cleaned.split("\nEXECUTION CONTEXT:", 1)[0].rstrip()
+    elif "\nAUTONOMOUS EXECUTION CONTRACT:" in cleaned:
+        cleaned = cleaned.split("\nAUTONOMOUS EXECUTION CONTRACT:", 1)[0].rstrip()
+    if "Messages with required reaction:" in cleaned:
+        cleaned = cleaned.split("Messages with required reaction:", 1)[1].strip()
+    elif "Messages aggregated:" in cleaned and "\n\n" in cleaned:
+        cleaned = cleaned.split("\n\n", 1)[1].strip()
+    normalized_lines: list[str] = []
+    skip_attachment_lines = False
+    for raw_line in cleaned.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if not stripped:
+            skip_attachment_lines = False
+            if normalized_lines and normalized_lines[-1] != "":
+                normalized_lines.append("")
+            continue
+        if stripped == "Attachment locations:":
+            skip_attachment_lines = True
+            continue
+        if skip_attachment_lines and stripped.startswith("- "):
+            continue
+        if stripped.startswith("Discord channel:"):
+            continue
+        if stripped.startswith("Channel ID:"):
+            continue
+        if stripped.startswith("Queue label:"):
+            continue
+        if stripped.startswith("Messages aggregated:"):
+            continue
+        if stripped.startswith("Available repository:"):
+            continue
+        if stripped.startswith("Attachments saved for execution"):
+            continue
+        if stripped.startswith("Attachments:"):
+            continue
+        if stripped.startswith("[") and ") " in stripped:
+            _prefix, _sep, remainder = stripped.partition(") ")
+            if _sep and _prefix.startswith("["):
+                stripped = remainder.strip()
+        normalized_lines.append(stripped)
+    while normalized_lines and normalized_lines[-1] == "":
+        normalized_lines.pop()
+    result = "\n".join(normalized_lines).strip()
+    return result or str(text or "").strip()
+
+
 def _command_trace_step(item: Mapping[str, object]) -> dict[str, str] | None:
     """Extract one compact command-trace step from a Responses input item."""
 
@@ -413,7 +467,7 @@ def extract_codex_turn_state(payload: Mapping[str, object]) -> dict[str, object]
 
     raw_input = payload.get("input")
     if isinstance(raw_input, str):
-        cleaned = raw_input.strip()
+        cleaned = _strip_dataset_execution_envelope(raw_input.strip())
         return {
             "original_prompt": cleaned,
             "command_trace": (
@@ -433,6 +487,9 @@ def extract_codex_turn_state(payload: Mapping[str, object]) -> dict[str, object]
         item_type = str(item.get("type") or "").strip().lower()
         step = _command_trace_step(item)
         text = step.get("text", "").strip() if isinstance(step, dict) else ""
+        if role == "user" and text and isinstance(step, dict):
+            step["text"] = _strip_dataset_execution_envelope(text)
+            text = step["text"]
         if item_type == "message":
             if role == "user" and text:
                 user_messages.append(text)
@@ -446,6 +503,7 @@ def extract_codex_turn_state(payload: Mapping[str, object]) -> dict[str, object]
         original_prompt = fallback_messages[-1]
     else:
         original_prompt = ""
+    original_prompt = _strip_dataset_execution_envelope(original_prompt)
     return {
         "original_prompt": original_prompt,
         "command_trace": command_trace,
@@ -535,20 +593,6 @@ def _resolve_bundle_family_registry(
 ) -> dict[str, object] | None:
     """Resolve the monolithic bundle's internal family registry when available."""
 
-    remote_bundle = fetch_remote_bundle(
-        bundle_root,
-        bundle_version=bundle_version,
-        channel=None if bundle_version else bundle_channel,
-    )
-    if isinstance(remote_bundle, dict):
-        remote_bundle_path = str(remote_bundle.get("bundle_path") or "").strip()
-        if remote_bundle_path:
-            resolved_remote_bundle_path = (bundle_root / remote_bundle_path).resolve()
-            if resolved_remote_bundle_path.is_file():
-                remote_bundle_payload = load_bundle_manifest(resolved_remote_bundle_path)
-                family_registry = remote_bundle_payload.get("family_registry")
-                if isinstance(family_registry, Mapping):
-                    return dict(family_registry)
     if bundle_version is not None:
         try:
             _, local_bundle = resolve_bundle_manifest(
@@ -579,6 +623,23 @@ def _resolve_bundle_family_registry(
             family_registry = local_bundle_payload.get("family_registry")
             if isinstance(family_registry, Mapping):
                 return dict(family_registry)
+    try:
+        remote_bundle = fetch_remote_bundle(
+            bundle_root,
+            bundle_version=bundle_version,
+            channel=None if bundle_version else bundle_channel,
+        )
+    except Exception:
+        remote_bundle = None
+    if isinstance(remote_bundle, dict):
+        remote_bundle_path = str(remote_bundle.get("bundle_path") or "").strip()
+        if remote_bundle_path:
+            resolved_remote_bundle_path = (bundle_root / remote_bundle_path).resolve()
+            if resolved_remote_bundle_path.is_file():
+                remote_bundle_payload = load_bundle_manifest(resolved_remote_bundle_path)
+                family_registry = remote_bundle_payload.get("family_registry")
+                if isinstance(family_registry, Mapping):
+                    return dict(family_registry)
     return None
 
 
@@ -687,19 +748,6 @@ def _resolve_program_path_and_bundle_version(
     bundle_version: str | None,
     bundle_channel: str,
 ) -> tuple[Path | None, str | None]:
-    remote_bundle = fetch_remote_bundle(
-        bundle_root,
-        bundle_version=bundle_version,
-        channel=None if bundle_version else bundle_channel,
-    )
-    if isinstance(remote_bundle, dict):
-        program_path_text = remote_bundle.get("program_path")
-        if isinstance(program_path_text, str) and program_path_text.strip():
-            program_path = (bundle_root / program_path_text).resolve()
-            resolved_version = (
-                str(remote_bundle.get("bundle_version") or bundle_version or "").strip() or None
-            )
-            return program_path, resolved_version
     if bundle_version is not None:
         try:
             _, local_bundle = resolve_bundle_manifest(
@@ -729,6 +777,24 @@ def _resolve_program_path_and_bundle_version(
                     str(channel_state.get("current_bundle_version") or "").strip() or None
                 )
                 return local_program_path, resolved_version
+    try:
+        remote_bundle = fetch_remote_bundle(
+            bundle_root,
+            bundle_version=bundle_version,
+            channel=None if bundle_version else bundle_channel,
+        )
+    except Exception:
+        remote_bundle = None
+    if isinstance(remote_bundle, dict):
+        program_path_text = remote_bundle.get("program_path")
+        if isinstance(program_path_text, str) and program_path_text.strip():
+            program_path = (bundle_root / program_path_text).resolve()
+            if program_path.is_file():
+                resolved_version = (
+                    str(remote_bundle.get("bundle_version") or bundle_version or "").strip()
+                    or None
+                )
+                return program_path, resolved_version
     runner = RepositoryRAG(repository_root, top_k=4)
     runner_program_path: Path | None = runner.program_path
     if runner_program_path is None:
@@ -1141,7 +1207,7 @@ class _CodexProxyHandler(BaseHTTPRequestHandler):
             ]
             if original_prompt:
                 mediation = runtime.build_mediation(original_prompt, command_trace)
-                runtime.persist_status(mediation)
+                runtime.persist_status(mediation, command_trace=command_trace)
                 runtime.persist_turn_trace(mediation, command_trace=command_trace)
                 if mediation.injected and mediation.developer_message.strip():
                     payload = augment_responses_payload(
@@ -1476,8 +1542,16 @@ class _CodexProxyRuntime:
         )
         return trace_path
 
-    def persist_status(self, mediation: CodexMediationResult) -> None:
-        self.persist_raw_status(mediation.to_payload())
+    def persist_status(
+        self,
+        mediation: CodexMediationResult,
+        *,
+        command_trace: list[Mapping[str, str]] | None = None,
+    ) -> None:
+        payload = mediation.to_payload()
+        if command_trace is not None:
+            payload["command_trace"] = list(command_trace)
+        self.persist_raw_status(payload)
 
     def persist_raw_status(self, payload: dict[str, object]) -> None:
         self.status_path.write_text(f"{json.dumps(payload, indent=2)}\n", encoding="utf-8")

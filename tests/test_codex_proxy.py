@@ -113,6 +113,53 @@ def test_extract_codex_turn_state_captures_command_trace() -> None:
     ]
 
 
+def test_extract_codex_turn_state_strips_dataset_execution_envelope() -> None:
+    payload = {
+        "input": [
+            {
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            "Discord channel: prompts_debt_relief\n"
+                            "Channel ID: 1491133577327411321\n"
+                            "Queue label: prompts_debt_relief\n"
+                            "Messages aggregated: 2\n"
+                            "Available repository: acme/repo -> /tmp/repo\n\n"
+                            "Messages with required reaction:\n"
+                            "[1] (2026-05-06T14:36:10.829+00:00 | user | id=1) "
+                            "In https://github.com/acme/repo\n\n"
+                            "Add an automated demo GIF of this wireframe.\n\n"
+                            "EXECUTION CONTEXT:\n"
+                            "- You are running in an automated container environment\n\n"
+                            "AUTONOMOUS EXECUTION CONTRACT:\n"
+                            "1. Operate fully autonomously.\n"
+                        ),
+                    }
+                ],
+            }
+        ]
+    }
+
+    state = extract_codex_turn_state(_payload_mapping(payload))
+
+    assert state["original_prompt"] == (
+        "In https://github.com/acme/repo\n\nAdd an automated demo GIF of this wireframe."
+    )
+    assert state["command_trace"] == [
+        {
+            "type": "message",
+            "role": "user",
+            "text": (
+                "In https://github.com/acme/repo\n\n"
+                "Add an automated demo GIF of this wireframe."
+            ),
+        }
+    ]
+
+
 def test_augment_responses_payload_inserts_developer_message_after_existing_developers() -> None:
     payload = {
         "input": [

@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-05-10T09:06:54Z",
-  "tracked_file_count": 364,
-  "summarized_file_count": 361,
+  "generated_at": "2026-05-10T10:52:53Z",
+  "tracked_file_count": 387,
+  "summarized_file_count": 384,
   "excluded_generated_file_count": 3,
-  "explicit_link_count": 89,
+  "explicit_link_count": 90,
   "machine_link_occurrence_count": 2632,
   "machine_link_unique_count": 2427,
   "bibliography_entry_count": 4,
@@ -273,20 +273,20 @@
     {
       "path": "FILES.csv",
       "kind": "generic",
-      "byte_size": 45605,
+      "byte_size": 49166,
       "line_count": null,
       "url_count": 0,
-      "summary_en": "Tracked repository file, 45605 bytes of binary data, 0 explicit URLs. Opening line: No non-empty preview line.",
-      "summary_ru": "\u041e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u0435\u043c\u044b\u0439 \u0444\u0430\u0439\u043b \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u044f, 45605 \u0431\u0430\u0439\u0442 \u0431\u0438\u043d\u0430\u0440\u043d\u044b\u0445 \u0434\u0430\u043d\u043d\u044b\u0445, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041f\u0435\u0440\u0432\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430: No non-empty preview line."
+      "summary_en": "Tracked repository file, 49166 bytes of binary data, 0 explicit URLs. Opening line: No non-empty preview line.",
+      "summary_ru": "\u041e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u0435\u043c\u044b\u0439 \u0444\u0430\u0439\u043b \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u044f, 49166 \u0431\u0430\u0439\u0442 \u0431\u0438\u043d\u0430\u0440\u043d\u044b\u0445 \u0434\u0430\u043d\u043d\u044b\u0445, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041f\u0435\u0440\u0432\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430: No non-empty preview line."
     },
     {
       "path": "FILES.md",
       "kind": "markdown",
-      "byte_size": 51760,
-      "line_count": 375,
+      "byte_size": 55689,
+      "line_count": 398,
       "url_count": 1,
-      "summary_en": "Markdown document, 375 lines, 1 explicit URLs. Lead heading: Repository File Inventory.",
-      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 375 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository File Inventory."
+      "summary_en": "Markdown document, 398 lines, 1 explicit URLs. Lead heading: Repository File Inventory.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 398 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository File Inventory."
     },
     {
       "path": "Makefile",
@@ -381,11 +381,11 @@
     {
       "path": "docs/architecture/research-narrative.md",
       "kind": "markdown",
-      "byte_size": 68390,
-      "line_count": 910,
+      "byte_size": 70136,
+      "line_count": 932,
       "url_count": 0,
-      "summary_en": "Markdown document, 910 lines, 0 explicit URLs. Lead heading: Repository Research Narrative.",
-      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 910 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository Research Narrative."
+      "summary_en": "Markdown document, 932 lines, 0 explicit URLs. Lead heading: Repository Research Narrative.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 932 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository Research Narrative."
     },
     {
       "path": "docs/archive/repo-completeness-checklist.md",
@@ -1297,9 +1297,207 @@
       "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 113 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-08 per-turn DSPy mediation contract stage 0."
     },
     {
+      "path": "docs/audit/2026-05-09-aks-run-25598675829-per-turn-mediation-gap.md",
+      "kind": "markdown",
+      "byte_size": 7119,
+      "line_count": 215,
+      "url_count": 0,
+      "summary_en": "Markdown document, 215 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 AKS run 25598675829 per-turn mediation gap.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 215 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 AKS run 25598675829 per-turn mediation gap."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage1.md",
+      "kind": "markdown",
+      "byte_size": 4684,
+      "line_count": 120,
+      "url_count": 0,
+      "summary_en": "Markdown document, 120 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 1.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 120 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 1."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage10.md",
+      "kind": "markdown",
+      "byte_size": 5329,
+      "line_count": 122,
+      "url_count": 0,
+      "summary_en": "Markdown document, 122 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 10.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 122 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 10."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage11.md",
+      "kind": "markdown",
+      "byte_size": 4638,
+      "line_count": 116,
+      "url_count": 0,
+      "summary_en": "Markdown document, 116 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 11.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 116 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 11."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage12.md",
+      "kind": "markdown",
+      "byte_size": 4941,
+      "line_count": 122,
+      "url_count": 0,
+      "summary_en": "Markdown document, 122 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 12.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 122 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 12."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage13.md",
+      "kind": "markdown",
+      "byte_size": 4992,
+      "line_count": 128,
+      "url_count": 0,
+      "summary_en": "Markdown document, 128 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 13.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 128 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 13."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage14.md",
+      "kind": "markdown",
+      "byte_size": 3944,
+      "line_count": 109,
+      "url_count": 0,
+      "summary_en": "Markdown document, 109 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 14.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 109 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 14."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage15.md",
+      "kind": "markdown",
+      "byte_size": 4728,
+      "line_count": 113,
+      "url_count": 0,
+      "summary_en": "Markdown document, 113 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 15.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 113 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 15."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage16.md",
+      "kind": "markdown",
+      "byte_size": 3748,
+      "line_count": 103,
+      "url_count": 0,
+      "summary_en": "Markdown document, 103 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 16.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 103 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 16."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage17.md",
+      "kind": "markdown",
+      "byte_size": 3519,
+      "line_count": 101,
+      "url_count": 0,
+      "summary_en": "Markdown document, 101 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 17.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 101 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 17."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage18.md",
+      "kind": "markdown",
+      "byte_size": 3164,
+      "line_count": 90,
+      "url_count": 0,
+      "summary_en": "Markdown document, 90 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 18.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 90 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 18."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage19.md",
+      "kind": "markdown",
+      "byte_size": 3984,
+      "line_count": 102,
+      "url_count": 0,
+      "summary_en": "Markdown document, 102 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 19.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 102 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 19."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage2.md",
+      "kind": "markdown",
+      "byte_size": 4936,
+      "line_count": 123,
+      "url_count": 0,
+      "summary_en": "Markdown document, 123 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 2.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 123 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 2."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage20.md",
+      "kind": "markdown",
+      "byte_size": 3076,
+      "line_count": 88,
+      "url_count": 0,
+      "summary_en": "Markdown document, 88 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 20.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 88 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 20."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage21.md",
+      "kind": "markdown",
+      "byte_size": 5742,
+      "line_count": 122,
+      "url_count": 0,
+      "summary_en": "Markdown document, 122 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 21.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 122 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 21."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage3.md",
+      "kind": "markdown",
+      "byte_size": 4147,
+      "line_count": 96,
+      "url_count": 0,
+      "summary_en": "Markdown document, 96 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 3.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 96 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 3."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage4.md",
+      "kind": "markdown",
+      "byte_size": 5209,
+      "line_count": 120,
+      "url_count": 0,
+      "summary_en": "Markdown document, 120 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 4.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 120 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 4."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage5.md",
+      "kind": "markdown",
+      "byte_size": 5172,
+      "line_count": 122,
+      "url_count": 0,
+      "summary_en": "Markdown document, 122 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 5.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 122 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 5."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage6.md",
+      "kind": "markdown",
+      "byte_size": 5120,
+      "line_count": 119,
+      "url_count": 0,
+      "summary_en": "Markdown document, 119 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 6.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 119 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 6."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage7.md",
+      "kind": "markdown",
+      "byte_size": 4680,
+      "line_count": 116,
+      "url_count": 0,
+      "summary_en": "Markdown document, 116 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 7.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 116 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 7."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage8.md",
+      "kind": "markdown",
+      "byte_size": 4477,
+      "line_count": 110,
+      "url_count": 0,
+      "summary_en": "Markdown document, 110 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 8.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 110 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 8."
+    },
+    {
+      "path": "docs/audit/2026-05-09-family-first-mipro-contract-stage9.md",
+      "kind": "markdown",
+      "byte_size": 4003,
+      "line_count": 106,
+      "url_count": 0,
+      "summary_en": "Markdown document, 106 lines, 0 explicit URLs. Lead heading: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 9.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 106 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository audit note for 2026-05-09 family-first MIPROv2 contract stage 9."
+    },
+    {
       "path": "docs/audit/README.md",
       "kind": "markdown",
-      "byte_size": 420,
+      "byte_size": 433,
       "line_count": 14,
       "url_count": 0,
       "summary_en": "Markdown document, 14 lines, 0 explicit URLs. Lead heading: Repository Audit Notes.",
@@ -1376,6 +1574,15 @@
       "url_count": 0,
       "summary_en": "Markdown document, 478 lines, 0 explicit URLs. Lead heading: Dataset Integration Plan.",
       "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 478 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Dataset Integration Plan."
+    },
+    {
+      "path": "docs/planning/family-first-mipro-runtime-contract.md",
+      "kind": "markdown",
+      "byte_size": 17117,
+      "line_count": 293,
+      "url_count": 0,
+      "summary_en": "Markdown document, 293 lines, 0 explicit URLs. Lead heading: Family-First DSPy / MIPROv2 Contract.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 293 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Family-First DSPy / MIPROv2 Contract."
     },
     {
       "path": "docs/planning/per-turn-dspy-mediation-contract.md",
@@ -2379,11 +2586,11 @@
     {
       "path": "src/repo_rag_lab/codex_proxy.py",
       "kind": "python",
-      "byte_size": 61011,
-      "line_count": 1586,
+      "byte_size": 64025,
+      "line_count": 1660,
       "url_count": 0,
-      "summary_en": "Python module, 1586 lines, 0 explicit URLs. Module intent: Local streaming proxy that injects repo-RAG + DSPy mediation for Codex.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1586 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Local streaming proxy that injects repo-RAG + DSPy mediation for Codex."
+      "summary_en": "Python module, 1660 lines, 0 explicit URLs. Module intent: Local streaming proxy that injects repo-RAG + DSPy mediation for Codex.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1660 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Local streaming proxy that injects repo-RAG + DSPy mediation for Codex."
     },
     {
       "path": "src/repo_rag_lab/corpus.py",
@@ -2532,11 +2739,11 @@
     {
       "path": "src/repo_rag_lab/runtime_artifacts.py",
       "kind": "python",
-      "byte_size": 103601,
-      "line_count": 2372,
+      "byte_size": 103988,
+      "line_count": 2380,
       "url_count": 0,
-      "summary_en": "Python module, 2372 lines, 0 explicit URLs. Module intent: Versioned bundle, overlay, and runtime-trace helpers.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 2372 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Versioned bundle, overlay, and runtime-trace helpers."
+      "summary_en": "Python module, 2380 lines, 0 explicit URLs. Module intent: Versioned bundle, overlay, and runtime-trace helpers.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 2380 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Versioned bundle, overlay, and runtime-trace helpers."
     },
     {
       "path": "src/repo_rag_lab/rust_lookup.py",
@@ -3000,11 +3207,11 @@
     {
       "path": "tests/test_codex_proxy.py",
       "kind": "python",
-      "byte_size": 30213,
-      "line_count": 846,
-      "url_count": 2,
-      "summary_en": "Python module, 846 lines, 2 explicit URLs. Module intent: No module docstring detected.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 846 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 2. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
+      "byte_size": 32010,
+      "line_count": 893,
+      "url_count": 5,
+      "summary_en": "Python module, 893 lines, 5 explicit URLs. Module intent: No module docstring detected.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 893 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 5. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
     },
     {
       "path": "tests/test_dspy_training.py",
@@ -3162,11 +3369,11 @@
     {
       "path": "tests/test_runtime_artifacts_azure.py",
       "kind": "python",
-      "byte_size": 46320,
-      "line_count": 1224,
+      "byte_size": 48961,
+      "line_count": 1303,
       "url_count": 4,
-      "summary_en": "Python module, 1224 lines, 4 explicit URLs. Module intent: No module docstring detected.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1224 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 4. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
+      "summary_en": "Python module, 1303 lines, 4 explicit URLs. Module intent: No module docstring detected.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1303 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 4. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
     },
     {
       "path": "tests/test_rust_lookup.py",
@@ -3475,6 +3682,16 @@
         "src/repo_rag_lab/pages_site.py"
       ],
       "occurrence_count": 2,
+      "fetch_state_en": "External GitHub URL referenced from 1 file(s). Local companion path(s): none.",
+      "fetch_state_ru": "\u0412\u043d\u0435\u0448\u043d\u0438\u0439 URL GitHub, \u0443\u043f\u043e\u043c\u044f\u043d\u0443\u0442\u044b\u0439 \u0432 1 \u0444\u0430\u0439\u043b\u0435(\u0430\u0445). \u041b\u043e\u043a\u0430\u043b\u044c\u043d\u044b\u0435 \u0441\u043e\u043f\u0440\u043e\u0432\u043e\u0434\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043f\u0443\u0442\u0438: none."
+    },
+    {
+      "url": "https://github.com/acme/repo",
+      "host": "github.com",
+      "source_paths": [
+        "tests/test_codex_proxy.py"
+      ],
+      "occurrence_count": 3,
       "fetch_state_en": "External GitHub URL referenced from 1 file(s). Local companion path(s): none.",
       "fetch_state_ru": "\u0412\u043d\u0435\u0448\u043d\u0438\u0439 URL GitHub, \u0443\u043f\u043e\u043c\u044f\u043d\u0443\u0442\u044b\u0439 \u0432 1 \u0444\u0430\u0439\u043b\u0435(\u0430\u0445). \u041b\u043e\u043a\u0430\u043b\u044c\u043d\u044b\u0435 \u0441\u043e\u043f\u0440\u043e\u0432\u043e\u0434\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043f\u0443\u0442\u0438: none."
     },

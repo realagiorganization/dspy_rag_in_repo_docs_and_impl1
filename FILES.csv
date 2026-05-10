@@ -40,7 +40,7 @@ docs/architecture/inspired/dspy-rag-tutorial.md,docs,markdown,35,1474,DSPy Tutor
 docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md,docs,markdown,38,1555,Implementing RAG with DSPy: Technical Guide
 docs/architecture/mcp-discovery.md,docs,markdown,54,1757,MCP Discovery Notes
 docs/architecture/package-api.md,docs,markdown,127,9186,Package API Notes
-docs/architecture/research-narrative.md,docs,markdown,910,68390,"Repository research narrative tying code, docs, and verification together"
+docs/architecture/research-narrative.md,docs,markdown,932,70136,"Repository research narrative tying code, docs, and verification together"
 docs/archive/repo-completeness-checklist.md,docs,markdown,238,7450,Archived completeness snapshot kept for workflow and lockfile policy context
 docs/audit/2026-03-15-repo-state.md,docs,markdown,151,5989,Repository audit note for 2026 03 15 repo state
 docs/audit/2026-03-17-docs-and-uv-refresh.md,docs,markdown,79,3977,Repository audit note for 2026 03 17 docs and uv refresh
@@ -142,7 +142,29 @@ docs/audit/2026-05-02-live-trainer-still-not-publishing-bundles.md,docs,markdown
 docs/audit/2026-05-02-trainer-context-group-champion-index-stage1.md,docs,markdown,330,18201,Repository audit note for 2026 05 02 trainer context group champion index stage1
 docs/audit/2026-05-02-zz-codex-exec-resume-session-state-stage0.md,docs,markdown,3866,170338,Repository audit note for 2026 05 02 zz codex exec resume session state stage0
 docs/audit/2026-05-08-zz-per-turn-dspy-mediation-contract-stage0.md,docs,markdown,113,5821,Repository audit note for 2026 05 08 zz per turn dspy mediation contract stage0
-docs/audit/README.md,docs,markdown,14,420,Repository audit note for README
+docs/audit/2026-05-09-aks-run-25598675829-per-turn-mediation-gap.md,docs,markdown,215,7119,Repository audit note for 2026 05 09 aks run 25598675829 per turn mediation gap
+docs/audit/2026-05-09-family-first-mipro-contract-stage1.md,docs,markdown,120,4684,Repository audit note for 2026 05 09 family first mipro contract stage1
+docs/audit/2026-05-09-family-first-mipro-contract-stage10.md,docs,markdown,122,5329,Repository audit note for 2026 05 09 family first mipro contract stage10
+docs/audit/2026-05-09-family-first-mipro-contract-stage11.md,docs,markdown,116,4638,Repository audit note for 2026 05 09 family first mipro contract stage11
+docs/audit/2026-05-09-family-first-mipro-contract-stage12.md,docs,markdown,122,4941,Repository audit note for 2026 05 09 family first mipro contract stage12
+docs/audit/2026-05-09-family-first-mipro-contract-stage13.md,docs,markdown,128,4992,Repository audit note for 2026 05 09 family first mipro contract stage13
+docs/audit/2026-05-09-family-first-mipro-contract-stage14.md,docs,markdown,109,3944,Repository audit note for 2026 05 09 family first mipro contract stage14
+docs/audit/2026-05-09-family-first-mipro-contract-stage15.md,docs,markdown,113,4728,Repository audit note for 2026 05 09 family first mipro contract stage15
+docs/audit/2026-05-09-family-first-mipro-contract-stage16.md,docs,markdown,103,3748,Repository audit note for 2026 05 09 family first mipro contract stage16
+docs/audit/2026-05-09-family-first-mipro-contract-stage17.md,docs,markdown,101,3519,Repository audit note for 2026 05 09 family first mipro contract stage17
+docs/audit/2026-05-09-family-first-mipro-contract-stage18.md,docs,markdown,90,3164,Repository audit note for 2026 05 09 family first mipro contract stage18
+docs/audit/2026-05-09-family-first-mipro-contract-stage19.md,docs,markdown,102,3984,Repository audit note for 2026 05 09 family first mipro contract stage19
+docs/audit/2026-05-09-family-first-mipro-contract-stage2.md,docs,markdown,123,4936,Repository audit note for 2026 05 09 family first mipro contract stage2
+docs/audit/2026-05-09-family-first-mipro-contract-stage20.md,docs,markdown,88,3076,Repository audit note for 2026 05 09 family first mipro contract stage20
+docs/audit/2026-05-09-family-first-mipro-contract-stage21.md,docs,markdown,122,5742,Repository audit note for 2026 05 09 family first mipro contract stage21
+docs/audit/2026-05-09-family-first-mipro-contract-stage3.md,docs,markdown,96,4147,Repository audit note for 2026 05 09 family first mipro contract stage3
+docs/audit/2026-05-09-family-first-mipro-contract-stage4.md,docs,markdown,120,5209,Repository audit note for 2026 05 09 family first mipro contract stage4
+docs/audit/2026-05-09-family-first-mipro-contract-stage5.md,docs,markdown,122,5172,Repository audit note for 2026 05 09 family first mipro contract stage5
+docs/audit/2026-05-09-family-first-mipro-contract-stage6.md,docs,markdown,119,5120,Repository audit note for 2026 05 09 family first mipro contract stage6
+docs/audit/2026-05-09-family-first-mipro-contract-stage7.md,docs,markdown,116,4680,Repository audit note for 2026 05 09 family first mipro contract stage7
+docs/audit/2026-05-09-family-first-mipro-contract-stage8.md,docs,markdown,110,4477,Repository audit note for 2026 05 09 family first mipro contract stage8
+docs/audit/2026-05-09-family-first-mipro-contract-stage9.md,docs,markdown,106,4003,Repository audit note for 2026 05 09 family first mipro contract stage9
+docs/audit/README.md,docs,markdown,14,433,Repository audit note for README
 docs/guides/hushwheel-fixture-rag-guide.md,docs,markdown,138,5169,RAG Guide For The Hushwheel Fixture
 docs/operations/azure-deployment.md,docs,markdown,111,4901,Azure Deployment Notes
 docs/operations/environment.md,docs,markdown,130,7589,Environment and secret reference for local runtime and deployment workflows
@@ -151,6 +173,7 @@ docs/operations/simple-end-to-end-verification-guide.md,docs,markdown,105,4111,S
 docs/operations/trainer-deployment.md,docs,markdown,152,6047,Trainer Deployment Notes
 docs/planning/codex-exec-resume-plan.md,docs,markdown,207,11561,Codex Exec Resume Plan
 docs/planning/dataset-integration-plan.md,docs,markdown,478,33882,Dataset Integration Plan
+docs/planning/family-first-mipro-runtime-contract.md,docs,markdown,293,17117,Family-First DSPy / MIPROv2 Contract
 docs/planning/per-turn-dspy-mediation-contract.md,docs,markdown,115,4966,Per-Turn DSPy Mediation Contract
 docs/planning/repo-hardening-plan.md,docs,markdown,71,4545,Repository Hardening Plan
 docs/planning/trainer-context-group-champion-plan.md,docs,markdown,119,7736,Trainer Context-Group Champion Plan
@@ -169,8 +192,8 @@ publication/exploratorium_translation/Makefile,publication,makefile,30,870,UV ?=
 publication/exploratorium_translation/README.md,publication,markdown,28,997,Exploratorium Translation
 publication/exploratorium_translation/exploratorium_translation.pdf,publication,binary,,633449,Binary tracked asset at publication/exploratorium_translation/exploratorium_translation.pdf
 publication/exploratorium_translation/exploratorium_translation.tex,publication,latex,70,2573,\documentclass[11pt]{article}
-publication/exploratorium_translation/generated/exploratorium-content.tex,publication,latex,2338,742477,% Generated by repo-rag sync-exploratorium-translation. Do not edit manually.
-publication/exploratorium_translation/generated/exploratorium-manifest.json,publication,json,4221,289867,"JSON object with keys: generated_at, tracked_file_count, summarized_file_count"
+publication/exploratorium_translation/generated/exploratorium-content.tex,publication,latex,2453,784167,% Generated by repo-rag sync-exploratorium-translation. Do not edit manually.
+publication/exploratorium_translation/generated/exploratorium-manifest.json,publication,json,4428,305447,"JSON object with keys: generated_at, tracked_file_count, summarized_file_count"
 publication/references.bib,publication,bibtex,28,1252,"@inproceedings{lewis2020rag,"
 publication/repository-rag-lab-article.pdf,publication,binary,,236232,Binary tracked asset at publication/repository-rag-lab-article.pdf
 publication/repository-rag-lab-article.tex,publication,latex,208,9526,\documentclass[11pt]{article}
@@ -265,7 +288,7 @@ src/repo_rag_lab/azure_artifacts.py,src,python,424,16241,Azure Blob + Queue help
 src/repo_rag_lab/azure_runtime.py,src,python,577,20123,"Azure runtime normalization, live probes, and cloud-completion helpers."
 src/repo_rag_lab/benchmarks.py,src,python,484,16524,Retrieval benchmark helpers for notebook assertions and logging.
 src/repo_rag_lab/cli.py,src,python,1339,58870,Command-line entrypoints for the shared repository RAG workflows.
-src/repo_rag_lab/codex_proxy.py,src,python,1586,61011,Local streaming proxy that injects repo-RAG + DSPy mediation for Codex.
+src/repo_rag_lab/codex_proxy.py,src,python,1660,64025,Local streaming proxy that injects repo-RAG + DSPy mediation for Codex.
 src/repo_rag_lab/corpus.py,src,python,181,5245,Repository file loading helpers for the baseline text corpus.
 src/repo_rag_lab/dspy_training.py,src,python,1603,61196,DSPy training and artifact helpers for repository-grounded RAG.
 src/repo_rag_lab/dspy_workflow.py,src,python,180,6518,DSPy-backed runtime wrappers around the repository retrieval workflow.
@@ -282,7 +305,7 @@ src/repo_rag_lab/pages_site.py,src,python,390,13635,Generate a MkDocs-ready cata
 src/repo_rag_lab/population_samples.py,src,python,241,8376,Helpers for reviewing and batching starter corpus-population inputs.
 src/repo_rag_lab/retrieval.py,src,python,788,25533,Baseline chunking and lexical retrieval utilities for repository text.
 src/repo_rag_lab/retrieval_profile.py,src,python,236,9527,"Profile-driven retrieval weighting, exclusions, and repo-local overrides."
-src/repo_rag_lab/runtime_artifacts.py,src,python,2372,103601,"Versioned bundle, overlay, and runtime-trace helpers."
+src/repo_rag_lab/runtime_artifacts.py,src,python,2380,103988,"Versioned bundle, overlay, and runtime-trace helpers."
 src/repo_rag_lab/rust_lookup.py,src,python,295,7724,Helpers for the native Rust-backed SQLite lookup index.
 src/repo_rag_lab/semantic_retrieval.py,src,python,214,7407,Azure OpenAI embedding-backed semantic retrieval helpers.
 src/repo_rag_lab/settings.py,src,python,28,699,Shared repository path settings derived from a repository root.
@@ -334,7 +357,7 @@ tests/fixtures/hushwheel_lexiconarium/tools/regenerate_hushwheel_fixture.py,test
 tests/test_azure_runtime.py,tests,python,208,7540,Python module for test azure runtime
 tests/test_benchmarks_and_notebook_scaffolding.py,tests,python,274,11859,Python module for test benchmarks and notebook scaffolding
 tests/test_cli_and_dspy.py,tests,python,1876,68622,Python module for test cli and dspy
-tests/test_codex_proxy.py,tests,python,846,30213,Python module for test codex proxy
+tests/test_codex_proxy.py,tests,python,893,32010,Python module for test codex proxy
 tests/test_dspy_training.py,tests,python,1642,66024,Python module for test dspy training
 tests/test_exploratorium_translation.py,tests,python,138,5239,Python module for test exploratorium translation
 tests/test_file_summaries.py,tests,python,230,9110,Python module for test file summaries
@@ -352,7 +375,7 @@ tests/test_population_samples.py,tests,python,76,3144,Python module for test pop
 tests/test_project_surfaces.py,tests,python,484,21471,Python module for test project surfaces
 tests/test_repository_rag_bdd.py,tests,python,30,879,Python module for test repository rag bdd
 tests/test_retrieval.py,tests,python,389,13365,Python module for test retrieval
-tests/test_runtime_artifacts_azure.py,tests,python,1224,46320,Python module for test runtime artifacts azure
+tests/test_runtime_artifacts_azure.py,tests,python,1303,48961,Python module for test runtime artifacts azure
 tests/test_rust_lookup.py,tests,python,95,3099,Python module for test rust lookup
 tests/test_todo_backlog.py,tests,python,103,3505,Python module for test todo backlog
 tests/test_training_samples.py,tests,python,1871,72921,Python module for test training samples
