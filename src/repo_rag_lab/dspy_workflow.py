@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -133,11 +134,19 @@ class RepositoryRAG:
             ),
         )
 
-    def __call__(self, question: str) -> DSPyRunResult:
+    def __call__(
+        self,
+        question: str,
+        *,
+        original_prompt: str | None = None,
+        reformulated_prompt: str | None = None,
+        command_trace: Sequence[Mapping[str, object]] = (),
+    ) -> DSPyRunResult:
         """Answer ``question`` with DSPy when configured, else fall back to context echoing."""
 
+        retrieval_question = str(reformulated_prompt or question or original_prompt or "").strip()
         if dspy is None or self.program is None:
-            context = self.retriever(question)
+            context = self.retriever(retrieval_question or question)
             answer = " ".join(context[:1]) if context else "No context available."
             return DSPyRunResult(
                 question=question,
@@ -147,7 +156,15 @@ class RepositoryRAG:
                 program_loaded=False,
                 retrieval_mode=self.retriever.retrieval_mode,
             )
-        prediction: Any = self.program(question=question)
+        try:
+            prediction = self.program(
+                question=question,
+                original_prompt=original_prompt,
+                reformulated_prompt=reformulated_prompt,
+                command_trace=command_trace,
+            )
+        except TypeError:
+            prediction = self.program(question=question)
         retrieved_context = list(self.retriever.last_chunks)
         prediction_context = list(getattr(prediction, "context", []))
         if not prediction_context and retrieved_context:

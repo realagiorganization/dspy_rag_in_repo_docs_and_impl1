@@ -7,7 +7,7 @@ import json
 import os
 import threading
 import time
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from http import HTTPStatus
@@ -23,16 +23,20 @@ from .dspy_training import configure_dspy_lm, resolve_dspy_lm_config
 from .dspy_workflow import RepositoryRAG
 from .retrieval import RetrievalMode
 from .runtime_artifacts import (
-    DEFAULT_TRAINER_CHAMPION_INDEX_PATH,
+    DEFAULT_TRAINER_FAMILY_STATE_PATH,
     RuntimeTraceContext,
     build_runtime_trace,
     fetch_remote_bundle,
-    fetch_remote_champion_index,
+    fetch_remote_family_state,
     inspect_bundle_channel,
+    load_bundle_manifest,
     resolve_bundle_manifest,
     resolve_bundle_version_for_program,
 )
-from .training_samples import resolve_prompt_family_support
+from .training_samples import (
+    resolve_prompt_family_support,
+    resolve_prompt_family_support_from_payload,
+)
 from .workflow import ask_repository
 
 try:
@@ -92,6 +96,9 @@ class CodexMediationResult:
     prompt_family_id: str | None = None
     prompt_family_similarity: float = 0.0
     prompt_family_band: str = "new"
+    family_runtime_hit_rate: float | None = None
+    family_artifact_hit_rate: float | None = None
+    family_artifact_selected: bool | None = None
     task_classification: str = "deep"
     budget_tokens: int = _DEFAULT_TOKEN_BUDGET
     estimated_tokens: int = 0
@@ -198,13 +205,17 @@ def _build_budgeted_message(
     summary_limit = max(120, min(520, budget_tokens * 3))
     trimmed_summary = _truncate_text(summary, limit=summary_limit)
     trimmed_previews = _dedupe_previews(previews)[: max(1, essentials_count)]
+    trimmed_reformulated_prompt = _truncate_text(
+        reformulated_prompt,
+        limit=max(96, budget_tokens * 2),
+    )
     lines = [
         "Repo mediation active.",
         f"Mode: {mediation_mode}",
         f"Task class: {task_classification}",
         f"RAG: {rag_status}",
         f"DSPy: {dspy_status}",
-        f"Reformulated prompt: {_truncate_text(reformulated_prompt, limit=max(96, budget_tokens * 2))}",
+        f"Reformulated prompt: {trimmed_reformulated_prompt}",
         "",
         "Summary:",
         trimmed_summary,
@@ -343,6 +354,13 @@ def _result_from_payload(payload: dict[str, object]) -> CodexMediationResult | N
             or None,
             prompt_family_similarity=float(payload.get("prompt_family_similarity") or 0.0),
             prompt_family_band=str(payload.get("prompt_family_band") or "new"),
+            family_runtime_hit_rate=_float_or_none(payload.get("family_runtime_hit_rate")),
+            family_artifact_hit_rate=_float_or_none(payload.get("family_artifact_hit_rate")),
+            family_artifact_selected=(
+                bool(payload.get("family_artifact_selected"))
+                if payload.get("family_artifact_selected") is not None
+                else None
+            ),
             task_classification=str(payload.get("task_classification") or "deep"),
             budget_tokens=budget_tokens,
             estimated_tokens=estimated_tokens,
@@ -479,26 +497,153 @@ def reformulate_codex_prompt(
         return cleaned, "identity"
 
 
-def _resolve_champion_index_path(repository_root: Path, bundle_root: Path) -> Path | None:
-    """Resolve the champion-index path used for prompt-family support lookups."""
+def _resolve_family_state_path(repository_root: Path, bundle_root: Path) -> Path | None:
+    """Resolve the family-state path used for prompt-family support lookups."""
 
     direct_candidates = [
-        bundle_root.resolve() / DEFAULT_TRAINER_CHAMPION_INDEX_PATH,
-        repository_root.resolve() / DEFAULT_TRAINER_CHAMPION_INDEX_PATH,
+        bundle_root.resolve() / DEFAULT_TRAINER_FAMILY_STATE_PATH,
+        repository_root.resolve() / DEFAULT_TRAINER_FAMILY_STATE_PATH,
     ]
     for candidate in direct_candidates:
         if candidate.is_file():
             return candidate
+    legacy_candidates = [
+        bundle_root.resolve() / "artifacts" / "trainer" / "champion-index.json",
+        repository_root.resolve() / "artifacts" / "trainer" / "champion-index.json",
+    ]
+    for candidate in legacy_candidates:
+        if candidate.is_file():
+            return candidate
     for cache_root in (bundle_root.resolve(), repository_root.resolve()):
-        remote_payload = fetch_remote_champion_index(cache_root)
+        remote_payload = fetch_remote_family_state(cache_root)
         if not isinstance(remote_payload, dict):
             continue
-        champion_index_path = str(remote_payload.get("champion_index_path") or "").strip()
-        if not champion_index_path:
+        family_state_path = str(remote_payload.get("family_state_path") or "").strip()
+        if not family_state_path:
             continue
-        resolved = cache_root / champion_index_path
+        resolved = cache_root / family_state_path
         if resolved.is_file():
             return resolved
+    return None
+
+
+def _resolve_bundle_family_registry(
+    *,
+    bundle_root: Path,
+    bundle_version: str | None,
+    bundle_channel: str,
+) -> dict[str, object] | None:
+    """Resolve the monolithic bundle's internal family registry when available."""
+
+    remote_bundle = fetch_remote_bundle(
+        bundle_root,
+        bundle_version=bundle_version,
+        channel=None if bundle_version else bundle_channel,
+    )
+    if isinstance(remote_bundle, dict):
+        remote_bundle_path = str(remote_bundle.get("bundle_path") or "").strip()
+        if remote_bundle_path:
+            resolved_remote_bundle_path = (bundle_root / remote_bundle_path).resolve()
+            if resolved_remote_bundle_path.is_file():
+                remote_bundle_payload = load_bundle_manifest(resolved_remote_bundle_path)
+                family_registry = remote_bundle_payload.get("family_registry")
+                if isinstance(family_registry, Mapping):
+                    return dict(family_registry)
+    if bundle_version is not None:
+        try:
+            _, local_bundle = resolve_bundle_manifest(
+                bundle_root,
+                bundle_version=bundle_version,
+            )
+        except ValueError:
+            local_bundle = None
+        family_registry = (
+            local_bundle.get("family_registry") if isinstance(local_bundle, dict) else None
+        )
+        if isinstance(family_registry, Mapping):
+            return dict(family_registry)
+        return None
+    channel_state = inspect_bundle_channel(bundle_root, channel=bundle_channel)
+    current_bundle = (
+        channel_state.get("current_bundle") if channel_state.get("channel_found") else None
+    )
+    if isinstance(current_bundle, Mapping):
+        family_registry = current_bundle.get("family_registry")
+        if isinstance(family_registry, Mapping):
+            return dict(family_registry)
+    current_bundle_path = str(channel_state.get("current_bundle_path") or "").strip()
+    if current_bundle_path:
+        resolved_local_bundle_path = (bundle_root / current_bundle_path).resolve()
+        if resolved_local_bundle_path.is_file():
+            local_bundle_payload = load_bundle_manifest(resolved_local_bundle_path)
+            family_registry = local_bundle_payload.get("family_registry")
+            if isinstance(family_registry, Mapping):
+                return dict(family_registry)
+    return None
+
+
+def _resolve_family_runtime_program_path(
+    *,
+    bundle_root: Path,
+    family_registry: Mapping[str, object] | None,
+    prompt_family_id: str | None,
+) -> Path | None:
+    """Resolve the matched family's runtime program path from the bundle registry."""
+
+    if not isinstance(family_registry, Mapping) or not prompt_family_id:
+        return None
+    raw_families = family_registry.get("families")
+    if not isinstance(raw_families, list):
+        return None
+    for family in raw_families:
+        if not isinstance(family, Mapping):
+            continue
+        family_id = str(family.get("prompt_family_id") or "").strip()
+        if family_id != prompt_family_id:
+            continue
+        runtime_artifact = family.get("runtime_artifact")
+        if not isinstance(runtime_artifact, Mapping):
+            return None
+        if not bool(runtime_artifact.get("artifact_ready")):
+            return None
+        program_path_text = str(runtime_artifact.get("program_path") or "").strip()
+        if not program_path_text:
+            return None
+        resolved_program_path = Path(program_path_text)
+        if not resolved_program_path.is_absolute():
+            resolved_program_path = bundle_root / resolved_program_path
+        if resolved_program_path.is_file():
+            return resolved_program_path
+        return None
+    return None
+
+
+def _float_or_none(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _resolve_family_bundle_entry(
+    *,
+    family_registry: Mapping[str, object] | None,
+    prompt_family_id: str | None,
+) -> dict[str, object] | None:
+    """Return the matched family entry from the bundle registry."""
+
+    if not isinstance(family_registry, Mapping) or not prompt_family_id:
+        return None
+    raw_families = family_registry.get("families")
+    if not isinstance(raw_families, list):
+        return None
+    for family in raw_families:
+        if not isinstance(family, Mapping):
+            continue
+        family_id = str(family.get("prompt_family_id") or "").strip()
+        if family_id == prompt_family_id:
+            return {str(key): value for key, value in family.items()}
     return None
 
 
@@ -594,6 +739,7 @@ def _resolve_program_path_and_bundle_version(
 def build_codex_mediation(
     question: str,
     *,
+    command_trace: Sequence[Mapping[str, object]] = (),
     repository_root: Path,
     bundle_root: Path,
     prefer_dspy: bool = True,
@@ -625,23 +771,54 @@ def build_codex_mediation(
         lm_config=lm_config,
     )
     active_prompt = reformulated_prompt or original_prompt
-    champion_index_path = _resolve_champion_index_path(resolved_root, bundle_root.resolve())
+    family_registry = _resolve_bundle_family_registry(
+        bundle_root=bundle_root.resolve(),
+        bundle_version=bundle_version,
+        bundle_channel=bundle_channel,
+    )
     prompt_family_id: str | None = None
     prompt_family_similarity = 0.0
     prompt_family_band = "new"
+    family_runtime_hit_rate: float | None = None
+    family_artifact_hit_rate: float | None = None
+    family_artifact_selected: bool | None = None
     supported_family = False
-    if champion_index_path is not None:
-        support = resolve_prompt_family_support(active_prompt, champion_index_path)
+    if isinstance(family_registry, Mapping):
+        support = resolve_prompt_family_support_from_payload(
+            active_prompt,
+            {"prompt_families": family_registry.get("families", [])},
+        )
         prompt_family_id = support.prompt_family_id
         prompt_family_similarity = support.similarity
         prompt_family_band = support.band
         supported_family = support.supported
     else:
-        warnings.append("Champion index was unavailable; request will pass through unchanged.")
+        family_state_path = _resolve_family_state_path(resolved_root, bundle_root.resolve())
+        if family_state_path is not None:
+            support = resolve_prompt_family_support(active_prompt, family_state_path)
+            prompt_family_id = support.prompt_family_id
+            prompt_family_similarity = support.similarity
+            prompt_family_band = support.band
+            supported_family = support.supported
+        else:
+            warnings.append(
+                "Family state index was unavailable; request will pass through unchanged."
+            )
+    family_entry = _resolve_family_bundle_entry(
+        family_registry=family_registry,
+        prompt_family_id=prompt_family_id,
+    )
+    if isinstance(family_entry, Mapping):
+        runtime_metric = family_entry.get("family_runtime_metric")
+        if isinstance(runtime_metric, Mapping):
+            family_runtime_hit_rate = _float_or_none(runtime_metric.get("hit_rate"))
+        runtime_artifact = family_entry.get("runtime_artifact")
+        if isinstance(runtime_artifact, Mapping):
+            family_artifact_hit_rate = _float_or_none(runtime_artifact.get("hit_rate"))
 
     if not supported_family:
         warnings.append(
-            "No champion prompt-family support was found for the reformulated prompt; "
+            "No father-backed prompt-family support was found for the reformulated prompt; "
             "the original request will pass through unchanged."
         )
         return CodexMediationResult(
@@ -654,7 +831,7 @@ def build_codex_mediation(
             dspy_status="skipped",
             dspy_lm_model=str(getattr(lm_config, "model", "") or "").strip() or None,
             summary=(
-                "No champion prompt-family support was found for the reformulated prompt, so "
+                "No father-backed prompt-family support was found for the reformulated prompt, so "
                 "the proxy did not inject DSPy mediation for this turn."
             ),
             retrieval_mode=str(retrieval_mode or "lexical"),
@@ -667,6 +844,9 @@ def build_codex_mediation(
             prompt_family_id=prompt_family_id,
             prompt_family_similarity=prompt_family_similarity,
             prompt_family_band=prompt_family_band,
+            family_runtime_hit_rate=family_runtime_hit_rate,
+            family_artifact_hit_rate=family_artifact_hit_rate,
+            family_artifact_selected=family_artifact_selected,
             task_classification=task_classification,
             budget_tokens=effective_budget,
             estimated_tokens=0,
@@ -721,14 +901,45 @@ def build_codex_mediation(
         try:
             if lm_config is None:
                 raise RuntimeError("DSPy LM configuration is unavailable.")
-            program_path, resolved_bundle_version = _resolve_program_path_and_bundle_version(
+            use_family_artifact = True
+            if (
+                family_artifact_hit_rate is not None
+                and family_runtime_hit_rate is not None
+                and family_artifact_hit_rate < family_runtime_hit_rate
+            ):
+                use_family_artifact = False
+                warnings.append(
+                    "Matched family runtime artifact scored below the current family hit-rate "
+                    "baseline, so the proxy fell back to fresh/global mediation for this turn."
+                )
+            family_program_path = (
+                _resolve_family_runtime_program_path(
+                    bundle_root=bundle_root.resolve(),
+                    family_registry=family_registry,
+                    prompt_family_id=prompt_family_id,
+                )
+                if use_family_artifact
+                else None
+            )
+            global_program_path, resolved_bundle_version = _resolve_program_path_and_bundle_version(
                 repository_root=resolved_root,
                 bundle_root=bundle_root.resolve(),
                 bundle_version=bundle_version,
                 bundle_channel=bundle_channel,
             )
+            program_path = family_program_path or global_program_path
+            family_artifact_selected = family_program_path is not None
             if program_path is None:
                 raise FileNotFoundError("No compiled DSPy bundle is available.")
+            if (
+                family_program_path is None
+                and use_family_artifact
+                and isinstance(family_registry, Mapping)
+            ):
+                warnings.append(
+                    "Family match resolved, but no ready family runtime artifact was available; "
+                    "falling back to the global compiled program."
+                )
             runner = RepositoryRAG(
                 root=resolved_root,
                 top_k=dspy_top_k,
@@ -737,7 +948,13 @@ def build_codex_mediation(
                 require_configured_lm=True,
                 retrieval_mode=retrieval_mode,
             )
-            dspy_result = runner(active_prompt)
+            runtime_question = original_prompt or active_prompt
+            dspy_result = runner(
+                runtime_question,
+                original_prompt=original_prompt or None,
+                reformulated_prompt=active_prompt or None,
+                command_trace=command_trace,
+            )
             if not dspy_result.answer.strip():
                 raise RuntimeError("DSPy produced an empty answer.")
             dspy_status = "success"
@@ -818,6 +1035,9 @@ def build_codex_mediation(
         prompt_family_id=prompt_family_id,
         prompt_family_similarity=prompt_family_similarity,
         prompt_family_band=prompt_family_band,
+        family_runtime_hit_rate=family_runtime_hit_rate,
+        family_artifact_hit_rate=family_artifact_hit_rate,
+        family_artifact_selected=family_artifact_selected,
         task_classification=task_classification,
         budget_tokens=effective_budget,
         estimated_tokens=estimated_tokens,
@@ -1100,6 +1320,9 @@ class _CodexProxyRuntime:
             prompt_family_id=cached.prompt_family_id,
             prompt_family_similarity=cached.prompt_family_similarity,
             prompt_family_band=cached.prompt_family_band,
+            family_runtime_hit_rate=cached.family_runtime_hit_rate,
+            family_artifact_hit_rate=cached.family_artifact_hit_rate,
+            family_artifact_selected=cached.family_artifact_selected,
             task_classification=cached.task_classification,
             budget_tokens=cached.budget_tokens,
             estimated_tokens=cached.estimated_tokens,
@@ -1138,6 +1361,7 @@ class _CodexProxyRuntime:
             return cached_disk
         mediation = build_codex_mediation(
             original_prompt,
+            command_trace=command_trace,
             repository_root=self.config.repository_root,
             bundle_root=self.config.bundle_root,
             prefer_dspy=self.config.prefer_dspy,
@@ -1203,6 +1427,9 @@ class _CodexProxyRuntime:
                     prompt_family_id=mediation.prompt_family_id,
                     prompt_family_similarity=mediation.prompt_family_similarity,
                     prompt_family_band=mediation.prompt_family_band,
+                    family_runtime_hit_rate=mediation.family_runtime_hit_rate,
+                    family_artifact_hit_rate=mediation.family_artifact_hit_rate,
+                    family_artifact_selected=mediation.family_artifact_selected,
                     mediation_metric_hits=metric_hits,
                     mediation_metric_total=metric_total,
                 )

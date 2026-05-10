@@ -296,8 +296,8 @@ def test_build_codex_mediation_suppresses_low_signal(
         fake_build_heuristic_previews,
     )
     monkeypatch.setattr(
-        "repo_rag_lab.codex_proxy._resolve_champion_index_path",
-        lambda *args, **kwargs: repo / "artifacts" / "trainer" / "champion-index.json",
+        "repo_rag_lab.codex_proxy._resolve_family_state_path",
+        lambda *args, **kwargs: repo / "artifacts" / "trainer" / "family-state.json",
     )
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy.resolve_prompt_family_support",
@@ -321,6 +321,339 @@ def test_build_codex_mediation_suppresses_low_signal(
     assert mediation.injected is False
     assert mediation.developer_message == ""
     assert any("suppressed" in warning.lower() for warning in mediation.warnings)
+
+
+def test_build_codex_mediation_prefers_bundle_family_registry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "README.md").write_text("repo summary\n", encoding="utf-8")
+
+    def fake_ask_repository(
+        question: str,
+        root: Path,
+        retrieval_mode: RetrievalMode | None = None,
+    ) -> SimpleNamespace:
+        del question, retrieval_mode
+        return SimpleNamespace(
+            context=[Chunk(source=root / "README.md", text="Repository summary text.")],
+            summary="Repository summary text.",
+            retrieval_mode="lexical",
+        )
+
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.ask_repository", fake_ask_repository)
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_bundle_family_registry",
+        lambda **kwargs: {
+            "schema_version": 1,
+            "registry_kind": "repo-rag-family-registry",
+            "families": [
+                {
+                    "prompt_family_id": "pf-demo",
+                    "family_father_question": "Run the failing pytest target and inspect stderr.",
+                    "family_father_record": {
+                        "question": "Run the failing pytest target and inspect stderr."
+                    },
+                    "family_runtime_record": {
+                        "question": "Run the failing pytest target and inspect stderr.",
+                        "metric_hits": 1,
+                        "metric_total": 1,
+                        "metric_ratio": 1.0,
+                    },
+                }
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_family_state_path",
+        lambda *args, **kwargs: pytest.fail("bundle family registry should be used first"),
+    )
+
+    mediation = build_codex_mediation(
+        "Run the failing pytest target and inspect stderr.",
+        repository_root=repo,
+        bundle_root=repo,
+        prefer_dspy=False,
+    )
+
+    assert mediation.prompt_family_id == "pf-demo"
+    assert mediation.prompt_family_band == "match"
+    assert mediation.mediation_mode != "passthrough"
+    assert mediation.injected is True
+
+
+def test_build_codex_mediation_executes_family_runtime_artifact_with_prompt_lineage(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "README.md").write_text("repo summary\n", encoding="utf-8")
+    family_program_path = (
+        repo
+        / "artifacts"
+        / "dspy"
+        / "remote"
+        / "stable-42"
+        / "families"
+        / "pf-demo"
+        / "program.json"
+    )
+    family_program_path.parent.mkdir(parents=True)
+    family_program_path.write_text('{"program":"family-demo"}\n', encoding="utf-8")
+
+    captured: dict[str, object] = {}
+
+    def fake_ask_repository(
+        question: str,
+        root: Path,
+        retrieval_mode: RetrievalMode | None = None,
+    ) -> SimpleNamespace:
+        del retrieval_mode
+        assert question == "Run the failing pytest target and inspect stderr."
+        return SimpleNamespace(
+            context=[Chunk(source=root / "README.md", text="Repository summary text.")],
+            summary="Repository summary text.",
+            retrieval_mode="lexical",
+        )
+
+    class FakeRepositoryRAG:
+        def __init__(
+            self,
+            root: Path,
+            top_k: int = 4,
+            *,
+            program_path: Path | None = None,
+            lm_config: object | None = None,
+            require_configured_lm: bool = False,
+            retrieval_mode: RetrievalMode | None = None,
+        ) -> None:
+            del root, top_k, require_configured_lm, retrieval_mode
+            captured["program_path"] = program_path
+            captured["lm_model"] = getattr(lm_config, "model", None)
+
+        def __call__(
+            self,
+            question: str,
+            *,
+            original_prompt: str | None = None,
+            reformulated_prompt: str | None = None,
+            command_trace: object = (),
+        ) -> SimpleNamespace:
+            captured["question"] = question
+            captured["original_prompt"] = original_prompt
+            captured["reformulated_prompt"] = reformulated_prompt
+            captured["command_trace"] = command_trace
+            return SimpleNamespace(
+                answer="Family-scoped DSPy answer.",
+                retrieval_mode="lexical",
+            )
+
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.ask_repository", fake_ask_repository)
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.RepositoryRAG", FakeRepositoryRAG)
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.resolve_dspy_lm_config",
+        lambda: SimpleNamespace(model="azure/dspy-helper"),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.reformulate_codex_prompt",
+        lambda prompt, *, lm_config=None: (
+            "Run the failing pytest target and inspect stderr.",
+            "success",
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_bundle_family_registry",
+        lambda **kwargs: {
+            "schema_version": 1,
+            "registry_kind": "repo-rag-family-registry",
+            "families": [
+                {
+                    "prompt_family_id": "pf-demo",
+                    "family_father_question": "Run the failing pytest target and inspect stderr.",
+                    "family_father_record": {
+                        "question": "Run the failing pytest target and inspect stderr.",
+                    },
+                    "family_runtime_metric": {"hit_rate": 0.8},
+                    "runtime_artifact": {
+                        "artifact_kind": "compiled-family-program",
+                        "artifact_ready": True,
+                        "program_path": (
+                            "artifacts/dspy/remote/stable-42/families/pf-demo/program.json"
+                        ),
+                        "metadata_path": (
+                            "artifacts/dspy/remote/stable-42/families/pf-demo/metadata.json"
+                        ),
+                        "hit_rate": 1.0,
+                    },
+                }
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_program_path_and_bundle_version",
+        lambda **kwargs: (
+            repo / "artifacts" / "dspy" / "remote" / "stable-42" / "program.json",
+            "stable-42",
+        ),
+    )
+
+    command_trace = [
+        {"role": "assistant", "text": "pytest tests/test_suite.py -q"},
+        {"role": "tool", "text": "1 failed, 4 passed"},
+    ]
+    mediation = build_codex_mediation(
+        "Investigate the failing pytest target and fix the broken test.",
+        command_trace=command_trace,
+        repository_root=repo,
+        bundle_root=repo,
+        prefer_dspy=True,
+    )
+
+    assert mediation.dspy_status == "success"
+    assert mediation.bundle_version == "stable-42"
+    assert mediation.program_path == (
+        "artifacts/dspy/remote/stable-42/families/pf-demo/program.json"
+    )
+    assert mediation.family_runtime_hit_rate == 0.8
+    assert mediation.family_artifact_hit_rate == 1.0
+    assert mediation.family_artifact_selected is True
+    assert captured["program_path"] == family_program_path.resolve()
+    assert captured["lm_model"] == "azure/dspy-helper"
+    assert captured["question"] == "Investigate the failing pytest target and fix the broken test."
+    assert captured["original_prompt"] == (
+        "Investigate the failing pytest target and fix the broken test."
+    )
+    assert captured["reformulated_prompt"] == (
+        "Run the failing pytest target and inspect stderr."
+    )
+    assert captured["command_trace"] == command_trace
+
+
+def test_build_codex_mediation_skips_family_artifact_when_hit_rate_drops(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "README.md").write_text("repo summary\n", encoding="utf-8")
+    global_program_path = repo / "artifacts" / "dspy" / "remote" / "stable-42" / "program.json"
+    global_program_path.parent.mkdir(parents=True)
+    global_program_path.write_text('{"program":"global-demo"}\n', encoding="utf-8")
+    family_program_path = (
+        repo
+        / "artifacts"
+        / "dspy"
+        / "remote"
+        / "stable-42"
+        / "families"
+        / "pf-demo"
+        / "program.json"
+    )
+    family_program_path.parent.mkdir(parents=True)
+    family_program_path.write_text('{"program":"family-demo"}\n', encoding="utf-8")
+
+    captured: dict[str, object] = {}
+
+    def fake_ask_repository(
+        question: str,
+        root: Path,
+        retrieval_mode: RetrievalMode | None = None,
+    ) -> SimpleNamespace:
+        del retrieval_mode
+        assert question == "Run the failing pytest target and inspect stderr."
+        return SimpleNamespace(
+            context=[Chunk(source=root / "README.md", text="Repository summary text.")],
+            summary="Repository summary text.",
+            retrieval_mode="lexical",
+        )
+
+    class FakeRepositoryRAG:
+        def __init__(
+            self,
+            root: Path,
+            top_k: int = 4,
+            *,
+            program_path: Path | None = None,
+            lm_config: object | None = None,
+            require_configured_lm: bool = False,
+            retrieval_mode: RetrievalMode | None = None,
+        ) -> None:
+            del root, top_k, lm_config, require_configured_lm, retrieval_mode
+            captured["program_path"] = program_path
+
+        def __call__(
+            self,
+            question: str,
+            *,
+            original_prompt: str | None = None,
+            reformulated_prompt: str | None = None,
+            command_trace: object = (),
+        ) -> SimpleNamespace:
+            del question, original_prompt, reformulated_prompt, command_trace
+            return SimpleNamespace(answer="Global fallback answer.", retrieval_mode="lexical")
+
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.ask_repository", fake_ask_repository)
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.RepositoryRAG", FakeRepositoryRAG)
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.resolve_dspy_lm_config",
+        lambda: SimpleNamespace(model="azure/dspy-helper"),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.reformulate_codex_prompt",
+        lambda prompt, *, lm_config=None: (
+            "Run the failing pytest target and inspect stderr.",
+            "success",
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_bundle_family_registry",
+        lambda **kwargs: {
+            "schema_version": 1,
+            "registry_kind": "repo-rag-family-registry",
+            "families": [
+                {
+                    "prompt_family_id": "pf-demo",
+                    "family_father_question": "Run the failing pytest target and inspect stderr.",
+                    "family_father_record": {
+                        "question": "Run the failing pytest target and inspect stderr."
+                    },
+                    "family_runtime_metric": {"hit_rate": 0.9},
+                    "runtime_artifact": {
+                        "artifact_kind": "compiled-family-program",
+                        "artifact_ready": True,
+                        "program_path": (
+                            "artifacts/dspy/remote/stable-42/families/pf-demo/program.json"
+                        ),
+                        "metadata_path": (
+                            "artifacts/dspy/remote/stable-42/families/pf-demo/metadata.json"
+                        ),
+                        "hit_rate": 0.4,
+                    },
+                }
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_program_path_and_bundle_version",
+        lambda **kwargs: (global_program_path, "stable-42"),
+    )
+
+    mediation = build_codex_mediation(
+        "Investigate the failing pytest target and fix the broken test.",
+        repository_root=repo,
+        bundle_root=repo,
+        prefer_dspy=True,
+    )
+
+    assert mediation.dspy_status == "success"
+    assert mediation.family_runtime_hit_rate == 0.9
+    assert mediation.family_artifact_hit_rate == 0.4
+    assert mediation.family_artifact_selected is False
+    assert mediation.program_path == "artifacts/dspy/remote/stable-42/program.json"
+    assert captured["program_path"] == global_program_path.resolve()
+    assert any("fell back to fresh/global mediation" in warning for warning in mediation.warnings)
 
 
 def test_resolve_program_path_and_bundle_version_uses_local_bundle_root_without_remote_fetch(
@@ -421,8 +754,8 @@ def test_running_codex_proxy_uses_budgeted_disk_cache(
     monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
     monkeypatch.setattr("repo_rag_lab.codex_proxy.resolve_dspy_lm_config", lambda: None)
     monkeypatch.setattr(
-        "repo_rag_lab.codex_proxy._resolve_champion_index_path",
-        lambda *args, **kwargs: repo / "artifacts" / "trainer" / "champion-index.json",
+        "repo_rag_lab.codex_proxy._resolve_family_state_path",
+        lambda *args, **kwargs: repo / "artifacts" / "trainer" / "family-state.json",
     )
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy.resolve_prompt_family_support",

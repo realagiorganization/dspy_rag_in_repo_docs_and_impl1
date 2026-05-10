@@ -1,5 +1,8 @@
 # Per-Turn DSPy Mediation Contract
 
+Historical stage-0 note. The active family-first contract now lives in
+[docs/planning/family-first-mipro-runtime-contract.md](family-first-mipro-runtime-contract.md).
+
 Date: `2026-05-08`
 
 This document is the current source of truth for how DSPy is supposed to work in the

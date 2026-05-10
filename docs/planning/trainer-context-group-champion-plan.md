@@ -1,5 +1,10 @@
 # Trainer Context-Group Champion Plan
 
+Historical plan. The active product contract now lives in
+[docs/planning/family-first-mipro-runtime-contract.md](family-first-mipro-runtime-contract.md),
+which keeps the family grouping but replaces champion-first product truth with father-based routing
+plus family runtime artifacts.
+
 Goal: keep one global universal DSPy bundle while stopping `last write wins` churn when the same prompt is executed many times under evolving repository context.
 
 ## Standing Product Requirement
