@@ -179,6 +179,39 @@ def test_extract_codex_turn_state_strips_dataset_execution_envelope() -> None:
     ]
 
 
+def test_extract_codex_turn_state_strips_runtime_repository_metadata() -> None:
+    payload = {
+        "input": [
+            {
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            "Repository checkout: acme/repo -> /workspace/repo\n"
+                            "Attachment mount: attachments_prompt_1\n"
+                            "Attachments: wireframe.png\n\n"
+                            "Add an automated demo GIF of this wireframe."
+                        ),
+                    }
+                ],
+            }
+        ]
+    }
+
+    state = extract_codex_turn_state(_payload_mapping(payload))
+
+    assert state["original_prompt"] == "Add an automated demo GIF of this wireframe."
+    assert state["command_trace"] == [
+        {
+            "type": "message",
+            "role": "user",
+            "text": "Add an automated demo GIF of this wireframe.",
+        }
+    ]
+
+
 def test_augment_responses_payload_inserts_developer_message_after_existing_developers() -> None:
     payload = {
         "input": [

@@ -446,6 +446,10 @@ def _strip_dataset_execution_envelope(text: str) -> str:
             continue
         if stripped.startswith("Available repository:"):
             continue
+        if stripped.startswith("Repository checkout:"):
+            continue
+        if stripped.startswith("Attachment mount:"):
+            continue
         if stripped.startswith("Attachments saved for execution"):
             continue
         if stripped.startswith("Attachments:"):

@@ -527,8 +527,11 @@ At the time of this document:
   Docker Hub 429 limits the build script now falls back to the newest already-published
   ACR-hosted `repo-rag-runtime` / `queue-initializer` images as base layers
 - `../dataset` now also carries explicit submodule metadata for this repository and
-  `dataset_website`, so the orchestration repository can show those relationships directly and use
-  the repo-RAG submodule as the preferred build context when it is initialized
+  `dataset_website`, but the runtime-image and trainer-deploy helpers now prefer the sibling
+  `../dspy_rag_in_repo_docs_and_impl1` checkout when it is present locally and fall back to the
+  repo-RAG submodule only when no sibling checkout is available; this avoids baking stale
+  champion-era code into `repo-rag-runtime` after the active repository has advanced past the
+  submodule pin
 - the central inference story is now explicit instead of implied: workers and trainer-side live
   recompilation currently target an external Azure/OpenAI inference layer first, while any shared
   internal model-serving tier remains a later cost/compliance optimization rather than a hidden

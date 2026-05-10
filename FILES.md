@@ -46,7 +46,7 @@ This inventory is generated from the current Git index.
 | `docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md` | docs | markdown | 38 | 1555 | Implementing RAG with DSPy: Technical Guide |
 | `docs/architecture/mcp-discovery.md` | docs | markdown | 54 | 1757 | MCP Discovery Notes |
 | `docs/architecture/package-api.md` | docs | markdown | 127 | 9186 | Package API Notes |
-| `docs/architecture/research-narrative.md` | docs | markdown | 971 | 73269 | Repository research narrative tying code, docs, and verification together |
+| `docs/architecture/research-narrative.md` | docs | markdown | 974 | 73480 | Repository research narrative tying code, docs, and verification together |
 | `docs/archive/repo-completeness-checklist.md` | docs | markdown | 238 | 7450 | Archived completeness snapshot kept for workflow and lockfile policy context |
 | `docs/audit/2026-03-15-repo-state.md` | docs | markdown | 151 | 5989 | Repository audit note for 2026 03 15 repo state |
 | `docs/audit/2026-03-17-docs-and-uv-refresh.md` | docs | markdown | 79 | 3977 | Repository audit note for 2026 03 17 docs and uv refresh |
@@ -173,10 +173,13 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-05-10-aks-run-25625638264-family-first-runtime-gap.md` | docs | markdown | 246 | 8472 | Repository audit note for 2026 05 10 aks run 25625638264 family first runtime gap |
 | `docs/audit/2026-05-10-aks-run-25629990035-family-first-runtime-still-heuristic.md` | docs | markdown | 211 | 6843 | Repository audit note for 2026 05 10 aks run 25629990035 family first runtime still heuristic |
 | `docs/audit/2026-05-10-aks-run-25632110510-handoff-fixed-runtime-still-heuristic.md` | docs | markdown | 231 | 7832 | Repository audit note for 2026 05 10 aks run 25632110510 handoff fixed runtime still heuristic |
+| `docs/audit/2026-05-10-aks-run-25634202380-reset-lane-batch-handoff-runtime-still-heuristic.md` | docs | markdown | 197 | 6096 | Repository audit note for 2026 05 10 aks run 25634202380 reset lane batch handoff runtime still heuristic |
 | `docs/audit/2026-05-10-family-first-runtime-fixes-after-run-25625638264.md` | docs | markdown | 261 | 12143 | Repository audit note for 2026 05 10 family first runtime fixes after run 25625638264 |
 | `docs/audit/2026-05-10-family-first-runtime-fixes-after-run-25629990035.md` | docs | markdown | 98 | 4170 | Repository audit note for 2026 05 10 family first runtime fixes after run 25629990035 |
 | `docs/audit/2026-05-10-family-first-runtime-fixes-after-run-25632110510.md` | docs | markdown | 112 | 5332 | Repository audit note for 2026 05 10 family first runtime fixes after run 25632110510 |
-| `docs/audit/README.md` | docs | markdown | 14 | 443 | Repository audit note for README |
+| `docs/audit/2026-05-10-family-state-root-alias-and-latest-bundle-staging-fallback.md` | docs | markdown | 81 | 3390 | Repository audit note for 2026 05 10 family state root alias and latest bundle staging fallback |
+| `docs/audit/2026-05-10-stale-submodule-runtime-image-root-cause-and-source-preference-fix.md` | docs | markdown | 114 | 5021 | Repository audit note for 2026 05 10 stale submodule runtime image root cause and source preference fix |
+| `docs/audit/README.md` | docs | markdown | 14 | 451 | Repository audit note for README |
 | `docs/guides/hushwheel-fixture-rag-guide.md` | docs | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
 | `docs/operations/azure-deployment.md` | docs | markdown | 111 | 4901 | Azure Deployment Notes |
 | `docs/operations/environment.md` | docs | markdown | 130 | 7589 | Environment and secret reference for local runtime and deployment workflows |
@@ -185,7 +188,7 @@ This inventory is generated from the current Git index.
 | `docs/operations/trainer-deployment.md` | docs | markdown | 152 | 6047 | Trainer Deployment Notes |
 | `docs/planning/codex-exec-resume-plan.md` | docs | markdown | 207 | 11561 | Codex Exec Resume Plan |
 | `docs/planning/dataset-integration-plan.md` | docs | markdown | 478 | 33882 | Dataset Integration Plan |
-| `docs/planning/family-first-mipro-runtime-contract.md` | docs | markdown | 328 | 19938 | Family-First DSPy / MIPROv2 Contract |
+| `docs/planning/family-first-mipro-runtime-contract.md` | docs | markdown | 334 | 20438 | Family-First DSPy / MIPROv2 Contract |
 | `docs/planning/per-turn-dspy-mediation-contract.md` | docs | markdown | 115 | 4966 | Per-Turn DSPy Mediation Contract |
 | `docs/planning/repo-hardening-plan.md` | docs | markdown | 71 | 4545 | Repository Hardening Plan |
 | `docs/planning/trainer-context-group-champion-plan.md` | docs | markdown | 119 | 7736 | Trainer Context-Group Champion Plan |
@@ -204,8 +207,8 @@ This inventory is generated from the current Git index.
 | `publication/exploratorium_translation/README.md` | publication | markdown | 28 | 997 | Exploratorium Translation |
 | `publication/exploratorium_translation/exploratorium_translation.pdf` | publication | binary |  | 633449 | Binary tracked asset at publication/exploratorium_translation/exploratorium_translation.pdf |
 | `publication/exploratorium_translation/exploratorium_translation.tex` | publication | latex | 70 | 2573 | \documentclass[11pt]{article} |
-| `publication/exploratorium_translation/generated/exploratorium-content.tex` | publication | latex | 2493 | 799715 | % Generated by repo-rag sync-exploratorium-translation. Do not edit manually. |
-| `publication/exploratorium_translation/generated/exploratorium-manifest.json` | publication | json | 4502 | 311228 | JSON object with keys: generated_at, tracked_file_count, summarized_file_count |
+| `publication/exploratorium_translation/generated/exploratorium-content.tex` | publication | latex | 2503 | 803563 | % Generated by repo-rag sync-exploratorium-translation. Do not edit manually. |
+| `publication/exploratorium_translation/generated/exploratorium-manifest.json` | publication | json | 4520 | 312601 | JSON object with keys: generated_at, tracked_file_count, summarized_file_count |
 | `publication/references.bib` | publication | bibtex | 28 | 1252 | @inproceedings{lewis2020rag, |
 | `publication/repository-rag-lab-article.pdf` | publication | binary |  | 236232 | Binary tracked asset at publication/repository-rag-lab-article.pdf |
 | `publication/repository-rag-lab-article.tex` | publication | latex | 208 | 9526 | \documentclass[11pt]{article} |
@@ -300,7 +303,7 @@ This inventory is generated from the current Git index.
 | `src/repo_rag_lab/azure_runtime.py` | src | python | 577 | 20123 | Azure runtime normalization, live probes, and cloud-completion helpers. |
 | `src/repo_rag_lab/benchmarks.py` | src | python | 484 | 16524 | Retrieval benchmark helpers for notebook assertions and logging. |
 | `src/repo_rag_lab/cli.py` | src | python | 1339 | 58870 | Command-line entrypoints for the shared repository RAG workflows. |
-| `src/repo_rag_lab/codex_proxy.py` | src | python | 1882 | 72177 | Local streaming proxy that injects repo-RAG + DSPy mediation for Codex. |
+| `src/repo_rag_lab/codex_proxy.py` | src | python | 1886 | 72328 | Local streaming proxy that injects repo-RAG + DSPy mediation for Codex. |
 | `src/repo_rag_lab/corpus.py` | src | python | 181 | 5245 | Repository file loading helpers for the baseline text corpus. |
 | `src/repo_rag_lab/dspy_training.py` | src | python | 1613 | 61656 | DSPy training and artifact helpers for repository-grounded RAG. |
 | `src/repo_rag_lab/dspy_workflow.py` | src | python | 180 | 6518 | DSPy-backed runtime wrappers around the repository retrieval workflow. |
@@ -369,7 +372,7 @@ This inventory is generated from the current Git index.
 | `tests/test_azure_runtime.py` | tests | python | 208 | 7540 | Python module for test azure runtime |
 | `tests/test_benchmarks_and_notebook_scaffolding.py` | tests | python | 274 | 11859 | Python module for test benchmarks and notebook scaffolding |
 | `tests/test_cli_and_dspy.py` | tests | python | 1876 | 68622 | Python module for test cli and dspy |
-| `tests/test_codex_proxy.py` | tests | python | 1222 | 43624 | Python module for test codex proxy |
+| `tests/test_codex_proxy.py` | tests | python | 1255 | 44684 | Python module for test codex proxy |
 | `tests/test_dspy_training.py` | tests | python | 1653 | 66652 | Python module for test dspy training |
 | `tests/test_exploratorium_translation.py` | tests | python | 138 | 5239 | Python module for test exploratorium translation |
 | `tests/test_file_summaries.py` | tests | python | 230 | 9110 | Python module for test file summaries |

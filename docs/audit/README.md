@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-05-10-family-state-root-alias-and-latest-bundle-staging-fallback.md`
+- `2026-05-10-stale-submodule-runtime-image-root-cause-and-source-preference-fix.md`
 
 ## Usage
 
