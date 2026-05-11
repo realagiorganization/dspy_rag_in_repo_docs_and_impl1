@@ -908,9 +908,7 @@ def fetch_remote_bundle(
         requested_channel = channel or "stable"
         channel_state = inspect_remote_bundle_channel(requested_channel)
         if channel_state is not None and channel_state.get("channel_found"):
-            resolved_bundle_version = _string_or_none(
-                channel_state.get("current_bundle_version")
-            )
+            resolved_bundle_version = _string_or_none(channel_state.get("current_bundle_version"))
         if resolved_bundle_version is None:
             resolved_bundle_version = _latest_remote_bundle_version(
                 store=store,
