@@ -24,6 +24,8 @@ a family-first model:
 3. The helper DSPy model reformulates that prompt into `reformulated_prompt`.
 4. The proxy compares the incoming prompt against **every family father** and computes one
    similarity score per family.
+   That routing comparison must use `original_prompt`; `reformulated_prompt` belongs to the DSPy
+   mediation surface, not to father matching.
 5. `metric 3` is the maximum of those scores.
 6. `metric 2` is the binary family-membership decision derived from that maximum:
    - if `metric 3 >= 0.8`, the prompt belongs to the best-matching family
@@ -174,6 +176,10 @@ Implemented locally in this stage:
 - worker-side batch handoff for proxy turn traces now overwrites the optimistic proxy draft metrics
   and outcomes with the final run `execution_status`, `acceptance_status`, and real post-run
   `mediation_metric_hits / mediation_metric_total` before `trace-export` / `trace-enqueue`
+- prompt-family routing now prefers `original_prompt` during father matching, while the
+  reformulated prompt remains the runtime mediation surface that the matched family artifact sees
+- deploy-stage trusted handoff now prefers the worker turn-trace batch manifest plus exported
+  per-turn trace records before it falls back to the old coarse single-trace payload
 - local trainer state now uses `artifacts/trainer/family-state.json` as the primary persisted
   filename, falls back to `artifacts/trainer/champion-index.json` only when older local snapshots
   have not been migrated yet, and caches remote family state under
@@ -372,3 +378,9 @@ Not implemented yet:
     processed-ledger traces before every poll iteration. When neither source has new input, the
     service records an idle state update and sleeps without invoking `trainer-cycle`, so the
     running poller no longer burns work just to rediscover an empty queue.
+28. Align runtime father matching and deploy-stage recovery with the family-first trace contract.
+    Stage 28 locally: family lookup now routes by `original_prompt` instead of the helper's
+    reformulated text, so existing fathers are compared against the raw task surface that the user
+    asked to preserve. Deploy-stage trusted handoff now also treats the worker batch manifest plus
+    exported per-turn trace records as the primary recovery path, and only falls back to the old
+    coarse single-trace payload when no valid worker batch exists.

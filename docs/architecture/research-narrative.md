@@ -978,6 +978,16 @@ execution proxy, removes that implicit publish gate unless an operator explicitl
 and keeps `trace-export` artifacts out of the target repository worktree so Codex does not spend
 tokens diffing its own exported traces.
 
+The next local correction on `2026-05-11` tightens the family-first contract in the two places
+where the latest live artifacts were still drifting from intent. First, family routing now
+compares fathers against `original_prompt`, not the helper-produced `reformulated_prompt`, so
+runtime reuse is keyed off the raw task surface that the trainer also persists in `father.json`.
+Second, deploy-stage trusted handoff now prefers the worker's turn-trace batch manifest plus the
+exported per-turn trace records, and only falls back to the coarse single proxy payload when no
+valid worker batch exists. That keeps trainer ingestion aligned with the per-turn traces that
+actually produced the family decision instead of silently collapsing back into one coarse ledger
+item.
+
 ## Tensions And Open Work
 
 The narrative is coherent, but not complete. The main open tensions are:

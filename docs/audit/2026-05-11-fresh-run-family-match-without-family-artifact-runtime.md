@@ -1,206 +1,210 @@
-# 2026-05-11 Fresh Run Matches Families but Does Not Activate Family Artifacts at Runtime
+# 2026-05-11 Fresh Run Family Match Without Family Artifact Runtime
 
 ## Context
 
-The user asked for a verification pass over the latest execution artifacts exported to
-`../dataset/artifacts/`, with special attention to:
+The user requested a direct analysis of the newest exported execution artifacts under
+`../dataset/artifacts/` and asked whether the latest live run completed the intended family-first
+DSPy cycle end to end.
 
-- whether DSPy worked correctly
-- whether prompt families were used
-- whether token spend looked valid
-- whether the family-first DSPy cycle completed end-to-end
+Artifacts inspected in this turn:
 
-This note records the artifact inspection for the fresh run plus a same-turn local verification
-baseline from this repository checkout.
+- `../dataset/artifacts/redis_results.json`
+- `../dataset/artifacts/upload_summary.json`
+- `../dataset/artifacts/all_artifacts.tar.gz`
+- `../dataset/artifacts/processed.tar.gz`
 
-## Artifact-Backed Findings
+The execution represented by those artifacts is:
 
-### 1. The execution itself succeeded, but runtime DSPy stayed on the heuristic path
+- `execution_id = 25669682011_20260511_130858`
 
-The latest exported result in `../dataset/artifacts/redis_results.json` reports:
+## What Worked
+
+Execution-level behavior was healthy in several ways:
 
 - `success = true`
 - `backend_used = codex_cli_repo_rag_proxy`
 - `trace_handoff_status = queued`
-- `acceptance_status = candidate`
-- `execution_time = 2310.248155`
-- `prompt_tokens = 248870`
+- `prompt_tokens = 146406`
 
-The execution therefore completed and did hand off a training trace, but the prompt-token spend was
-very high for a run that was supposed to benefit from family-backed DSPy runtime reuse.
+Prompt cleanup and runtime shape were also materially better than the earlier pathological runs:
 
-### 2. Prompt-family matching happened, but family artifacts were not used
+- the top-level proxy snapshot carried a clean repository task in `question`
+- `original_prompt` preserved the raw user request
+- `reformulated_prompt` was a normalized DSPy-produced instruction block
+- `reformulation_status = dspy`
+- the compact turn-trace directory existed:
+  - `repo_rag_turn_traces/20260511T123215Z/`
+  - `38` turn files plus `manifest.json`
 
-`repo_rag_codex_proxy_last.json` shows:
+The underlying Codex rollout was substantial rather than trivially idle:
 
-- `prompt_family_id = pf-c93cbc537b800fac`
-- `prompt_family_similarity = 1.0`
-- `prompt_family_band = "match"`
-- `family_artifact_selected = false`
+- `codex_response.txt` was about `79 KB`
+- `1834` lines
+- repeated `playwright`, `npm`, `gif`, and asset-validation activity were present
+- the target repository diff ended as a single binary GIF refresh
+
+So the token count was not dominated by the earlier Discord-forwarding or queue-replay noise. It
+came largely from real execution work.
+
+## What Did Not Work
+
+The family-first DSPy runtime still did **not** activate.
+
+Direct evidence from
+`execution_artifacts/prompt-worker-0-rehydrated/artifacts/prompts_debt_relief-p00000-cfc990/repo_rag_codex_proxy_last.json`:
+
+- `mediation_mode = passthrough`
+- `rag_status = skipped`
+- `dspy_status = skipped`
 - `bundle_version = null`
-- `dspy_status = "heuristic"`
-- `reformulation_status = "identity"`
+- `program_path = null`
+- `program_loaded = null`
+- `prompt_family_id = pf-9e9caa33f8664b26`
+- `prompt_family_similarity = 0.51087`
+- `prompt_family_band = new`
+- `family_artifact_selected = null`
 
-So the proxy **did** find an existing family match at runtime, and the match quality was maximal
-(`1.0`), but it still failed to load or select a family runtime artifact. The run therefore stayed
-on heuristic mediation instead of the intended family-first DSPy path.
+The summary string was explicit:
 
-### 3. Turn-level traces were captured, and reformulation behavior was mixed
+- `No father-backed prompt-family support was found for the reformulated prompt, so the proxy did not inject DSPy mediation for this turn.`
 
-The archive contains a turn batch under:
+Trainer-facing exported traces under `artifacts/traces/*.json` all agreed with that outcome:
 
-- `repo_rag_turn_traces/20260511T093405Z/`
+- `38` traces exported
+- all `38` carried the same `prompt_family_id`
+- all `38` had:
+  - `prompt_family_band = new`
+  - `bundle_version = null`
+  - `family_artifact_selected = null`
+  - `mediation_metric_hits = 1`
+  - `mediation_metric_total = 1`
 
-That batch contains `44` turn JSON files plus a batch manifest.
+That means:
 
-Aggregating the turn traces shows:
+1. prompt-family assignment exists
+2. but the assignment was to a newly synthesized family
+3. and no existing father-backed family artifact was reused
+4. therefore the intended family-artifact runtime path did not run
 
-- `19` turns with `reformulation_status = "dspy"`
-- `25` turns with `reformulation_status = "identity"`
-- `26` turns where `original_prompt == reformulated_prompt`
+## Queue And Trace Handoff Findings
 
-So DSPy-style reformulation was not completely absent, but it was inconsistent and it did not
-translate into family-artifact execution.
+The compact turn-trace batch existed locally, but the authoritative queue handoff was still the
+legacy single coarse trace path.
 
-At the same time, the compact and trainer-facing surfaces still disagree:
+Evidence:
 
-- the compact turn-trace files do not consistently carry the family metadata
-- the exported trainer-facing trace files under `artifacts/traces/*.json` do carry it
+- `repo_rag_turn_trace_batch_manifest.json` existed and listed all `38` turn-trace files
+- but there was **no** `repo_rag_turn_trace_export_batch.json`
+- and there was **no** `repo_rag_turn_trace_enqueue_batch.json`
 
-Aggregating the exported trace files shows:
+Instead, the actual enqueue command was:
 
-- `44` exported traces
-- `44` traces with a `prompt_family_id`
-- `25` traces with `prompt_family_band = "match"`
-- `19` traces with `prompt_family_band = "new"`
-- similarity range `0.5 .. 1.0`
-- `family_artifact_selected_count = 0`
-- no non-null `bundle_version`
+- `trusted-trace-handoff --trace-path .../repo_rag_codex_proxy_payload.json ...`
 
-This means the family lookup stage is partially alive, but the bridge from family lookup to actual
-family-artifact execution is still broken.
+And `repo_rag_trace_enqueue.json` pointed to a single queue item:
 
-### 4. The run still queued the legacy single coarse trace
+- `queued/repo-rag-training/20260511T130856Z-prompts_debt_relief-p00000-cfc990.json`
 
-The batch manifest exists:
+`trusted_trace_handoff_summary.json` confirmed:
 
-- `repo_rag_turn_trace_batch_manifest.json`
+- `attempted = 1`
+- `queued = 1`
+- `skipped = 0`
+- `status = success`
 
-But the trainer queue artifacts that survived into the archive are still the legacy single-trace
-handoff surfaces:
+So the current state is:
 
-- `trusted_trace_handoff_summary.json`
-- `repo_rag_trace_enqueue.json`
-- `repo_rag_trace_enqueue_stdout.txt`
+- compact per-turn trace capture works
+- but authoritative queue import is still coarse single-trace handoff
 
-Those files show the queued blob:
-
-- `queued/repo-rag-training/20260511T101344Z-prompts_debt_relief-p00000-cfc990.json`
-
-and `repo_rag_trace_enqueue.json` still points at:
-
-- `source_trace_path = execution_artifacts/.../repo_rag_codex_proxy_payload.json`
-
-instead of a per-turn exported trace file. So although the run captured `44` turn traces, the
-observable queue handoff in this artifact dump is still the old coarse path.
-
-### 5. Token spend was not healthy for a family-assisted run
+## Token Assessment
 
 This run spent:
 
-- `248870` prompt tokens
+- `146406` prompt tokens
 
-The same artifact set reports the previous fresh baseline as:
+Relative to the previously observed `248870` prompt-token baseline, the latest run is lower.
+Relative to an ideal family-artifact reuse path, it is still high.
 
-- `baseline_prompt_tokens = 69812`
+The evidence in `codex_response.txt` suggests this run was **not** pure prompt-noise burn:
 
-So the delta was:
+- the model actually installed browser dependencies
+- validated Playwright
+- rebuilt the target app
+- reran the GIF generator
+- cleaned generated noise
+- verified the produced binary asset
 
-- `prompt_tokens_delta = 179058`
-- `prompt_tokens_delta_ratio = 2.56486`
+So the token count is not obviously invalid, but it is still above the expected steady state for
+the intended architecture because bundle-backed family reuse never activated.
 
-This is too large for a run where the family-first DSPy runtime should have reused an existing
-family artifact on the very first request. The evidence points to the main Codex rollout doing
-real work, but the cost is still not “healthy” in the intended architecture because the runtime
-never crossed from family-match into family-artifact execution.
+## Full DSPy Cycle Verdict
 
-### 6. The full family-first DSPy cycle did not complete
+The full intended family-first DSPy cycle did **not** complete.
 
-Against the intended design, the cycle stopped short at runtime:
+What completed:
 
-- original prompt captured: **yes**
-- reformulated prompt generated: **not really**; proxy status says `identity`
-- family lookup by similarity: **yes**
-- family artifact / bundle selected: **no**
-- runtime DSPy mediation injected: **no**
-- per-turn traces captured: **yes**
-- queue handoff happened: **yes**, but visibly through the legacy coarse trace path
-- runtime used the family-backed DSPy artifact: **no**
+- prompt capture
+- prompt cleanup
+- DSPy reformulation
+- prompt-family lookup
+- compact trace capture
+- single-trace queue handoff
 
-So the cycle did **not** complete end-to-end.
+What did **not** complete:
 
-## Specific Bugs / Gaps Confirmed by This Run
+- load latest published bundle
+- locate father-backed family support
+- select a family runtime artifact
+- inject family-backed DSPy mediation into the live turn
+- enqueue the authoritative per-turn batch as the primary training payload
 
-1. **Family match without family artifact activation**
-   - exact family match (`1.0`) still did not activate the runtime artifact
-   - `bundle_version` stayed null
+## Local Verification In This Turn
 
-2. **Reformulation regressed to identity**
-   - `original_prompt == reformulated_prompt` in proxy status
-
-3. **Batch handoff remains incomplete/inconsistent**
-   - turn batch exists locally
-   - queue-visible artifact is still the legacy single trace
-
-4. **Compact trace surfaces are missing family fields**
-   - family metadata exists in `artifacts/traces/*.json`
-   - the compact `repo_rag_turn_traces/...` files do not consistently mirror it
-
-## Local Verification Baseline
-
-Executed in this repository checkout during the same turn:
+Executed during this turn:
 
 - `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
   - `pass`
 - `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
-  - `47 passed`
+  - `49 passed`
 - `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
   - `pass`
 - `cargo build --manifest-path rust-cli/Cargo.toml`
   - `pass`
 
-## Verification Categories Not Executed in This Turn
+## Verification Categories Not Executed In This Turn
 
-- `coverage`
+- coverage
   - not run
-- lint / formatting / type checking
-  - not run in this turn
-- live AKS inspection
-  - not run in this turn
-- downstream trainer publish verification against Azure Blob
-  - not run in this turn
+- lint / format / mypy / basedpyright
+  - not run
+- live AKS trainer redeploy
+  - not run
+- live verification of downstream `repo-rag-training-families` and `repo-rag-bundles`
+  - not run from this artifact set
 
 ## Conclusion
 
-The fresh run shows meaningful progress over earlier broken states:
+No, the latest run did **not** fully work as intended.
 
-- family matching is now visible
-- turn-level capture is working
-- queue handoff still happens
+The run was healthier than the earlier pathological cases:
 
-But DSPy did **not** work correctly in the intended family-first sense:
+- queue replay storm was no longer evident in the artifact set
+- the prompt envelope was much cleaner
+- token spend was lower than the worst previous runs
+- compact turn traces were captured
 
-- prompt families were recognized
-- family runtime artifacts were **not** used
-- bundle activation still failed
-- token spend was therefore not healthy for the target architecture
-- the full family-first DSPy cycle did **not** complete end-to-end
+But the critical family-first runtime bridge is still broken:
 
-## Next Operator Focus
+- the proxy reformulated the prompt
+- assigned it to a new family
+- and then fell back to passthrough instead of using a father-backed family artifact from a
+  published bundle
 
-The next fixes should target the execution/runtime path, not the trace capture surface:
+That means DSPy is currently functioning as:
 
-1. make exact family matches activate a family runtime artifact
-2. make reformulation behavior consistent and keep it coupled to family-artifact selection
-3. make the per-turn batch handoff the authoritative queue/export path instead of the coarse
-   single-trace fallback
+- reformulation + trace capture
+
+and **not yet** as:
+
+- family lookup + bundle-backed runtime reuse

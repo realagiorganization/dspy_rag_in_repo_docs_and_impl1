@@ -1045,7 +1045,13 @@ def build_codex_mediation(
         lm_config=lm_config,
     )
     active_prompt = reformulated_prompt or original_prompt
+    family_lookup_prompt = original_prompt or active_prompt
     family_state_path: Path | None = None
+    resolved_bundle_version: str | None = _resolve_bundle_version_hint(
+        bundle_root=resolved_bundle_root,
+        bundle_version=bundle_version,
+        bundle_channel=bundle_channel,
+    )
     family_registry = _resolve_bundle_family_registry(
         bundle_root=resolved_bundle_root,
         bundle_version=bundle_version,
@@ -1060,7 +1066,7 @@ def build_codex_mediation(
     supported_family = False
     if isinstance(family_registry, Mapping):
         support = resolve_prompt_family_support_from_payload(
-            active_prompt,
+            family_lookup_prompt,
             {"prompt_families": family_registry.get("families", [])},
         )
         prompt_family_id = support.prompt_family_id
@@ -1077,11 +1083,11 @@ def build_codex_mediation(
             if isinstance(synthesized_family_registry, Mapping):
                 family_registry = synthesized_family_registry
                 support = resolve_prompt_family_support_from_payload(
-                    active_prompt,
+                    family_lookup_prompt,
                     {"prompt_families": family_registry.get("families", [])},
                 )
             else:
-                support = resolve_prompt_family_support(active_prompt, family_state_path)
+                support = resolve_prompt_family_support(family_lookup_prompt, family_state_path)
             prompt_family_id = support.prompt_family_id
             prompt_family_similarity = support.similarity
             prompt_family_band = support.band
@@ -1104,8 +1110,8 @@ def build_codex_mediation(
 
     if not supported_family:
         warnings.append(
-            "No father-backed prompt-family support was found for the reformulated prompt; "
-            "the original request will pass through unchanged."
+            "No father-backed prompt-family support was found for the original prompt; "
+            "the request will pass through unchanged."
         )
         return CodexMediationResult(
             question=active_prompt,
@@ -1117,13 +1123,13 @@ def build_codex_mediation(
             dspy_status="skipped",
             dspy_lm_model=str(getattr(lm_config, "model", "") or "").strip() or None,
             summary=(
-                "No father-backed prompt-family support was found for the reformulated prompt, so "
+                "No father-backed prompt-family support was found for the original prompt, so "
                 "the proxy did not inject DSPy mediation for this turn."
             ),
             retrieval_mode=str(retrieval_mode or "lexical"),
             sources=[],
             warnings=warnings,
-            bundle_version=bundle_version,
+            bundle_version=resolved_bundle_version,
             program_path=None,
             evidence_previews=[],
             developer_message="",
@@ -1182,11 +1188,6 @@ def build_codex_mediation(
     dspy_lm_model = str(getattr(lm_config, "model", "") or "").strip() or None
     summary = rag_summary
     program_path_text: str | None = None
-    resolved_bundle_version: str | None = _resolve_bundle_version_hint(
-        bundle_root=resolved_bundle_root,
-        bundle_version=bundle_version,
-        bundle_channel=bundle_channel,
-    )
     if prefer_dspy:
         try:
             if lm_config is None:

@@ -451,6 +451,33 @@ def _normalize_question_text(value: object) -> str:
     return " ".join(_strip_dataset_execution_envelope(value).split())
 
 
+def _routing_question(
+    *,
+    question: object = "",
+    original_prompt: object = "",
+    reformulated_prompt: object = "",
+) -> str:
+    """Return the family-routing prompt surface, preferring the original prompt contract."""
+
+    normalized_original = _normalize_question_text(original_prompt)
+    if normalized_original:
+        return normalized_original
+    normalized_question = _normalize_question_text(question)
+    if normalized_question:
+        return normalized_question
+    return _normalize_question_text(reformulated_prompt)
+
+
+def _record_routing_question(record: Mapping[str, Any]) -> str:
+    """Return the persisted routing prompt for one trainer-family record."""
+
+    return _routing_question(
+        question=record.get("question"),
+        original_prompt=record.get("original_prompt"),
+        reformulated_prompt=record.get("reformulated_prompt"),
+    )
+
+
 def _stable_hash(*parts: object) -> str:
     """Return a short stable hash for trainer-side lineage identifiers."""
 
@@ -583,8 +610,13 @@ def _trace_context_snapshot(
         or payload.get("question")
         or original_prompt
     )
+    routing_question = _routing_question(
+        question=payload.get("question") or trace_mapping.get("question"),
+        original_prompt=original_prompt,
+        reformulated_prompt=reformulated_prompt,
+    )
     return {
-        "question": reformulated_prompt or original_prompt,
+        "question": routing_question or reformulated_prompt or original_prompt,
         "original_prompt": original_prompt,
         "reformulated_prompt": reformulated_prompt or original_prompt,
         "retrieval_mode": retrieval_mode,
@@ -658,22 +690,32 @@ def _family_question_variants(family_payload: Mapping[str, Any]) -> list[str]:
 
     _append_variant(family_payload.get("question"))
     _append_variant(family_payload.get("normalized_question"))
+    _append_variant(family_payload.get("family_father_question"))
     stored_variants = family_payload.get("question_variants")
     if isinstance(stored_variants, list):
         for variant in stored_variants:
             _append_variant(variant)
     for record in _family_candidate_records(family_payload):
+        _append_variant(_record_routing_question(record))
         _append_variant(record.get("question"))
+        _append_variant(record.get("original_prompt"))
+        _append_variant(record.get("reformulated_prompt"))
     return variants
 
 
 def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) -> float:
     """Return the prompt similarity between one question and the family father."""
 
-    family_father_question = _normalize_question_text(
-        family_payload.get("family_father_question")
+    family_father_question = _routing_question(
+        question=family_payload.get("family_father_question")
         or family_payload.get("question")
-        or family_payload.get("normalized_question")
+        or family_payload.get("normalized_question"),
+        original_prompt=(
+            _family_father_record(family_payload) or {}
+        ).get("original_prompt"),
+        reformulated_prompt=(
+            _family_father_record(family_payload) or {}
+        ).get("reformulated_prompt"),
     )
     if not family_father_question:
         return 0.0
@@ -745,7 +787,7 @@ def resolve_prompt_family_support(question: str, family_state_path: Path) -> Pro
 def _refresh_prompt_family_summary(family_payload: dict[str, Any], question: str) -> None:
     """Update one prompt-family summary so routing follows the current family father."""
 
-    normalized_question = _normalize_question_text(question)
+    normalized_question = _routing_question(question=question)
     question_variants = family_payload.get("question_variants")
     if not isinstance(question_variants, list):
         question_variants = []
@@ -761,12 +803,11 @@ def _refresh_prompt_family_summary(family_payload: dict[str, Any], question: str
     father_record, father_similarity_mean = _select_family_father_record(family_payload)
     if father_record is not None:
         family_payload["family_father_record"] = father_record
-        family_payload["family_father_question"] = str(father_record.get("question") or "").strip()
+        father_question = _record_routing_question(father_record)
+        family_payload["family_father_question"] = father_question or None
         family_payload["family_father_similarity_mean"] = father_similarity_mean
-        family_payload["question"] = str(father_record.get("question") or "").strip()
-        family_payload["normalized_question"] = (
-            str(father_record.get("question") or "").strip().casefold()
-        )
+        family_payload["question"] = father_question
+        family_payload["normalized_question"] = father_question.casefold()
         return
     family_payload["family_father_record"] = None
     family_payload["family_father_similarity_mean"] = None
@@ -1046,7 +1087,7 @@ def _seed_champion_index_from_existing_records(
     family_by_id: dict[str, dict[str, Any]] = {}
     family_order: list[str] = []
     for record in records:
-        question = _normalize_question_text(record.get("question"))
+        question = _record_routing_question(record)
         if not question:
             continue
         preferred_family_id = str(record.get("prompt_family_id") or "").strip() or None
@@ -1067,7 +1108,7 @@ def _seed_champion_index_from_existing_records(
         if not isinstance(record_value, Mapping):
             continue
         record = cast(Mapping[str, Any], record_value)
-        question = _normalize_question_text(record.get("question"))
+        question = _record_routing_question(record)
         sources = _normalized_source_tokens(record.get("expected_sources", []))
         context_group_id = str(
             record.get("context_group_id")
@@ -1215,13 +1256,13 @@ def _select_family_father_record(
     best_record: dict[str, Any] | None = None
     best_mean: float | None = None
     for record in candidate_records:
-        question = _normalize_question_text(record.get("question"))
+        question = _record_routing_question(record)
         if not question:
             continue
         similarities = [
-            _question_similarity(question, _normalize_question_text(other.get("question")))
+            _question_similarity(question, _record_routing_question(other))
             for other in candidate_records
-            if _normalize_question_text(other.get("question"))
+            if _record_routing_question(other)
         ]
         if not similarities:
             continue
@@ -1587,8 +1628,10 @@ def _normalize_materialized_candidate_record(record: Mapping[str, Any]) -> dict[
     original_prompt = _normalize_question_text(record.get("original_prompt"))
     reformulated_prompt = _normalize_question_text(record.get("reformulated_prompt"))
     normalized: dict[str, Any] = {
-        "question": _normalize_question_text(
-            record.get("question") or reformulated_prompt or original_prompt
+        "question": _routing_question(
+            question=record.get("question"),
+            original_prompt=original_prompt,
+            reformulated_prompt=reformulated_prompt,
         ),
         "expected_answer": normalized_answer,
         "tags": tags,
@@ -1641,9 +1684,9 @@ def _normalize_combined_training_record(record: Mapping[str, Any]) -> dict[str, 
     normalized = _normalize_materialized_candidate_record(record)
     combined = {
         "question": str(
-            normalized.get("reformulated_prompt")
-            or normalized.get("question")
+            normalized.get("question")
             or normalized.get("original_prompt")
+            or normalized.get("reformulated_prompt")
             or ""
         ).strip(),
         "expected_answer": str(normalized.get("expected_answer") or "").strip(),
@@ -1852,9 +1895,11 @@ def _training_candidate_from_trace_record(
     context_snapshot = _trace_context_snapshot(payload, trace_mapping, outcome_mapping)
     original_prompt = str(context_snapshot.get("original_prompt") or "").strip()
     reformulated_prompt = str(context_snapshot.get("reformulated_prompt") or "").strip()
-    question = str(
-        context_snapshot.get("question") or reformulated_prompt or original_prompt
-    ).strip()
+    question = _routing_question(
+        question=context_snapshot.get("question"),
+        original_prompt=original_prompt,
+        reformulated_prompt=reformulated_prompt,
+    )
     command_trace = _ordered_unique_command_trace(context_snapshot.get("command_trace", []))
     if not question:
         return None, "missing-question"
