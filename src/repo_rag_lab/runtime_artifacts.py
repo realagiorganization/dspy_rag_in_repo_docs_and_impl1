@@ -908,9 +908,7 @@ def fetch_remote_bundle(
         requested_channel = channel or "stable"
         channel_state = inspect_remote_bundle_channel(requested_channel)
         if channel_state is not None and channel_state.get("channel_found"):
-            resolved_bundle_version = _string_or_none(
-                channel_state.get("current_bundle_version")
-            )
+            resolved_bundle_version = _string_or_none(channel_state.get("current_bundle_version"))
         if resolved_bundle_version is None:
             resolved_bundle_version = _latest_remote_bundle_version(
                 store=store,
@@ -1038,6 +1036,10 @@ def upload_remote_family_state(
     resolved_family_state_path = family_state_path.resolve()
     store = AzureArtifactStore(config)
     container = repo_rag_family_state_container(config)
+    for legacy_blob_name in store.list_blobs(container, prefix="families/"):
+        store.delete_blob(container, legacy_blob_name)
+    if store.blob_exists(container, "family-state.json"):
+        store.delete_blob(container, "family-state.json")
     family_state_version = _utc_timestamp_token()
     blob_map = family_state_blob_names(family_state_version)
     prompt_families = payload.get("prompt_families")
@@ -1048,69 +1050,36 @@ def upload_remote_family_state(
         "updated_at": _utc_now_isoformat(),
         "current_version": family_state_version,
         "current_family_state_blob": blob_map["family_state"],
-        "current_family_state_alias_blob": "family-state.json",
         "current_family_count": prompt_family_count,
         "current_prompt_family_count": prompt_family_count,
     }
     family_state_text = resolved_family_state_path.read_text(encoding="utf-8")
     remote_family_member_blobs: dict[str, dict[str, object]] = {}
-    remote_current_family_member_blobs: dict[str, dict[str, object]] = {}
     for family_payload in _mapping_list(payload.get("prompt_families")):
         prompt_family_id = _string_or_none(family_payload.get("prompt_family_id"))
         if prompt_family_id is None:
             continue
         family_blob_map = _family_state_member_blob_names(family_state_version, prompt_family_id)
-        current_family_blob_map = _family_state_member_blob_names("current", prompt_family_id)
-        current_family_blob_map = {
-            "family": current_family_blob_map["family"].replace(
-                "versions/current/", "",
-                1,
-            ),
-            "father": current_family_blob_map["father"].replace(
-                "versions/current/",
-                "",
-                1,
-            ),
-            "records_prefix": current_family_blob_map["records_prefix"].replace(
-                "versions/current/",
-                "",
-                1,
-            ),
-        }
         store.upload_json(container, family_blob_map["family"], family_payload)
-        store.upload_json(container, current_family_blob_map["family"], family_payload)
         father_record = _mapping_or_none(family_payload.get("family_father_record"))
         if father_record is not None:
             store.upload_json(container, family_blob_map["father"], father_record)
-            store.upload_json(container, current_family_blob_map["father"], father_record)
         record_blob_map: dict[str, str] = {}
-        current_record_blob_map: dict[str, str] = {}
         for record in _family_state_records_from_payload(family_payload):
             record_token = _family_state_record_token(record)
             record_blob_name = f"{family_blob_map['records_prefix']}/{record_token}.json"
-            current_record_blob_name = (
-                f"{current_family_blob_map['records_prefix']}/{record_token}.json"
-            )
             store.upload_json(container, record_blob_name, record)
-            store.upload_json(container, current_record_blob_name, record)
             record_blob_map[record_token] = record_blob_name
-            current_record_blob_map[record_token] = current_record_blob_name
         remote_family_member_blobs[prompt_family_id] = {
             "family": family_blob_map["family"],
             "father": family_blob_map["father"],
             "record_blobs": record_blob_map,
-        }
-        remote_current_family_member_blobs[prompt_family_id] = {
-            "family": current_family_blob_map["family"],
-            "father": current_family_blob_map["father"],
-            "record_blobs": current_record_blob_map,
         }
     store.upload_text(
         container,
         blob_map["family_state"],
         family_state_text,
     )
-    store.upload_text(container, "family-state.json", family_state_text)
     store.upload_json(container, blob_map["current"], current_payload)
     return {
         "storage_backend": "azure-blob",
@@ -1118,8 +1087,6 @@ def upload_remote_family_state(
         "family_state_version": family_state_version,
         "remote_family_state_blobs": blob_map,
         "remote_family_member_blobs": remote_family_member_blobs,
-        "remote_current_family_state_blob": "family-state.json",
-        "remote_current_family_member_blobs": remote_current_family_member_blobs,
         "family_state_path": _relative_to_root(resolved_family_state_path, resolved_root),
     }
 
@@ -2039,6 +2006,8 @@ def restore_processed_trace_records(
                 if trace_payload is None:
                     raise ValueError("Processed trace blob is missing `trace_payload`.")
                 trace_path = resolved_output_dir / Path(blob_name).name
+                if trace_path.is_file():
+                    continue
                 normalized_payload = normalize_trace_record_payload(trace_payload)
                 record = _build_trace_record(
                     resolved_root,
@@ -2082,6 +2051,8 @@ def restore_processed_trace_records(
             if trace_payload is None:
                 raise ValueError("Processed trace item is missing `trace_payload`.")
             trace_path = resolved_output_dir / processed_path.name
+            if trace_path.is_file():
+                continue
             normalized_payload = normalize_trace_record_payload(trace_payload)
             record = _build_trace_record(
                 resolved_root,

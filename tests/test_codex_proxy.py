@@ -639,12 +639,7 @@ def test_build_codex_mediation_synthesizes_family_registry_from_family_state(
     family_state_path = bundle_root / "artifacts" / "trainer" / "family-state.json"
     family_state_path.parent.mkdir(parents=True)
     family_program_path = (
-        bundle_root
-        / "versions"
-        / "stable-42"
-        / "families"
-        / "pf-demo"
-        / "program.json"
+        bundle_root / "versions" / "stable-42" / "families" / "pf-demo" / "program.json"
     )
     family_program_path.parent.mkdir(parents=True)
     family_program_path.write_text('{"program":"family-demo"}\n', encoding="utf-8")

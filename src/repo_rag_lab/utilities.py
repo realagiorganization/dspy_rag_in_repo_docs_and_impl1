@@ -1519,10 +1519,6 @@ def run_trainer_cycle(
     pending_recompile = bool(pending_recompile_summary.get("pending_recompile"))
     recompile_triggered = recompile_requested and (recompile_threshold_met or pending_recompile)
     explicit_publish_requested = run_name is not None or bundle_version is not None
-    if effective_minimum_bundle_pass_rate is None and (
-        explicit_publish_requested or recompile_triggered
-    ):
-        effective_minimum_bundle_pass_rate = 1.0
     retrieval_payload = _build_retrieval_evaluation_payload(
         root,
         training_path=training_path,
@@ -1863,16 +1859,17 @@ def run_trainer_cycle(
 def run_trainer_candidates(
     root: Path,
     *,
-    trace_paths: Sequence[Path] = (),
+    trace_paths: Sequence[Path] | None = None,
     output_path: Path = DEFAULT_TRAINER_TRAINING_CANDIDATES_PATH,
     summary_path: Path = DEFAULT_TRAINER_TRAINING_CANDIDATES_SUMMARY_PATH,
     include_statuses: Sequence[str] = ("accepted", "candidate"),
 ) -> str:
     """Materialize trainer-side DSPy training candidates from imported trace records."""
 
+    effective_trace_paths = list(trace_paths) if trace_paths is not None else None
     payload = materialize_training_candidates(
         root,
-        trace_paths=trace_paths,
+        trace_paths=effective_trace_paths,
         output_path=output_path,
         summary_path=summary_path,
         include_statuses=include_statuses,
@@ -1883,7 +1880,7 @@ def run_trainer_candidates(
         payload=payload,
         command_status="success",
         artifact_metadata=_artifact_metadata(
-            input_paths=[str(path) for path in trace_paths],
+            input_paths=[str(path) for path in effective_trace_paths or []],
             generated_paths=[
                 str(payload.get("output_path") or ""),
                 str(payload.get("summary_path") or ""),
