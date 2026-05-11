@@ -913,17 +913,17 @@ as the trainer-facing answer payload.
 The next trainer-side hardening pass closes the bundle-version storm that the user observed on
 `2026-05-11`: idle `trainer-service` cycles could previously keep minting fresh timestamped bundle
 versions whenever `pending_recompile` stayed true from old lineage drift, even if the current
-cycle had imported no new traces. Automatic recompilation now requires current-cycle queue or
-recovered trace input, and the trainer combines imported plus recovered trace paths so the same
-cycle cannot miss a fresh queue item when processed-ledger recovery also restored a trace.
+cycle had imported no new traces. Automatic recompilation now requires current-cycle queue input,
+and processed-ledger recovery no longer contributes active trace paths to the recompile path.
 The next local service hardening pass closes the remaining operational gap in that same area:
 even after the version-storm fix, the long-lived `trainer-service` still entered
 `run_trainer_cycle()` on every poll interval and only discovered the empty queue from inside the
 cycle. Repo-rag now performs an explicit preflight before each service iteration, measuring queue
-visibility plus unrecovered processed-trace count, and it skips `trainer-cycle` entirely when both
-are zero. The current Kubernetes deployment is still poll-based rather than queue-event-driven,
-but after this fix the service only starts a real trainer cycle when queue or recovery input is
-actually present.
+visibility alone for cycle authorization, and it skips `trainer-cycle` entirely when `queued/`
+contains no fresh trace input. Unrecovered processed traces remain visible diagnostically, but they
+no longer start work or augment an active cycle. The current Kubernetes deployment is still
+poll-based rather than queue-event-driven, but after this fix the service only starts a real
+trainer cycle when queue input is actually present.
 
 Finally, the session-resume contract is now explicit rather than accidental. The worker-side default
 for automatic Codex session lanes is `queue_and_slug`, and the generated AKS pod env now exports
@@ -987,6 +987,30 @@ exported per-turn trace records, and only falls back to the coarse single proxy 
 valid worker batch exists. That keeps trainer ingestion aligned with the per-turn traces that
 actually produced the family decision instead of silently collapsing back into one coarse ledger
 item.
+
+One more deployment-side defect surfaced immediately after that handoff refactor. A generated
+Python heredoc inside the dataset deploy script carried an unmatched `)` in the trusted-handoff
+helper, so worker execution could finish, Redis could receive the final result, and inline
+artifact rehydration could even succeed locally, yet the script would still abort before the Azure
+upload stage. The practical symptom was an empty latest `execution-artifacts` blob upload even
+though the worker had already finished its Codex run. The current local hotfix removes that syntax
+error from both the deployment template and the checked-in generated script, restoring the
+post-run path from rehydrated worker artifacts to Azure blob upload.
+
+The next execution-stage fix addressed the remaining reason DSPy family reuse was still absent even
+after family-state population started to work. Two separate gaps were responsible. First, the
+dataset workflow enters `cd aks_modules` before invoking `./deploy.sh`, but the generated deploy
+script still looked for `tools/pvc_artifact_sync.sh` relative to the current shell directory. That
+silently disabled `.repo_rag_bundle_store` staging even though the helper script existed in the
+dataset repository. Second, `repo-rag-training-families` carried `family.json`, `father.json`, and
+`records/...` but not the executable `runtime-artifact/program.json` / `metadata.json` files for
+each family, so a worker could match a father yet still have no runnable local program to load.
+The current local fix therefore makes remote family-state uploads carry those runtime-artifact
+files, rewrites `family_runtime_artifact` paths onto the local worker cache when family-state is
+fetched, and resolves the PVC sync helper from the dataset repository root instead of the current
+working directory. After the next trainer upload cycle, a worker can execute a matched family
+artifact directly from `repo-rag-training-families` even when `repo-rag-bundles` is still empty
+or unpublished.
 
 ## Tensions And Open Work
 

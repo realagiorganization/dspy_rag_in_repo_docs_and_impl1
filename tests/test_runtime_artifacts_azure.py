@@ -601,7 +601,7 @@ def test_inspect_pending_trainer_inputs_reports_filesystem_queue_and_recovery(
     third = inspect_pending_trainer_inputs(tmp_path, queue_name="dataset")
     assert third["queue_visible_count"] == 0
     assert third["recoverable_processed_count"] == 1
-    assert third["current_cycle_input_detected"] is True
+    assert third["current_cycle_input_detected"] is False
 
     restore_processed_trace_records(tmp_path, queue_name="dataset")
     fourth = inspect_pending_trainer_inputs(tmp_path, queue_name="dataset")
@@ -1041,6 +1041,14 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
     )
     family_state_path = tmp_path / "artifacts" / "trainer" / "family-state.json"
     family_state_path.parent.mkdir(parents=True)
+    runtime_program_path = tmp_path / "artifacts" / "dspy" / "family-demo" / "program.json"
+    runtime_metadata_path = tmp_path / "artifacts" / "dspy" / "family-demo" / "metadata.json"
+    runtime_program_path.parent.mkdir(parents=True)
+    runtime_program_path.write_text('{"program":"family-demo"}\n', encoding="utf-8")
+    runtime_metadata_path.write_text(
+        json.dumps({"prompt_family_id": "pf-demo"}, indent=2) + "\n",
+        encoding="utf-8",
+    )
     family_state_path.write_text(
         json.dumps(
             {
@@ -1076,6 +1084,13 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
                                 "metric_ratio": 1.0,
                             }
                         ],
+                        "family_runtime_artifact": {
+                            "artifact_kind": "compiled-family-program",
+                            "artifact_ready": True,
+                            "program_path": "artifacts/dspy/family-demo/program.json",
+                            "metadata_path": "artifacts/dspy/family-demo/metadata.json",
+                            "hit_rate": 1.0,
+                        },
                     }
                 ],
             },
@@ -1129,6 +1144,16 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
                     f"versions/{uploaded['family_state_version']}/families/pf-demo/records/ts-father.json"
                 ),
             },
+            "runtime_artifact_blobs": {
+                "program": (
+                    f"versions/{uploaded['family_state_version']}/families/pf-demo/"
+                    "runtime-artifact/program.json"
+                ),
+                "metadata": (
+                    f"versions/{uploaded['family_state_version']}/families/pf-demo/"
+                    "runtime-artifact/metadata.json"
+                ),
+            },
         }
     }
     assert store.blob_exists("repo-rag-training-families", blob_map["family_state"])
@@ -1150,6 +1175,20 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
     assert store.blob_exists(
         "repo-rag-training-families",
         f"versions/{uploaded['family_state_version']}/families/pf-demo/records/ts-demo.json",
+    )
+    assert store.blob_exists(
+        "repo-rag-training-families",
+        (
+            f"versions/{uploaded['family_state_version']}/families/pf-demo/"
+            "runtime-artifact/program.json"
+        ),
+    )
+    assert store.blob_exists(
+        "repo-rag-training-families",
+        (
+            f"versions/{uploaded['family_state_version']}/families/pf-demo/"
+            "runtime-artifact/metadata.json"
+        ),
     )
     assert not store.blob_exists("repo-rag-training-families", "family-state.json")
     assert not store.blob_exists("repo-rag-training-families", "families/pf-demo/family.json")
@@ -1176,16 +1215,26 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
     assert isinstance(cached_family_detail, dict)
     cached_father_path = tmp_path / str(cached_family_detail["father"])
     cached_record_paths = [tmp_path / str(path) for path in cached_family_detail["record_paths"]]
+    cached_runtime_paths = cast(dict[str, str], cached_family_detail["runtime_artifact"])
+    cached_runtime_program_path = tmp_path / cached_runtime_paths["program"]
+    cached_runtime_metadata_path = tmp_path / cached_runtime_paths["metadata"]
     assert cached_family_state.exists()
     assert cached_family_member.exists()
     assert cached_father_path.exists()
     assert len(cached_record_paths) == 2
     assert all(path.exists() for path in cached_record_paths)
-    assert cached_family_state.read_text(encoding="utf-8") == family_state_path.read_text(
-        encoding="utf-8"
-    )
+    assert cached_runtime_program_path.exists()
+    assert cached_runtime_metadata_path.exists()
     cached_family_payload = json.loads(cached_family_member.read_text(encoding="utf-8"))
     assert cached_family_payload["prompt_family_id"] == "pf-demo"
+    assert cached_family_payload["family_runtime_artifact"]["program_path"] == str(
+        cached_runtime_paths["program"]
+    )
+    cached_family_state_payload = json.loads(cached_family_state.read_text(encoding="utf-8"))
+    assert (
+        cached_family_state_payload["prompt_families"][0]["family_runtime_artifact"]["program_path"]
+        == str(cached_runtime_paths["program"])
+    )
     cached_father_payload = json.loads(cached_father_path.read_text(encoding="utf-8"))
     assert cached_father_payload["exact_snapshot_id"] == "ts-father"
 
