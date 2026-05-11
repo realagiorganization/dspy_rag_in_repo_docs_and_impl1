@@ -562,6 +562,12 @@ def test_restore_processed_trace_records_rebuilds_local_ledger_from_azure_proces
     assert restored_payload["question"] == "How does the trainer ingest traces?"
     assert restored_payload["outcome"]["acceptance_status"] == "accepted"
 
+    restored_again = restore_processed_trace_records(tmp_path, queue_name="dataset")
+
+    assert restored_again["processed_count"] == 1
+    assert restored_again["restored_count"] == 0
+    assert restored_again["trace_paths"] == []
+
 
 def test_fetch_remote_bundle_downloads_bundle_assets(
     tmp_path: Path,
@@ -1020,6 +1026,14 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
         "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
         fake_azure_artifact_store,
     )
+    store.upload_text("repo-rag-training-families", "family-state.json", "{}")
+    store.upload_json("repo-rag-training-families", "families/pf-demo/family.json", {"old": True})
+    store.upload_json("repo-rag-training-families", "families/pf-demo/father.json", {"old": True})
+    store.upload_json(
+        "repo-rag-training-families",
+        "families/pf-demo/records/ts-demo.json",
+        {"old": True},
+    )
 
     uploaded = upload_remote_family_state(tmp_path, family_state_path=family_state_path)
 
@@ -1042,26 +1056,14 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
             },
         }
     }
-    assert uploaded["remote_current_family_state_blob"] == "family-state.json"
-    assert uploaded["remote_current_family_member_blobs"] == {
-        "pf-demo": {
-            "family": "families/pf-demo/family.json",
-            "father": "families/pf-demo/father.json",
-            "record_blobs": {
-                "ts-demo": "families/pf-demo/records/ts-demo.json",
-                "ts-father": "families/pf-demo/records/ts-father.json",
-            },
-        }
-    }
     assert store.blob_exists("repo-rag-training-families", blob_map["family_state"])
-    assert store.blob_exists("repo-rag-training-families", "family-state.json")
     assert store.blob_exists("repo-rag-training-families", family_state_current_blob_name())
     current_payload = json.loads(
         store.download_text("repo-rag-training-families", family_state_current_blob_name())
     )
     assert "champion_state_kind" not in current_payload
     assert "current_champion_index_blob" not in current_payload
-    assert current_payload["current_family_state_alias_blob"] == "family-state.json"
+    assert "current_family_state_alias_blob" not in current_payload
     assert store.blob_exists(
         "repo-rag-training-families",
         f"versions/{uploaded['family_state_version']}/families/pf-demo/family.json",
@@ -1074,9 +1076,10 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
         "repo-rag-training-families",
         f"versions/{uploaded['family_state_version']}/families/pf-demo/records/ts-demo.json",
     )
-    assert store.blob_exists("repo-rag-training-families", "families/pf-demo/family.json")
-    assert store.blob_exists("repo-rag-training-families", "families/pf-demo/father.json")
-    assert store.blob_exists(
+    assert not store.blob_exists("repo-rag-training-families", "family-state.json")
+    assert not store.blob_exists("repo-rag-training-families", "families/pf-demo/family.json")
+    assert not store.blob_exists("repo-rag-training-families", "families/pf-demo/father.json")
+    assert not store.blob_exists(
         "repo-rag-training-families",
         "families/pf-demo/records/ts-demo.json",
     )

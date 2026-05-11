@@ -62,6 +62,7 @@ _CODEX_TRANSCRIPT_BLOCK_PATTERN = re.compile(
     r"^tokens used\b|\Z)"
 )
 _CODEX_STDOUT_SECTION_PATTERN = re.compile(r"(?ms)\nSTDOUT:\n(.*?)(?:\nSTDERR:\n|\Z)")
+_FORWARDED_DISCORD_TAIL_PATTERN = re.compile(r"(?is)\s*\[forwarded\]\s*@.*$")
 
 
 def _coerce_int(value: object) -> int | None:
@@ -84,6 +85,75 @@ def _coerce_int(value: object) -> int | None:
         except ValueError:
             return None
     return None
+
+
+def _strip_forwarded_discord_tail(text: str) -> str:
+    """Remove one Discord forwarding tail from a prompt-like string."""
+
+    cleaned = str(text or "").strip()
+    if not cleaned:
+        return ""
+    stripped = _FORWARDED_DISCORD_TAIL_PATTERN.sub("", cleaned).strip()
+    return stripped or cleaned
+
+
+def _strip_dataset_execution_envelope(text: object) -> str:
+    """Remove worker-side execution scaffolding from one prompt-like string."""
+
+    cleaned = str(text or "").strip()
+    if not cleaned:
+        return ""
+    if "\nEXECUTION CONTEXT:" in cleaned:
+        cleaned = cleaned.split("\nEXECUTION CONTEXT:", 1)[0].rstrip()
+    elif "\nAUTONOMOUS EXECUTION CONTRACT:" in cleaned:
+        cleaned = cleaned.split("\nAUTONOMOUS EXECUTION CONTRACT:", 1)[0].rstrip()
+    if "Messages with required reaction:" in cleaned:
+        cleaned = cleaned.split("Messages with required reaction:", 1)[1].strip()
+    elif "Messages aggregated:" in cleaned and "\n\n" in cleaned:
+        cleaned = cleaned.split("\n\n", 1)[1].strip()
+    normalized_lines: list[str] = []
+    skip_attachment_lines = False
+    for raw_line in cleaned.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if not stripped:
+            skip_attachment_lines = False
+            if normalized_lines and normalized_lines[-1] != "":
+                normalized_lines.append("")
+            continue
+        if stripped == "Attachment locations:":
+            skip_attachment_lines = True
+            continue
+        if skip_attachment_lines and stripped.startswith("- "):
+            continue
+        if stripped.startswith("Discord channel:"):
+            continue
+        if stripped.startswith("Channel ID:"):
+            continue
+        if stripped.startswith("Queue label:"):
+            continue
+        if stripped.startswith("Messages aggregated:"):
+            continue
+        if stripped.startswith("Available repository:"):
+            continue
+        if stripped.startswith("Repository checkout:"):
+            continue
+        if stripped.startswith("Attachment mount:"):
+            continue
+        if stripped.startswith("Attachments saved for execution"):
+            continue
+        if stripped.startswith("Attachments:"):
+            continue
+        if stripped.startswith("[") and ") " in stripped:
+            prefix, separator, remainder = stripped.partition(") ")
+            if separator and prefix.startswith("["):
+                stripped = remainder.strip()
+        normalized_lines.append(stripped)
+    while normalized_lines and normalized_lines[-1] == "":
+        normalized_lines.pop()
+    result = _strip_forwarded_discord_tail("\n".join(normalized_lines).strip())
+    fallback = _strip_forwarded_discord_tail(str(text or "").strip())
+    return result or fallback
 
 
 def normalize_training_examples(records: list[dict[str, Any]]) -> list[TrainingExample]:
@@ -125,12 +195,12 @@ def normalize_training_examples(records: list[dict[str, Any]]) -> list[TrainingE
             for source in record.get("benchmark_context_sources", [])
             if str(source).strip()
         )
-        original_prompt = str(record.get("original_prompt") or "").strip()
-        reformulated_prompt = str(record.get("reformulated_prompt") or "").strip()
+        original_prompt = _normalize_question_text(record.get("original_prompt"))
+        reformulated_prompt = _normalize_question_text(record.get("reformulated_prompt"))
         command_trace = tuple(_ordered_unique_command_trace(record.get("command_trace", [])))
         normalized.append(
             TrainingExample(
-                question=str(record["question"]).strip(),
+                question=_normalize_question_text(record["question"]),
                 expected_answer=str(record["expected_answer"]).strip(),
                 tags=tags,
                 expected_sources=expected_sources,
@@ -254,7 +324,7 @@ def _candidate_record_key(record: Mapping[str, Any]) -> tuple[str, str, tuple[st
         )
     )
     return (
-        str(record.get("question") or "").strip().casefold(),
+        _normalize_question_text(record.get("question")).casefold(),
         str(record.get("expected_answer") or "").strip().casefold(),
         sources,
         str(record.get("candidate_status") or "").strip().casefold(),
@@ -264,7 +334,7 @@ def _candidate_record_key(record: Mapping[str, Any]) -> tuple[str, str, tuple[st
 def _candidate_question_key(record: Mapping[str, Any]) -> str:
     """Return the stable question-level identity for one training-candidate record."""
 
-    return str(record.get("question") or "").strip().casefold()
+    return _normalize_question_text(record.get("question")).casefold()
 
 
 def _candidate_record_hash(record: Mapping[str, Any]) -> str:
@@ -378,7 +448,7 @@ def _normalize_imported_training_answer(
 def _normalize_question_text(value: object) -> str:
     """Return a whitespace-normalized question string suitable for family grouping."""
 
-    return " ".join(str(value or "").strip().split())
+    return " ".join(_strip_dataset_execution_envelope(value).split())
 
 
 def _stable_hash(*parts: object) -> str:
@@ -908,6 +978,23 @@ def _load_champion_index(path: Path) -> dict[str, Any]:
         if not isinstance(family, dict):
             continue
         family["family_needs_recompile"] = bool(family.get("family_needs_recompile"))
+        stored_family_question = _normalize_question_text(family.get("question"))
+        if stored_family_question:
+            family["question"] = stored_family_question
+            family["normalized_question"] = stored_family_question.casefold()
+        for record_field in (
+            "family_father_record",
+            "family_runtime_record",
+            "family_champion_record",
+        ):
+            candidate_record = family.get(record_field)
+            if not isinstance(candidate_record, Mapping):
+                continue
+            normalized_record = _serialize_candidate_record(candidate_record)
+            if not _trainer_candidate_record_is_supported(normalized_record):
+                family[record_field] = None
+                continue
+            family[record_field] = normalized_record
         _refresh_prompt_family_summary(family, family.get("question") or "")
         context_groups = family.get("context_groups")
         if not isinstance(context_groups, list):
@@ -945,6 +1032,8 @@ def _load_champion_index(path: Path) -> dict[str, Any]:
         champion_record = _family_champion_record(family)
         if champion_record is not None:
             _refresh_prompt_family_summary(family, champion_record.get("question") or "")
+        elif stored_family_question:
+            _refresh_prompt_family_summary(family, stored_family_question)
     return payload
 
 
@@ -1495,10 +1584,12 @@ def _normalize_materialized_candidate_record(record: Mapping[str, Any]) -> dict[
         and str(record.get("expected_answer") or "").strip() == normalized_answer
     ):
         answer_metadata = dict(existing_answer_metadata)
-    original_prompt = str(record.get("original_prompt") or "").strip()
-    reformulated_prompt = str(record.get("reformulated_prompt") or "").strip()
+    original_prompt = _normalize_question_text(record.get("original_prompt"))
+    reformulated_prompt = _normalize_question_text(record.get("reformulated_prompt"))
     normalized: dict[str, Any] = {
-        "question": str(record.get("question") or reformulated_prompt or original_prompt).strip(),
+        "question": _normalize_question_text(
+            record.get("question") or reformulated_prompt or original_prompt
+        ),
         "expected_answer": normalized_answer,
         "tags": tags,
         "expected_sources": expected_sources,
@@ -1521,6 +1612,15 @@ def _normalize_materialized_candidate_record(record: Mapping[str, Any]) -> dict[
         normalized["candidate_status"] = candidate_status
     if isinstance(provenance, Mapping):
         normalized_provenance = dict(provenance)
+        for field_name in ("question", "original_prompt", "reformulated_prompt"):
+            if field_name in normalized_provenance:
+                normalized_value = _normalize_question_text(normalized_provenance.get(field_name))
+                if normalized_value:
+                    normalized_provenance[field_name] = normalized_value
+        if "command_trace" in normalized_provenance:
+            normalized_provenance["command_trace"] = _ordered_unique_command_trace(
+                normalized_provenance.get("command_trace", [])
+            )
         normalized_provenance["answer_normalization"] = answer_metadata
         normalized["provenance"] = normalized_provenance
     for field_name in (
@@ -1611,6 +1711,11 @@ def _ordered_unique_command_trace(values: object) -> list[dict[str, Any]]:
         if not isinstance(value, Mapping):
             continue
         normalized = {str(key): item for key, item in value.items()}
+        for field_name in ("text", "content", "question", "original_prompt", "reformulated_prompt"):
+            field_value = normalized.get(field_name)
+            if isinstance(field_value, str):
+                cleaned = _normalize_question_text(field_value)
+                normalized[field_name] = cleaned if cleaned else field_value.strip()
         token = json.dumps(normalized, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
         if token in seen:
             continue
@@ -1700,12 +1805,14 @@ def _merge_equivalent_candidate_records(
         or current_serialized.get("original_prompt")
         or ""
     ).strip()
+    merged["original_prompt"] = _normalize_question_text(merged["original_prompt"])
     merged["reformulated_prompt"] = str(
         merged.get("reformulated_prompt")
         or candidate_serialized.get("reformulated_prompt")
         or current_serialized.get("reformulated_prompt")
         or ""
     ).strip()
+    merged["reformulated_prompt"] = _normalize_question_text(merged["reformulated_prompt"])
     provenance = merged.get("provenance")
     if isinstance(provenance, Mapping):
         merged_provenance = dict(provenance)
@@ -1907,7 +2014,7 @@ def materialize_training_candidates(
     ):
         existing_family_state_path = resolved_champion_index_path
     candidate_paths: list[Path]
-    if trace_paths:
+    if trace_paths is not None:
         candidate_paths = []
         for trace_path in trace_paths:
             path = Path(str(trace_path))

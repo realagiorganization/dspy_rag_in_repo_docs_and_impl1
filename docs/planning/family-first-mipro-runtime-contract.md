@@ -163,10 +163,11 @@ Implemented locally in this stage:
 - the remote `repo-rag-training-families` mirror now writes one `family.json`, one `father.json`,
   and one `records/<snapshot>.json` payload per family, so the versioned family directory already
   contains the concrete replay objects that family-scoped `MIPROv2` is supposed to optimize
-- that same remote family-state mirror now also writes operator-visible current aliases at the
-  container root: `family-state.json` plus `families/<prompt_family_id>/{family.json,father.json}`
-  and `records/<snapshot>.json`, so `repo-rag-training-families` no longer looks empty unless no
-  family state has been uploaded at all
+- the remote family-state machine contract is now versioned-only: `current.json` points at
+  `versions/<family_state_version>/family-state.json`, and the per-family replay objects live only
+  under `versions/<family_state_version>/families/<prompt_family_id>/...`; the earlier root-level
+  `family-state.json` / `families/<id>/...` aliases were removed because they duplicated the same
+  state without helping runtime resolution
 - proxy family routing now also checks the validated family runtime-artifact `hit_rate` against the
   current family baseline and refuses to run a degraded family artifact, falling back to
   fresh/global mediation instead
@@ -211,6 +212,25 @@ Implemented locally in this stage:
 - the live `codex exec` prompt body is now task-first and stripped of Discord channel metadata,
   forwarded tails, and attachment-dump noise; rich prompt metadata stays in artifacts instead of
   being sent to the model
+- live trainer evidence now confirms that `repo-rag-training-families` is no longer empty once a
+  trainer cycle completes: `current.json` points at a populated
+  `versions/<family_state_version>/family-state.json`, per-family state lives under
+  `versions/<family_state_version>/families/<prompt_family_id>/...`, and the trainer pod persists
+  the same family-state snapshot locally under `artifacts/trainer/`
+- trainer-side family materialization now sanitizes prompt lineage with the same rules as the
+  execution-side proxy, stripping `Discord channel:`, `Messages with required reaction:`,
+  `Repository checkout:`, `Attachment mount:`, and forwarded Discord tails before those values can
+  become stored fathers or replay-set records
+- trainer-cycle publish logic no longer injects an implicit `minimum_bundle_pass_rate = 1.0`
+  whenever recompile/publish is requested; the family-first path now publishes unless an operator
+  explicitly asks for a bundle gate
+- trainer-side durable recovery is now incremental: `restore_processed_trace_records(...)` restores
+  only processed queue blobs that have not already been mirrored into
+  `artifacts/trainer/recovered-imported-traces/`, and `materialize_training_candidates(...)`
+  treats `trace_paths=[]` as “process nothing new” instead of falling back to the full imported
+  ledger
+- worker-side `trace-export` now writes under the execution directory instead of the target
+  repository root, so Codex no longer risks diffing or re-editing its own exported trace files
 - AKS defaults now enable the existing resumed-lane rollover logic through
   `DATASET_CODEX_MAX_RESUMED_RUNS=3` and
   `DATASET_CODEX_PROMPT_TOKEN_GROWTH_RESET_RATIO=2.0`, so repeated verification reruns of one
@@ -331,3 +351,14 @@ Not implemented yet:
     `../dspy_rag_in_repo_docs_and_impl1` checkout over the pinned submodule whenever both are
     available, and runtime lineage stripping now also removes `Repository checkout:` /
     `Attachment mount:` scaffolding so family matching compares only prompt content.
+25. Align trainer-side family-state normalization and bundle publication policy with the
+    family-first runtime contract.
+    Stage 25 locally: trainer-side prompt-family materialization now strips the same dataset
+    execution envelope from `question`, `original_prompt`, `reformulated_prompt`, and prompt-like
+    `command_trace` fields that the execution proxy already strips, so stored `father.json`
+    questions are mathematically comparable to the live runtime prompt. The trainer cycle also no
+    longer auto-injects an implicit `minimum_bundle_pass_rate = 1.0`; bundle publication now
+    proceeds by default unless an operator explicitly configures a bundle pass-rate threshold.
+    Finally, worker-side `trace-export` now writes under `exec_dir` instead of the target repo
+    worktree, keeping `artifacts/traces/...` out of user branches and reducing self-inflicted diff
+    noise during Codex rollouts.

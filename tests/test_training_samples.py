@@ -445,6 +445,119 @@ def test_materialize_training_candidates_keeps_prompt_reformulation_and_command_
     )
 
 
+def test_materialize_training_candidates_strips_execution_envelope_from_family_father(
+    tmp_path: Path,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    dirty_original = (
+        "Discord channel: prompts_debt_relief\n"
+        "Repository checkout: realagiorganization/national-debt-relief -> "
+        "/workspace/checked-out-repo\n"
+        "Attachment mount: attachments_prompts_debt_relief\n\n"
+        "Continue developing the national debt relief landing page"
+    )
+    dirty_reformulated = (
+        "Discord channel: prompts_debt_relief\n"
+        "Repository checkout: realagiorganization/national-debt-relief -> "
+        "/workspace/checked-out-repo\n"
+        "Attachment mount: attachments_prompts_debt_relief\n\n"
+        "Inspect the existing landing page and continue development."
+    )
+    (imported_dir / "dirty-envelope.json").write_text(
+        json.dumps(
+            {
+                "trace_record_kind": "repo-rag-trace-record",
+                "trace_record_path": "artifacts/traces/imported/dirty-envelope.json",
+                "question": dirty_reformulated,
+                "original_prompt": dirty_original,
+                "reformulated_prompt": dirty_reformulated,
+                "answer": "The landing page already contains the requested baseline assets.",
+                "command_trace": [
+                    {
+                        "type": "message",
+                        "role": "user",
+                        "text": dirty_original,
+                    }
+                ],
+                "trace": {
+                    "schema_version": 1,
+                    "trace_kind": "repo-rag-runtime",
+                    "recorded_at": "2026-05-10T19:42:26+00:00",
+                    "question": dirty_reformulated,
+                    "original_prompt": dirty_original,
+                    "reformulated_prompt": dirty_reformulated,
+                    "mode": "codex-proxy",
+                    "retrieval_mode": "lexical",
+                    "sources": ["README.md"],
+                    "source_count": 1,
+                    "context_count": 1,
+                    "context_field": "evidence_previews",
+                    "top_k": 4,
+                    "program_loaded": False,
+                    "mcp_candidate_count": 0,
+                    "answer_length": 63,
+                },
+                "outcome": {
+                    "acceptance_status": "candidate",
+                    "accepted": None,
+                    "execution_status": "success",
+                    "method": "codex_cli",
+                    "backend": "codex_cli_repo_rag_proxy",
+                    "used_baseline_fallback": True,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+    )
+
+    assert summary["candidate_count"] == 1
+    materialized_payload = yaml.safe_load(
+        (tmp_path / "artifacts" / "trainer" / "training-candidates.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert materialized_payload[0]["question"] == (
+        "Inspect the existing landing page and continue development."
+    )
+    assert materialized_payload[0]["original_prompt"] == (
+        "Continue developing the national debt relief landing page"
+    )
+    assert materialized_payload[0]["reformulated_prompt"] == (
+        "Inspect the existing landing page and continue development."
+    )
+    assert materialized_payload[0]["command_trace"] == [
+        {
+            "type": "message",
+            "role": "user",
+            "text": "Continue developing the national debt relief landing page",
+        }
+    ]
+
+    family_state_path = tmp_path / "artifacts" / "trainer" / "family-state.json"
+    family_state = json.loads(family_state_path.read_text(encoding="utf-8"))
+    family_payload = family_state["prompt_families"][0]
+    assert family_payload["family_father_question"] == (
+        "Inspect the existing landing page and continue development."
+    )
+    assert "Repository checkout:" not in family_payload["family_father_question"]
+    support = resolve_prompt_family_support(
+        "Inspect the existing landing page and continue development.",
+        family_state_path,
+    )
+    assert support.supported is True
+    assert support.band == "match"
+    assert support.family_father_question == (
+        "Inspect the existing landing page and continue development."
+    )
+
+
 def test_resolve_prompt_family_support_matches_best_family_father(tmp_path: Path) -> None:
     trainer_dir = tmp_path / "artifacts" / "trainer"
     trainer_dir.mkdir(parents=True, exist_ok=True)
@@ -529,6 +642,173 @@ def test_resolve_prompt_family_support_matches_best_family_father(tmp_path: Path
         "Inspect whether the README already embeds a demo GIF."
     )
     assert support.family_runtime_record is not None
+
+
+def test_resolve_prompt_family_support_normalizes_dirty_persisted_family_state(
+    tmp_path: Path,
+) -> None:
+    trainer_dir = tmp_path / "artifacts" / "trainer"
+    trainer_dir.mkdir(parents=True, exist_ok=True)
+    family_state_path = trainer_dir / "family-state.json"
+    dirty_question = (
+        "Discord channel: prompts_debt_relief\n\n"
+        "Messages with required reaction:\n"
+        "[1] (2026-05-10T00:00:00+00:00 | drybox | id=1) "
+        "Add a demo GIF to README\n"
+        "Repository checkout: /tmp/repositories/demo\n"
+        "Attachment mount: /tmp/attachments\n"
+    )
+    family_state_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "record_kind": "repo-rag-trainer-champion-index",
+                "family_state_kind": "repo-rag-trainer-family-state",
+                "generated_at": "2026-05-10T20:00:00+00:00",
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-demo",
+                        "question": dirty_question,
+                        "normalized_question": dirty_question.casefold(),
+                        "family_father_question": dirty_question,
+                        "family_father_record": {
+                            "question": dirty_question,
+                            "expected_answer": "README already embeds the GIF.",
+                            "tags": ["trainer-candidate"],
+                            "original_prompt": dirty_question,
+                            "reformulated_prompt": dirty_question,
+                            "command_trace": [
+                                {
+                                    "type": "message",
+                                    "role": "user",
+                                    "text": dirty_question,
+                                }
+                            ],
+                        },
+                        "family_runtime_record": {
+                            "question": dirty_question,
+                            "expected_answer": "README already embeds the GIF.",
+                            "tags": ["trainer-candidate"],
+                            "original_prompt": dirty_question,
+                            "reformulated_prompt": dirty_question,
+                        },
+                        "family_champion_context_group_id": "cg-demo",
+                        "family_champion_score": 1.0,
+                        "family_champion_record": {
+                            "question": dirty_question,
+                            "expected_answer": "README already embeds the GIF.",
+                            "tags": ["trainer-candidate"],
+                        },
+                        "family_records": [
+                            {
+                                "question": dirty_question,
+                                "expected_answer": "README already embeds the GIF.",
+                                "tags": ["trainer-candidate"],
+                                "original_prompt": dirty_question,
+                                "reformulated_prompt": dirty_question,
+                                "command_trace": [
+                                    {
+                                        "type": "message",
+                                        "role": "user",
+                                        "text": dirty_question,
+                                    }
+                                ],
+                            }
+                        ],
+                        "context_groups": [],
+                    }
+                ],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    support = resolve_prompt_family_support("Add a demo GIF to README", family_state_path)
+    materialize_training_candidates(
+        tmp_path,
+        trace_paths=[],
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+        family_state_path=Path("artifacts/trainer/family-state.json"),
+    )
+    rewritten_state = json.loads(family_state_path.read_text(encoding="utf-8"))
+    family_payload = rewritten_state["prompt_families"][0]
+
+    assert support.supported is True
+    assert support.band == "match"
+    assert support.prompt_family_id == "pf-demo"
+    assert support.family_father_question == "Add a demo GIF to README"
+    assert family_payload["family_father_question"] == "Add a demo GIF to README"
+    assert family_payload["question"] == "Add a demo GIF to README"
+    assert family_payload["family_father_record"]["original_prompt"] == "Add a demo GIF to README"
+    assert family_payload["family_records"][0]["reformulated_prompt"] == "Add a demo GIF to README"
+    assert family_payload["family_records"][0]["command_trace"] == [
+        {
+            "type": "message",
+            "role": "user",
+            "text": "Add a demo GIF to README",
+        }
+    ]
+
+
+def test_materialize_training_candidates_respects_explicit_empty_trace_paths(
+    tmp_path: Path,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    (imported_dir / "accepted.json").write_text(
+        json.dumps(
+            {
+                "trace_record_kind": "repo-rag-trace-record",
+                "trace_record_path": "artifacts/traces/imported/accepted.json",
+                "question": "Add a demo GIF to README",
+                "answer": "README already embeds the GIF.",
+                "trace": {
+                    "schema_version": 1,
+                    "trace_kind": "repo-rag-runtime",
+                    "recorded_at": "2026-05-10T20:05:00+00:00",
+                    "question": "Add a demo GIF to README",
+                    "mode": "codex-proxy",
+                    "sources": ["README.md"],
+                    "source_count": 1,
+                    "context_count": 0,
+                    "program_loaded": False,
+                    "mcp_candidate_count": 0,
+                    "answer_length": 31,
+                },
+                "outcome": {
+                    "acceptance_status": "accepted",
+                    "accepted": True,
+                    "execution_status": "success",
+                    "method": "codex_cli",
+                    "backend": "codex_cli_repo_rag_proxy",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        trace_paths=[],
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+        seed_existing_output=False,
+    )
+
+    assert summary["input_trace_count"] == 0
+    assert summary["loaded_candidate_count"] == 0
+    assert summary["candidate_count"] == 0
+    assert summary["trace_paths"] == []
+    materialized_payload = yaml.safe_load(
+        (tmp_path / "artifacts" / "trainer" / "training-candidates.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert materialized_payload == []
 
 
 def test_resolve_prompt_family_support_creates_new_family_below_threshold(tmp_path: Path) -> None:

@@ -810,11 +810,12 @@ matching local cache tree for those family records. The container is therefore s
 the family-directory shape we actually want, even though the full replay-set layout is still not
 there yet.
 
-That same container is now also easier to inspect operationally. Fresh uploads write a root-level
-`family-state.json` alias plus `families/<prompt_family_id>/{family.json,father.json}` and
-`records/<snapshot>.json` mirrors beside the immutable versioned history. In other words,
-`repo-rag-training-families` no longer requires operators to descend into `versions/...` just to
-confirm that family state exists at all.
+That same container is now also less redundant operationally. Earlier iterations mirrored
+`family-state.json` plus `families/<prompt_family_id>/...` at the container root even though the
+runtime only needed `current.json` and the immutable versioned history. The active contract now
+keeps only `current.json` at the root and stores all family payloads under
+`versions/<family_state_version>/...`, which preserves a cheap “what is current?” lookup without
+duplicating the entire family tree one level higher.
 
 The local trainer contract now mirrors that naming more honestly too. The primary persisted local
 state file is `artifacts/trainer/family-state.json`, remote fetch caches live under
@@ -856,6 +857,14 @@ the JSON returned by `trainer-candidates`, and pending-recompile summaries no lo
 The active local/output path now writes only `family-state.json`, while older
 `champion-index.json` snapshots remain readable as migration input. The machine contract points
 callers only at `family_state_path` plus the family-state counters.
+
+The trainer ingest loop is now closer to the intended incremental cost model too. The original
+durable-recovery path mirrored every `processed/...` queue item back into local trainer storage on
+every cycle and then let candidate materialization fall back to the full imported-trace ledger
+when the recovered list was empty. That replayed historical traces even when no new queue items
+arrived. The current path restores only not-yet-mirrored processed blobs and treats explicit
+`trace_paths=[]` as “ingest nothing new,” so trainer work now scales with new queue arrivals
+instead of the full accumulated ledger.
 
 The remaining public helper surface has narrowed too. The repo no longer exposes separate
 `repo_rag_champion_container(...)`, `upload_remote_champion_index(...)`,
@@ -939,6 +948,20 @@ lookup before it stages `.repo_rag_bundle_store`. When that fallback path resolv
 staged worker mirror also synthesizes a minimal local `channels/stable.json` pointer to the
 resolved bundle so the execution-side proxy can activate compiled family artifacts without relying
 on a separately published channel record.
+
+The newest live inspection on `2026-05-10` sharpened the remaining gap again. The
+`repo-rag-training-families` container is no longer empty in live AKS; it already carries
+`current.json`, container-root `family-state.json`, and per-family `family.json`, `father.json`,
+and `records/<snapshot>.json` payloads. The execution-stage blocker moved upstream of storage:
+trainer-side family materialization was still persisting polluted father questions that included
+`Repository checkout:` and `Attachment mount:` scaffolding, so runtime family matching compared a
+clean prompt against dirty stored fathers and kept classifying the turn as a new family. The same
+inspection also exposed one old champion-era policy that no longer fits the family-first design:
+bundle publication was still being blocked by an implicit `minimum_bundle_pass_rate = 1.0`. The
+current local fix set therefore sanitizes trainer-side prompt lineage with the same rules as the
+execution proxy, removes that implicit publish gate unless an operator explicitly requests one,
+and keeps `trace-export` artifacts out of the target repository worktree so Codex does not spend
+tokens diffing its own exported traces.
 
 ## Tensions And Open Work
 
