@@ -910,6 +910,21 @@ batch, the worker now synthesizes one compact per-turn batch from `repo_rag_code
 plus the final execution outcome, instead of exporting the entire `codex_response.txt` transcript
 as the trainer-facing answer payload.
 
+The next trainer-side hardening pass closes the bundle-version storm that the user observed on
+`2026-05-11`: idle `trainer-service` cycles could previously keep minting fresh timestamped bundle
+versions whenever `pending_recompile` stayed true from old lineage drift, even if the current
+cycle had imported no new traces. Automatic recompilation now requires current-cycle queue or
+recovered trace input, and the trainer combines imported plus recovered trace paths so the same
+cycle cannot miss a fresh queue item when processed-ledger recovery also restored a trace.
+The next local service hardening pass closes the remaining operational gap in that same area:
+even after the version-storm fix, the long-lived `trainer-service` still entered
+`run_trainer_cycle()` on every poll interval and only discovered the empty queue from inside the
+cycle. Repo-rag now performs an explicit preflight before each service iteration, measuring queue
+visibility plus unrecovered processed-trace count, and it skips `trainer-cycle` entirely when both
+are zero. The current Kubernetes deployment is still poll-based rather than queue-event-driven,
+but after this fix the service only starts a real trainer cycle when queue or recovery input is
+actually present.
+
 Finally, the session-resume contract is now explicit rather than accidental. The worker-side default
 for automatic Codex session lanes is `queue_and_slug`, and the generated AKS pod env now exports
 that same value explicitly unless an operator overrides it. That does not yet prove a live token

@@ -913,7 +913,10 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
         seed_existing_output: bool = True,
     ) -> dict[str, object]:
         del root, output_path, summary_path, include_statuses
-        assert trace_paths == [Path("artifacts/trainer/recovered-imported-traces/demo.json")]
+        assert trace_paths == [
+            Path("artifacts/traces/imported/demo.json"),
+            Path("artifacts/trainer/recovered-imported-traces/demo.json"),
+        ]
         assert seed_existing_output is True
         return {
             "candidate_count": 1,
@@ -1718,6 +1721,14 @@ def test_run_trainer_cycle_recompiles_when_published_bundle_lags_current_champio
         ),
     )
     monkeypatch.setattr(
+        "repo_rag_lab.utilities._trainer_pending_recompile_summary",
+        lambda *args, **kwargs: {
+            "pending_recompile": True,
+            "reason": "family-trace-path-drift",
+            "current_bundle_version": "stable-run",
+        },
+    )
+    monkeypatch.setattr(
         "repo_rag_lab.utilities._versioned_training_run_name",
         lambda run_family, recorded_at=None: "20260507T180000Z",
     )
@@ -1766,6 +1777,131 @@ def test_run_trainer_cycle_recompiles_when_published_bundle_lags_current_champio
     assert payload["pending_recompile"]["pending_recompile"] is True
     assert payload["pending_recompile"]["reason"] == "family-trace-path-drift"
     assert payload["pending_recompile"]["current_bundle_version"] == "stable-run"
+    assert payload["current_cycle_input_detected"] is False
+    assert payload["recompile"]["recompile_status"] == "skipped-no-new-candidates"
+    assert payload["publish_requested"] is False
+    assert payload["publish"] is None
+    assert any(
+        "skipping auto-recompile to avoid repeated bundle versions" in warning
+        for warning in payload["warnings"]
+    )
+
+
+def test_run_trainer_cycle_recompiles_pending_family_drift_once_new_traces_arrive(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.drain_trace_queue",
+        lambda root, queue_name="default", limit=None, keep_queued=False: {
+            "queue_name": queue_name,
+            "queue_found": True,
+            "queued_count_before": 0,
+            "selected_count": 0,
+            "drained_count": 0,
+            "failed_count": 0,
+            "remaining_count": 0,
+            "keep_queued": keep_queued,
+            "status": "success",
+            "items": [],
+            "failures": [],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.restore_processed_trace_records",
+        _restore_processed_trace_records_stub(
+            processed_count=1,
+            restored_count=1,
+            trace_paths=["artifacts/trainer/recovered-imported-traces/new.json"],
+        ),
+    )
+    monkeypatch.setattr("repo_rag_lab.utilities.load_training_examples", lambda path: ["example"])
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.build_retrieval_benchmarks",
+        lambda examples: [{"question": "demo"}],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.evaluate_retrieval_quality_suite",
+        lambda root, benchmarks, top_k, top_k_values, retrieval_mode=None: {
+            "retrieval_mode": "idf-rerank",
+            "default_top_k": 4,
+            "default_summary": {
+                "top_k": 4,
+                "pass_rate": 1.0,
+                "source_recall": 1.0,
+                "tag_summaries": [],
+            },
+            "top_k_summaries": [{"top_k": 4, "pass_rate": 1.0, "source_recall": 1.0}],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.check_retrieval_quality_thresholds",
+        lambda summary, minimum_pass_rate=None, minimum_source_recall=None: [],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.materialize_training_candidates",
+        _materialize_training_candidates_stub(
+            candidate_count=1,
+            new_candidate_count=0,
+            prompt_family_count=1,
+            context_group_count=1,
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._trainer_pending_recompile_summary",
+        lambda *args, **kwargs: {
+            "pending_recompile": True,
+            "reason": "family-trace-path-drift",
+            "current_bundle_version": "stable-run",
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._versioned_training_run_name",
+        lambda run_family, recorded_at=None: "20260507T180000Z",
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._trainer_recompile_payload",
+        lambda *args, **kwargs: {
+            "recompile_status": "compiled",
+            "generated_training": {
+                "output_path": "artifacts/trainer/generated-training.yaml",
+                "summary_path": "artifacts/trainer/generated-training-summary.json",
+            },
+            "training_result": {
+                "run_name": "20260507T180000Z",
+                "bundle_version": "20260507T180000Z",
+                "metadata_path": "artifacts/dspy/20260507T180000Z/metadata.json",
+                "bundle_path": "artifacts/dspy/20260507T180000Z/bundle.json",
+                "benchmark_summary": {"pass_rate": 1.0},
+            },
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.publish_bundle",
+        lambda *args, **kwargs: {
+            "bundle_version": "20260507T180000Z",
+            "run_name": "20260507T180000Z",
+            "published_bundle_path": "artifacts/dspy/published/20260507T180000Z.json",
+            "bundle_path": "artifacts/dspy/20260507T180000Z/bundle.json",
+            "metadata_path": "artifacts/dspy/20260507T180000Z/metadata.json",
+            "program_path": "artifacts/dspy/20260507T180000Z/program.json",
+            "publish_status": "published",
+        },
+    )
+    monkeypatch.setattr("repo_rag_lab.utilities.resolve_azure_artifact_config", lambda: None)
+
+    payload = json.loads(
+        run_trainer_cycle(
+            tmp_path,
+            queue_name="dataset",
+            recompile_run_name="trainer-auto",
+        )
+    )
+
+    assert payload["command_status"] == "success"
+    assert payload["pending_recompile"]["pending_recompile"] is True
+    assert payload["current_cycle_input_detected"] is True
+    assert payload["current_cycle_recovered_count"] == 1
     assert payload["recompile"]["recompile_status"] == "compiled"
     assert payload["publish_requested"] is True
     assert payload["publish"]["bundle_version"] == "20260507T180000Z"
@@ -2323,6 +2459,20 @@ def test_run_trainer_service_writes_state_and_history(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    pending_input_inspections = iter(
+        [
+            {
+                "current_cycle_input_detected": True,
+                "queue_visible_count": 1,
+                "recoverable_processed_count": 0,
+            },
+            {
+                "current_cycle_input_detected": True,
+                "queue_visible_count": 0,
+                "recoverable_processed_count": 1,
+            },
+        ]
+    )
     cycle_payloads = iter(
         [
             {
@@ -2410,6 +2560,10 @@ def test_run_trainer_service_writes_state_and_history(
         "repo_rag_lab.utilities.run_trainer_cycle",
         lambda *args, **kwargs: json.dumps(next(cycle_payloads)),
     )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.inspect_pending_trainer_inputs",
+        lambda *args, **kwargs: dict(next(pending_input_inspections)),
+    )
 
     payload = json.loads(
         run_trainer_service(
@@ -2446,12 +2600,21 @@ def test_run_trainer_service_writes_state_and_history(
     assert state_payload["last_cycle_command_status"] == "success"
     assert state_payload["total_prompt_family_count"] == 1
     assert state_payload["total_context_group_count"] == 2
+    assert state_payload["pending_input_inspection"]["recoverable_processed_count"] == 1
 
 
 def test_run_trainer_service_reports_failed_cycles(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.inspect_pending_trainer_inputs",
+        lambda *args, **kwargs: {
+            "current_cycle_input_detected": True,
+            "queue_visible_count": 1,
+            "recoverable_processed_count": 0,
+        },
+    )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.run_trainer_cycle",
         lambda *args, **kwargs: json.dumps(
@@ -2494,6 +2657,52 @@ def test_run_trainer_service_reports_failed_cycles(
     assert payload["gate_failure_count"] == 1
     assert payload["bundle_gate_failure_count"] == 1
     assert "One or more trainer cycles failed during service execution." in payload["warnings"]
+
+
+def test_run_trainer_service_skips_cycle_when_queue_and_recovery_are_empty(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.inspect_pending_trainer_inputs",
+        lambda *args, **kwargs: {
+            "current_cycle_input_detected": False,
+            "queue_visible_count": 0,
+            "recoverable_processed_count": 0,
+        },
+    )
+
+    def _unexpected_cycle(*args: object, **kwargs: object) -> str:
+        raise AssertionError("trainer-cycle should not run without queued or recoverable traces")
+
+    monkeypatch.setattr("repo_rag_lab.utilities.run_trainer_cycle", _unexpected_cycle)
+
+    payload = json.loads(
+        run_trainer_service(
+            tmp_path,
+            queue_name="dataset",
+            poll_interval_seconds=0,
+            max_idle_cycles=1,
+        )
+    )
+
+    assert payload["command"] == "trainer-service"
+    assert payload["command_status"] == "success"
+    assert payload["stop_reason"] == "max-idle-cycles"
+    assert payload["cycles_executed"] == 0
+    assert payload["idle_cycles"] == 1
+    assert payload["total_drained_count"] == 0
+    assert payload["latest_cycle_record_path"] is None
+    assert payload["pending_input_inspection"]["current_cycle_input_detected"] is False
+    assert (
+        "Trainer service skipped trainer-cycle because no queued or recoverable trace inputs "
+        "were available."
+        in payload["warnings"]
+    )
+    state_payload = json.loads((tmp_path / payload["state_path"]).read_text(encoding="utf-8"))
+    assert state_payload["cycles_executed"] == 0
+    assert state_payload["last_cycle"] is None
+    assert state_payload["pending_input_inspection"]["queue_visible_count"] == 0
 
 
 def test_run_todo_backlog_sync_reports_expected_fields() -> None:

@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-05-10-live-trainer-service-replays-processed-ledger-while-queue-empty.md`
+- `2026-05-11-trainer-service-preflights-queue-before-running-cycles.md`
 
 ## Usage
 
