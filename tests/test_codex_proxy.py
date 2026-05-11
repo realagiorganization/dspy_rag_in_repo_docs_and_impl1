@@ -570,9 +570,13 @@ def test_build_codex_mediation_executes_family_runtime_artifact_with_prompt_line
             "families": [
                 {
                     "prompt_family_id": "pf-demo",
-                    "family_father_question": "Run the failing pytest target and inspect stderr.",
+                    "family_father_question": (
+                        "Investigate the failing pytest target and fix the broken test."
+                    ),
                     "family_father_record": {
-                        "question": "Run the failing pytest target and inspect stderr.",
+                        "question": (
+                            "Investigate the failing pytest target and fix the broken test."
+                        ),
                     },
                     "family_runtime_metric": {"hit_rate": 0.8},
                     "runtime_artifact": {
@@ -654,13 +658,17 @@ def test_build_codex_mediation_synthesizes_family_registry_from_family_state(
                     {
                         "prompt_family_id": "pf-demo",
                         "family_father_question": (
-                            "Run the failing pytest target and inspect stderr."
+                            "Investigate the failing pytest target and fix the broken test."
                         ),
                         "family_father_record": {
-                            "question": "Run the failing pytest target and inspect stderr."
+                            "question": (
+                                "Investigate the failing pytest target and fix the broken test."
+                            )
                         },
                         "family_runtime_record": {
-                            "question": "Run the failing pytest target and inspect stderr.",
+                            "question": (
+                                "Investigate the failing pytest target and fix the broken test."
+                            ),
                             "metric_hits": 4,
                             "metric_total": 5,
                             "metric_ratio": 0.8,
@@ -762,6 +770,143 @@ def test_build_codex_mediation_synthesizes_family_registry_from_family_state(
     assert captured["program_path"] == family_program_path.resolve()
 
 
+def test_build_codex_mediation_uses_original_prompt_for_family_lookup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "README.md").write_text("repo summary\n", encoding="utf-8")
+    family_program_path = (
+        repo
+        / "artifacts"
+        / "dspy"
+        / "remote"
+        / "stable-99"
+        / "families"
+        / "pf-docs"
+        / "program.json"
+    )
+    family_program_path.parent.mkdir(parents=True)
+    family_program_path.write_text('{"program":"family-demo"}\n', encoding="utf-8")
+
+    captured: dict[str, object] = {}
+
+    def fake_ask_repository(
+        question: str,
+        root: Path,
+        retrieval_mode: RetrievalMode | None = None,
+    ) -> SimpleNamespace:
+        del retrieval_mode
+        assert question == "Inspect README.md and update documentation gaps."
+        return SimpleNamespace(
+            context=[Chunk(source=root / "README.md", text="Repository summary text.")],
+            summary="Repository summary text.",
+            retrieval_mode="lexical",
+        )
+
+    class FakeRepositoryRAG:
+        def __init__(
+            self,
+            root: Path,
+            top_k: int = 4,
+            *,
+            program_path: Path | None = None,
+            lm_config: object | None = None,
+            require_configured_lm: bool = False,
+            retrieval_mode: RetrievalMode | None = None,
+        ) -> None:
+            del root, top_k, require_configured_lm, retrieval_mode
+            captured["program_path"] = program_path
+            captured["lm_model"] = getattr(lm_config, "model", None)
+
+        def __call__(
+            self,
+            question: str,
+            *,
+            original_prompt: str | None = None,
+            reformulated_prompt: str | None = None,
+            command_trace: object = (),
+        ) -> SimpleNamespace:
+            captured["question"] = question
+            captured["original_prompt"] = original_prompt
+            captured["reformulated_prompt"] = reformulated_prompt
+            captured["command_trace"] = command_trace
+            return SimpleNamespace(answer="Family-scoped DSPy answer.", retrieval_mode="lexical")
+
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.ask_repository", fake_ask_repository)
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.RepositoryRAG", FakeRepositoryRAG)
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.resolve_dspy_lm_config",
+        lambda: SimpleNamespace(model="azure/dspy-helper"),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.reformulate_codex_prompt",
+        lambda prompt, *, lm_config=None: (
+            "Inspect README.md and update documentation gaps.",
+            "success",
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_bundle_family_registry",
+        lambda **kwargs: {
+            "schema_version": 1,
+            "registry_kind": "repo-rag-family-registry",
+            "families": [
+                {
+                    "prompt_family_id": "pf-docs",
+                    "family_father_question": "Inspect repository and update docs",
+                    "family_father_record": {
+                        "question": "Inspect repository and update docs",
+                        "original_prompt": "Inspect repository and update docs",
+                        "reformulated_prompt": "Inspect README.md and update documentation gaps.",
+                    },
+                    "family_runtime_metric": {"hit_rate": 0.5},
+                    "runtime_artifact": {
+                        "artifact_kind": "compiled-family-program",
+                        "artifact_ready": True,
+                        "program_path": (
+                            "artifacts/dspy/remote/stable-99/families/pf-docs/program.json"
+                        ),
+                        "metadata_path": (
+                            "artifacts/dspy/remote/stable-99/families/pf-docs/metadata.json"
+                        ),
+                        "hit_rate": 1.0,
+                    },
+                }
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_program_path_and_bundle_version",
+        lambda **kwargs: (
+            repo / "artifacts" / "dspy" / "remote" / "stable-99" / "program.json",
+            "stable-99",
+        ),
+    )
+
+    mediation = build_codex_mediation(
+        "Inspect repository and update docs",
+        command_trace=[{"role": "assistant", "text": "inspect README"}],
+        repository_root=repo,
+        bundle_root=repo,
+        prefer_dspy=True,
+    )
+
+    assert mediation.dspy_status == "success"
+    assert mediation.prompt_family_id == "pf-docs"
+    assert mediation.prompt_family_band == "match"
+    assert mediation.bundle_version == "stable-99"
+    assert mediation.family_artifact_selected is True
+    assert mediation.program_path == (
+        "artifacts/dspy/remote/stable-99/families/pf-docs/program.json"
+    )
+    assert captured["program_path"] == family_program_path.resolve()
+    assert captured["question"] == "Inspect repository and update docs"
+    assert captured["original_prompt"] == "Inspect repository and update docs"
+    assert captured["reformulated_prompt"] == "Inspect README.md and update documentation gaps."
+
+
 def test_build_codex_mediation_skips_family_artifact_when_hit_rate_drops(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -846,9 +991,13 @@ def test_build_codex_mediation_skips_family_artifact_when_hit_rate_drops(
             "families": [
                 {
                     "prompt_family_id": "pf-demo",
-                    "family_father_question": "Run the failing pytest target and inspect stderr.",
+                    "family_father_question": (
+                        "Investigate the failing pytest target and fix the broken test."
+                    ),
                     "family_father_record": {
-                        "question": "Run the failing pytest target and inspect stderr."
+                        "question": (
+                            "Investigate the failing pytest target and fix the broken test."
+                        )
                     },
                     "family_runtime_metric": {"hit_rate": 0.9},
                     "runtime_artifact": {

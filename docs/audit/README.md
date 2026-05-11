@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-05-11-trainer-service-preflights-queue-before-running-cycles.md`
+- `2026-05-11-original-prompt-routing-and-batch-handoff-fixes.md`
 
 ## Usage
 

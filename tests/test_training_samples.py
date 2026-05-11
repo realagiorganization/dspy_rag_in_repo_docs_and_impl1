@@ -413,9 +413,7 @@ def test_materialize_training_candidates_keeps_prompt_reformulation_and_command_
     assert summary["dirty_family_count"] == 1
     materialized_path = tmp_path / "artifacts" / "trainer" / "training-candidates.yaml"
     materialized_payload = yaml.safe_load(materialized_path.read_text(encoding="utf-8"))
-    assert materialized_payload[0]["question"] == (
-        "Inspect whether the README already embeds a demo GIF."
-    )
+    assert materialized_payload[0]["question"] == "Add a demo GIF to README"
     assert materialized_payload[0]["original_prompt"] == "Add a demo GIF to README"
     assert materialized_payload[0]["reformulated_prompt"] == (
         "Inspect whether the README already embeds a demo GIF."
@@ -430,9 +428,7 @@ def test_materialize_training_candidates_keeps_prompt_reformulation_and_command_
     family_payload = family_state["prompt_families"][0]
     assert summary["dirty_family_ids"] == [family_payload["prompt_family_id"]]
     assert family_payload["family_needs_recompile"] is True
-    assert family_payload["family_father_question"] == (
-        "Inspect whether the README already embeds a demo GIF."
-    )
+    assert family_payload["family_father_question"] == "Add a demo GIF to README"
     assert family_payload["family_runtime_record"]["reformulated_prompt"] == (
         "Inspect whether the README already embeds a demo GIF."
     )
@@ -524,7 +520,7 @@ def test_materialize_training_candidates_strips_execution_envelope_from_family_f
         )
     )
     assert materialized_payload[0]["question"] == (
-        "Inspect the existing landing page and continue development."
+        "Continue developing the national debt relief landing page"
     )
     assert materialized_payload[0]["original_prompt"] == (
         "Continue developing the national debt relief landing page"
@@ -544,17 +540,17 @@ def test_materialize_training_candidates_strips_execution_envelope_from_family_f
     family_state = json.loads(family_state_path.read_text(encoding="utf-8"))
     family_payload = family_state["prompt_families"][0]
     assert family_payload["family_father_question"] == (
-        "Inspect the existing landing page and continue development."
+        "Continue developing the national debt relief landing page"
     )
     assert "Repository checkout:" not in family_payload["family_father_question"]
     support = resolve_prompt_family_support(
-        "Inspect the existing landing page and continue development.",
+        "Continue developing the national debt relief landing page",
         family_state_path,
     )
     assert support.supported is True
     assert support.band == "match"
     assert support.family_father_question == (
-        "Inspect the existing landing page and continue development."
+        "Continue developing the national debt relief landing page"
     )
 
 
