@@ -741,6 +741,7 @@ def _resolve_bundle_family_registry(
     """Resolve the monolithic bundle's internal family registry when available."""
 
     if bundle_version is not None:
+        local_bundle: Mapping[str, object] | None
         try:
             _, local_bundle = resolve_bundle_manifest(
                 bundle_root,
