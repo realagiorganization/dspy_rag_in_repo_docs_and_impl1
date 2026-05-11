@@ -32,6 +32,7 @@ from repo_rag_lab.runtime_artifacts import (
     fetch_remote_bundle,
     fetch_remote_family_state,
     inspect_bundle_channel,
+    inspect_pending_trainer_inputs,
     queue_trace_record,
     resolve_bundle_manifest,
     restore_processed_trace_records,
@@ -101,6 +102,10 @@ class _FakeAzureArtifactStore:
         if isinstance(limit, int) and limit > 0:
             return list(self.messages[:limit])
         return list(self.messages)
+
+    def approximate_queue_message_count(self, queue_name: str) -> int:
+        del queue_name
+        return len(self.messages)
 
     def delete_queue_message(self, queue_name: str, message: AzureQueueMessage) -> None:
         del queue_name
@@ -243,6 +248,13 @@ class _FakeQueueClient:
     ) -> list[_FakeQueueSDKMessage]:
         del visibility_timeout
         return list(self.messages[:messages_per_page])
+
+    def get_queue_properties(self) -> object:
+        return type(
+            "_FakeQueueProperties",
+            (),
+            {"approximate_message_count": len(self.messages)},
+        )()
 
     def delete_message(self, message_id: str, pop_receipt: str) -> None:
         del pop_receipt
@@ -567,6 +579,69 @@ def test_restore_processed_trace_records_rebuilds_local_ledger_from_azure_proces
     assert restored_again["processed_count"] == 1
     assert restored_again["restored_count"] == 0
     assert restored_again["trace_paths"] == []
+
+
+def test_inspect_pending_trainer_inputs_reports_filesystem_queue_and_recovery(
+    tmp_path: Path,
+) -> None:
+    first = inspect_pending_trainer_inputs(tmp_path, queue_name="dataset")
+    assert first["storage_backend"] == "filesystem"
+    assert first["queue_visible_count"] == 0
+    assert first["recoverable_processed_count"] == 0
+    assert first["current_cycle_input_detected"] is False
+
+    queued = queue_trace_record(tmp_path, _sample_trace_payload(), queue_name="dataset")
+    assert queued["storage_backend"] == "filesystem"
+
+    second = inspect_pending_trainer_inputs(tmp_path, queue_name="dataset")
+    assert second["queue_visible_count"] == 1
+    assert second["current_cycle_input_detected"] is True
+
+    drain_trace_queue(tmp_path, queue_name="dataset")
+    third = inspect_pending_trainer_inputs(tmp_path, queue_name="dataset")
+    assert third["queue_visible_count"] == 0
+    assert third["recoverable_processed_count"] == 1
+    assert third["current_cycle_input_detected"] is True
+
+    restore_processed_trace_records(tmp_path, queue_name="dataset")
+    fourth = inspect_pending_trainer_inputs(tmp_path, queue_name="dataset")
+    assert fourth["queue_visible_count"] == 0
+    assert fourth["recoverable_processed_count"] == 0
+    assert fourth["current_cycle_input_detected"] is False
+
+
+def test_inspect_pending_trainer_inputs_reports_azure_queue_visibility(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _FakeAzureArtifactStore()
+    config = AzureArtifactConfig(
+        account_name="acct",
+        account_key="key",
+        connection_string=None,
+        trace_container="repo-rag-training-traces",
+        bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-training-families",
+        queue_name="repo-rag-training",
+    )
+
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config",
+        lambda queue_name=None: config,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
+        lambda cfg: store,
+    )
+
+    queued = queue_trace_record(tmp_path, _sample_trace_payload(), queue_name="dataset")
+    assert queued["storage_backend"] == "azure-blob-queue"
+
+    inspected = inspect_pending_trainer_inputs(tmp_path, queue_name="dataset")
+    assert inspected["storage_backend"] == "azure-blob-queue"
+    assert inspected["queue_visible_count"] == 1
+    assert inspected["recoverable_processed_count"] == 0
+    assert inspected["current_cycle_input_detected"] is True
 
 
 def test_fetch_remote_bundle_downloads_bundle_assets(

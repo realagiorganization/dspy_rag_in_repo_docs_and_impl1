@@ -1975,6 +1975,75 @@ def write_trace_record(
     return record
 
 
+def inspect_pending_trainer_inputs(
+    root: Path,
+    *,
+    queue_name: str = "default",
+    output_dir: Path = DEFAULT_TRAINER_RECOVERED_TRACES_DIR,
+) -> dict[str, object]:
+    """Inspect whether a trainer cycle has any new queued or recoverable trace input."""
+
+    resolved_root = root.resolve()
+    resolved_output_dir = output_dir if output_dir.is_absolute() else resolved_root / output_dir
+    resolved_output_dir.mkdir(parents=True, exist_ok=True)
+    normalized_queue_name = _sanitize_name(queue_name, default="default")
+    config = resolve_azure_artifact_config(queue_name=queue_name)
+
+    if config is not None and config.queue_enabled:
+        store = AzureArtifactStore(config)
+        container = repo_rag_trace_container(config)
+        queue_name_remote = repo_rag_trace_queue_name(config, fallback=normalized_queue_name)
+        queue_visible_count = store.approximate_queue_message_count(queue_name_remote)
+        recoverable_processed_count = 0
+        processed_count = 0
+        if queue_visible_count == 0:
+            prefix = processed_trace_blob_name(queue_name_remote, "")
+            blob_names = sorted(store.list_blobs(container, prefix=prefix))
+            processed_count = len(blob_names)
+            recoverable_processed_count = sum(
+                1
+                for blob_name in blob_names
+                if not (resolved_output_dir / Path(blob_name).name).is_file()
+            )
+        return {
+            "queue_name": queue_name_remote,
+            "queue_visible_count": queue_visible_count,
+            "processed_count": processed_count,
+            "recoverable_processed_count": recoverable_processed_count,
+            "current_cycle_input_detected": (
+                queue_visible_count > 0 or recoverable_processed_count > 0
+            ),
+            "storage_backend": "azure-blob-queue",
+            "trace_container": container,
+            "processed_queue_dir": f"azure://{container}/processed/{queue_name_remote}",
+        }
+
+    queue_dir = _trace_queue_dir(resolved_root, queue_name, processed=False)
+    processed_dir = _trace_queue_dir(resolved_root, queue_name, processed=True)
+    queued_paths = sorted(queue_dir.glob("*.json")) if queue_dir.is_dir() else []
+    queue_visible_count = len(queued_paths)
+    processed_paths = sorted(processed_dir.glob("*.json")) if processed_dir.is_dir() else []
+    recoverable_processed_count = 0
+    if queue_visible_count == 0:
+        recoverable_processed_count = sum(
+            1
+            for processed_path in processed_paths
+            if not (resolved_output_dir / processed_path.name).is_file()
+        )
+    return {
+        "queue_name": normalized_queue_name,
+        "queue_visible_count": queue_visible_count,
+        "processed_count": len(processed_paths),
+        "recoverable_processed_count": recoverable_processed_count,
+        "current_cycle_input_detected": (
+            queue_visible_count > 0 or recoverable_processed_count > 0
+        ),
+        "storage_backend": "filesystem",
+        "queue_dir": _relative_to_root(queue_dir, resolved_root),
+        "processed_queue_dir": _relative_to_root(processed_dir, resolved_root),
+    }
+
+
 def restore_processed_trace_records(
     root: Path,
     *,

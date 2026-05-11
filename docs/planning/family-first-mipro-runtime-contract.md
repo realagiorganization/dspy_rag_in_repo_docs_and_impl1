@@ -362,3 +362,13 @@ Not implemented yet:
     Finally, worker-side `trace-export` now writes under `exec_dir` instead of the target repo
     worktree, keeping `artifacts/traces/...` out of user branches and reducing self-inflicted diff
     noise during Codex rollouts.
+26. Prevent idle trainer-service cycles from minting repeated timestamped bundle versions.
+    Stage 26 locally: trainer-cycle now treats stale `pending_recompile` as insufficient by
+    itself; automatic recompile/publish requires current-cycle queue or recovered trace input, and
+    imported plus recovered trace paths are merged so one cycle cannot ignore a fresh queue item
+    just because processed-ledger recovery also restored a trace.
+27. Prevent `trainer-service` from entering `trainer-cycle` at all when queue input is absent.
+    Stage 27 locally: the long-lived service now preflights queue visibility plus recoverable
+    processed-ledger traces before every poll iteration. When neither source has new input, the
+    service records an idle state update and sleeps without invoking `trainer-cycle`, so the
+    running poller no longer burns work just to rediscover an empty queue.

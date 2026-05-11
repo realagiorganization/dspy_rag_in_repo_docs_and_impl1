@@ -49,6 +49,7 @@ from .runtime_artifacts import (
     drain_trace_queue,
     fetch_remote_bundle,
     initialize_local_overlay,
+    inspect_pending_trainer_inputs,
     inspect_bundle_channel,
     inspect_remote_bundle_channel,
     inspect_remote_bundle_version,
@@ -1494,7 +1495,9 @@ def run_trainer_cycle(
         if isinstance(raw_trace_paths, list)
         else []
     )
-    trainer_trace_paths = recovered_trace_paths or imported_trace_paths
+    trainer_trace_paths = _stable_ordered_strings(
+        [*imported_trace_paths, *recovered_trace_paths]
+    )
     ingestion_summary = _summarize_imported_trace_records(root, trainer_trace_paths)
     training_candidates = materialize_training_candidates(
         root,
@@ -1517,7 +1520,19 @@ def run_trainer_cycle(
     recompile_requested = recompile_run_name is not None
     recompile_threshold_met = new_candidate_count >= effective_min_new_candidates
     pending_recompile = bool(pending_recompile_summary.get("pending_recompile"))
-    recompile_triggered = recompile_requested and (recompile_threshold_met or pending_recompile)
+    current_cycle_trace_input_count = len(trainer_trace_paths)
+    current_cycle_queue_drain_count = int(queue_payload.get("drained_count") or 0)
+    current_cycle_recovered_count = int(durable_trace_recovery.get("restored_count") or 0)
+    current_cycle_input_detected = (
+        current_cycle_trace_input_count > 0
+        or current_cycle_queue_drain_count > 0
+        or current_cycle_recovered_count > 0
+        or new_candidate_count > 0
+    )
+    pending_recompile_with_new_inputs = pending_recompile and current_cycle_input_detected
+    recompile_triggered = recompile_requested and (
+        recompile_threshold_met or pending_recompile_with_new_inputs
+    )
     explicit_publish_requested = run_name is not None or bundle_version is not None
     retrieval_payload = _build_retrieval_evaluation_payload(
         root,
@@ -1567,10 +1582,17 @@ def run_trainer_cycle(
             }
             if new_candidate_count == 0:
                 if pending_recompile:
-                    cycle_warnings.append(
-                        "Trainer-side bundle recompilation remained pending because the current "
-                        "family set still differs from the published bundle."
-                    )
+                    if current_cycle_input_detected:
+                        cycle_warnings.append(
+                            "Trainer-side bundle recompilation remained pending because the current "
+                            "family set still differs from the published bundle."
+                        )
+                    else:
+                        cycle_warnings.append(
+                            "Trainer-side bundle recompilation remained pending, but this idle "
+                            "cycle imported no new traces; skipping auto-recompile to avoid "
+                            "repeated bundle versions."
+                        )
                 else:
                     cycle_warnings.append(
                         "Trainer-side bundle recompilation was skipped because no new training "
@@ -1770,6 +1792,10 @@ def run_trainer_cycle(
         "training_candidates": training_candidates,
         "pending_recompile": pending_recompile_summary,
         "min_new_candidates_for_recompile": effective_min_new_candidates,
+        "current_cycle_trace_input_count": current_cycle_trace_input_count,
+        "current_cycle_queue_drain_count": current_cycle_queue_drain_count,
+        "current_cycle_recovered_count": current_cycle_recovered_count,
+        "current_cycle_input_detected": current_cycle_input_detected,
         "recompile_threshold_met": recompile_threshold_met,
         "recompile": recompile_payload,
         "recompile_error": recompile_error,
@@ -2106,11 +2132,81 @@ def run_trainer_service(
     invalid_record_count = 0
     latest_cycle_record_path: Path | None = None
     last_cycle_payload: dict[str, object] | None = None
+    last_pending_input_inspection: dict[str, object] | None = None
     latest_warnings: list[str] = []
     stop_reason = "completed"
 
     try:
         while True:
+            pending_input_inspection = inspect_pending_trainer_inputs(
+                resolved_root,
+                queue_name=queue_name,
+                output_dir=DEFAULT_TRAINER_RECOVERED_TRACES_DIR,
+            )
+            last_pending_input_inspection = dict(pending_input_inspection)
+            if not bool(pending_input_inspection.get("current_cycle_input_detected")):
+                idle_cycles += 1
+                consecutive_idle_cycles += 1
+                latest_warnings = [
+                    "Trainer service skipped trainer-cycle because no queued or recoverable "
+                    "trace inputs were available."
+                ]
+                state_payload = {
+                    "trainer_service_state_kind": TRAINER_SERVICE_STATE_KIND,
+                    "updated_at": datetime.now(UTC).isoformat(),
+                    "started_at": started_at.isoformat(),
+                    "queue_name": queue_name,
+                    "poll_interval_seconds": poll_interval_seconds,
+                    "max_cycles": max_cycles,
+                    "max_idle_cycles": max_idle_cycles,
+                    "cycles_executed": cycles_executed,
+                    "successful_cycle_count": successful_cycle_count,
+                    "failed_cycle_count": failed_cycle_count,
+                    "idle_cycles": idle_cycles,
+                    "consecutive_idle_cycles": consecutive_idle_cycles,
+                    "total_drained_count": total_drained_count,
+                    "total_queue_failures": total_queue_failures,
+                    "total_publish_count": total_publish_count,
+                    "total_promotion_count": total_promotion_count,
+                    "total_training_candidate_count": total_training_candidate_count,
+                    "total_new_training_candidate_count": total_new_training_candidate_count,
+                    "total_prompt_family_count": total_prompt_family_count,
+                    "total_context_group_count": total_context_group_count,
+                    "total_recompiled_run_count": total_recompiled_run_count,
+                    "total_skipped_recompile_count": total_skipped_recompile_count,
+                    "gate_failure_count": gate_failure_count,
+                    "bundle_gate_failure_count": bundle_gate_failure_count,
+                    "acceptance_status_totals": dict(sorted(acceptance_status_totals.items())),
+                    "execution_status_totals": dict(sorted(execution_status_totals.items())),
+                    "retrieval_mode_totals": dict(sorted(retrieval_mode_totals.items())),
+                    "bundle_version_totals": dict(sorted(bundle_version_totals.items())),
+                    "missing_source_count": missing_source_count,
+                    "missing_context_count": missing_context_count,
+                    "source_error_count": source_error_count,
+                    "used_baseline_fallback_count": used_baseline_fallback_count,
+                    "invalid_record_count": invalid_record_count,
+                    "latest_cycle_record_path": (
+                        _path_text_for_root(latest_cycle_record_path, resolved_root)
+                        if latest_cycle_record_path is not None
+                        else None
+                    ),
+                    "last_cycle_command_status": (
+                        str(last_cycle_payload.get("command_status"))
+                        if isinstance(last_cycle_payload, Mapping)
+                        else None
+                    ),
+                    "last_cycle_warnings": latest_warnings,
+                    "last_cycle": last_cycle_payload,
+                    "pending_input_inspection": pending_input_inspection,
+                }
+                _write_json_artifact(resolved_state_path, state_payload)
+                if max_idle_cycles is not None and consecutive_idle_cycles >= max_idle_cycles:
+                    stop_reason = "max-idle-cycles"
+                    break
+                if poll_interval_seconds > 0:
+                    time.sleep(poll_interval_seconds)
+                continue
+
             cycle_started_at = datetime.now(UTC)
             cycle_payload = json.loads(
                 run_trainer_cycle(
@@ -2280,6 +2376,7 @@ def run_trainer_service(
                 "last_cycle_command_status": cycle_status,
                 "last_cycle_warnings": latest_warnings,
                 "last_cycle": last_cycle_payload,
+                "pending_input_inspection": pending_input_inspection,
             }
             _write_json_artifact(resolved_state_path, state_payload)
 
@@ -2351,6 +2448,7 @@ def run_trainer_service(
         if latest_cycle_record_path is not None
         else None,
         "last_cycle": last_cycle_payload,
+        "pending_input_inspection": last_pending_input_inspection,
     }
     return _json_command_payload(
         "trainer-service",

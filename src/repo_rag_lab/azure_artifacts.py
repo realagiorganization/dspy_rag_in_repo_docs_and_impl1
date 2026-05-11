@@ -313,6 +313,18 @@ class AzureArtifactStore:
             )
         return messages
 
+    def approximate_queue_message_count(self, queue_name: str) -> int:
+        """Return the provider-reported approximate visible message count for one queue."""
+
+        self.ensure_queue(queue_name)
+        queue_client: AzureQueueClient = self._queue_service().get_queue_client(queue_name)
+        properties = queue_client.get_queue_properties()
+        approximate = getattr(properties, "approximate_message_count", 0)
+        try:
+            return max(0, int(approximate or 0))
+        except (TypeError, ValueError):
+            return 0
+
     def delete_queue_message(self, queue_name: str, message: AzureQueueMessage) -> None:
         queue_client: AzureQueueClient = self._queue_service().get_queue_client(queue_name)
         queue_client.delete_message(message.message_id, message.pop_receipt)
