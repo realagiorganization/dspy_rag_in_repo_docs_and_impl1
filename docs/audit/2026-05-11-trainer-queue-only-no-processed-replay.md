@@ -54,32 +54,42 @@ Verification after shutdown:
 
 ## Root Cause
 
-Two code paths still violated the strict queue-only contract:
+The strict queue-only contract was still violated in two distinct ways:
 
-1. `inspect_pending_trainer_inputs(...)` in `src/repo_rag_lab/runtime_artifacts.py`
-   previously set:
-   - `current_cycle_input_detected = queue_visible_count > 0 or recoverable_processed_count > 0`
-2. `run_trainer_cycle(...)` in `src/repo_rag_lab/utilities.py`
-   still called `restore_processed_trace_records(...)` and merged recovered trace paths into the
-   active train input set
+1. `run_trainer_cycle(...)` in `src/repo_rag_lab/utilities.py`
+   used to call `restore_processed_trace_records(...)` and merge recovered trace paths into the
+   active train input set.
+2. Even after that replay path was removed, `inspect_pending_trainer_inputs(...)` in
+   `src/repo_rag_lab/runtime_artifacts.py` still used Azure Queue message visibility as the active
+   service preflight trigger.
 
-That meant processed history could still:
+That second bug mattered because the user requirement is not “train when the Azure queue has a
+message”; it is strictly “train when a new trace appears under `queued/`”.
 
-- trigger service preflight
-- enter active candidate materialization
-- keep dirty-family recompiles alive without any fresh queued trace
+In the broken Azure path:
+
+- `queue_visible_count` came from `approximate_queue_message_count(...)`
+- `current_cycle_input_detected = queue_visible_count > 0`
+- blob-backed `queued/<queue>/...` visibility was not the source of truth
+
+So a lingering or drifted Azure Queue message could still wake the trainer service even when the
+blob `queued/` directory was empty.
 
 ## Fix Implemented
 
 The queue-only contract is now explicit.
 
-### 1. Service preflight is queue-only
+### 1. Service preflight is queue-only by blob `queued/` visibility
 
-`inspect_pending_trainer_inputs(...)` now reports `current_cycle_input_detected=True` **only** when
-`queue_visible_count > 0`.
+`inspect_pending_trainer_inputs(...)` now:
 
-`recoverable_processed_count` is still reported diagnostically, but it no longer authorizes a
-trainer cycle.
+- counts queued blob items under `queued/<queue>/...`
+- reports that count as `queue_visible_count`
+- keeps Azure Queue message visibility only as diagnostic `queue_message_count`
+- sets `current_cycle_input_detected=True` **only** when queued blob count is nonzero
+
+`recoverable_processed_count` is still reported diagnostically, but it does not authorize a
+trainer cycle, and neither does a nonzero Azure Queue message count by itself.
 
 ### 2. Active trainer cycles no longer replay processed history
 
@@ -112,6 +122,8 @@ The regression suite was updated to match the new contract:
 
 - `tests/test_runtime_artifacts_azure.py`
   - recoverable processed traces no longer imply `current_cycle_input_detected=True`
+  - lingering Azure Queue messages without any `queued/` blobs now keep
+    `current_cycle_input_detected=False`
 - `tests/test_utilities.py`
   - active trainer-cycle tests now expect queue-only trace paths
   - durable recovery payloads now assert `status = "queue-only-disabled"`
@@ -123,15 +135,15 @@ The regression suite was updated to match the new contract:
 Executed in this repository checkout during the same turn:
 
 - `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_runtime_artifacts_azure.py tests/test_utilities.py -q`
-  - `64 passed`
+  - `66 passed`
 - `UV_CACHE_DIR=/tmp/uvcache uv run python -m compileall src tests`
   - `pass`
 - `UV_CACHE_DIR=/tmp/uvcache uv run pytest tests/test_repository_rag_bdd.py -q`
-  - `49 passed`
+  - `3 passed`
 - `UV_CACHE_DIR=/tmp/uvcache uv run repo-rag smoke-test`
-  - `pass`
+  - pending at audit update time
 - `cargo build --manifest-path rust-cli/Cargo.toml`
-  - `pass`
+  - pending at audit update time
 - `make files-sync`
   - pending at audit creation time
 - `make verify-surfaces`
