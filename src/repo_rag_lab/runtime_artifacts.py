@@ -386,6 +386,8 @@ def _family_state_member_blob_names(
         "family": f"{family_prefix}/family.json",
         "father": f"{family_prefix}/father.json",
         "records_prefix": f"{family_prefix}/records",
+        "runtime_program": f"{family_prefix}/runtime-artifact/program.json",
+        "runtime_metadata": f"{family_prefix}/runtime-artifact/metadata.json",
     }
 
 
@@ -1070,10 +1072,38 @@ def upload_remote_family_state(
             record_blob_name = f"{family_blob_map['records_prefix']}/{record_token}.json"
             store.upload_json(container, record_blob_name, record)
             record_blob_map[record_token] = record_blob_name
+        runtime_artifact_blob_map: dict[str, str] = {}
+        runtime_artifact = _mapping_or_none(family_payload.get("family_runtime_artifact"))
+        if runtime_artifact is not None:
+            runtime_program_path_text = _string_or_none(runtime_artifact.get("program_path"))
+            if runtime_program_path_text is not None:
+                runtime_program_path = Path(runtime_program_path_text)
+                if not runtime_program_path.is_absolute():
+                    runtime_program_path = resolved_root / runtime_program_path
+                if runtime_program_path.is_file():
+                    store.upload_text(
+                        container,
+                        family_blob_map["runtime_program"],
+                        runtime_program_path.read_text(encoding="utf-8"),
+                    )
+                    runtime_artifact_blob_map["program"] = family_blob_map["runtime_program"]
+            runtime_metadata_path_text = _string_or_none(runtime_artifact.get("metadata_path"))
+            if runtime_metadata_path_text is not None:
+                runtime_metadata_path = Path(runtime_metadata_path_text)
+                if not runtime_metadata_path.is_absolute():
+                    runtime_metadata_path = resolved_root / runtime_metadata_path
+                if runtime_metadata_path.is_file():
+                    store.upload_text(
+                        container,
+                        family_blob_map["runtime_metadata"],
+                        runtime_metadata_path.read_text(encoding="utf-8"),
+                    )
+                    runtime_artifact_blob_map["metadata"] = family_blob_map["runtime_metadata"]
         remote_family_member_blobs[prompt_family_id] = {
             "family": family_blob_map["family"],
             "father": family_blob_map["father"],
             "record_blobs": record_blob_map,
+            "runtime_artifact_blobs": runtime_artifact_blob_map,
         }
     store.upload_text(
         container,
@@ -1115,10 +1145,6 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
     family_state_path = cache_dir / "family-state.json"
     current_path = cache_dir / "current.json"
     family_state_text = store.download_text(container, family_state_blob)
-    family_state_path.write_text(
-        family_state_text,
-        encoding="utf-8",
-    )
     current_path.write_text(
         json.dumps(current_payload, indent=2) + "\n",
         encoding="utf-8",
@@ -1132,7 +1158,10 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
         if isinstance(family_state_payload, Mapping)
         else []
     )
-    for family_payload in _mapping_list(raw_prompt_families):
+    for family_index, family_value in enumerate(raw_prompt_families if isinstance(raw_prompt_families, list) else []):
+        family_payload = _mapping_or_none(family_value)
+        if family_payload is None:
+            continue
         prompt_family_id = _string_or_none(family_payload.get("prompt_family_id"))
         if prompt_family_id is None:
             continue
@@ -1153,6 +1182,7 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
             "family": family_blob_map["family"],
             "father": family_blob_map["father"],
             "record_blobs": {},
+            "runtime_artifact_blobs": {},
         }
         father_record = _mapping_or_none(family_payload.get("family_father_record"))
         local_father_path = family_dir / "father.json"
@@ -1182,8 +1212,61 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
             record_blob_map[record_token] = record_blob_name
         local_member_paths["record_paths"] = record_paths
         remote_member_blobs["record_blobs"] = record_blob_map
+        runtime_artifact = _mapping_or_none(family_payload.get("family_runtime_artifact"))
+        runtime_artifact_blob_map: dict[str, str] = {}
+        local_runtime_paths: dict[str, str] = {}
+        if runtime_artifact is not None:
+            normalized_runtime_artifact = {
+                str(key): value for key, value in runtime_artifact.items()
+            }
+            if store.blob_exists(container, family_blob_map["runtime_program"]):
+                local_runtime_dir = family_dir / "runtime-artifact"
+                local_runtime_dir.mkdir(parents=True, exist_ok=True)
+                local_runtime_program_path = local_runtime_dir / "program.json"
+                local_runtime_program_path.write_text(
+                    store.download_text(container, family_blob_map["runtime_program"]),
+                    encoding="utf-8",
+                )
+                normalized_runtime_artifact["program_path"] = _relative_to_root(
+                    local_runtime_program_path,
+                    resolved_root,
+                )
+                local_runtime_paths["program"] = _relative_to_root(
+                    local_runtime_program_path,
+                    resolved_root,
+                )
+                runtime_artifact_blob_map["program"] = family_blob_map["runtime_program"]
+            if store.blob_exists(container, family_blob_map["runtime_metadata"]):
+                local_runtime_dir = family_dir / "runtime-artifact"
+                local_runtime_dir.mkdir(parents=True, exist_ok=True)
+                local_runtime_metadata_path = local_runtime_dir / "metadata.json"
+                local_runtime_metadata_path.write_text(
+                    store.download_text(container, family_blob_map["runtime_metadata"]),
+                    encoding="utf-8",
+                )
+                normalized_runtime_artifact["metadata_path"] = _relative_to_root(
+                    local_runtime_metadata_path,
+                    resolved_root,
+                )
+                local_runtime_paths["metadata"] = _relative_to_root(
+                    local_runtime_metadata_path,
+                    resolved_root,
+                )
+                runtime_artifact_blob_map["metadata"] = family_blob_map["runtime_metadata"]
+            if runtime_artifact_blob_map:
+                family_payload["family_runtime_artifact"] = normalized_runtime_artifact
+                if isinstance(raw_prompt_families, list):
+                    raw_prompt_families[family_index] = family_payload
+                family_text = f"{json.dumps(family_payload, indent=2)}\n"
+                local_family_path.write_text(family_text, encoding="utf-8")
+                local_member_paths["runtime_artifact"] = local_runtime_paths
+                remote_member_blobs["runtime_artifact_blobs"] = runtime_artifact_blob_map
         cached_family_member_paths[prompt_family_id] = local_member_paths
         remote_family_member_blobs[prompt_family_id] = remote_member_blobs
+    family_state_path.write_text(
+        f"{json.dumps(family_state_payload, indent=2)}\n",
+        encoding="utf-8",
+    )
     return {
         "family_state_found": True,
         "storage_backend": "azure-blob",
@@ -1981,7 +2064,7 @@ def inspect_pending_trainer_inputs(
     queue_name: str = "default",
     output_dir: Path = DEFAULT_TRAINER_RECOVERED_TRACES_DIR,
 ) -> dict[str, object]:
-    """Inspect whether a trainer cycle has any new queued or recoverable trace input."""
+    """Inspect whether a trainer cycle has any new queued trace input."""
 
     resolved_root = root.resolve()
     resolved_output_dir = output_dir if output_dir.is_absolute() else resolved_root / output_dir
@@ -2010,9 +2093,7 @@ def inspect_pending_trainer_inputs(
             "queue_visible_count": queue_visible_count,
             "processed_count": processed_count,
             "recoverable_processed_count": recoverable_processed_count,
-            "current_cycle_input_detected": (
-                queue_visible_count > 0 or recoverable_processed_count > 0
-            ),
+            "current_cycle_input_detected": queue_visible_count > 0,
             "storage_backend": "azure-blob-queue",
             "trace_container": container,
             "processed_queue_dir": f"azure://{container}/processed/{queue_name_remote}",
@@ -2035,9 +2116,7 @@ def inspect_pending_trainer_inputs(
         "queue_visible_count": queue_visible_count,
         "processed_count": len(processed_paths),
         "recoverable_processed_count": recoverable_processed_count,
-        "current_cycle_input_detected": (
-            queue_visible_count > 0 or recoverable_processed_count > 0
-        ),
+        "current_cycle_input_detected": queue_visible_count > 0,
         "storage_backend": "filesystem",
         "queue_dir": _relative_to_root(queue_dir, resolved_root),
         "processed_queue_dir": _relative_to_root(processed_dir, resolved_root),

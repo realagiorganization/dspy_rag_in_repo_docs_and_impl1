@@ -913,10 +913,7 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
         seed_existing_output: bool = True,
     ) -> dict[str, object]:
         del root, output_path, summary_path, include_statuses
-        assert trace_paths == [
-            Path("artifacts/traces/imported/demo.json"),
-            Path("artifacts/trainer/recovered-imported-traces/demo.json"),
-        ]
+        assert trace_paths == [Path("artifacts/traces/imported/demo.json")]
         assert seed_existing_output is True
         return {
             "candidate_count": 1,
@@ -993,7 +990,8 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
     assert payload["command_status"] == "success"
     assert payload["queue_name"] == "dataset"
     assert payload["queue_drain"]["drained_count"] == 1
-    assert payload["durable_trace_recovery"]["restored_count"] == 1
+    assert payload["durable_trace_recovery"]["status"] == "queue-only-disabled"
+    assert payload["durable_trace_recovery"]["restored_count"] == 0
     assert payload["training_candidates"]["candidate_count"] == 1
     assert payload["gate_passed"] is True
     assert payload["recompile"]["requested_run_name"] == "trainer-auto"
@@ -1796,14 +1794,14 @@ def test_run_trainer_cycle_recompiles_pending_family_drift_once_new_traces_arriv
         lambda root, queue_name="default", limit=None, keep_queued=False: {
             "queue_name": queue_name,
             "queue_found": True,
-            "queued_count_before": 0,
-            "selected_count": 0,
-            "drained_count": 0,
+            "queued_count_before": 1,
+            "selected_count": 1,
+            "drained_count": 1,
             "failed_count": 0,
             "remaining_count": 0,
             "keep_queued": keep_queued,
             "status": "success",
-            "items": [],
+            "items": [{"imported_trace_record_path": "artifacts/traces/imported/new.json"}],
             "failures": [],
         },
     )
@@ -1901,7 +1899,7 @@ def test_run_trainer_cycle_recompiles_pending_family_drift_once_new_traces_arriv
     assert payload["command_status"] == "success"
     assert payload["pending_recompile"]["pending_recompile"] is True
     assert payload["current_cycle_input_detected"] is True
-    assert payload["current_cycle_recovered_count"] == 1
+    assert payload["current_cycle_recovered_count"] == 0
     assert payload["recompile"]["recompile_status"] == "compiled"
     assert payload["publish_requested"] is True
     assert payload["publish"]["bundle_version"] == "20260507T180000Z"
@@ -2314,7 +2312,8 @@ def test_run_trainer_cycle_uploads_remote_bundle_when_publish_succeeds(
     assert payload["command"] == "trainer-cycle"
     assert payload["command_status"] == "success"
     assert payload["publish_requested"] is True
-    assert payload["durable_trace_recovery"]["restored_count"] == 1
+    assert payload["durable_trace_recovery"]["status"] == "queue-only-disabled"
+    assert payload["durable_trace_recovery"]["restored_count"] == 0
     assert payload["recompile"]["requested_run_name"] == "trainer-auto"
     assert payload["recompile"]["resolved_run_name"] == "20260501T170100Z"
     assert payload["publish"]["bundle_version"] == "20260501T170100Z"
@@ -2673,7 +2672,7 @@ def test_run_trainer_service_skips_cycle_when_queue_and_recovery_are_empty(
     )
 
     def _unexpected_cycle(*args: object, **kwargs: object) -> str:
-        raise AssertionError("trainer-cycle should not run without queued or recoverable traces")
+        raise AssertionError("trainer-cycle should not run without queued traces")
 
     monkeypatch.setattr("repo_rag_lab.utilities.run_trainer_cycle", _unexpected_cycle)
 
@@ -2695,8 +2694,7 @@ def test_run_trainer_service_skips_cycle_when_queue_and_recovery_are_empty(
     assert payload["latest_cycle_record_path"] is None
     assert payload["pending_input_inspection"]["current_cycle_input_detected"] is False
     assert (
-        "Trainer service skipped trainer-cycle because no queued or recoverable trace inputs "
-        "were available."
+        "Trainer service skipped trainer-cycle because no queued trace inputs were available."
         in payload["warnings"]
     )
     state_payload = json.loads((tmp_path / payload["state_path"]).read_text(encoding="utf-8"))

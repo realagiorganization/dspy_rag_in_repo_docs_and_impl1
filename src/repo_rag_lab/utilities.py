@@ -60,7 +60,7 @@ from .runtime_artifacts import (
     queue_trace_record,
     resolve_azure_artifact_config,
     resolve_bundle_manifest,
-    restore_processed_trace_records,
+    restore_processed_trace_records as _restore_processed_trace_records_compat,
     rollback_bundle,
     upload_remote_bundle,
     upload_remote_bundle_channel,
@@ -97,6 +97,11 @@ from .training_samples import (
 )
 from .verification import verify_repository_surfaces
 from .workflow import ask_repository
+
+# Compatibility alias for older tests and callers. Active trainer cycles no longer invoke
+# processed-ledger recovery, but the symbol remains importable until the compatibility surface is
+# fully retired.
+restore_processed_trace_records = _restore_processed_trace_records_compat
 
 
 def _json_command_payload(
@@ -1484,20 +1489,21 @@ def run_trainer_cycle(
         for item in normalized_queue_items
         if isinstance(item, Mapping) and item.get("imported_trace_record_path")
     ]
-    durable_trace_recovery = restore_processed_trace_records(
-        root,
-        queue_name=queue_name,
-        output_dir=DEFAULT_TRAINER_RECOVERED_TRACES_DIR,
-    )
-    raw_trace_paths = durable_trace_recovery.get("trace_paths")
-    recovered_trace_paths = (
-        [str(path) for path in raw_trace_paths if isinstance(path, str) and path.strip()]
-        if isinstance(raw_trace_paths, list)
-        else []
-    )
-    trainer_trace_paths = _stable_ordered_strings(
-        [*imported_trace_paths, *recovered_trace_paths]
-    )
+    durable_trace_recovery = {
+        "storage_backend": "disabled",
+        "queue_name": queue_name,
+        "processed_count": 0,
+        "restored_count": 0,
+        "failed_count": 0,
+        "trace_paths": [],
+        "failures": [],
+        "status": "queue-only-disabled",
+        "note": (
+            "Trainer cycles now process only fresh queued traces. "
+            "Processed-ledger recovery no longer triggers or augments active cycles."
+        ),
+    }
+    trainer_trace_paths = _stable_ordered_strings(imported_trace_paths)
     ingestion_summary = _summarize_imported_trace_records(root, trainer_trace_paths)
     training_candidates = materialize_training_candidates(
         root,
@@ -1522,11 +1528,10 @@ def run_trainer_cycle(
     pending_recompile = bool(pending_recompile_summary.get("pending_recompile"))
     current_cycle_trace_input_count = len(trainer_trace_paths)
     current_cycle_queue_drain_count = int(queue_payload.get("drained_count") or 0)
-    current_cycle_recovered_count = int(durable_trace_recovery.get("restored_count") or 0)
+    current_cycle_recovered_count = 0
     current_cycle_input_detected = (
         current_cycle_trace_input_count > 0
         or current_cycle_queue_drain_count > 0
-        or current_cycle_recovered_count > 0
         or new_candidate_count > 0
     )
     pending_recompile_with_new_inputs = pending_recompile and current_cycle_input_detected
@@ -2148,8 +2153,8 @@ def run_trainer_service(
                 idle_cycles += 1
                 consecutive_idle_cycles += 1
                 latest_warnings = [
-                    "Trainer service skipped trainer-cycle because no queued or recoverable "
-                    "trace inputs were available."
+                    "Trainer service skipped trainer-cycle because no queued trace inputs "
+                    "were available."
                 ]
                 state_payload = {
                     "trainer_service_state_kind": TRAINER_SERVICE_STATE_KIND,

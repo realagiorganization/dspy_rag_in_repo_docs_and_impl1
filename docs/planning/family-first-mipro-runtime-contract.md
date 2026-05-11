@@ -370,17 +370,37 @@ Not implemented yet:
     noise during Codex rollouts.
 26. Prevent idle trainer-service cycles from minting repeated timestamped bundle versions.
     Stage 26 locally: trainer-cycle now treats stale `pending_recompile` as insufficient by
-    itself; automatic recompile/publish requires current-cycle queue or recovered trace input, and
-    imported plus recovered trace paths are merged so one cycle cannot ignore a fresh queue item
-    just because processed-ledger recovery also restored a trace.
+    itself; automatic recompile/publish requires current-cycle queue input, and processed-ledger
+    recovery no longer augments or authorizes active trainer cycles.
 27. Prevent `trainer-service` from entering `trainer-cycle` at all when queue input is absent.
-    Stage 27 locally: the long-lived service now preflights queue visibility plus recoverable
-    processed-ledger traces before every poll iteration. When neither source has new input, the
-    service records an idle state update and sleeps without invoking `trainer-cycle`, so the
-    running poller no longer burns work just to rediscover an empty queue.
+    Stage 27 locally: the long-lived service now preflights queue visibility before every poll
+    iteration. When the queue has no new trace input, the service records an idle state update and
+    sleeps without invoking `trainer-cycle`, so the running poller no longer burns work just to
+    rediscover an empty queue.
+30. Enforce the user-requested queue-only trainer contract.
+    Stage 30 locally: processed-ledger recovery is now diagnostic only. `recoverable_processed`
+    counts still surface in status payloads, but they no longer trigger `current_cycle_input`
+    detection and no longer contribute trace paths to active family materialization or family-local
+    recompilation.
+31. Make family-state itself sufficient for runtime family artifact execution, even when the
+    published bundle container is missing or stale.
+    Stage 31 locally: remote family-state uploads now carry
+    `runtime-artifact/program.json` / `metadata.json` alongside `family.json`, `father.json`, and
+    `records/...`, while remote family-state fetch rewrites `family_runtime_artifact` paths onto
+    the local worker cache so a matched father can resolve a runnable DSPy family program without
+    depending on `repo-rag-bundles`.
+32. Remove shell-directory dependence from dataset-side repo-rag bundle staging.
+    Stage 32 locally: the deploy-stage PVC sync helper is now resolved from the dataset repository
+    root rather than from the current shell directory, so `cd aks_modules && ./deploy.sh` no
+    longer disables `.repo_rag_bundle_store` staging by failing to find
+    `tools/pvc_artifact_sync.sh`.
 28. Align runtime father matching and deploy-stage recovery with the family-first trace contract.
     Stage 28 locally: family lookup now routes by `original_prompt` instead of the helper's
     reformulated text, so existing fathers are compared against the raw task surface that the user
     asked to preserve. Deploy-stage trusted handoff now also treats the worker batch manifest plus
     exported per-turn trace records as the primary recovery path, and only falls back to the old
     coarse single-trace payload when no valid worker batch exists.
+29. Keep deploy-stage postprocessing from aborting after a successful worker run.
+    Stage 29 locally: the dataset deploy script no longer carries the malformed trusted-handoff
+    helper line with an unmatched `)`, so one successful worker run can proceed from Redis result
+    rehydration into Azure `execution-artifacts` upload instead of dying during Step 7.3b.
