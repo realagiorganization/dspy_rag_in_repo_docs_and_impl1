@@ -2005,6 +2005,20 @@ def _build_trace_record(
         or _string_or_none(trace.get("original_prompt")),
         "reformulated_prompt": _string_or_none(snapshot.get("reformulated_prompt"))
         or _string_or_none(trace.get("reformulated_prompt")),
+        "bundle_version": _string_or_none(trace.get("bundle_version")),
+        "program_path": _string_or_none(trace.get("program_path")),
+        "prompt_family_id": _string_or_none(trace.get("prompt_family_id")),
+        "prompt_family_similarity": _float_or_none(trace.get("prompt_family_similarity")),
+        "prompt_family_band": _string_or_none(trace.get("prompt_family_band")),
+        "family_runtime_hit_rate": _float_or_none(trace.get("family_runtime_hit_rate")),
+        "family_artifact_hit_rate": _float_or_none(trace.get("family_artifact_hit_rate")),
+        "family_artifact_selected": (
+            trace.get("family_artifact_selected")
+            if isinstance(trace.get("family_artifact_selected"), bool)
+            else None
+        ),
+        "mediation_metric_hits": _int_or_none(trace.get("mediation_metric_hits")),
+        "mediation_metric_total": _int_or_none(trace.get("mediation_metric_total")),
         "answer": _string_or_none(snapshot.get("answer")),
         "response_text": _string_or_none(snapshot.get("response_text")),
         "sources": _string_list(snapshot.get("sources")) or _string_list(trace.get("sources")),
@@ -2076,7 +2090,10 @@ def inspect_pending_trainer_inputs(
         store = AzureArtifactStore(config)
         container = repo_rag_trace_container(config)
         queue_name_remote = repo_rag_trace_queue_name(config, fallback=normalized_queue_name)
-        queue_visible_count = store.approximate_queue_message_count(queue_name_remote)
+        queued_prefix = queued_trace_blob_name(queue_name_remote, "")
+        queued_blob_names = sorted(store.list_blobs(container, prefix=queued_prefix))
+        queue_visible_count = len(queued_blob_names)
+        queue_message_count = store.approximate_queue_message_count(queue_name_remote)
         recoverable_processed_count = 0
         processed_count = 0
         if queue_visible_count == 0:
@@ -2091,6 +2108,7 @@ def inspect_pending_trainer_inputs(
         return {
             "queue_name": queue_name_remote,
             "queue_visible_count": queue_visible_count,
+            "queue_message_count": queue_message_count,
             "processed_count": processed_count,
             "recoverable_processed_count": recoverable_processed_count,
             "current_cycle_input_detected": queue_visible_count > 0,

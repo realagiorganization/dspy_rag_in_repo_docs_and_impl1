@@ -610,7 +610,7 @@ def test_inspect_pending_trainer_inputs_reports_filesystem_queue_and_recovery(
     assert fourth["current_cycle_input_detected"] is False
 
 
-def test_inspect_pending_trainer_inputs_reports_azure_queue_visibility(
+def test_inspect_pending_trainer_inputs_reports_azure_queued_blob_visibility(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -640,8 +640,46 @@ def test_inspect_pending_trainer_inputs_reports_azure_queue_visibility(
     inspected = inspect_pending_trainer_inputs(tmp_path, queue_name="dataset")
     assert inspected["storage_backend"] == "azure-blob-queue"
     assert inspected["queue_visible_count"] == 1
+    assert inspected["queue_message_count"] == 1
     assert inspected["recoverable_processed_count"] == 0
     assert inspected["current_cycle_input_detected"] is True
+
+
+def test_inspect_pending_trainer_inputs_ignores_lingering_queue_messages_without_queued_blobs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _FakeAzureArtifactStore()
+    config = AzureArtifactConfig(
+        account_name="acct",
+        account_key="key",
+        connection_string=None,
+        trace_container="repo-rag-training-traces",
+        bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-training-families",
+        queue_name="repo-rag-training",
+    )
+
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config",
+        lambda queue_name=None: config,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
+        lambda cfg: store,
+    )
+
+    store.send_queue_message(
+        repo_rag_trace_queue_name(config, fallback="dataset"),
+        {"queue_item_kind": "repo-rag-trace-queue-item"},
+    )
+
+    inspected = inspect_pending_trainer_inputs(tmp_path, queue_name="dataset")
+
+    assert inspected["storage_backend"] == "azure-blob-queue"
+    assert inspected["queue_visible_count"] == 0
+    assert inspected["queue_message_count"] == 1
+    assert inspected["current_cycle_input_detected"] is False
 
 
 def test_fetch_remote_bundle_downloads_bundle_assets(
