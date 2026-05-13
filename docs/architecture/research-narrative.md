@@ -1066,6 +1066,17 @@ family trace `hit_rate`. Persisted family runtime artifacts now carry their own 
 decide “matched family artifact vs heuristic fallback” on the same semantic quantity the trainer
 stores in family state.
 
+The next operational bug was not about routing correctness but about hidden Azure spend. Even
+after GitHub Actions variables were switched to `gpt-4o`, live AKS traffic still burned mostly on
+`gpt-5.4` because two stale-default paths preserved the expensive model: trainer deployment
+defaults in `../dataset/deploy_repo_rag_trainer.sh` and the `CODEX_AZURE_CONFIG` secret consumed
+by Azure Codex workers. The dataset-side fix now rewrites Azure Codex config payloads to the
+configured default model (`AZURE_OPENAI_MODEL_NAME` / `AZURE_OPENAI_DEPLOYMENT_NAME`) before the
+secret is created or worker auth normalizes it, while keeping explicit prompt `model_hint`
+overrides as the highest-priority Codex path. That preserves the intended split of responsibilities:
+`codex exec` follows `CODEX_AZURE_CONFIG(+model_hint)`, whereas trainer/helper DSPy calls continue
+to follow `DSPY_*` first and then `AZURE_OPENAI_*`.
+
 ## Tensions And Open Work
 
 The narrative is coherent, but not complete. The main open tensions are:
