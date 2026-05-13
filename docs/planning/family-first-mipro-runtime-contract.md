@@ -241,11 +241,21 @@ Implemented locally in this stage:
   `DATASET_CODEX_MAX_RESUMED_RUNS=3` and
   `DATASET_CODEX_PROMPT_TOKEN_GROWTH_RESET_RATIO=2.0`, so repeated verification reruns of one
   queue/slug lane do not keep compounding the same Codex transcript without bound
+- local trainer state now follows a cache-first lifecycle:
+  - if `artifacts/trainer/family-state.json` plus `artifacts/trainer/families/<id>/...` already
+    exist, trainer reuses that local cache as the base version
+  - if the local cache is missing, trainer adopts the latest remote
+    `repo-rag-training-families` version into that same local cache
+  - only if neither local nor remote family state exists does trainer rebuild the local cache from
+    `repo-rag-training-traces/processed`, and that from-scratch rebuild stays local until the
+    current `queued` traces are applied
+- `family-state.json` is now a thin index over the local family cache instead of a replay-buffer
+  aggregate; full family payloads live under `artifacts/trainer/families/<prompt_family_id>/`
+  (`family.json`, `father.json`, `records/*.json`), while the top-level index keeps only routing,
+  dirty-flag, score, and path metadata
 
 Not implemented yet:
 
-- aggregate `family-state.json` is still the compatibility-backed source of truth beside the newer
-  per-family `records/*.json` mirror
 - removal of all compatibility `champion-*` naming from repo and dataset wiring
 - older local snapshots or tests can still enter through `champion-index.json`, but that file is
   now read-only migration input instead of an active mirrored state surface
@@ -394,6 +404,28 @@ Not implemented yet:
     root rather than from the current shell directory, so `cd aks_modules && ./deploy.sh` no
     longer disables `.repo_rag_bundle_store` staging by failing to find
     `tools/pvc_artifact_sync.sh`.
+33. Bridge matched family lookups onto fetched family-state runtime artifacts when bundle-local
+    family registries are stale, and surface the selected family/runtime metadata in exported
+    trace records.
+    Stage 33 locally: bundle-local family registries still win when they point at valid runnable
+    family programs, but the proxy now lazily falls back to the fetched `family-state.json`
+    runtime-artifact path when a matched family registry entry is stale. Trainer-facing exported
+    trace records now also carry `prompt_family_id`, `prompt_family_similarity`,
+    `family_artifact_selected`, `bundle_version`, `program_path`, and `mediation_metric_hits` /
+    `mediation_metric_total` as top-level fields instead of hiding them only inside nested runtime
+    trace payloads.
+34. Turn `family-state.json` into the thin family index the user asked for.
+    Stage 34 locally: persisted trainer state now writes the full family payloads to
+    `artifacts/trainer/families/<prompt_family_id>/family.json` plus `father.json` and
+    `records/*.json`, while top-level `family-state.json` stores only thin routing/index metadata
+    and repo-relative paths into that per-family cache.
+35. Redesign trainer cache/version preparation so one queue event yields one family-state update.
+    Stage 35 locally: `trainer-cycle` now prepares one active local cache before touching current
+    `queued` traces. It reuses an existing local cache when present, copies the latest remote
+    family-state version into that cache when the local cache is absent, and only rebuilds from
+    `processed` when neither local nor remote state exists. That from-scratch rebuild uses
+    `upload_remote_state=False`, so it does not mint an intermediate remote version before the
+    current queued traces are applied and dirty families are recompiled.
 28. Align runtime father matching and deploy-stage recovery with the family-first trace contract.
     Stage 28 locally: family lookup now routes by `original_prompt` instead of the helper's
     reformulated text, so existing fathers are compared against the raw task surface that the user

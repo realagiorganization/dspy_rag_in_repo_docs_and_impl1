@@ -46,7 +46,7 @@ This inventory is generated from the current Git index.
 | `docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md` | docs | markdown | 38 | 1555 | Implementing RAG with DSPy: Technical Guide |
 | `docs/architecture/mcp-discovery.md` | docs | markdown | 54 | 1757 | MCP Discovery Notes |
 | `docs/architecture/package-api.md` | docs | markdown | 127 | 9186 | Package API Notes |
-| `docs/architecture/research-narrative.md` | docs | markdown | 1046 | 79433 | Repository research narrative tying code, docs, and verification together |
+| `docs/architecture/research-narrative.md` | docs | markdown | 1077 | 82061 | Repository research narrative tying code, docs, and verification together |
 | `docs/archive/repo-completeness-checklist.md` | docs | markdown | 238 | 7450 | Archived completeness snapshot kept for workflow and lockfile policy context |
 | `docs/audit/2026-03-15-repo-state.md` | docs | markdown | 151 | 5989 | Repository audit note for 2026 03 15 repo state |
 | `docs/audit/2026-03-17-docs-and-uv-refresh.md` | docs | markdown | 79 | 3977 | Repository audit note for 2026 03 17 docs and uv refresh |
@@ -182,11 +182,14 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-05-10-hidden-token-spend-and-incremental-trainer-fixes.md` | docs | markdown | 154 | 6740 | Repository audit note for 2026 05 10 hidden token spend and incremental trainer fixes |
 | `docs/audit/2026-05-10-live-trainer-service-replays-processed-ledger-while-queue-empty.md` | docs | markdown | 160 | 5891 | Repository audit note for 2026 05 10 live trainer service replays processed ledger while queue empty |
 | `docs/audit/2026-05-10-stale-submodule-runtime-image-root-cause-and-source-preference-fix.md` | docs | markdown | 114 | 5021 | Repository audit note for 2026 05 10 stale submodule runtime image root cause and source preference fix |
+| `docs/audit/2026-05-11-family-runtime-artifact-fallback-and-staging-path-fix.md` | docs | markdown | 139 | 5601 | Repository audit note for 2026 05 11 family runtime artifact fallback and staging path fix |
 | `docs/audit/2026-05-11-fresh-run-family-match-without-family-artifact-runtime.md` | docs | markdown | 211 | 6472 | Repository audit note for 2026 05 11 fresh run family match without family artifact runtime |
 | `docs/audit/2026-05-11-idle-trainer-cycles-no-longer-autorepublish-bundles.md` | docs | markdown | 108 | 3162 | Repository audit note for 2026 05 11 idle trainer cycles no longer autorepublish bundles |
 | `docs/audit/2026-05-11-original-prompt-routing-and-batch-handoff-fixes.md` | docs | markdown | 91 | 3829 | Repository audit note for 2026 05 11 original prompt routing and batch handoff fixes |
+| `docs/audit/2026-05-11-trainer-queue-only-no-processed-replay.md` | docs | markdown | 166 | 6373 | Repository audit note for 2026 05 11 trainer queue only no processed replay |
 | `docs/audit/2026-05-11-trainer-service-preflights-queue-before-running-cycles.md` | docs | markdown | 121 | 4211 | Repository audit note for 2026 05 11 trainer service preflights queue before running cycles |
-| `docs/audit/README.md` | docs | markdown | 14 | 438 | Repository audit note for README |
+| `docs/audit/2026-05-11-trusted-handoff-syntax-error-blocked-execution-artifact-upload.md` | docs | markdown | 86 | 4031 | Repository audit note for 2026 05 11 trusted handoff syntax error blocked execution artifact upload |
+| `docs/audit/README.md` | docs | markdown | 14 | 443 | Repository audit note for README |
 | `docs/guides/hushwheel-fixture-rag-guide.md` | docs | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
 | `docs/operations/azure-deployment.md` | docs | markdown | 111 | 4901 | Azure Deployment Notes |
 | `docs/operations/environment.md` | docs | markdown | 130 | 7589 | Environment and secret reference for local runtime and deployment workflows |
@@ -195,7 +198,7 @@ This inventory is generated from the current Git index.
 | `docs/operations/trainer-deployment.md` | docs | markdown | 152 | 6047 | Trainer Deployment Notes |
 | `docs/planning/codex-exec-resume-plan.md` | docs | markdown | 207 | 11561 | Codex Exec Resume Plan |
 | `docs/planning/dataset-integration-plan.md` | docs | markdown | 478 | 33882 | Dataset Integration Plan |
-| `docs/planning/family-first-mipro-runtime-contract.md` | docs | markdown | 407 | 26457 | Family-First DSPy / MIPROv2 Contract |
+| `docs/planning/family-first-mipro-runtime-contract.md` | docs | markdown | 439 | 29074 | Family-First DSPy / MIPROv2 Contract |
 | `docs/planning/per-turn-dspy-mediation-contract.md` | docs | markdown | 115 | 4966 | Per-Turn DSPy Mediation Contract |
 | `docs/planning/repo-hardening-plan.md` | docs | markdown | 71 | 4545 | Repository Hardening Plan |
 | `docs/planning/trainer-context-group-champion-plan.md` | docs | markdown | 119 | 7736 | Trainer Context-Group Champion Plan |
@@ -214,8 +217,8 @@ This inventory is generated from the current Git index.
 | `publication/exploratorium_translation/README.md` | publication | markdown | 28 | 997 | Exploratorium Translation |
 | `publication/exploratorium_translation/exploratorium_translation.pdf` | publication | binary |  | 726076 | Binary tracked asset at publication/exploratorium_translation/exploratorium_translation.pdf |
 | `publication/exploratorium_translation/exploratorium_translation.tex` | publication | latex | 70 | 2573 | \documentclass[11pt]{article} |
-| `publication/exploratorium_translation/generated/exploratorium-content.tex` | publication | latex | 2523 | 811583 | % Generated by repo-rag sync-exploratorium-translation. Do not edit manually. |
-| `publication/exploratorium_translation/generated/exploratorium-manifest.json` | publication | json | 4556 | 315449 | JSON object with keys: generated_at, tracked_file_count, summarized_file_count |
+| `publication/exploratorium_translation/generated/exploratorium-content.tex` | publication | latex | 2558 | 824757 | % Generated by repo-rag sync-exploratorium-translation. Do not edit manually. |
+| `publication/exploratorium_translation/generated/exploratorium-manifest.json` | publication | json | 4619 | 320236 | JSON object with keys: generated_at, tracked_file_count, summarized_file_count |
 | `publication/references.bib` | publication | bibtex | 28 | 1252 | @inproceedings{lewis2020rag, |
 | `publication/repository-rag-lab-article.pdf` | publication | binary |  | 236232 | Binary tracked asset at publication/repository-rag-lab-article.pdf |
 | `publication/repository-rag-lab-article.tex` | publication | latex | 208 | 9526 | \documentclass[11pt]{article} |
@@ -310,9 +313,9 @@ This inventory is generated from the current Git index.
 | `src/repo_rag_lab/azure_runtime.py` | src | python | 577 | 20123 | Azure runtime normalization, live probes, and cloud-completion helpers. |
 | `src/repo_rag_lab/benchmarks.py` | src | python | 484 | 16524 | Retrieval benchmark helpers for notebook assertions and logging. |
 | `src/repo_rag_lab/cli.py` | src | python | 1339 | 58870 | Command-line entrypoints for the shared repository RAG workflows. |
-| `src/repo_rag_lab/codex_proxy.py` | src | python | 1888 | 72451 | Local streaming proxy that injects repo-RAG + DSPy mediation for Codex. |
+| `src/repo_rag_lab/codex_proxy.py` | src | python | 1946 | 75460 | Local streaming proxy that injects repo-RAG + DSPy mediation for Codex. |
 | `src/repo_rag_lab/corpus.py` | src | python | 181 | 5245 | Repository file loading helpers for the baseline text corpus. |
-| `src/repo_rag_lab/dspy_training.py` | src | python | 1613 | 61656 | DSPy training and artifact helpers for repository-grounded RAG. |
+| `src/repo_rag_lab/dspy_training.py` | src | python | 1612 | 61618 | DSPy training and artifact helpers for repository-grounded RAG. |
 | `src/repo_rag_lab/dspy_workflow.py` | src | python | 180 | 6518 | DSPy-backed runtime wrappers around the repository retrieval workflow. |
 | `src/repo_rag_lab/exploratorium_translation.py` | src | python | 1009 | 38049 | Generate the bilingual exploratorium translation publication surfaces. |
 | `src/repo_rag_lab/file_summaries.py` | src | python | 327 | 10564 | Generate tracked repository file-summary surfaces. |
@@ -327,14 +330,14 @@ This inventory is generated from the current Git index.
 | `src/repo_rag_lab/population_samples.py` | src | python | 241 | 8376 | Helpers for reviewing and batching starter corpus-population inputs. |
 | `src/repo_rag_lab/retrieval.py` | src | python | 788 | 25533 | Baseline chunking and lexical retrieval utilities for repository text. |
 | `src/repo_rag_lab/retrieval_profile.py` | src | python | 236 | 9527 | Profile-driven retrieval weighting, exclusions, and repo-local overrides. |
-| `src/repo_rag_lab/runtime_artifacts.py` | src | python | 2566 | 113389 | Versioned bundle, overlay, and runtime-trace helpers. |
+| `src/repo_rag_lab/runtime_artifacts.py` | src | python | 2671 | 118360 | Versioned bundle, overlay, and runtime-trace helpers. |
 | `src/repo_rag_lab/rust_lookup.py` | src | python | 295 | 7724 | Helpers for the native Rust-backed SQLite lookup index. |
 | `src/repo_rag_lab/semantic_retrieval.py` | src | python | 214 | 7407 | Azure OpenAI embedding-backed semantic retrieval helpers. |
 | `src/repo_rag_lab/settings.py` | src | python | 28 | 699 | Shared repository path settings derived from a repository root. |
 | `src/repo_rag_lab/todo_backlog.py` | src | python | 276 | 8434 | Shared backlog rendering helpers for Markdown and LaTeX surfaces. |
 | `src/repo_rag_lab/trainer_deployment.py` | src | python | 431 | 18027 | Kubernetes manifest helpers for trainer-side repo-RAG deployment surfaces. |
-| `src/repo_rag_lab/training_samples.py` | src | python | 2487 | 101221 | Helpers for loading and summarizing starter DSPy training examples. |
-| `src/repo_rag_lab/utilities.py` | src | python | 2682 | 111015 | User-facing utility helpers shared by the CLI, tests, and notebooks. |
+| `src/repo_rag_lab/training_samples.py` | src | python | 2709 | 110198 | Helpers for loading and summarizing starter DSPy training examples. |
+| `src/repo_rag_lab/utilities.py` | src | python | 2809 | 116367 | User-facing utility helpers shared by the CLI, tests, and notebooks. |
 | `src/repo_rag_lab/verification.py` | src | python | 163 | 4476 | Verification helpers for Makefile and notebook contract checks. |
 | `src/repo_rag_lab/workflow.py` | src | python | 503 | 15900 | Baseline repository question-answering workflow built on file retrieval. |
 | `tests/features/repository_rag.feature` | tests | gherkin | 12 | 377 | Feature: Repository RAG |
@@ -379,7 +382,7 @@ This inventory is generated from the current Git index.
 | `tests/test_azure_runtime.py` | tests | python | 208 | 7540 | Python module for test azure runtime |
 | `tests/test_benchmarks_and_notebook_scaffolding.py` | tests | python | 274 | 11859 | Python module for test benchmarks and notebook scaffolding |
 | `tests/test_cli_and_dspy.py` | tests | python | 1876 | 68622 | Python module for test cli and dspy |
-| `tests/test_codex_proxy.py` | tests | python | 1399 | 50403 | Python module for test codex proxy |
+| `tests/test_codex_proxy.py` | tests | python | 1571 | 57154 | Python module for test codex proxy |
 | `tests/test_dspy_training.py` | tests | python | 1653 | 66652 | Python module for test dspy training |
 | `tests/test_exploratorium_translation.py` | tests | python | 138 | 5239 | Python module for test exploratorium translation |
 | `tests/test_file_summaries.py` | tests | python | 230 | 9110 | Python module for test file summaries |
@@ -397,11 +400,11 @@ This inventory is generated from the current Git index.
 | `tests/test_project_surfaces.py` | tests | python | 484 | 21471 | Python module for test project surfaces |
 | `tests/test_repository_rag_bdd.py` | tests | python | 30 | 879 | Python module for test repository rag bdd |
 | `tests/test_retrieval.py` | tests | python | 389 | 13362 | Python module for test retrieval |
-| `tests/test_runtime_artifacts_azure.py` | tests | python | 1516 | 57579 | Python module for test runtime artifacts azure |
+| `tests/test_runtime_artifacts_azure.py` | tests | python | 1554 | 58883 | Python module for test runtime artifacts azure |
 | `tests/test_rust_lookup.py` | tests | python | 95 | 3099 | Python module for test rust lookup |
 | `tests/test_todo_backlog.py` | tests | python | 103 | 3505 | Python module for test todo backlog |
-| `tests/test_training_samples.py` | tests | python | 2146 | 84599 | Python module for test training samples |
-| `tests/test_utilities.py` | tests | python | 2898 | 113269 | Python module for test utilities |
+| `tests/test_training_samples.py` | tests | python | 2152 | 84870 | Python module for test training samples |
+| `tests/test_utilities.py` | tests | python | 3117 | 121479 | Python module for test utilities |
 | `tests/test_verification.py` | tests | python | 66 | 3156 | Python module for test verification |
 | `tests/test_workflow.py` | tests | python | 99 | 3456 | Python module for test workflow |
 | `tests/test_workflow_live.py` | tests | python | 128 | 4292 | Python module for test workflow live |

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import time
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -37,6 +38,8 @@ from .notebook_runner import run_notebooks
 from .pages_site import sync_pages_site
 from .retrieval import RetrievalMode
 from .runtime_artifacts import (
+    DEFAULT_TRAINER_FAMILY_CACHE_DIR,
+    DEFAULT_TRAINER_FAMILY_STATE_PATH,
     DEFAULT_TRAINER_GENERATED_TRAINING_PATH,
     DEFAULT_TRAINER_GENERATED_TRAINING_SUMMARY_PATH,
     DEFAULT_TRAINER_RECOVERED_TRACES_DIR,
@@ -47,6 +50,7 @@ from .runtime_artifacts import (
     TRAINER_SERVICE_CYCLE_KIND,
     TRAINER_SERVICE_STATE_KIND,
     drain_trace_queue,
+    fetch_remote_family_state,
     fetch_remote_bundle,
     initialize_local_overlay,
     inspect_pending_trainer_inputs,
@@ -181,6 +185,123 @@ def _versioned_training_run_name(run_family: str, *, recorded_at: datetime | Non
 
     _sanitize_training_run_name(run_family, default=DEFAULT_DSPY_RUN_NAME)
     return (recorded_at or datetime.now(UTC)).strftime("%Y%m%dT%H%M%S%fZ")
+
+
+def _trainer_local_family_state_path(root: Path) -> Path:
+    """Return the active local trainer family-state path."""
+
+    return root.resolve() / DEFAULT_TRAINER_FAMILY_STATE_PATH
+
+
+def _trainer_local_family_cache_dir(root: Path) -> Path:
+    """Return the active local trainer family-cache directory."""
+
+    return root.resolve() / DEFAULT_TRAINER_FAMILY_CACHE_DIR
+
+
+def _clear_local_trainer_family_cache(root: Path) -> None:
+    """Remove the active local trainer family cache before a from-scratch rebuild."""
+
+    family_state_path = _trainer_local_family_state_path(root)
+    family_cache_dir = _trainer_local_family_cache_dir(root)
+    training_candidates_path = root.resolve() / DEFAULT_TRAINER_TRAINING_CANDIDATES_PATH
+    training_candidates_summary_path = (
+        root.resolve() / DEFAULT_TRAINER_TRAINING_CANDIDATES_SUMMARY_PATH
+    )
+    if family_state_path.exists():
+        family_state_path.unlink()
+    if family_cache_dir.is_dir():
+        shutil.rmtree(family_cache_dir)
+    if training_candidates_path.exists():
+        training_candidates_path.unlink()
+    if training_candidates_summary_path.exists():
+        training_candidates_summary_path.unlink()
+
+
+def _adopt_remote_family_cache(
+    root: Path,
+    *,
+    fetched_family_state_path: Path,
+) -> dict[str, object]:
+    """Promote one fetched remote family-state cache into the active local trainer cache."""
+
+    resolved_root = root.resolve()
+    local_family_state_path = _trainer_local_family_state_path(resolved_root)
+    local_family_cache_dir = _trainer_local_family_cache_dir(resolved_root)
+    source_family_cache_dir = fetched_family_state_path.parent / "families"
+    _clear_local_trainer_family_cache(resolved_root)
+    local_family_state_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(fetched_family_state_path, local_family_state_path)
+    if source_family_cache_dir.is_dir():
+        shutil.copytree(source_family_cache_dir, local_family_cache_dir, dirs_exist_ok=True)
+    return {
+        "status": "hydrated-from-remote-version",
+        "local_family_state_path": _path_text_for_root(local_family_state_path, resolved_root),
+        "local_family_cache_dir": _path_text_for_root(local_family_cache_dir, resolved_root),
+        "source_family_state_path": _path_text_for_root(fetched_family_state_path, resolved_root),
+    }
+
+
+def _prepare_local_trainer_family_cache(
+    root: Path,
+    *,
+    queue_name: str,
+) -> dict[str, object]:
+    """Ensure one active local trainer family cache exists before queued traces are applied."""
+
+    resolved_root = root.resolve()
+    local_family_state_path = _trainer_local_family_state_path(resolved_root)
+    local_family_cache_dir = _trainer_local_family_cache_dir(resolved_root)
+    if local_family_state_path.is_file() and local_family_cache_dir.is_dir():
+        return {
+            "status": "using-local-cache",
+            "family_state_path": _path_text_for_root(local_family_state_path, resolved_root),
+            "family_cache_dir": _path_text_for_root(local_family_cache_dir, resolved_root),
+        }
+
+    remote_family_state = fetch_remote_family_state(resolved_root)
+    if isinstance(remote_family_state, Mapping):
+        fetched_family_state_text = str(remote_family_state.get("family_state_path") or "").strip()
+        if fetched_family_state_text:
+            fetched_family_state_path = resolved_root / fetched_family_state_text
+            if fetched_family_state_path.is_file():
+                adopted = _adopt_remote_family_cache(
+                    resolved_root,
+                    fetched_family_state_path=fetched_family_state_path,
+                )
+                return {
+                    **adopted,
+                    "status": "using-remote-version-as-local-cache",
+                    "remote_family_state": dict(remote_family_state),
+                }
+
+    _clear_local_trainer_family_cache(resolved_root)
+    recovered = restore_processed_trace_records(
+        resolved_root,
+        queue_name=queue_name,
+        output_dir=DEFAULT_TRAINER_RECOVERED_TRACES_DIR,
+    )
+    recovered_trace_paths = [
+        Path(path_text)
+        for path_text in recovered.get("trace_paths", [])
+        if isinstance(path_text, str) and path_text.strip()
+    ]
+    if recovered_trace_paths:
+        materialize_training_candidates(
+            resolved_root,
+            trace_paths=recovered_trace_paths,
+            output_path=DEFAULT_TRAINER_TRAINING_CANDIDATES_PATH,
+            summary_path=DEFAULT_TRAINER_TRAINING_CANDIDATES_SUMMARY_PATH,
+            seed_existing_output=False,
+            upload_remote_state=False,
+        )
+    return {
+        "status": "rebuilt-from-processed-history",
+        "family_state_path": _path_text_for_root(local_family_state_path, resolved_root),
+        "family_cache_dir": _path_text_for_root(local_family_cache_dir, resolved_root),
+        "processed_recovery": recovered,
+        "recovered_trace_count": len(recovered_trace_paths),
+    }
 
 
 def _summarize_imported_trace_records(
@@ -1503,6 +1624,10 @@ def run_trainer_cycle(
             "Processed-ledger recovery no longer triggers or augments active cycles."
         ),
     }
+    family_cache_preparation = _prepare_local_trainer_family_cache(
+        root,
+        queue_name=queue_name,
+    )
     trainer_trace_paths = _stable_ordered_strings(imported_trace_paths)
     ingestion_summary = _summarize_imported_trace_records(root, trainer_trace_paths)
     training_candidates = materialize_training_candidates(
@@ -1617,6 +1742,7 @@ def run_trainer_cycle(
                 "imported_trace_record_paths": trainer_trace_paths,
                 "imported_trace_count": len(trainer_trace_paths),
                 "durable_trace_recovery": durable_trace_recovery,
+                "family_cache_preparation": family_cache_preparation,
                 "training_candidates_path": training_candidates.get("output_path"),
                 "training_candidates_summary_path": training_candidates.get("summary_path"),
                 "family_state_path": training_candidates.get("family_state_path"),
@@ -1793,6 +1919,7 @@ def run_trainer_cycle(
         "queue_name": queue_name,
         "queue_drain": queue_payload,
         "durable_trace_recovery": durable_trace_recovery,
+        "family_cache_preparation": family_cache_preparation,
         "ingestion_summary": ingestion_summary,
         "training_candidates": training_candidates,
         "pending_recompile": pending_recompile_summary,

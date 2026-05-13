@@ -58,6 +58,7 @@ DEFAULT_TRAINER_TRAINING_CANDIDATES_SUMMARY_PATH = (
     DEFAULT_TRAINER_SERVICE_DIR / "training-candidates-summary.json"
 )
 DEFAULT_TRAINER_FAMILY_STATE_PATH = DEFAULT_TRAINER_SERVICE_DIR / "family-state.json"
+DEFAULT_TRAINER_FAMILY_CACHE_DIR = DEFAULT_TRAINER_SERVICE_DIR / "families"
 DEFAULT_REMOTE_FAMILY_STATE_CACHE_DIR = DEFAULT_TRAINER_SERVICE_DIR / "remote-family-state"
 DEFAULT_TRAINER_RECOVERED_TRACES_DIR = DEFAULT_TRAINER_SERVICE_DIR / "recovered-imported-traces"
 DEFAULT_TRAINER_GENERATED_TRAINING_PATH = DEFAULT_TRAINER_SERVICE_DIR / "generated-training.yaml"
@@ -305,7 +306,11 @@ def build_bundle_family_registry(
         normalized = _mapping_or_none(family)
         if normalized is None:
             continue
-        entry = _bundle_family_entry(normalized)
+        resolved_family_payload = _resolved_family_state_family_payload(
+            resolved_family_state_path,
+            normalized,
+        )
+        entry = _bundle_family_entry(resolved_family_payload)
         if entry is not None:
             if isinstance(family_artifact_registry, Mapping):
                 family_id = _string_or_none(entry.get("prompt_family_id"))
@@ -389,6 +394,57 @@ def _family_state_member_blob_names(
         "runtime_program": f"{family_prefix}/runtime-artifact/program.json",
         "runtime_metadata": f"{family_prefix}/runtime-artifact/metadata.json",
     }
+
+
+def _resolve_family_state_family_path(
+    family_state_path: Path,
+    family_payload: Mapping[str, object],
+) -> Path | None:
+    """Resolve one persisted local/remote family payload path from a thin family-state entry."""
+
+    family_path_text = _string_or_none(family_payload.get("family_path"))
+    if family_path_text is None:
+        return None
+    candidate = Path(family_path_text)
+    if candidate.is_absolute():
+        return candidate
+    return family_state_path.resolve().parent / candidate
+
+
+def _resolved_family_state_family_payload(
+    family_state_path: Path,
+    family_payload: Mapping[str, object],
+) -> dict[str, object]:
+    """Return the full family payload for one thin-index family-state entry when available."""
+
+    resolved_family_path = _resolve_family_state_family_path(family_state_path, family_payload)
+    if resolved_family_path is not None and resolved_family_path.is_file():
+        try:
+            payload = json.loads(resolved_family_path.read_text(encoding="utf-8"))
+        except Exception:
+            payload = None
+        if isinstance(payload, dict):
+            merged_payload = {str(key): value for key, value in payload.items()}
+            for field_name in (
+                "prompt_family_id",
+                "family_needs_recompile",
+                "question",
+                "normalized_question",
+                "question_variants",
+                "question_variant_count",
+                "family_father_question",
+                "family_father_similarity_mean",
+                "family_father_record",
+                "family_runtime_record",
+                "family_runtime_artifact",
+                "family_runtime_score",
+                "family_champion_record",
+                "family_champion_score",
+            ):
+                if field_name in family_payload and field_name not in merged_payload:
+                    merged_payload[field_name] = family_payload[field_name]
+            return merged_payload
+    return {str(key): value for key, value in family_payload.items()}
 
 
 def _family_state_record_token(record: Mapping[str, object]) -> str:
@@ -1057,10 +1113,14 @@ def upload_remote_family_state(
     }
     family_state_text = resolved_family_state_path.read_text(encoding="utf-8")
     remote_family_member_blobs: dict[str, dict[str, object]] = {}
-    for family_payload in _mapping_list(payload.get("prompt_families")):
-        prompt_family_id = _string_or_none(family_payload.get("prompt_family_id"))
+    for family_entry in _mapping_list(payload.get("prompt_families")):
+        prompt_family_id = _string_or_none(family_entry.get("prompt_family_id"))
         if prompt_family_id is None:
             continue
+        family_payload = _resolved_family_state_family_payload(
+            resolved_family_state_path,
+            family_entry,
+        )
         family_blob_map = _family_state_member_blob_names(family_state_version, prompt_family_id)
         store.upload_json(container, family_blob_map["family"], family_payload)
         father_record = _mapping_or_none(family_payload.get("family_father_record"))
@@ -1158,11 +1218,13 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
         if isinstance(family_state_payload, Mapping)
         else []
     )
-    for family_index, family_value in enumerate(raw_prompt_families if isinstance(raw_prompt_families, list) else []):
-        family_payload = _mapping_or_none(family_value)
-        if family_payload is None:
+    for family_index, family_value in enumerate(
+        raw_prompt_families if isinstance(raw_prompt_families, list) else []
+    ):
+        family_entry = _mapping_or_none(family_value)
+        if family_entry is None:
             continue
-        prompt_family_id = _string_or_none(family_payload.get("prompt_family_id"))
+        prompt_family_id = _string_or_none(family_entry.get("prompt_family_id"))
         if prompt_family_id is None:
             continue
         family_blob_map = _family_state_member_blob_names(family_state_version, prompt_family_id)
@@ -1172,8 +1234,11 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
         if store.blob_exists(container, family_blob_map["family"]):
             family_text = store.download_text(container, family_blob_map["family"])
         else:
-            family_text = f"{json.dumps(family_payload, indent=2)}\n"
+            family_text = f"{json.dumps(family_entry, indent=2)}\n"
         local_family_path.write_text(family_text, encoding="utf-8")
+        full_family_payload = json.loads(family_text)
+        if not isinstance(full_family_payload, dict):
+            full_family_payload = {str(key): value for key, value in family_entry.items()}
         cached_family_paths[prompt_family_id] = _relative_to_root(local_family_path, resolved_root)
         local_member_paths: dict[str, object] = {
             "family": _relative_to_root(local_family_path, resolved_root)
@@ -1184,7 +1249,9 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
             "record_blobs": {},
             "runtime_artifact_blobs": {},
         }
-        father_record = _mapping_or_none(family_payload.get("family_father_record"))
+        father_record = _mapping_or_none(full_family_payload.get("family_father_record")) or _mapping_or_none(
+            family_entry.get("family_father_record")
+        )
         local_father_path = family_dir / "father.json"
         if store.blob_exists(container, family_blob_map["father"]):
             father_text = store.download_text(container, family_blob_map["father"])
@@ -1198,7 +1265,7 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
             local_member_paths["father"] = _relative_to_root(local_father_path, resolved_root)
         record_paths: list[str] = []
         record_blob_map: dict[str, str] = {}
-        for record in _family_state_records_from_payload(family_payload):
+        for record in _family_state_records_from_payload(full_family_payload):
             record_token = _family_state_record_token(record)
             record_blob_name = f"{family_blob_map['records_prefix']}/{record_token}.json"
             local_record_path = family_dir / "records" / f"{record_token}.json"
@@ -1212,7 +1279,9 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
             record_blob_map[record_token] = record_blob_name
         local_member_paths["record_paths"] = record_paths
         remote_member_blobs["record_blobs"] = record_blob_map
-        runtime_artifact = _mapping_or_none(family_payload.get("family_runtime_artifact"))
+        runtime_artifact = _mapping_or_none(full_family_payload.get("family_runtime_artifact")) or _mapping_or_none(
+            family_entry.get("family_runtime_artifact")
+        )
         runtime_artifact_blob_map: dict[str, str] = {}
         local_runtime_paths: dict[str, str] = {}
         if runtime_artifact is not None:
@@ -1254,13 +1323,31 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
                 )
                 runtime_artifact_blob_map["metadata"] = family_blob_map["runtime_metadata"]
             if runtime_artifact_blob_map:
-                family_payload["family_runtime_artifact"] = normalized_runtime_artifact
+                full_family_payload["family_runtime_artifact"] = normalized_runtime_artifact
                 if isinstance(raw_prompt_families, list):
-                    raw_prompt_families[family_index] = family_payload
-                family_text = f"{json.dumps(family_payload, indent=2)}\n"
+                    updated_entry = dict(family_entry)
+                    updated_entry["family_runtime_artifact"] = normalized_runtime_artifact
+                    raw_prompt_families[family_index] = updated_entry
+                    family_entry = updated_entry
+                family_text = f"{json.dumps(full_family_payload, indent=2)}\n"
                 local_family_path.write_text(family_text, encoding="utf-8")
                 local_member_paths["runtime_artifact"] = local_runtime_paths
                 remote_member_blobs["runtime_artifact_blobs"] = runtime_artifact_blob_map
+        family_entry["family_path"] = str(Path("families") / _sanitize_name(prompt_family_id, default="family") / "family.json")
+        if "father" in local_member_paths:
+            family_entry["father_path"] = str(
+                Path("families")
+                / _sanitize_name(prompt_family_id, default="family")
+                / "father.json"
+            )
+        family_entry["family_record_count"] = len(record_paths)
+        family_entry["context_group_count"] = len(
+            full_family_payload.get("context_groups")
+            if isinstance(full_family_payload.get("context_groups"), list)
+            else []
+        )
+        if isinstance(raw_prompt_families, list):
+            raw_prompt_families[family_index] = family_entry
         cached_family_member_paths[prompt_family_id] = local_member_paths
         remote_family_member_blobs[prompt_family_id] = remote_member_blobs
     family_state_path.write_text(

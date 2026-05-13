@@ -1012,6 +1012,37 @@ working directory. After the next trainer upload cycle, a worker can execute a m
 artifact directly from `repo-rag-training-families` even when `repo-rag-bundles` is still empty
 or unpublished.
 
+One last bridge bug remained even after that transport work: a worker could match a family father
+from bundle-local registry data yet still fall back to heuristic execution because the registry's
+recorded `program_path` was stale. The proxy now keeps bundle-local registry priority when those
+paths are valid, but lazily synthesizes a replacement registry from fetched `family-state.json`
+when the matched family entry has no runnable local `program.json`. That same fix also normalizes
+the selected `program_path` to a repo-relative path when the runtime artifact lives under the
+family-state cache instead of the staged bundle mirror, and exported trainer-facing trace records
+now surface `prompt_family_id`, `prompt_family_similarity`, `family_artifact_selected`,
+`bundle_version`, `program_path`, and mediation metric fields directly. The family-first runtime
+contract is therefore locally coherent end-to-end again: father match can now resolve into a
+family-state-backed DSPy runtime artifact instead of stopping at heuristic mode.
+
+The next trainer-side redesign closes the other half of the version-storm problem. The intended
+contract is no longer “copy the previous version into blob again and then mutate it remotely”; it
+is “maintain one active local family cache, apply only current queued traces, and publish only the
+resulting updated state once.” The local trainer now follows exactly that lifecycle. If
+`artifacts/trainer/family-state.json` plus `artifacts/trainer/families/<id>/...` already exist,
+that cache is reused in place. If the local cache is absent, trainer adopts the latest remote
+`repo-rag-training-families` version into the same local cache. Only when neither local nor remote
+state exists does trainer rebuild its cache from `repo-rag-training-traces/processed`, and that
+bootstrap rebuild stays local until the current `queued` traces are applied. This removes the old
+failure mode where one trainer run could first materialize a remote family-state snapshot from
+historical traces and then immediately publish a second version after applying the current queue.
+
+That redesign also finally makes `family-state.json` fit its intended role. It is no longer a full
+aggregate replay buffer duplicated beside `family.json`, `father.json`, and `records/*.json`. The
+top-level file is now a thin index with routing, score, dirty-flag, and path metadata, while the
+full transformed family payloads live only under `artifacts/trainer/families/<prompt_family_id>/`.
+In other words, the durable local cache is the per-family directory tree; `family-state.json` is
+the manifest that points at it.
+
 ## Tensions And Open Work
 
 The narrative is coherent, but not complete. The main open tensions are:
