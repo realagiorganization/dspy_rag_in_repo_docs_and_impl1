@@ -1043,6 +1043,17 @@ full transformed family payloads live only under `artifacts/trainer/families/<pr
 In other words, the durable local cache is the per-family directory tree; `family-state.json` is
 the manifest that points at it.
 
+One more live bug remained after that redesign: replaying the same processed queue item into a
+fresh local cache still produced a new imported trace filename, and the trainer treated that new
+filename as a brand-new snapshot. In practice that meant a later trainer cycle could take the same
+logical 25-turn batch and inflate one family from 25 replay records to 50 without ever seeing a
+new worker run. The fix is now explicit in code: imported trace records persist their original
+queued-item identity, trainer snapshot IDs prefer that stable source token over the transient
+imported path, and family-state hydration plus replay upserts dedupe logical replays instead of
+double-counting them. The same pass also stops writing a new remote family-state version when a
+cycle loaded no accepted/candidate records, so empty no-op versions no longer appear as if they
+were meaningful training outputs.
+
 ## Tensions And Open Work
 
 The narrative is coherent, but not complete. The main open tensions are:

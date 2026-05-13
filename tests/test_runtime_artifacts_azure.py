@@ -549,6 +549,7 @@ def test_restore_processed_trace_records_rebuilds_local_ledger_from_azure_proces
             "queue_item_kind": "repo-rag-trace-queue-item",
             "queue_status": "imported",
             "queue_name": "repo-rag-training",
+            "queue_item_path": "queued/repo-rag-training/20260501T180000Z-worker-demo.json",
             "trace_name": "worker-demo",
             "trace_payload": _sample_trace_payload(),
             "outcome": {
@@ -573,6 +574,11 @@ def test_restore_processed_trace_records_rebuilds_local_ledger_from_azure_proces
     assert restored_payload["trace_record_kind"] == "repo-rag-trace-record"
     assert restored_payload["question"] == "How does the trainer ingest traces?"
     assert restored_payload["outcome"]["acceptance_status"] == "accepted"
+    assert (
+        restored_payload["source_queue_item_path"]
+        == "queued/repo-rag-training/20260501T180000Z-worker-demo.json"
+    )
+    assert restored_payload["source_trace_name"] == "worker-demo"
 
     restored_again = restore_processed_trace_records(tmp_path, queue_name="dataset")
 

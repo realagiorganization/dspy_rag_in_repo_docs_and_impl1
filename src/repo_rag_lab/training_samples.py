@@ -921,20 +921,69 @@ def _exact_snapshot_id(
     *,
     question: str,
     expected_answer: str,
+    source_identity: str,
     trace_record_path: str,
     recorded_at: str,
     context_snapshot: Mapping[str, Any],
 ) -> str:
     """Return the immutable identity for one concrete imported trace snapshot."""
 
+    identity_token = source_identity.strip() or trace_record_path.strip() or recorded_at.strip()
     stable_snapshot_hash = _stable_hash(
         question,
         expected_answer,
-        trace_record_path,
-        recorded_at,
+        identity_token,
         context_snapshot,
     )
     return f"ts-{stable_snapshot_hash}"
+
+
+_REPLAYED_TRACE_RECORD_NAME_PATTERN = re.compile(
+    r"^(?P<prefix>\d{8}T\d{6}Z)-(?P<rest>\d{8}T\d{6}Z-.*)$"
+)
+
+
+def _canonical_trace_record_path(path_text: object) -> str:
+    """Return one stable trace-record path token across imported replays."""
+
+    normalized_path = str(path_text or "").strip()
+    if not normalized_path:
+        return ""
+    candidate = Path(normalized_path)
+    file_name = candidate.name
+    while True:
+        match = _REPLAYED_TRACE_RECORD_NAME_PATTERN.match(file_name)
+        if match is None:
+            break
+        file_name = match.group("rest")
+    return str(candidate.with_name(file_name))
+
+
+def _stable_trace_source_identity(
+    payload: Mapping[str, Any],
+    *,
+    trace_record_path: str,
+) -> str:
+    """Return one stable source identity for deduping logical trace replays."""
+
+    source_queue_item_path = str(payload.get("source_queue_item_path") or "").strip()
+    if source_queue_item_path:
+        return f"trace-file:{Path(source_queue_item_path).name}"
+    provenance = payload.get("provenance")
+    if isinstance(provenance, Mapping):
+        provenance_queue_item_path = str(provenance.get("source_queue_item_path") or "").strip()
+        if provenance_queue_item_path:
+            return f"trace-file:{Path(provenance_queue_item_path).name}"
+    source_trace_name = str(payload.get("source_trace_name") or "").strip()
+    source_batch_name = str(payload.get("source_batch_name") or "").strip()
+    if source_trace_name:
+        if source_batch_name:
+            return f"trace:{source_batch_name}:{source_trace_name}"
+        return f"trace:{source_trace_name}"
+    canonical_trace_path = _canonical_trace_record_path(trace_record_path)
+    if canonical_trace_path:
+        return f"trace-file:{Path(canonical_trace_path).name}"
+    return ""
 
 
 def _metric_ratio(hits: int, total: int) -> float:
@@ -1171,7 +1220,9 @@ def _persist_local_family_state(
         record_dir.mkdir(parents=True, exist_ok=True)
         expected_record_paths: set[Path] = set()
         for record in _family_replay_records(full_family_payload):
-            record_token = str(record.get("exact_snapshot_id") or _candidate_record_hash(record)).strip()
+            record_token = str(
+                record.get("exact_snapshot_id") or _candidate_record_hash(record)
+            ).strip()
             if not record_token:
                 continue
             record_path = record_dir / f"{record_token}.json"
@@ -1281,7 +1332,24 @@ def _load_champion_index(path: Path) -> dict[str, Any]:
         normalized_family_records = _family_replay_records(family)
         if not normalized_family_records:
             normalized_family_records = _family_candidate_records(family)
-        family["family_records"] = normalized_family_records
+        deduped_family_records: list[dict[str, Any]] = []
+        deduped_record_index: dict[str, int] = {}
+        for record in normalized_family_records:
+            stable_key = _stable_family_replay_key(record)
+            if not stable_key:
+                deduped_family_records.append(record)
+                continue
+            existing_index = deduped_record_index.get(stable_key)
+            if existing_index is None:
+                deduped_record_index[stable_key] = len(deduped_family_records)
+                deduped_family_records.append(record)
+                continue
+            merged_record = _merge_replayed_candidate_records(
+                deduped_family_records[existing_index],
+                record,
+            )
+            deduped_family_records[existing_index] = merged_record
+        family["family_records"] = deduped_family_records
         _refresh_family_champion(family)
         champion_record = _family_champion_record(family)
         if champion_record is not None:
@@ -2086,6 +2154,45 @@ def _merge_equivalent_candidate_records(
     return merged
 
 
+def _stable_family_replay_key(record: Mapping[str, Any]) -> str:
+    """Return one stable dedupe key for logical family replay records."""
+
+    provenance = record.get("provenance")
+    if isinstance(provenance, Mapping):
+        stable_source_identity = str(provenance.get("stable_source_identity") or "").strip()
+        if stable_source_identity:
+            return stable_source_identity
+        source_queue_item_path = str(provenance.get("source_queue_item_path") or "").strip()
+        if source_queue_item_path:
+            return f"trace-file:{Path(source_queue_item_path).name}"
+        trace_record_path = str(provenance.get("trace_record_path") or "").strip()
+        canonical_trace_path = _canonical_trace_record_path(trace_record_path)
+        if canonical_trace_path:
+            return f"trace-file:{Path(canonical_trace_path).name}"
+    exact_snapshot_id = str(record.get("exact_snapshot_id") or "").strip()
+    if exact_snapshot_id:
+        return exact_snapshot_id
+    return str(_candidate_record_hash(record)).strip()
+
+
+def _merge_replayed_candidate_records(
+    current_record: Mapping[str, Any],
+    candidate_record: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Merge two re-imported copies of the same logical trace without double-counting it."""
+
+    current_serialized = _serialize_candidate_record(current_record)
+    candidate_serialized = _serialize_candidate_record(candidate_record)
+    current_richness = _candidate_benchmark_context_richness(current_serialized)
+    candidate_richness = _candidate_benchmark_context_richness(candidate_serialized)
+    prefer_candidate = candidate_richness > current_richness or (
+        candidate_richness == current_richness
+        and _candidate_recorded_at(candidate_serialized)
+        > _candidate_recorded_at(current_serialized)
+    )
+    return dict(candidate_serialized if prefer_candidate else current_serialized)
+
+
 def _training_candidate_from_trace_record(
     payload: Mapping[str, Any],
     *,
@@ -2124,10 +2231,16 @@ def _training_candidate_from_trace_record(
         return None, "missing-question"
     prompt_family_id = _prompt_family_id(question)
     benchmark_context, benchmark_context_sources = _extract_benchmark_context(payload)
+    trace_record_path = str(payload.get("trace_record_path") or "")
+    source_identity = _stable_trace_source_identity(
+        payload,
+        trace_record_path=trace_record_path,
+    )
     exact_snapshot_id = _exact_snapshot_id(
         question=question,
         expected_answer=expected_answer,
-        trace_record_path=str(payload.get("trace_record_path") or ""),
+        source_identity=source_identity,
+        trace_record_path=trace_record_path,
         recorded_at=str(trace_mapping.get("recorded_at") or ""),
         context_snapshot=context_snapshot,
     )
@@ -2169,7 +2282,11 @@ def _training_candidate_from_trace_record(
         "metric_ratio": metric_ratio,
         "support_count": 1,
         "provenance": {
-            "trace_record_path": str(payload.get("trace_record_path") or ""),
+            "trace_record_path": trace_record_path,
+            "source_queue_item_path": str(payload.get("source_queue_item_path") or ""),
+            "source_trace_name": str(payload.get("source_trace_name") or ""),
+            "source_batch_name": str(payload.get("source_batch_name") or ""),
+            "stable_source_identity": source_identity,
             "source_command": str(payload.get("source_command") or ""),
             "original_prompt": original_prompt,
             "reformulated_prompt": reformulated_prompt or question,
@@ -2211,9 +2328,7 @@ def _upsert_family_replay_record(
     if not isinstance(raw_records, list):
         raw_records = []
         family_payload["family_records"] = raw_records
-    candidate_key = str(
-        normalized.get("exact_snapshot_id") or _candidate_record_hash(normalized)
-    ).strip()
+    candidate_key = _stable_family_replay_key(normalized)
     if not candidate_key:
         raw_records.append(normalized)
         return
@@ -2221,16 +2336,21 @@ def _upsert_family_replay_record(
         if not isinstance(existing, Mapping):
             continue
         existing_normalized = _serialize_candidate_record(existing)
-        existing_key = str(
-            existing_normalized.get("exact_snapshot_id")
-            or _candidate_record_hash(existing_normalized)
-        ).strip()
+        existing_key = _stable_family_replay_key(existing_normalized)
         if existing_key != candidate_key:
             continue
-        raw_records[index] = _merge_equivalent_candidate_records(
-            existing_normalized,
-            normalized,
-        )
+        if str(existing_normalized.get("exact_snapshot_id") or "").strip() == str(
+            normalized.get("exact_snapshot_id") or ""
+        ).strip():
+            raw_records[index] = _merge_equivalent_candidate_records(
+                existing_normalized,
+                normalized,
+            )
+        else:
+            raw_records[index] = _merge_replayed_candidate_records(
+                existing_normalized,
+                normalized,
+            )
         return
     raw_records.append(normalized)
 
@@ -2496,7 +2616,7 @@ def materialize_training_candidates(
             resolved_root,
             family_state_path=resolved_family_state_path,
         )
-        if upload_remote_state
+        if upload_remote_state and bool(loaded_records)
         else None
     )
     family_state_summary = summarize_family_state(resolved_family_state_path)
