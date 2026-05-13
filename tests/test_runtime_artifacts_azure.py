@@ -814,6 +814,7 @@ def test_fetch_remote_bundle_downloads_bundle_assets(
     assert runtime_artifact["metadata_path"] == (
         f"artifacts/dspy/remote/{bundle_version}/families/pf-demo/metadata.json"
     )
+    assert runtime_artifact.get("hit_rate") is None
     family_program_path = tmp_path / str(runtime_artifact["program_path"])
     assert family_program_path.exists()
     assert family_program_path.read_text(encoding="utf-8") == '{"program":"family-demo"}\n'

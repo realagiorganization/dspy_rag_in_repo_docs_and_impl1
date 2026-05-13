@@ -432,6 +432,15 @@ Not implemented yet:
     replay upserts plus family-state hydration dedupe re-imported processed traces instead of
     counting them as new snapshots. Remote family-state uploads are also skipped when a cycle loads
     no accepted/candidate records, so empty no-op versions are no longer minted.
+37. Preserve user-authored lines that follow forwarded Discord messages, and stop comparing family
+    trace `hit_rate` against unrelated benchmark pass-rate fields.
+    Stage 37 locally: prompt extraction in both the proxy and the dataset worker now removes only
+    the forwarded-message line plus its attachment companion line, preserving later user-authored
+    prompt lines verbatim in `original_prompt`, `reformulated_prompt`, and prompt-like
+    `command_trace` entries. The runtime bridge now also interprets family artifact readiness using
+    the persisted family trace `hit_rate` (metric 1) and keeps compile-time
+    `benchmark_pass_rate` as diagnostics only, so an exact family match no longer drops into
+    heuristic mode merely because the bundle carried a separate benchmark score.
 28. Align runtime father matching and deploy-stage recovery with the family-first trace contract.
     Stage 28 locally: family lookup now routes by `original_prompt` instead of the helper's
     reformulated text, so existing fathers are compared against the raw task surface that the user

@@ -179,6 +179,41 @@ def test_extract_codex_turn_state_strips_dataset_execution_envelope() -> None:
     ]
 
 
+def test_extract_codex_turn_state_preserves_lines_after_forwarded_message() -> None:
+    payload = {
+        "input": [
+            {
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            "Messages with required reaction:\n"
+                            "[1] (2026-05-06T14:36:10.829+00:00 | user | id=1) "
+                            "In https://github.com/acme/repo\n\n"
+                            "Add an automated demo GIF of this wireframe.\n"
+                            "[2] (2026-05-08T16:36:31.066+00:00 | user | id=2) "
+                            "[forwarded] @Tyler ATTTENTION. @|DT| drybox\n"
+                            "Attachments: Screenshot.png: /out/media/Screenshot.png\n"
+                            "[3] (2026-05-11T19:29:49.359+00:00 | user | id=3) "
+                            "This is a test run, no development or installation required.\n"
+                        ),
+                    }
+                ],
+            }
+        ]
+    }
+
+    state = extract_codex_turn_state(_payload_mapping(payload))
+
+    assert state["original_prompt"] == (
+        "In https://github.com/acme/repo\n\n"
+        "Add an automated demo GIF of this wireframe.\n"
+        "This is a test run, no development or installation required."
+    )
+
+
 def test_extract_codex_turn_state_strips_runtime_repository_metadata() -> None:
     payload = {
         "input": [
@@ -939,6 +974,116 @@ def test_build_codex_mediation_falls_back_to_family_state_when_bundle_registry_p
     assert mediation.program_path == (
         "artifacts/trainer/remote-family-state/state-1/families/pf-demo/runtime-artifact/program.json"
     )
+    assert captured["program_path"] == family_program_path.resolve()
+
+
+def test_build_codex_mediation_prefers_family_metric_hit_rate_over_benchmark_pass_rate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "README.md").write_text("repo summary\n", encoding="utf-8")
+    family_program_path = (
+        repo
+        / "artifacts"
+        / "dspy"
+        / "remote"
+        / "stable-42"
+        / "families"
+        / "pf-demo"
+        / "program.json"
+    )
+    family_program_path.parent.mkdir(parents=True)
+    family_program_path.write_text('{"program":"family-demo"}\n', encoding="utf-8")
+
+    captured: dict[str, object] = {}
+
+    def fake_ask_repository(
+        question: str,
+        root: Path,
+        retrieval_mode: RetrievalMode | None = None,
+    ) -> SimpleNamespace:
+        del question, retrieval_mode
+        return SimpleNamespace(
+            context=[Chunk(source=root / "README.md", text="Repository summary text.")],
+            summary="Repository summary text.",
+            retrieval_mode="lexical",
+        )
+
+    class FakeRepositoryRAG:
+        def __init__(
+            self,
+            root: Path,
+            top_k: int = 4,
+            *,
+            program_path: Path | None = None,
+            lm_config: object | None = None,
+            require_configured_lm: bool = False,
+            retrieval_mode: RetrievalMode | None = None,
+        ) -> None:
+            del root, top_k, lm_config, require_configured_lm, retrieval_mode
+            captured["program_path"] = program_path
+
+        def __call__(self, question: str, **kwargs: object) -> SimpleNamespace:
+            del question, kwargs
+            return SimpleNamespace(answer="Family-scoped DSPy answer.", retrieval_mode="lexical")
+
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.ask_repository", fake_ask_repository)
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.RepositoryRAG", FakeRepositoryRAG)
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.resolve_dspy_lm_config",
+        lambda: SimpleNamespace(model="azure/dspy-helper"),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.reformulate_codex_prompt",
+        lambda prompt, *, lm_config=None: (prompt, "identity"),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_program_path_and_bundle_version",
+        lambda **kwargs: (None, "stable-42"),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_bundle_family_registry",
+        lambda **kwargs: {
+            "schema_version": 1,
+            "registry_kind": "repo-rag-family-registry",
+            "families": [
+                {
+                    "prompt_family_id": "pf-demo",
+                    "family_father_question": "Investigate the failing pytest target.",
+                    "family_father_record": {
+                        "question": "Investigate the failing pytest target.",
+                    },
+                    "family_runtime_metric": {"hit_rate": 1.0},
+                    "runtime_artifact": {
+                        "artifact_kind": "compiled-family-program",
+                        "artifact_ready": True,
+                        "program_path": (
+                            "artifacts/dspy/remote/stable-42/families/pf-demo/program.json"
+                        ),
+                        "metadata_path": (
+                            "artifacts/dspy/remote/stable-42/families/pf-demo/metadata.json"
+                        ),
+                        "hit_rate": 1.0,
+                        "benchmark_pass_rate": 0.0,
+                    },
+                }
+            ],
+        },
+    )
+
+    mediation = build_codex_mediation(
+        "Investigate the failing pytest target.",
+        repository_root=repo,
+        bundle_root=repo,
+        prefer_dspy=True,
+        bundle_version="stable-42",
+    )
+
+    assert mediation.family_runtime_hit_rate == 1.0
+    assert mediation.family_artifact_hit_rate == 1.0
+    assert mediation.family_artifact_selected is True
     assert captured["program_path"] == family_program_path.resolve()
 
 
