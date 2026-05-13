@@ -1054,6 +1054,18 @@ double-counting them. The same pass also stops writing a new remote family-state
 cycle loaded no accepted/candidate records, so empty no-op versions no longer appear as if they
 were meaningful training outputs.
 
+The newest runtime bridge correction addresses the last mismatch between the user's intended
+metric contract and what the worker actually used in live runs. Forwarded Discord cleanup is now
+line-based in both the dataset worker and the proxy, so the forwarded marker and its immediate
+attachment companion line disappear without deleting later user-authored task lines. That closes
+the bug where a trailing instruction such as “This is a test run, no development or installation
+required.” survived in the aggregated prompt artifact but vanished before `codex exec` saw it. The
+same patch also stops treating bundle `benchmark_pass_rate` as if it were the same thing as the
+family trace `hit_rate`. Persisted family runtime artifacts now carry their own metric-1
+`hit_rate`, benchmark pass-rate remains diagnostic only, and family-artifact selection can finally
+decide “matched family artifact vs heuristic fallback” on the same semantic quantity the trainer
+stores in family state.
+
 ## Tensions And Open Work
 
 The narrative is coherent, but not complete. The main open tensions are:

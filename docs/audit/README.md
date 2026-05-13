@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-05-13-processed-replay-no-longer-duplicates-family-records.md`
+- `2026-05-13-latest-run-used-global-dspy-bundle-but-dropped-supplemental-user-line.md`
 
 ## Usage
 

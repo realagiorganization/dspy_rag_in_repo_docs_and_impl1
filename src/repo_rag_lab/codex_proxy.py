@@ -54,7 +54,7 @@ _DEFAULT_TRIVIAL_TOKEN_BUDGET = 280
 _DEFAULT_CACHE_TTL_SECONDS = 3600
 _TASK_TOKEN_DEEP_THRESHOLD = 10
 _LOW_SIGNAL_SUMMARY_LIMIT = 40
-_FORWARDED_DISCORD_TAIL_PATTERN = re.compile(r"(?is)\s*\[forwarded\]\s*@.*$")
+_FORWARDED_DISCORD_LINE_PATTERN = re.compile(r"(?is)^\[forwarded\]\s*@.*$")
 _REPO_GROUNDING_HINTS = {
     "repo",
     "repository",
@@ -398,13 +398,28 @@ def _sanitize_bundle_token(name: str, *, default: str) -> str:
 
 
 def _strip_forwarded_discord_tail(text: str) -> str:
-    """Remove the Discord forwarding tail that should not participate in mediation."""
+    """Remove forwarded Discord noise without dropping later user-authored lines."""
 
     cleaned = str(text or "").strip()
     if not cleaned:
         return ""
-    stripped = _FORWARDED_DISCORD_TAIL_PATTERN.sub("", cleaned).strip()
-    return stripped or cleaned
+    filtered_lines: list[str] = []
+    skipping_forwarded_followups = False
+    for raw_line in cleaned.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if _FORWARDED_DISCORD_LINE_PATTERN.match(stripped):
+            skipping_forwarded_followups = True
+            continue
+        if skipping_forwarded_followups and (
+            stripped.startswith("Attachments:") or stripped.startswith("- ")
+        ):
+            continue
+        if stripped:
+            skipping_forwarded_followups = False
+        filtered_lines.append(line)
+    stripped_text = "\n".join(filtered_lines).strip()
+    return stripped_text or cleaned
 
 
 def _strip_dataset_execution_envelope(text: str) -> str:

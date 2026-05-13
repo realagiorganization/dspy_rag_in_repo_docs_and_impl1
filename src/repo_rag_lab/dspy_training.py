@@ -191,6 +191,7 @@ class DSPyFamilyArtifactResult:
     training_example_count: int
     benchmark_example_count: int
     benchmark_summary: dict[str, object]
+    hit_rate: float | None = None
     artifact_ready: bool = True
     artifact_source: str = "recompiled"
 
@@ -1223,6 +1224,28 @@ def _update_family_artifact_state(
     family_payload["family_needs_recompile"] = False
 
 
+def _family_runtime_hit_rate(family_payload: Mapping[str, object]) -> float | None:
+    """Return the family runtime hit-rate baseline aligned to trace metric-1."""
+
+    runtime_record = family_payload.get("family_runtime_record")
+    if not isinstance(runtime_record, Mapping):
+        return None
+    metric_ratio = runtime_record.get("metric_ratio")
+    if isinstance(metric_ratio, (int, float)) and not isinstance(metric_ratio, bool):
+        return float(metric_ratio)
+    metric_hits = runtime_record.get("metric_hits")
+    metric_total = runtime_record.get("metric_total")
+    if (
+        isinstance(metric_hits, int)
+        and isinstance(metric_total, int)
+        and not isinstance(metric_hits, bool)
+        and not isinstance(metric_total, bool)
+        and metric_total > 0
+    ):
+        return round(max(0, min(metric_hits, metric_total)) / metric_total, 6)
+    return None
+
+
 def _compile_family_artifacts(
     root: Path,
     *,
@@ -1325,6 +1348,7 @@ def _compile_family_artifacts(
             training_example_count=len(examples),
             benchmark_example_count=len(examples),
             benchmark_summary=cast(dict[str, object], benchmark_summary),
+            hit_rate=_family_runtime_hit_rate(family),
             artifact_ready=artifact_paths.program_path.is_file(),
             artifact_source="recompiled",
         ).to_payload()

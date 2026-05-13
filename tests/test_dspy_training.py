@@ -1128,6 +1128,7 @@ def test_train_repository_program_recompiles_only_dirty_families(
     assert family_artifact_registry["pf-dirty"]["program_path"] == (
         "artifacts/dspy/family-dirty-run/families/pf-dirty/program.json"
     )
+    assert family_artifact_registry["pf-dirty"]["hit_rate"] == 1.0
     assert family_artifact_registry["pf-clean"]["artifact_source"] == "carried-forward"
     assert family_artifact_registry["pf-clean"]["program_path"] == (
         "artifacts/dspy/previous-run/families/pf-clean/program.json"

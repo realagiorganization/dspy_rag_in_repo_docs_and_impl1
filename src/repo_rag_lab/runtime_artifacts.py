@@ -255,7 +255,9 @@ def _bundle_family_entry(family_payload: Mapping[str, object]) -> dict[str, obje
     persisted_runtime_artifact = _mapping_or_none(family_payload.get("family_runtime_artifact"))
     runtime_artifact: dict[str, object]
     if persisted_runtime_artifact is not None:
-        runtime_artifact = persisted_runtime_artifact
+        runtime_artifact = dict(persisted_runtime_artifact)
+        if runtime_artifact.get("hit_rate") is None:
+            runtime_artifact["hit_rate"] = _float_or_none(runtime_metric.get("hit_rate"))
     else:
         runtime_artifact = {
             "artifact_kind": (
@@ -321,8 +323,14 @@ def build_bundle_family_registry(
                 )
                 if family_artifact_payload is not None:
                     runtime_artifact = _mapping_or_none(entry.get("runtime_artifact")) or {}
+                    runtime_metric = _mapping_or_none(entry.get("family_runtime_metric")) or {}
                     benchmark_summary = _mapping_or_none(
                         family_artifact_payload.get("benchmark_summary")
+                    )
+                    hit_rate = (
+                        _float_or_none(family_artifact_payload.get("hit_rate"))
+                        or _float_or_none(runtime_artifact.get("hit_rate"))
+                        or _float_or_none(runtime_metric.get("hit_rate"))
                     )
                     runtime_artifact.update(
                         {
@@ -348,11 +356,12 @@ def build_bundle_family_registry(
                                 family_artifact_payload.get("benchmark_example_count")
                             ),
                             "benchmark_summary": benchmark_summary,
-                            "hit_rate": (
+                            "benchmark_pass_rate": (
                                 _float_or_none(benchmark_summary.get("pass_rate"))
                                 if benchmark_summary is not None
-                                else _float_or_none(runtime_artifact.get("hit_rate"))
+                                else None
                             ),
+                            "hit_rate": hit_rate,
                         }
                     )
                     entry["runtime_artifact"] = runtime_artifact
