@@ -161,11 +161,11 @@ uv sync --extra azure
 make utility-summary
 make ask QUESTION="What does this repository research?"
 make ask-dspy QUESTION="What does this repository research?" \
-  DSPY_MODEL=openai/gpt-4o-mini \
-  DSPY_API_KEY="$OPENAI_API_KEY"
+  DSPY_HELPER_MODEL=openai/gpt-4o-mini \
+  DSPY_HELPER_API_KEY="$OPENAI_API_KEY"
 make dspy-train DSPY_RUN_NAME=smoke \
-  DSPY_MODEL=openai/gpt-4o-mini \
-  DSPY_API_KEY="$OPENAI_API_KEY"
+  DSPY_TRAINER_MODEL=openai/gpt-4o-mini \
+  DSPY_TRAINER_API_KEY="$OPENAI_API_KEY"
 make dspy-artifacts
 uv run repo-rag ask --question "What does this repository research?" --output json
 uv run repo-rag ask --question "What does this repository research?" --use-dspy --output json \
@@ -177,14 +177,19 @@ make verify-surfaces
 The baseline path above is runnable as-is. The DSPy path can now resolve LM configuration from:
 
 - explicit `--dspy-*` CLI flags
-- `DSPY_*` environment variables
-- repository Azure variables such as `AZURE_OPENAI_DEPLOYMENT_NAME` and `AZURE_OPENAI_ENDPOINT`
+- helper-scoped `DSPY_HELPER_*` environment variables
+- trainer-scoped `DSPY_TRAINER_*` environment variables
+- shared transport variables such as `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, and `AZURE_OPENAI_API_VERSION`
 - `OPENAI_API_KEY` for the default OpenAI fallback model
 
-When both `DSPY_*` and generic Azure variables are present, the DSPy runtime prefers
-`DSPY_MODEL`. That lets the Codex proxy and trainer use one dedicated helper deployment such as
-`DSPY_MODEL=azure/gpt-4.1-mini` while still reusing the shared `AZURE_OPENAI_*` transport values
-unless `DSPY_API_BASE`, `DSPY_API_VERSION`, or `DSPY_API_KEY` override them explicitly.
+The family-first runtime now splits helper and trainer model selection explicitly:
+
+- `DSPY_HELPER_MODEL` defaults to `azure/gpt-5.4-nano`
+- `DSPY_TRAINER_MODEL` defaults to `azure/gpt-5.4-mini`
+
+That keeps the Codex proxy on a cheap helper model while trainer-side compile/recompile can use
+a stronger-but-still-cheap default. Shared Azure variables remain transport fallback only; they no
+longer silently choose the DSPy model for helper/trainer paths.
 
 Once a program is compiled, `make ask-dspy` will automatically reuse the latest saved artifact
 when LM configuration is available. You can still point the runtime at an explicit saved artifact
@@ -193,8 +198,8 @@ directly:
 ```bash
 make ask-dspy QUESTION="What does this repository research?" \
   DSPY_PROGRAM_PATH=artifacts/dspy/smoke/program.json \
-  DSPY_MODEL=openai/gpt-4o-mini \
-  DSPY_API_KEY="$OPENAI_API_KEY"
+  DSPY_HELPER_MODEL=openai/gpt-4o-mini \
+  DSPY_HELPER_API_KEY="$OPENAI_API_KEY"
 ```
 
 For downstream worker integration, the key new surface is the shared machine-readable envelope:
@@ -692,19 +697,19 @@ The user-facing commands are:
 
 ```bash
 make ask-dspy QUESTION="What does this repository research?" \
-  DSPY_MODEL=openai/gpt-4o-mini \
-  DSPY_API_KEY="$OPENAI_API_KEY"
+  DSPY_HELPER_MODEL=openai/gpt-4o-mini \
+  DSPY_HELPER_API_KEY="$OPENAI_API_KEY"
 
 make dspy-train DSPY_RUN_NAME=smoke \
-  DSPY_MODEL=openai/gpt-4o-mini \
-  DSPY_API_KEY="$OPENAI_API_KEY"
+  DSPY_TRAINER_MODEL=openai/gpt-4o-mini \
+  DSPY_TRAINER_API_KEY="$OPENAI_API_KEY"
 
 make dspy-artifacts
 
 make ask-dspy QUESTION="What does this repository research?" \
   DSPY_PROGRAM_PATH=artifacts/dspy/smoke/program.json \
-  DSPY_MODEL=openai/gpt-4o-mini \
-  DSPY_API_KEY="$OPENAI_API_KEY"
+  DSPY_HELPER_MODEL=openai/gpt-4o-mini \
+  DSPY_HELPER_API_KEY="$OPENAI_API_KEY"
 ```
 
 Important limitation:

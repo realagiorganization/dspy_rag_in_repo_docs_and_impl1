@@ -27,6 +27,12 @@ These are the variables most relevant to real usage and downstream deployment.
 | `AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME` | Azure OpenAI semantic retrieval | `src/repo_rag_lab/semantic_retrieval.py`, `src/repo_rag_lab/retrieval.py` | Non-secret. Required for `vector` / `hybrid-vector` retrieval to build the local semantic index. |
 | `AZURE_OPENAI_EMBEDDING_MODEL_NAME` | Optional embedding deployment alias/label | `src/repo_rag_lab/azure_runtime.py` | Optional fallback label when deployment name and model name are the same. |
 | `AZURE_OPENAI_EMBEDDING_API_VERSION` | Optional embedding-specific API-version override | `src/repo_rag_lab/azure_runtime.py` | Falls back to `AZURE_OPENAI_API_VERSION` when unset. |
+| `DSPY_HELPER_MODEL` | Worker-side DSPy helper routing/reformulation model selector | `src/repo_rag_lab/codex_proxy.py`, `src/repo_rag_lab/dspy_training.py` | Defaults to `azure/gpt-5.4-nano`; this is the primary helper model selector. |
+| `DSPY_HELPER_API_BASE` / `DSPY_HELPER_API_VERSION` / `DSPY_HELPER_API_KEY` | Worker-side DSPy helper transport overrides | `src/repo_rag_lab/codex_proxy.py`, `src/repo_rag_lab/dspy_training.py` | Optional; when unset, Azure/OpenAI transport falls back to shared credentials such as `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_API_KEY`. |
+| `DSPY_HELPER_MODEL_TYPE` / `DSPY_HELPER_TEMPERATURE` / `DSPY_HELPER_MAX_TOKENS` | Worker-side DSPy helper tuning | `src/repo_rag_lab/codex_proxy.py`, `src/repo_rag_lab/dspy_training.py` | Optional helper-only generation knobs. |
+| `DSPY_TRAINER_MODEL` | Trainer-side DSPy compile/recompile model selector | `src/repo_rag_lab/utilities.py`, `src/repo_rag_lab/dspy_training.py` | Defaults to `azure/gpt-5.4-mini`; this is the primary trainer model selector. |
+| `DSPY_TRAINER_API_BASE` / `DSPY_TRAINER_API_VERSION` / `DSPY_TRAINER_API_KEY` | Trainer-side DSPy transport overrides | `src/repo_rag_lab/utilities.py`, `src/repo_rag_lab/dspy_training.py` | Optional; transport falls back to shared Azure/OpenAI vars when omitted. |
+| `DSPY_TRAINER_MODEL_TYPE` / `DSPY_TRAINER_TEMPERATURE` / `DSPY_TRAINER_MAX_TOKENS` | Trainer-side DSPy tuning | `src/repo_rag_lab/utilities.py`, `src/repo_rag_lab/dspy_training.py` | Optional trainer-only generation knobs. |
 | `AZURE_INFERENCE_ENDPOINT` | Deployment/runtime environment contract | `src/repo_rag_lab/azure.py`, `azure-deployment.md` | This repo stores it in generated deployment manifests. |
 | `AZURE_INFERENCE_CREDENTIAL` | Deployment/runtime environment contract | `src/repo_rag_lab/azure.py`, `azure-deployment.md` | Usually the same secret as `AZURE_OPENAI_API_KEY` when key auth is used. |
 
@@ -70,6 +76,8 @@ Current checked-in code and docs explicitly reference these runtime env vars:
 - `AZURE_INFERENCE_CREDENTIAL`
 - `AZURE_OPENAI_API_VERSION`
 - `AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME`
+- `DSPY_HELPER_MODEL` / `DSPY_HELPER_API_*`
+- `DSPY_TRAINER_MODEL` / `DSPY_TRAINER_API_*`
 
 Current checked-in operational tooling explicitly relies on:
 
