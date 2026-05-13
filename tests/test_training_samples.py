@@ -7,6 +7,7 @@ import yaml
 
 from repo_rag_lab.training_samples import (
     batch_training_examples,
+    load_family_state_payload,
     load_training_examples,
     materialize_combined_training_examples,
     materialize_training_candidates,
@@ -229,9 +230,7 @@ tokens used
     assert materialized[0].expected_answer == (
         "Added the demo GIF to README and verified npm run build."
     )
-    payload = json.loads(
-        (tmp_path / "artifacts" / "trainer" / "family-state.json").read_text(encoding="utf-8")
-    )
+    payload = load_family_state_payload(tmp_path / "artifacts" / "trainer" / "family-state.json")
     provenance = payload["prompt_families"][0]["family_champion_record"]["provenance"]
     assert provenance["answer_normalization"]["normalization_method"] == "codex-final-block"
     assert provenance["answer_normalization"]["was_transcript"] is True
@@ -422,8 +421,8 @@ def test_materialize_training_candidates_keeps_prompt_reformulation_and_command_
         {"type": "message", "role": "assistant", "text": "inspect README"},
         {"type": "message", "role": "assistant", "text": "check docs/assets"},
     ]
-    family_state = json.loads(
-        (tmp_path / "artifacts" / "trainer" / "family-state.json").read_text(encoding="utf-8")
+    family_state = load_family_state_payload(
+        tmp_path / "artifacts" / "trainer" / "family-state.json"
     )
     family_payload = family_state["prompt_families"][0]
     assert summary["dirty_family_ids"] == [family_payload["prompt_family_id"]]
@@ -542,6 +541,13 @@ def test_materialize_training_candidates_strips_execution_envelope_from_family_f
     assert family_payload["family_father_question"] == (
         "Continue developing the national debt relief landing page"
     )
+    assert str(family_payload["family_path"]).startswith("families/pf-")
+    assert str(family_payload["family_path"]).endswith("/family.json")
+    assert "family_records" not in family_payload
+    assert "context_groups" not in family_payload
+    assert "family_father_record" not in family_payload
+    assert "family_runtime_record" not in family_payload
+    assert "family_champion_record" not in family_payload
     assert "Repository checkout:" not in family_payload["family_father_question"]
     support = resolve_prompt_family_support(
         "Continue developing the national debt relief landing page",
@@ -729,7 +735,7 @@ def test_resolve_prompt_family_support_normalizes_dirty_persisted_family_state(
         summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
         family_state_path=Path("artifacts/trainer/family-state.json"),
     )
-    rewritten_state = json.loads(family_state_path.read_text(encoding="utf-8"))
+    rewritten_state = load_family_state_payload(family_state_path)
     family_payload = rewritten_state["prompt_families"][0]
 
     assert support.supported is True
@@ -986,7 +992,7 @@ def test_materialize_training_candidates_keeps_persisted_champions_without_bench
     assert summary["family_state_path"] == "artifacts/trainer/family-state.json"
     family_state_path = tmp_path / str(summary["family_state_path"])
     assert family_state_path.exists()
-    champion_index = json.loads(family_state_path.read_text(encoding="utf-8"))
+    champion_index = load_family_state_payload(family_state_path)
     family = champion_index["prompt_families"][0]
     assert family["family_champion_record"] is not None
     assert len(family["context_groups"]) == 1
@@ -1409,8 +1415,8 @@ def test_materialize_training_candidates_tracks_context_groups_but_materializes_
     assert len(materialized) == 1
     assert "core gameplay loop" in materialized[0].expected_answer
 
-    champion_index = json.loads(
-        (tmp_path / "artifacts" / "trainer" / "family-state.json").read_text(encoding="utf-8")
+    champion_index = load_family_state_payload(
+        tmp_path / "artifacts" / "trainer" / "family-state.json"
     )
     assert champion_index["record_kind"] == "repo-rag-trainer-champion-index"
     assert len(champion_index["prompt_families"]) == 1
@@ -1476,8 +1482,8 @@ def test_materialize_training_candidates_accumulates_support_for_repeated_answer
     assert summary["new_candidate_count"] == 1
     assert summary["context_group_count"] == 1
 
-    champion_index = json.loads(
-        (tmp_path / "artifacts" / "trainer" / "family-state.json").read_text(encoding="utf-8")
+    champion_index = load_family_state_payload(
+        tmp_path / "artifacts" / "trainer" / "family-state.json"
     )
     family = champion_index["prompt_families"][0]
     group = family["context_groups"][0]
@@ -1607,7 +1613,7 @@ def test_materialize_training_candidates_refreshes_same_key_champion_with_richer
     )
     assert materialized[0].benchmark_context_sources == ("docs/USAGE.md", "README.md")
 
-    champion_index = json.loads((trainer_dir / "family-state.json").read_text(encoding="utf-8"))
+    champion_index = load_family_state_payload(trainer_dir / "family-state.json")
     family = champion_index["prompt_families"][0]
     assert family["family_champion_record"]["provenance"]["trace_record_path"].endswith(
         "accepted-b.json"
@@ -1685,8 +1691,8 @@ def test_materialize_training_candidates_groups_similar_prompt_variants_into_one
 
     assert summary["prompt_family_count"] == 1
     assert summary["new_prompt_family_count"] == 1
-    champion_index = json.loads(
-        (tmp_path / "artifacts" / "trainer" / "family-state.json").read_text(encoding="utf-8")
+    champion_index = load_family_state_payload(
+        tmp_path / "artifacts" / "trainer" / "family-state.json"
     )
     family = champion_index["prompt_families"][0]
     assert family["question_variant_count"] == 2
@@ -1821,8 +1827,8 @@ def test_materialize_training_candidates_keeps_gradual_source_drift_in_one_conte
     assert summary["candidate_count"] == 1
     assert summary["context_group_count"] == 1
 
-    champion_index = json.loads(
-        (tmp_path / "artifacts" / "trainer" / "family-state.json").read_text(encoding="utf-8")
+    champion_index = load_family_state_payload(
+        tmp_path / "artifacts" / "trainer" / "family-state.json"
     )
     family = champion_index["prompt_families"][0]
     group = family["context_groups"][0]
@@ -1927,8 +1933,8 @@ def test_materialize_training_candidates_splits_same_sources_when_evidence_finge
     assert summary["candidate_count"] == 1
     assert summary["context_group_count"] == 1
 
-    champion_index = json.loads(
-        (tmp_path / "artifacts" / "trainer" / "family-state.json").read_text(encoding="utf-8")
+    champion_index = load_family_state_payload(
+        tmp_path / "artifacts" / "trainer" / "family-state.json"
     )
     family = champion_index["prompt_families"][0]
     assert len(family["context_groups"]) == 1
@@ -2028,8 +2034,8 @@ def test_materialize_training_candidates_keeps_family_champion_on_small_score_ed
     assert summary["candidate_count"] == 1
     assert summary["context_group_count"] == 1
 
-    champion_index = json.loads(
-        (tmp_path / "artifacts" / "trainer" / "family-state.json").read_text(encoding="utf-8")
+    champion_index = load_family_state_payload(
+        tmp_path / "artifacts" / "trainer" / "family-state.json"
     )
     family = champion_index["prompt_families"][0]
     assert family["family_champion_record"]["expected_answer"] == supported_answer

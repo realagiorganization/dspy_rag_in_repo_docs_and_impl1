@@ -20,6 +20,7 @@ from .retrieval_profile import load_retrieval_profile
 from .runtime_artifacts import write_bundle_manifest
 from .training_samples import (
     TrainingExample,
+    load_family_state_payload,
     load_training_examples,
     normalize_training_examples,
     validate_training_examples,
@@ -1246,9 +1247,7 @@ def _compile_family_artifacts(
         resolved_family_state_path = resolved_root / resolved_family_state_path
     if not resolved_family_state_path.is_file():
         return {}
-    payload = json.loads(resolved_family_state_path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        return {}
+    payload = load_family_state_payload(resolved_family_state_path)
     raw_families = payload.get("prompt_families")
     if not isinstance(raw_families, list):
         return {}

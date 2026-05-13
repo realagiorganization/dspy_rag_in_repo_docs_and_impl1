@@ -90,8 +90,17 @@ def _materialize_training_candidates_stub(
         summary_path: Path,
         include_statuses: tuple[str, ...] = ("accepted", "candidate"),
         seed_existing_output: bool = True,
+        upload_remote_state: bool = True,
     ) -> dict[str, object]:
-        del root, trace_paths, output_path, summary_path, include_statuses, seed_existing_output
+        del (
+            root,
+            trace_paths,
+            output_path,
+            summary_path,
+            include_statuses,
+            seed_existing_output,
+            upload_remote_state,
+        )
         return {
             "candidate_count": candidate_count,
             "new_candidate_count": new_candidate_count,
@@ -149,6 +158,113 @@ def _write_bundle_manifest(
         encoding="utf-8",
     )
     return bundle_path
+
+
+def test_prepare_local_trainer_family_cache_prefers_existing_local_cache(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trainer_dir = tmp_path / "artifacts" / "trainer"
+    family_state_path = trainer_dir / "family-state.json"
+    family_cache_dir = trainer_dir / "families" / "pf-demo"
+    family_cache_dir.mkdir(parents=True, exist_ok=True)
+    family_state_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "record_kind": "repo-rag-trainer-champion-index",
+                "family_state_kind": "repo-rag-trainer-family-state",
+                "family_state_layout": "thin-index",
+                "generated_at": "2026-05-13T00:00:00+00:00",
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-demo",
+                        "family_path": "families/pf-demo/family.json",
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (family_cache_dir / "family.json").write_text(
+        json.dumps({"prompt_family_id": "pf-demo"}) + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.fetch_remote_family_state",
+        lambda root: (_ for _ in ()).throw(
+            AssertionError("remote family-state fetch should not run when local cache exists")
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.restore_processed_trace_records",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("processed recovery should not run when local cache exists")
+        ),
+    )
+
+    payload = utilities_module._prepare_local_trainer_family_cache(
+        tmp_path,
+        queue_name="dataset",
+    )
+
+    assert payload["status"] == "using-local-cache"
+    assert payload["family_state_path"] == "artifacts/trainer/family-state.json"
+    assert payload["family_cache_dir"] == "artifacts/trainer/families"
+
+
+def test_prepare_local_trainer_family_cache_adopts_latest_remote_version(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    remote_cache_dir = tmp_path / "artifacts" / "trainer" / "remote-family-state" / "v1"
+    remote_family_dir = remote_cache_dir / "families" / "pf-demo"
+    remote_family_dir.mkdir(parents=True, exist_ok=True)
+    (remote_cache_dir / "family-state.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "record_kind": "repo-rag-trainer-champion-index",
+                "family_state_kind": "repo-rag-trainer-family-state",
+                "family_state_layout": "thin-index",
+                "generated_at": "2026-05-13T00:00:00+00:00",
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-demo",
+                        "family_path": "families/pf-demo/family.json",
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (remote_family_dir / "family.json").write_text(
+        json.dumps({"prompt_family_id": "pf-demo", "question": "demo"}) + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.fetch_remote_family_state",
+        lambda root: {
+            "family_state_path": "artifacts/trainer/remote-family-state/v1/family-state.json"
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.restore_processed_trace_records",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("processed recovery should not run when a remote version is available")
+        ),
+    )
+
+    payload = utilities_module._prepare_local_trainer_family_cache(
+        tmp_path,
+        queue_name="dataset",
+    )
+
+    assert payload["status"] == "using-remote-version-as-local-cache"
+    assert (tmp_path / "artifacts" / "trainer" / "family-state.json").is_file()
+    assert (tmp_path / "artifacts" / "trainer" / "families" / "pf-demo" / "family.json").is_file()
 
 
 def _write_demo_repo_for_exploratorium(tmp_path: Path) -> None:
@@ -631,6 +747,69 @@ def test_run_trace_export_persists_normalized_record(tmp_path: Path) -> None:
     assert len(trace_record["trace"]["evidence_fingerprints"]) == 1
 
 
+def test_run_trace_export_preserves_family_runtime_metadata(tmp_path: Path) -> None:
+    payload_path = tmp_path / "family-trace.json"
+    payload_path.write_text(
+        json.dumps(
+            {
+                "command": "codex-proxy-turn-mediation",
+                "command_status": "success",
+                "question": "Repository task",
+                "original_prompt": "Original prompt",
+                "reformulated_prompt": "Reformulated prompt",
+                "answer": "Family answer",
+                "sources": ["README.md"],
+                "context": [],
+                "retrieved_context": [],
+                "command_trace": [{"role": "assistant", "text": "inspect README"}],
+                "trace": {
+                    "schema_version": 1,
+                    "trace_kind": "repo-rag-runtime",
+                    "question": "Repository task",
+                    "mode": "codex-proxy-turn-mediation",
+                    "retrieval_mode": "lexical",
+                    "sources": ["README.md"],
+                    "source_count": 1,
+                    "context_count": 1,
+                    "context_field": "evidence_previews",
+                    "mcp_candidate_count": 0,
+                    "answer_length": 12,
+                    "original_prompt": "Original prompt",
+                    "reformulated_prompt": "Reformulated prompt",
+                    "bundle_version": "stable-42",
+                    "program_path": "artifacts/dspy/remote/stable-42/families/pf-demo/program.json",
+                    "prompt_family_id": "pf-demo",
+                    "prompt_family_similarity": 1.0,
+                    "prompt_family_band": "match",
+                    "family_runtime_hit_rate": 0.8,
+                    "family_artifact_hit_rate": 1.0,
+                    "family_artifact_selected": True,
+                    "mediation_metric_hits": 1,
+                    "mediation_metric_total": 1,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exported = json.loads(run_trace_export(tmp_path, payload_path=payload_path, trace_name="demo"))
+    trace_record_path = tmp_path / exported["trace_record_path"]
+    trace_record = json.loads(trace_record_path.read_text(encoding="utf-8"))
+
+    assert trace_record["bundle_version"] == "stable-42"
+    assert trace_record["program_path"] == (
+        "artifacts/dspy/remote/stable-42/families/pf-demo/program.json"
+    )
+    assert trace_record["prompt_family_id"] == "pf-demo"
+    assert trace_record["prompt_family_similarity"] == 1.0
+    assert trace_record["prompt_family_band"] == "match"
+    assert trace_record["family_runtime_hit_rate"] == 0.8
+    assert trace_record["family_artifact_hit_rate"] == 1.0
+    assert trace_record["family_artifact_selected"] is True
+    assert trace_record["mediation_metric_hits"] == 1
+    assert trace_record["mediation_metric_total"] == 1
+
+
 def test_run_trace_import_ingests_external_trace_record(tmp_path: Path) -> None:
     external_trace_path = tmp_path / "external-trace.json"
     outcome_path = tmp_path / "accepted-outcome.json"
@@ -904,6 +1083,8 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
         lambda summary, minimum_pass_rate=None, minimum_source_recall=None: [],
     )
 
+    materialize_calls: list[dict[str, object]] = []
+
     def fake_materialize_training_candidates(
         root: Path,
         trace_paths: list[Path],
@@ -911,10 +1092,16 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
         summary_path: Path,
         include_statuses: tuple[str, ...] = ("accepted", "candidate"),
         seed_existing_output: bool = True,
+        upload_remote_state: bool = True,
     ) -> dict[str, object]:
         del root, output_path, summary_path, include_statuses
-        assert trace_paths == [Path("artifacts/traces/imported/demo.json")]
-        assert seed_existing_output is True
+        materialize_calls.append(
+            {
+                "trace_paths": list(trace_paths),
+                "seed_existing_output": seed_existing_output,
+                "upload_remote_state": upload_remote_state,
+            }
+        )
         return {
             "candidate_count": 1,
             "new_candidate_count": 1,
@@ -990,6 +1177,19 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
     assert payload["command_status"] == "success"
     assert payload["queue_name"] == "dataset"
     assert payload["queue_drain"]["drained_count"] == 1
+    assert materialize_calls == [
+        {
+            "trace_paths": [Path("artifacts/trainer/recovered-imported-traces/demo.json")],
+            "seed_existing_output": False,
+            "upload_remote_state": False,
+        },
+        {
+            "trace_paths": [Path("artifacts/traces/imported/demo.json")],
+            "seed_existing_output": True,
+            "upload_remote_state": True,
+        },
+    ]
+    assert payload["family_cache_preparation"]["status"] == "rebuilt-from-processed-history"
     assert payload["durable_trace_recovery"]["status"] == "queue-only-disabled"
     assert payload["durable_trace_recovery"]["restored_count"] == 0
     assert payload["training_candidates"]["candidate_count"] == 1
@@ -1096,8 +1296,17 @@ def test_run_trainer_cycle_blocks_promotion_when_gate_fails(
         summary_path: Path,
         include_statuses: tuple[str, ...] = ("accepted", "candidate"),
         seed_existing_output: bool = True,
+        upload_remote_state: bool = True,
     ) -> dict[str, object]:
-        del root, trace_paths, output_path, summary_path, include_statuses, seed_existing_output
+        del (
+            root,
+            trace_paths,
+            output_path,
+            summary_path,
+            include_statuses,
+            seed_existing_output,
+            upload_remote_state,
+        )
         return {
             "candidate_count": 0,
             "new_candidate_count": 0,
@@ -1205,8 +1414,17 @@ def test_run_trainer_cycle_blocks_publish_when_bundle_benchmark_gate_fails(
         summary_path: Path,
         include_statuses: tuple[str, ...] = ("accepted", "candidate"),
         seed_existing_output: bool = True,
+        upload_remote_state: bool = True,
     ) -> dict[str, object]:
-        del root, trace_paths, output_path, summary_path, include_statuses, seed_existing_output
+        del (
+            root,
+            trace_paths,
+            output_path,
+            summary_path,
+            include_statuses,
+            seed_existing_output,
+            upload_remote_state,
+        )
         return {
             "candidate_count": 1,
             "new_candidate_count": 1,
@@ -1521,8 +1739,9 @@ def test_run_trainer_cycle_does_not_replay_full_imported_ledger_when_no_new_trac
         summary_path: Path,
         include_statuses: tuple[str, ...] = ("accepted", "candidate"),
         seed_existing_output: bool = True,
+        upload_remote_state: bool = True,
     ) -> dict[str, object]:
-        del root, output_path, summary_path, include_statuses
+        del root, output_path, summary_path, include_statuses, upload_remote_state
         assert trace_paths == []
         assert seed_existing_output is True
         return {

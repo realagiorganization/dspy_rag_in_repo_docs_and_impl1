@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shutil
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -15,6 +16,7 @@ from typing import Any, cast
 import yaml
 
 from .runtime_artifacts import (
+    DEFAULT_TRAINER_FAMILY_CACHE_DIR,
     DEFAULT_TRAINER_FAMILY_STATE_PATH,
     load_json_object,
     upload_remote_family_state,
@@ -63,6 +65,7 @@ _CODEX_TRANSCRIPT_BLOCK_PATTERN = re.compile(
 )
 _CODEX_STDOUT_SECTION_PATTERN = re.compile(r"(?ms)\nSTDOUT:\n(.*?)(?:\nSTDERR:\n|\Z)")
 _FORWARDED_DISCORD_TAIL_PATTERN = re.compile(r"(?is)\s*\[forwarded\]\s*@.*$")
+_FAMILY_CACHE_TOKEN_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 def _coerce_int(value: object) -> int | None:
@@ -154,6 +157,44 @@ def _strip_dataset_execution_envelope(text: object) -> str:
     result = _strip_forwarded_discord_tail("\n".join(normalized_lines).strip())
     fallback = _strip_forwarded_discord_tail(str(text or "").strip())
     return result or fallback
+
+
+def _sanitize_family_cache_token(value: object, *, default: str) -> str:
+    """Return a filesystem-safe cache token for one family-scoped path."""
+
+    cleaned = "-".join(
+        part
+        for part in _FAMILY_CACHE_TOKEN_PATTERN.split(str(value or "").strip())
+        if part
+    )
+    return cleaned or default
+
+
+def _family_state_dir(path: Path) -> Path:
+    """Return the directory that owns one persisted family-state file."""
+
+    return path.resolve().parent
+
+
+def _family_cache_relative_dir(prompt_family_id: str) -> Path:
+    """Return the relative local cache directory for one prompt family."""
+
+    return Path("families") / _sanitize_family_cache_token(prompt_family_id, default="family")
+
+
+def _resolve_family_state_member_path(
+    family_state_path: Path,
+    path_text: object,
+) -> Path | None:
+    """Resolve one thin-index member path relative to its owning family-state file."""
+
+    cleaned = str(path_text or "").strip()
+    if not cleaned:
+        return None
+    candidate = Path(cleaned)
+    if candidate.is_absolute():
+        return candidate
+    return _family_state_dir(family_state_path) / candidate
 
 
 def normalize_training_examples(records: list[dict[str, Any]]) -> list[TrainingExample]:
@@ -998,9 +1039,175 @@ def _fresh_champion_index() -> dict[str, Any]:
         "schema_version": TRAINER_FAMILY_STATE_SCHEMA_VERSION,
         "record_kind": TRAINER_CHAMPION_INDEX_KIND,
         "family_state_kind": TRAINER_FAMILY_STATE_KIND,
+        "family_state_layout": "thin-index",
         "generated_at": datetime.now(UTC).isoformat(),
         "prompt_families": [],
     }
+
+
+def _family_state_entry_to_payload(
+    family_state_path: Path,
+    family_entry: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Hydrate one persisted thin-index family entry into its full family payload."""
+
+    loaded_payload: dict[str, Any] | None = None
+    resolved_family_path = _resolve_family_state_member_path(
+        family_state_path,
+        family_entry.get("family_path"),
+    )
+    if resolved_family_path is not None and resolved_family_path.is_file():
+        candidate_payload = json.loads(resolved_family_path.read_text(encoding="utf-8"))
+        if isinstance(candidate_payload, dict):
+            loaded_payload = {str(key): value for key, value in candidate_payload.items()}
+    if loaded_payload is None:
+        loaded_payload = {str(key): value for key, value in family_entry.items()}
+    for field_name in (
+        "prompt_family_id",
+        "family_needs_recompile",
+        "question",
+        "normalized_question",
+        "question_variants",
+        "question_variant_count",
+        "family_father_question",
+        "family_father_similarity_mean",
+        "family_father_record",
+        "family_runtime_artifact",
+        "family_runtime_context_group_id",
+        "family_runtime_score",
+        "family_runtime_record",
+        "family_champion_context_group_id",
+        "family_champion_score",
+        "family_champion_record",
+    ):
+        if field_name in family_entry and field_name not in loaded_payload:
+            loaded_payload[field_name] = family_entry[field_name]
+    return loaded_payload
+
+
+def _strip_family_state_inline_payload(
+    family_payload: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Return one thin-index family entry without replay-set duplication."""
+
+    return {
+        "prompt_family_id": str(family_payload.get("prompt_family_id") or "").strip(),
+        "family_needs_recompile": bool(family_payload.get("family_needs_recompile")),
+        "question": _normalize_question_text(family_payload.get("question")),
+        "normalized_question": _normalize_question_text(
+            family_payload.get("normalized_question")
+        ),
+        "question_variants": _family_question_variants(family_payload),
+        "question_variant_count": int(family_payload.get("question_variant_count") or 0),
+        "family_father_question": _normalize_question_text(
+            family_payload.get("family_father_question")
+        )
+        or None,
+        "family_father_similarity_mean": family_payload.get("family_father_similarity_mean"),
+        "family_runtime_context_group_id": family_payload.get("family_runtime_context_group_id"),
+        "family_runtime_score": family_payload.get("family_runtime_score"),
+        "family_runtime_artifact": family_payload.get("family_runtime_artifact"),
+        "family_champion_context_group_id": family_payload.get("family_champion_context_group_id"),
+        "family_champion_score": family_payload.get("family_champion_score"),
+        "family_record_count": len(_family_replay_records(family_payload)),
+        "context_group_count": len(
+            family_payload.get("context_groups")
+            if isinstance(family_payload.get("context_groups"), list)
+            else []
+        ),
+    }
+
+
+def _persist_local_family_state(
+    family_state_path: Path,
+    index_payload: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Persist the local family cache plus a thin family-state index."""
+
+    resolved_family_state_path = family_state_path.resolve()
+    family_state_dir = _family_state_dir(resolved_family_state_path)
+    family_cache_dir = family_state_dir / DEFAULT_TRAINER_FAMILY_CACHE_DIR.name
+    family_cache_dir.mkdir(parents=True, exist_ok=True)
+
+    raw_families = index_payload.get("prompt_families")
+    family_payloads = raw_families if isinstance(raw_families, list) else []
+    active_family_dirs: set[Path] = set()
+    thin_families: list[dict[str, Any]] = []
+
+    for family_value in family_payloads:
+        if not isinstance(family_value, Mapping):
+            continue
+        full_family_payload = {str(key): value for key, value in family_value.items()}
+        prompt_family_id = str(full_family_payload.get("prompt_family_id") or "").strip()
+        if not prompt_family_id:
+            continue
+        relative_family_dir = _family_cache_relative_dir(prompt_family_id)
+        family_dir = family_state_dir / relative_family_dir
+        active_family_dirs.add(family_dir)
+        family_dir.mkdir(parents=True, exist_ok=True)
+
+        family_file_payload = {
+            key: value
+            for key, value in full_family_payload.items()
+            if key not in {"family_path", "father_path", "record_paths", "family_record_count"}
+        }
+        family_json_path = family_dir / "family.json"
+        family_json_path.write_text(
+            f"{json.dumps(family_file_payload, indent=2)}\n",
+            encoding="utf-8",
+        )
+
+        father_path = family_dir / "father.json"
+        father_record = _family_father_record(full_family_payload)
+        if father_record is not None:
+            father_path.write_text(
+                f"{json.dumps(father_record, indent=2)}\n",
+                encoding="utf-8",
+            )
+        elif father_path.exists():
+            father_path.unlink()
+
+        record_dir = family_dir / "records"
+        record_dir.mkdir(parents=True, exist_ok=True)
+        expected_record_paths: set[Path] = set()
+        for record in _family_replay_records(full_family_payload):
+            record_token = str(record.get("exact_snapshot_id") or _candidate_record_hash(record)).strip()
+            if not record_token:
+                continue
+            record_path = record_dir / f"{record_token}.json"
+            expected_record_paths.add(record_path)
+            record_path.write_text(
+                f"{json.dumps(record, indent=2)}\n",
+                encoding="utf-8",
+            )
+        for stale_record in record_dir.glob("*.json"):
+            if stale_record not in expected_record_paths:
+                stale_record.unlink()
+
+        thin_entry = _strip_family_state_inline_payload(full_family_payload)
+        thin_entry["family_path"] = str((relative_family_dir / "family.json").as_posix())
+        if father_record is not None:
+            thin_entry["father_path"] = str((relative_family_dir / "father.json").as_posix())
+        thin_families.append(thin_entry)
+
+    for stale_family_dir in family_cache_dir.iterdir():
+        if stale_family_dir not in active_family_dirs:
+            shutil.rmtree(stale_family_dir)
+
+    thin_index = {
+        "schema_version": index_payload.get("schema_version", TRAINER_FAMILY_STATE_SCHEMA_VERSION),
+        "record_kind": index_payload.get("record_kind", TRAINER_CHAMPION_INDEX_KIND),
+        "family_state_kind": index_payload.get("family_state_kind", TRAINER_FAMILY_STATE_KIND),
+        "family_state_layout": "thin-index",
+        "generated_at": index_payload.get("generated_at") or datetime.now(UTC).isoformat(),
+        "prompt_families": thin_families,
+    }
+    resolved_family_state_path.parent.mkdir(parents=True, exist_ok=True)
+    resolved_family_state_path.write_text(
+        f"{json.dumps(thin_index, indent=2)}\n",
+        encoding="utf-8",
+    )
+    return thin_index
 
 
 def _load_champion_index(path: Path) -> dict[str, Any]:
@@ -1015,7 +1222,13 @@ def _load_champion_index(path: Path) -> dict[str, Any]:
     if not isinstance(families, list):
         payload["prompt_families"] = []
         return payload
+    hydrated_families: list[dict[str, Any]] = []
     for family in families:
+        if not isinstance(family, Mapping):
+            continue
+        hydrated_families.append(_family_state_entry_to_payload(path, family))
+    payload["prompt_families"] = hydrated_families
+    for family in hydrated_families:
         if not isinstance(family, dict):
             continue
         family["family_needs_recompile"] = bool(family.get("family_needs_recompile"))
@@ -1076,6 +1289,12 @@ def _load_champion_index(path: Path) -> dict[str, Any]:
         elif stored_family_question:
             _refresh_prompt_family_summary(family, stored_family_question)
     return payload
+
+
+def load_family_state_payload(path: Path) -> dict[str, Any]:
+    """Load one persisted family-state file and hydrate its full family payloads."""
+
+    return _load_champion_index(path)
 
 
 def _seed_champion_index_from_existing_records(
@@ -2026,6 +2245,7 @@ def materialize_training_candidates(
     champion_index_path: Path | None = None,
     include_statuses: Sequence[str] = ("accepted", "candidate"),
     seed_existing_output: bool = True,
+    upload_remote_state: bool = True,
 ) -> dict[str, Any]:
     """Materialize trainer-side DSPy training candidates from imported trace records."""
 
@@ -2267,15 +2487,17 @@ def materialize_training_candidates(
     champion_index["prompt_families"] = [family_by_id[family_id] for family_id in family_order]
     merged_records = _materialize_family_champion_records(champion_index)
 
-    family_state_text = json.dumps(champion_index, indent=2) + "\n"
-    resolved_family_state_path.parent.mkdir(parents=True, exist_ok=True)
-    resolved_family_state_path.write_text(
-        family_state_text,
-        encoding="utf-8",
+    _persist_local_family_state(
+        resolved_family_state_path,
+        champion_index,
     )
-    remote_family_state = upload_remote_family_state(
-        resolved_root,
-        family_state_path=resolved_family_state_path,
+    remote_family_state = (
+        upload_remote_family_state(
+            resolved_root,
+            family_state_path=resolved_family_state_path,
+        )
+        if upload_remote_state
+        else None
     )
     family_state_summary = summarize_family_state(resolved_family_state_path)
     resolved_output_path.parent.mkdir(parents=True, exist_ok=True)

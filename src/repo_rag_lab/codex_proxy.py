@@ -718,14 +718,14 @@ def _staged_family_program_candidates(
 
 def _build_family_registry_from_state_path(
     *,
-    bundle_root: Path,
+    repository_root: Path,
     family_state_path: Path,
 ) -> dict[str, object] | None:
     """Synthesize one bundle-style family registry from a persisted family-state file."""
 
     try:
         return build_bundle_family_registry(
-            bundle_root.resolve(),
+            repository_root.resolve(),
             family_state_path=family_state_path.resolve(),
         )
     except Exception:
@@ -826,6 +826,7 @@ def _resolve_bundle_family_registry(
 
 def _resolve_family_runtime_program_path(
     *,
+    repository_root: Path,
     bundle_root: Path,
     family_registry: Mapping[str, object] | None,
     prompt_family_id: str | None,
@@ -853,9 +854,17 @@ def _resolve_family_runtime_program_path(
                 break
             resolved_program_path = Path(program_path_text)
             if not resolved_program_path.is_absolute():
-                resolved_program_path = bundle_root / resolved_program_path
-            if resolved_program_path.is_file():
-                return resolved_program_path
+                candidate_roots = []
+                for candidate_root in (repository_root, bundle_root):
+                    resolved_candidate_root = candidate_root.resolve()
+                    if resolved_candidate_root not in candidate_roots:
+                        candidate_roots.append(resolved_candidate_root)
+                for candidate_root in candidate_roots:
+                    candidate_program_path = candidate_root / resolved_program_path
+                    if candidate_program_path.is_file():
+                        return candidate_program_path.resolve()
+            elif resolved_program_path.is_file():
+                return resolved_program_path.resolve()
             break
     for candidate in _staged_family_program_candidates(
         bundle_root=bundle_root,
@@ -1047,6 +1056,15 @@ def build_codex_mediation(
     active_prompt = reformulated_prompt or original_prompt
     family_lookup_prompt = original_prompt or active_prompt
     family_state_path: Path | None = None
+    family_state_checked = False
+
+    def _get_family_state_path() -> Path | None:
+        nonlocal family_state_checked, family_state_path
+        if not family_state_checked:
+            family_state_path = _resolve_family_state_path(resolved_root, resolved_bundle_root)
+            family_state_checked = True
+        return family_state_path
+
     resolved_bundle_version: str | None = _resolve_bundle_version_hint(
         bundle_root=resolved_bundle_root,
         bundle_version=bundle_version,
@@ -1074,10 +1092,10 @@ def build_codex_mediation(
         prompt_family_band = support.band
         supported_family = support.supported
     else:
-        family_state_path = _resolve_family_state_path(resolved_root, resolved_bundle_root)
+        family_state_path = _get_family_state_path()
         if family_state_path is not None:
             synthesized_family_registry = _build_family_registry_from_state_path(
-                bundle_root=resolved_bundle_root,
+                repository_root=resolved_root,
                 family_state_path=family_state_path,
             )
             if isinstance(synthesized_family_registry, Mapping):
@@ -1096,6 +1114,44 @@ def build_codex_mediation(
             warnings.append(
                 "Family state index was unavailable; request will pass through unchanged."
             )
+    if (
+        prefer_dspy
+        and
+        supported_family
+        and prompt_family_id is not None
+        and isinstance(family_registry, Mapping)
+    ):
+        family_state_path = _get_family_state_path()
+        resolved_family_program_path = _resolve_family_runtime_program_path(
+            repository_root=resolved_root,
+            bundle_root=resolved_bundle_root,
+            family_registry=family_registry,
+            prompt_family_id=prompt_family_id,
+            bundle_version=resolved_bundle_version,
+        )
+        if resolved_family_program_path is None and family_state_path is not None:
+            synthesized_family_registry = _build_family_registry_from_state_path(
+                repository_root=resolved_root,
+                family_state_path=family_state_path,
+            )
+            if isinstance(synthesized_family_registry, Mapping):
+                synthesized_support = resolve_prompt_family_support_from_payload(
+                    family_lookup_prompt,
+                    {"prompt_families": synthesized_family_registry.get("families", [])},
+                )
+                synthesized_family_program_path = _resolve_family_runtime_program_path(
+                    repository_root=resolved_root,
+                    bundle_root=resolved_bundle_root,
+                    family_registry=synthesized_family_registry,
+                    prompt_family_id=synthesized_support.prompt_family_id,
+                    bundle_version=resolved_bundle_version,
+                )
+                if synthesized_support.supported and synthesized_family_program_path is not None:
+                    family_registry = synthesized_family_registry
+                    prompt_family_id = synthesized_support.prompt_family_id
+                    prompt_family_similarity = synthesized_support.similarity
+                    prompt_family_band = synthesized_support.band
+                    supported_family = True
     family_entry = _resolve_family_bundle_entry(
         family_registry=family_registry,
         prompt_family_id=prompt_family_id,
@@ -1205,6 +1261,7 @@ def build_codex_mediation(
                 )
             family_program_path = (
                 _resolve_family_runtime_program_path(
+                    repository_root=resolved_root,
                     bundle_root=resolved_bundle_root,
                     family_registry=family_registry,
                     prompt_family_id=prompt_family_id,
@@ -1255,11 +1312,12 @@ def build_codex_mediation(
                 getattr(dspy_result, "retrieval_mode", effective_retrieval_mode)
                 or effective_retrieval_mode
             )
-            program_path_text = (
-                program_path.relative_to(resolved_bundle_root).as_posix()
-                if program_path.is_relative_to(resolved_bundle_root)
-                else str(program_path)
-            )
+            if program_path.is_relative_to(resolved_bundle_root):
+                program_path_text = program_path.relative_to(resolved_bundle_root).as_posix()
+            elif program_path.is_relative_to(resolved_root):
+                program_path_text = program_path.relative_to(resolved_root).as_posix()
+            else:
+                program_path_text = str(program_path)
         except Exception as exc:
             dspy_status = "heuristic"
             warnings.append(

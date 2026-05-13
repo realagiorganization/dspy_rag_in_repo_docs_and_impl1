@@ -770,6 +770,178 @@ def test_build_codex_mediation_synthesizes_family_registry_from_family_state(
     assert captured["program_path"] == family_program_path.resolve()
 
 
+def test_build_codex_mediation_falls_back_to_family_state_when_bundle_registry_path_is_stale(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "README.md").write_text("repo summary\n", encoding="utf-8")
+    bundle_root = tmp_path / "bundle-root"
+    family_state_path = repo / "artifacts" / "trainer" / "remote-family-state" / "state-1" / "family-state.json"
+    family_state_path.parent.mkdir(parents=True)
+    family_program_path = (
+        repo
+        / "artifacts"
+        / "trainer"
+        / "remote-family-state"
+        / "state-1"
+        / "families"
+        / "pf-demo"
+        / "runtime-artifact"
+        / "program.json"
+    )
+    family_program_path.parent.mkdir(parents=True)
+    family_program_path.write_text('{"program":"family-demo"}\n', encoding="utf-8")
+    family_state_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "family_state_kind": "repo-rag-family-state",
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-demo",
+                        "family_father_question": (
+                            "Investigate the failing pytest target and fix the broken test."
+                        ),
+                        "family_father_record": {
+                            "question": (
+                                "Investigate the failing pytest target and fix the broken test."
+                            )
+                        },
+                        "family_runtime_record": {
+                            "question": (
+                                "Investigate the failing pytest target and fix the broken test."
+                            ),
+                            "metric_hits": 4,
+                            "metric_total": 5,
+                            "metric_ratio": 0.8,
+                        },
+                        "family_runtime_artifact": {
+                            "artifact_kind": "compiled-family-program",
+                            "artifact_ready": True,
+                            "program_path": str(family_program_path.relative_to(repo)),
+                            "metadata_path": (
+                                "artifacts/trainer/remote-family-state/state-1/families/pf-demo/"
+                                "runtime-artifact/metadata.json"
+                            ),
+                            "hit_rate": 1.0,
+                        },
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_ask_repository(
+        question: str,
+        root: Path,
+        retrieval_mode: RetrievalMode | None = None,
+    ) -> SimpleNamespace:
+        del retrieval_mode
+        assert question == "Run the failing pytest target and inspect stderr."
+        return SimpleNamespace(
+            context=[Chunk(source=root / "README.md", text="Repository summary text.")],
+            summary="Repository summary text.",
+            retrieval_mode="lexical",
+        )
+
+    class FakeRepositoryRAG:
+        def __init__(
+            self,
+            root: Path,
+            top_k: int = 4,
+            *,
+            program_path: Path | None = None,
+            lm_config: object | None = None,
+            require_configured_lm: bool = False,
+            retrieval_mode: RetrievalMode | None = None,
+        ) -> None:
+            del root, top_k, lm_config, require_configured_lm, retrieval_mode
+            captured["program_path"] = program_path
+
+        def __call__(
+            self,
+            question: str,
+            *,
+            original_prompt: str | None = None,
+            reformulated_prompt: str | None = None,
+            command_trace: object = (),
+        ) -> SimpleNamespace:
+            del question, original_prompt, reformulated_prompt, command_trace
+            return SimpleNamespace(answer="Family-state fallback answer.", retrieval_mode="lexical")
+
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.ask_repository", fake_ask_repository)
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.RepositoryRAG", FakeRepositoryRAG)
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.resolve_dspy_lm_config",
+        lambda: SimpleNamespace(model="azure/dspy-helper"),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.reformulate_codex_prompt",
+        lambda prompt, *, lm_config=None: (
+            "Run the failing pytest target and inspect stderr.",
+            "success",
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_bundle_family_registry",
+        lambda **kwargs: {
+            "schema_version": 1,
+            "registry_kind": "repo-rag-family-registry",
+            "families": [
+                {
+                    "prompt_family_id": "pf-demo",
+                    "family_father_question": (
+                        "Investigate the failing pytest target and fix the broken test."
+                    ),
+                    "family_father_record": {
+                        "question": (
+                            "Investigate the failing pytest target and fix the broken test."
+                        )
+                    },
+                    "family_runtime_metric": {"hit_rate": 0.8},
+                    "runtime_artifact": {
+                        "artifact_kind": "compiled-family-program",
+                        "artifact_ready": True,
+                        "program_path": "versions/stable-42/families/pf-demo/program.json",
+                        "metadata_path": "versions/stable-42/families/pf-demo/metadata.json",
+                        "hit_rate": 1.0,
+                    },
+                }
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_family_state_path",
+        lambda *args, **kwargs: family_state_path,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_program_path_and_bundle_version",
+        lambda **kwargs: (None, "stable-42"),
+    )
+
+    mediation = build_codex_mediation(
+        "Investigate the failing pytest target and fix the broken test.",
+        repository_root=repo,
+        bundle_root=bundle_root,
+        prefer_dspy=True,
+        bundle_version="stable-42",
+    )
+
+    assert mediation.dspy_status == "success"
+    assert mediation.prompt_family_id == "pf-demo"
+    assert mediation.family_artifact_selected is True
+    assert mediation.program_path == (
+        "artifacts/trainer/remote-family-state/state-1/families/pf-demo/runtime-artifact/program.json"
+    )
+    assert captured["program_path"] == family_program_path.resolve()
+
+
 def test_build_codex_mediation_uses_original_prompt_for_family_lookup(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
