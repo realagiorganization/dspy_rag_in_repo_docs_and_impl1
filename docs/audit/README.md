@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-05-13-trainer-local-cache-thin-index-one-version-per-queue-cycle.md`
+- `2026-05-13-processed-replay-no-longer-duplicates-family-records.md`
 
 ## Usage
 

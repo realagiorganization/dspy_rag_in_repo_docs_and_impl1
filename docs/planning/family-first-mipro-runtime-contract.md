@@ -426,6 +426,12 @@ Not implemented yet:
     `processed` when neither local nor remote state exists. That from-scratch rebuild uses
     `upload_remote_state=False`, so it does not mint an intermediate remote version before the
     current queued traces are applied and dirty families are recompiled.
+36. Make processed-ledger replay stable so one logical trace cannot duplicate itself on restore.
+    Stage 36 locally: imported trace records now preserve the original queued-item identity, trainer
+    snapshot IDs prefer that stable source token over the transient imported filename, and family
+    replay upserts plus family-state hydration dedupe re-imported processed traces instead of
+    counting them as new snapshots. Remote family-state uploads are also skipped when a cycle loads
+    no accepted/candidate records, so empty no-op versions are no longer minted.
 28. Align runtime father matching and deploy-stage recovery with the family-first trace contract.
     Stage 28 locally: family lookup now routes by `original_prompt` instead of the helper's
     reformulated text, so existing fathers are compared against the raw task surface that the user

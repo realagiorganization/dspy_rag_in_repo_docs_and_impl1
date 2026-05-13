@@ -1249,9 +1249,9 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
             "record_blobs": {},
             "runtime_artifact_blobs": {},
         }
-        father_record = _mapping_or_none(full_family_payload.get("family_father_record")) or _mapping_or_none(
-            family_entry.get("family_father_record")
-        )
+        father_record = _mapping_or_none(
+            full_family_payload.get("family_father_record")
+        ) or _mapping_or_none(family_entry.get("family_father_record"))
         local_father_path = family_dir / "father.json"
         if store.blob_exists(container, family_blob_map["father"]):
             father_text = store.download_text(container, family_blob_map["father"])
@@ -1279,9 +1279,9 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
             record_blob_map[record_token] = record_blob_name
         local_member_paths["record_paths"] = record_paths
         remote_member_blobs["record_blobs"] = record_blob_map
-        runtime_artifact = _mapping_or_none(full_family_payload.get("family_runtime_artifact")) or _mapping_or_none(
-            family_entry.get("family_runtime_artifact")
-        )
+        runtime_artifact = _mapping_or_none(
+            full_family_payload.get("family_runtime_artifact")
+        ) or _mapping_or_none(family_entry.get("family_runtime_artifact"))
         runtime_artifact_blob_map: dict[str, str] = {}
         local_runtime_paths: dict[str, str] = {}
         if runtime_artifact is not None:
@@ -1333,7 +1333,11 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
                 local_family_path.write_text(family_text, encoding="utf-8")
                 local_member_paths["runtime_artifact"] = local_runtime_paths
                 remote_member_blobs["runtime_artifact_blobs"] = runtime_artifact_blob_map
-        family_entry["family_path"] = str(Path("families") / _sanitize_name(prompt_family_id, default="family") / "family.json")
+        family_entry["family_path"] = str(
+            Path("families")
+            / _sanitize_name(prompt_family_id, default="family")
+            / "family.json"
+        )
         if "father" in local_member_paths:
             family_entry["father_path"] = str(
                 Path("families")
@@ -2066,6 +2070,9 @@ def _build_trace_record(
     trace_path: Path,
     imported: bool,
     outcome: Mapping[str, object] | None,
+    source_queue_item_path: str | None = None,
+    source_trace_name: str | None = None,
+    source_batch_name: str | None = None,
 ) -> dict[str, object]:
     """Build one normalized stored trace record for a concrete path."""
 
@@ -2086,6 +2093,9 @@ def _build_trace_record(
         "source_command_status": _string_or_none(normalized_payload.get("source_command_status"))
         or "success",
         "source_root": _string_or_none(normalized_payload.get("source_root")),
+        "source_queue_item_path": _string_or_none(source_queue_item_path),
+        "source_trace_name": _string_or_none(source_trace_name),
+        "source_batch_name": _string_or_none(source_batch_name),
         "question": _string_or_none(snapshot.get("question"))
         or _string_or_none(trace.get("question")),
         "original_prompt": _string_or_none(snapshot.get("original_prompt"))
@@ -2132,6 +2142,8 @@ def write_trace_record(
     trace_name: str | None = None,
     imported: bool = False,
     outcome: Mapping[str, object] | None = None,
+    source_queue_item_path: str | None = None,
+    source_batch_name: str | None = None,
 ) -> dict[str, object]:
     """Normalize and persist one runtime-trace record under ``artifacts/traces``."""
 
@@ -2154,6 +2166,9 @@ def write_trace_record(
         trace_path=trace_path,
         imported=imported,
         outcome=normalized_outcome,
+        source_queue_item_path=source_queue_item_path,
+        source_trace_name=trace_name,
+        source_batch_name=source_batch_name,
     )
     trace_path.write_text(f"{json.dumps(record, indent=2)}\n", encoding="utf-8")
     return record
@@ -2268,6 +2283,10 @@ def restore_processed_trace_records(
                     trace_path=trace_path,
                     imported=True,
                     outcome=_mapping_or_none(queued_item.get("outcome")),
+                    source_queue_item_path=_string_or_none(queued_item.get("queue_item_path"))
+                    or blob_name,
+                    source_trace_name=_string_or_none(queued_item.get("trace_name")),
+                    source_batch_name=_string_or_none(queued_item.get("batch_name")),
                 )
                 trace_path.write_text(f"{json.dumps(record, indent=2)}\n", encoding="utf-8")
                 restored_paths.append(_relative_to_root(trace_path, resolved_root))
@@ -2313,6 +2332,10 @@ def restore_processed_trace_records(
                 trace_path=trace_path,
                 imported=True,
                 outcome=_mapping_or_none(queued_item.get("outcome")),
+                source_queue_item_path=_string_or_none(queued_item.get("queue_item_path"))
+                or _relative_to_root(processed_path, resolved_root),
+                source_trace_name=_string_or_none(queued_item.get("trace_name")),
+                source_batch_name=_string_or_none(queued_item.get("batch_name")),
             )
             trace_path.write_text(f"{json.dumps(record, indent=2)}\n", encoding="utf-8")
             restored_paths_local.append(_relative_to_root(trace_path, resolved_root))
@@ -2500,6 +2523,9 @@ def drain_trace_queue(
                     trace_name=trace_name,
                     imported=True,
                     outcome=outcome,
+                    source_queue_item_path=_string_or_none(queued_item.get("queue_item_path"))
+                    or blob_name,
+                    source_batch_name=_string_or_none(queued_item.get("batch_name")),
                 )
                 file_name = Path(blob_name).name
                 processed_blob = processed_trace_blob_name(queue_name_remote, file_name)
@@ -2614,6 +2640,8 @@ def drain_trace_queue(
                 trace_name=trace_name,
                 imported=True,
                 outcome=outcome,
+                source_queue_item_path=_relative_to_root(queued_path, resolved_root),
+                source_batch_name=_string_or_none(queued_item.get("batch_name")),
             )
             processed_dir.mkdir(parents=True, exist_ok=True)
             processed_path = processed_dir / queued_path.name

@@ -560,6 +560,91 @@ def test_materialize_training_candidates_strips_execution_envelope_from_family_f
     )
 
 
+def test_materialize_training_candidates_dedupes_replayed_processed_trace_imports(
+    tmp_path: Path,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    base_payload = {
+        "trace_record_kind": "repo-rag-trace-record",
+        "question": "Add a demo GIF to README",
+        "original_prompt": "Add a demo GIF to README",
+        "reformulated_prompt": "Inspect whether the README already embeds a demo GIF.",
+        "answer": "No father-backed prompt-family support was found for this turn.",
+        "source_queue_item_path": (
+            "queued/repo-rag-training/20260513T120200Z-worker-0-prompts_debt_relief.json"
+        ),
+        "source_trace_name": "worker-0-prompts_debt_relief",
+        "trace": {
+            "schema_version": 1,
+            "trace_kind": "repo-rag-runtime",
+            "question": "Add a demo GIF to README",
+            "recorded_at": "2026-05-13T12:00:00+00:00",
+            "mode": "codex-proxy-turn-mediation",
+            "retrieval_mode": "lexical",
+            "sources": [],
+            "source_count": 0,
+            "context_count": 0,
+            "context_field": "evidence_previews",
+            "mcp_candidate_count": 0,
+            "answer_length": 63,
+        },
+        "outcome": {
+            "acceptance_status": "candidate",
+            "accepted": None,
+            "execution_status": "success",
+            "method": "codex_cli",
+            "backend": "codex_cli_repo_rag_proxy",
+        },
+    }
+    (imported_dir / "first.json").write_text(
+        json.dumps(
+            {
+                **base_payload,
+                "trace_record_path": "artifacts/traces/imported/20260513T120200Z-worker-0.json",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (imported_dir / "second.json").write_text(
+        json.dumps(
+            {
+                **base_payload,
+                "trace_record_path": (
+                    "artifacts/traces/imported/20260513T121509Z-20260513T120200Z-worker-0.json"
+                ),
+                "trace": {
+                    **base_payload["trace"],
+                    "recorded_at": "2026-05-13T12:15:09+00:00",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        trace_paths=[
+            Path("artifacts/traces/imported/first.json"),
+            Path("artifacts/traces/imported/second.json"),
+        ],
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+    )
+
+    assert summary["loaded_candidate_count"] == 2
+    family_state = load_family_state_payload(
+        tmp_path / "artifacts" / "trainer" / "family-state.json"
+    )
+    family_payload = family_state["prompt_families"][0]
+    family_records = family_payload["family_records"]
+    assert len(family_records) == 1
+    assert (
+        family_records[0]["provenance"]["source_queue_item_path"]
+        == "queued/repo-rag-training/20260513T120200Z-worker-0-prompts_debt_relief.json"
+    )
+
+
 def test_resolve_prompt_family_support_matches_best_family_father(tmp_path: Path) -> None:
     trainer_dir = tmp_path / "artifacts" / "trainer"
     trainer_dir.mkdir(parents=True, exist_ok=True)
