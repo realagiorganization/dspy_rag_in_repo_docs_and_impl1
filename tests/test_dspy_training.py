@@ -10,6 +10,8 @@ import pytest
 
 from repo_rag_lab.dspy_training import (
     DEFAULT_DSPY_MODEL,
+    DEFAULT_DSPY_HELPER_MODEL,
+    DEFAULT_DSPY_TRAINER_MODEL,
     DSPyLMConfig,
     DSPyTrainingConfig,
     _training_examples_signature,
@@ -24,7 +26,9 @@ from repo_rag_lab.dspy_training import (
     load_dspy_artifact_metadata,
     repository_answer_metric,
     resolve_dspy_artifact_paths,
+    resolve_dspy_helper_lm_config,
     resolve_dspy_lm_config,
+    resolve_dspy_trainer_lm_config,
     resolve_dspy_program_path,
     train_repository_program,
 )
@@ -161,6 +165,90 @@ def test_resolve_dspy_lm_config_returns_none_without_configuration(
         monkeypatch.delenv(name, raising=False)
 
     assert resolve_dspy_lm_config() is None
+
+
+def test_resolve_dspy_helper_lm_config_defaults_to_scoped_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in [
+        "DSPY_HELPER_MODEL",
+        "DSPY_MODEL",
+        "DSPY_HELPER_API_KEY",
+        "DSPY_API_KEY",
+        "DSPY_HELPER_API_BASE",
+        "DSPY_API_BASE",
+        "DSPY_HELPER_API_VERSION",
+        "DSPY_API_VERSION",
+    ]:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "secret")
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2025-03-01-preview")
+
+    config = resolve_dspy_helper_lm_config()
+
+    assert config is not None
+    assert config.model == DEFAULT_DSPY_HELPER_MODEL
+    assert config.api_base == "https://example.openai.azure.com"
+    assert config.api_version == "2025-03-01-preview"
+    assert config.api_key == "secret"
+
+
+def test_resolve_dspy_trainer_lm_config_defaults_to_scoped_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in [
+        "DSPY_TRAINER_MODEL",
+        "DSPY_MODEL",
+        "DSPY_TRAINER_API_KEY",
+        "DSPY_API_KEY",
+        "DSPY_TRAINER_API_BASE",
+        "DSPY_API_BASE",
+        "DSPY_TRAINER_API_VERSION",
+        "DSPY_API_VERSION",
+    ]:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "secret")
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2025-03-01-preview")
+
+    config = resolve_dspy_trainer_lm_config()
+
+    assert config is not None
+    assert config.model == DEFAULT_DSPY_TRAINER_MODEL
+    assert config.api_base == "https://example.openai.azure.com"
+    assert config.api_version == "2025-03-01-preview"
+    assert config.api_key == "secret"
+
+
+def test_resolve_dspy_helper_lm_config_prefers_scoped_env_over_shared(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DSPY_MODEL", "azure/shared")
+    monkeypatch.setenv("DSPY_HELPER_MODEL", "azure/helper")
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "secret")
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2025-03-01-preview")
+
+    config = resolve_dspy_helper_lm_config()
+
+    assert config is not None
+    assert config.model == "azure/helper"
+
+
+def test_resolve_dspy_trainer_lm_config_prefers_scoped_env_over_shared(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DSPY_MODEL", "azure/shared")
+    monkeypatch.setenv("DSPY_TRAINER_MODEL", "azure/trainer")
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "secret")
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2025-03-01-preview")
+
+    config = resolve_dspy_trainer_lm_config()
+
+    assert config is not None
+    assert config.model == "azure/trainer"
 
 
 def test_resolve_dspy_artifact_paths_and_latest_metadata(tmp_path: Path) -> None:

@@ -71,8 +71,8 @@ preserving stale `gpt-5.4`.
     the Kubernetes secret
 - `deploy_repo_rag_trainer.sh`
   - default trainer deployment/model values changed from `gpt-5.4` to `gpt-4o`
-  - `DSPY_MODEL` remains optional and empty by default, so helper/trainer still use their own
-    explicit override when provided
+  - helper/trainer DSPy paths now rely on dedicated scoped variables rather than a shared
+    `DSPY_MODEL`
 - `.env.example`
   - examples updated to `gpt-4o`
 

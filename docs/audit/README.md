@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-05-13-azure-defaults-and-codex-config-model-alignment.md`
+- `2026-05-13-scoped-dspy-helper-trainer-model-defaults.md`
 
 ## Usage
 

@@ -34,6 +34,10 @@ except ImportError:  # pragma: no cover - optional dependency at import time
 DEFAULT_DSPY_RUN_NAME = "repository-rag-default"
 DEFAULT_OPENAI_MODEL = "openai/gpt-4o-mini"
 DEFAULT_DSPY_MODEL = DEFAULT_OPENAI_MODEL
+DSPY_HELPER_SCOPE = "helper"
+DSPY_TRAINER_SCOPE = "trainer"
+DEFAULT_DSPY_HELPER_MODEL = "azure/gpt-5.4-nano"
+DEFAULT_DSPY_TRAINER_MODEL = "azure/gpt-5.4-mini"
 DEFAULT_TRAINING_PATH = Path("samples/training/repository_training_examples.yaml")
 PROGRAM_FILENAME = "program.json"
 METADATA_FILENAME = "metadata.json"
@@ -282,6 +286,32 @@ def _int_from_env(name: str) -> int | None:
     return int(raw_value)
 
 
+def _scoped_env_name(scope: str, suffix: str) -> str:
+    return f"DSPY_{scope.upper()}_{suffix}"
+
+
+def _first_non_empty_env(*names: str) -> str | None:
+    return _first_non_empty(*(os.getenv(name) for name in names))
+
+
+def _float_from_env_names(*names: str) -> float | None:
+    for name in names:
+        raw_value = os.getenv(name)
+        if raw_value is None or not raw_value.strip():
+            continue
+        return float(raw_value)
+    return None
+
+
+def _int_from_env_names(*names: str) -> int | None:
+    for name in names:
+        raw_value = os.getenv(name)
+        if raw_value is None or not raw_value.strip():
+            continue
+        return int(raw_value)
+    return None
+
+
 def _normalize_api_base(api_base: str | None) -> str | None:
     if api_base is None:
         return None
@@ -431,6 +461,149 @@ def resolve_dspy_lm_config(
         )
 
     return None
+
+
+def _resolve_scoped_dspy_lm_config(
+    scope: str,
+    *,
+    model: str | None = None,
+    api_key: str | None = None,
+    api_base: str | None = None,
+    api_version: str | None = None,
+    model_type: str | None = "chat",
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+) -> DSPyLMConfig | None:
+    scoped_model = _scoped_env_name(scope, "MODEL")
+    scoped_api_key = _scoped_env_name(scope, "API_KEY")
+    scoped_api_base = _scoped_env_name(scope, "API_BASE")
+    scoped_api_version = _scoped_env_name(scope, "API_VERSION")
+    scoped_model_type = _scoped_env_name(scope, "MODEL_TYPE")
+    scoped_temperature = _scoped_env_name(scope, "TEMPERATURE")
+    scoped_max_tokens = _scoped_env_name(scope, "MAX_TOKENS")
+
+    default_model_by_scope = {
+        DSPY_HELPER_SCOPE: DEFAULT_DSPY_HELPER_MODEL,
+        DSPY_TRAINER_SCOPE: DEFAULT_DSPY_TRAINER_MODEL,
+    }
+    resolved_model_type = _first_non_empty(
+        model_type,
+        _first_non_empty_env(scoped_model_type, "DSPY_MODEL_TYPE"),
+        "chat",
+    )
+    resolved_temperature = (
+        temperature
+        if temperature is not None
+        else _float_from_env_names(scoped_temperature, "DSPY_TEMPERATURE")
+    )
+    resolved_max_tokens = (
+        max_tokens
+        if max_tokens is not None
+        else _int_from_env_names(scoped_max_tokens, "DSPY_MAX_TOKENS")
+    )
+    resolved_api_key = _first_non_empty(
+        api_key,
+        _first_non_empty_env(scoped_api_key, "DSPY_API_KEY"),
+    )
+    resolved_api_base = _normalize_api_base(
+        _first_non_empty(
+            api_base,
+            _first_non_empty_env(scoped_api_base, "DSPY_API_BASE"),
+        )
+    )
+    resolved_api_version = _first_non_empty(
+        api_version,
+        _first_non_empty_env(scoped_api_version, "DSPY_API_VERSION"),
+    )
+    resolved_model = _first_non_empty(
+        model,
+        _first_non_empty_env(scoped_model, "DSPY_MODEL"),
+        default_model_by_scope.get(scope),
+    )
+    if resolved_model is None:
+        return None
+
+    azure_api_base = _derive_azure_api_base(
+        os.getenv("AZURE_OPENAI_ENDPOINT"),
+        os.getenv("AZURE_OPENAI_CHAT_COMPLETIONS_URI"),
+    )
+    azure_api_key = _first_non_empty(resolved_api_key, os.getenv("AZURE_OPENAI_API_KEY"))
+    azure_api_version = _first_non_empty(
+        resolved_api_version, os.getenv("AZURE_OPENAI_API_VERSION")
+    )
+    openai_api_key = _first_non_empty(resolved_api_key, os.getenv("OPENAI_API_KEY"))
+
+    normalized_model = resolved_model.strip()
+    lowered_model = normalized_model.casefold()
+    effective_api_key = resolved_api_key
+    effective_api_base = resolved_api_base
+    effective_api_version = resolved_api_version
+    if lowered_model.startswith("azure/"):
+        effective_api_key = azure_api_key
+        effective_api_base = _normalize_api_base(
+            _first_non_empty(resolved_api_base, azure_api_base)
+        )
+        effective_api_version = azure_api_version
+    elif lowered_model.startswith("openai/"):
+        effective_api_key = openai_api_key
+
+    return DSPyLMConfig(
+        model=normalized_model,
+        api_key=effective_api_key,
+        api_base=effective_api_base,
+        api_version=effective_api_version,
+        model_type=resolved_model_type or "chat",
+        temperature=resolved_temperature,
+        max_tokens=resolved_max_tokens,
+    )
+
+
+def resolve_dspy_helper_lm_config(
+    *,
+    model: str | None = None,
+    api_key: str | None = None,
+    api_base: str | None = None,
+    api_version: str | None = None,
+    model_type: str | None = "chat",
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+) -> DSPyLMConfig | None:
+    """Resolve the DSPy LM configuration for helper/runtime mediation calls."""
+
+    return _resolve_scoped_dspy_lm_config(
+        DSPY_HELPER_SCOPE,
+        model=model,
+        api_key=api_key,
+        api_base=api_base,
+        api_version=api_version,
+        model_type=model_type,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+
+
+def resolve_dspy_trainer_lm_config(
+    *,
+    model: str | None = None,
+    api_key: str | None = None,
+    api_base: str | None = None,
+    api_version: str | None = None,
+    model_type: str | None = "chat",
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+) -> DSPyLMConfig | None:
+    """Resolve the DSPy LM configuration for trainer-side compile/recompile work."""
+
+    return _resolve_scoped_dspy_lm_config(
+        DSPY_TRAINER_SCOPE,
+        model=model,
+        api_key=api_key,
+        api_base=api_base,
+        api_version=api_version,
+        model_type=model_type,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
 
 
 def configure_dspy_lm(lm_config: DSPyLMConfig) -> object:

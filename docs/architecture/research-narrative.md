@@ -1085,9 +1085,10 @@ The narrative is coherent, but not complete. The main open tensions are:
 - notebook execution is well observed, but notebook conclusions still depend on the quality of the
   underlying corpus and benchmarks
 - deployment handoff is documented, but live remote deployment is intentionally outside repo scope
-- the runtime now has a first-class contract for a dedicated DSPy helper model selected through
-  `DSPY_MODEL`, with explicit precedence over generic `AZURE_OPENAI_*` fallbacks and mirrored
-  delivery through the dataset worker manifest plus GitHub Actions env path
+- the runtime now has a first-class split between `DSPY_HELPER_*` and `DSPY_TRAINER_*`, with
+  default helper/trainer model selectors pinned to `azure/gpt-5.4-nano` and
+  `azure/gpt-5.4-mini` respectively, while shared `AZURE_OPENAI_*` values remain transport
+  fallback only and are mirrored through the dataset worker manifest plus GitHub Actions env path
 - verification evidence is strong, but the index docs must be kept synchronized so the narrative
   does not drift behind the latest audit and CI state; the current CI contract is stricter than
   the local MCP/debug loop alone and now explicitly depends on `uv run mypy src tests`,
