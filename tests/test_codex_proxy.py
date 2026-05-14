@@ -1916,3 +1916,97 @@ def test_persist_turn_trace_skips_successful_family_reuse_and_dedupes_same_promp
         assert not runtime.turn_trace_manifest_path.exists()
     finally:
         runtime.close()
+
+
+def test_persist_turn_trace_emits_additional_lineage_trace_for_reformulated_prompt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.resolve_azure_openai_runtime",
+        lambda env: SimpleNamespace(
+            endpoint="http://127.0.0.1:9",
+            api_key="test-key",
+            api_version="2024-12-01-preview",
+        ),
+    )
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    config = CodexProxyConfig(
+        repository_root=repo,
+        bundle_root=repo,
+        artifact_dir=tmp_path / "artifacts",
+    )
+    runtime = codex_proxy_module._CodexProxyRuntime(config)
+    try:
+        primary = CodexMediationResult(
+            question="Inspect README and update docs",
+            original_prompt="Update docs",
+            reformulated_prompt="Inspect README and update docs",
+            reformulation_status="success",
+            mediation_mode="passthrough",
+            rag_status="success",
+            dspy_status="heuristic",
+            dspy_lm_model="azure/gpt-5.4-nano",
+            summary="fallback",
+            retrieval_mode="lexical",
+            sources=["README.md"],
+            warnings=["No family support"],
+            bundle_version=None,
+            program_path=None,
+            evidence_previews=[],
+            developer_message="repo mediation",
+            prompt_family_id=None,
+            prompt_family_similarity=0.0,
+            prompt_family_band="new",
+            family_runtime_hit_rate=None,
+            family_artifact_hit_rate=None,
+            family_artifact_selected=False,
+        )
+
+        def fake_build_mediation(original_prompt: str, command_trace: list[Mapping[str, str]]) -> CodexMediationResult:
+            del command_trace
+            return CodexMediationResult(
+                question=original_prompt,
+                original_prompt=original_prompt,
+                reformulated_prompt=original_prompt,
+                reformulation_status="identity",
+                mediation_mode="passthrough",
+                rag_status="success",
+                dspy_status="heuristic",
+                dspy_lm_model="azure/gpt-5.4-nano",
+                summary=f"fallback for {original_prompt}",
+                retrieval_mode="lexical",
+                sources=["README.md"],
+                warnings=["No family support"],
+                bundle_version=None,
+                program_path=None,
+                evidence_previews=[],
+                developer_message="repo mediation",
+                prompt_family_id=None,
+                prompt_family_similarity=0.0,
+                prompt_family_band="new",
+                family_runtime_hit_rate=None,
+                family_artifact_hit_rate=None,
+                family_artifact_selected=False,
+            )
+
+        monkeypatch.setattr(runtime, "build_mediation", fake_build_mediation, raising=False)
+
+        trace_path = runtime.persist_turn_trace(
+            primary,
+            command_trace=[
+                {"role": "assistant", "text": "Inspect README and update docs"},
+                {"role": "tool", "text": "README summary"},
+            ],
+        )
+
+        assert trace_path is not None
+        manifest = json.loads(runtime.turn_trace_manifest_path.read_text(encoding="utf-8"))
+        assert len(manifest["trace_paths"]) == 2
+        roles = []
+        for relative_path in manifest["trace_paths"]:
+            payload = json.loads((config.artifact_dir / relative_path).read_text(encoding="utf-8"))
+            roles.append(payload["trace_role"])
+        assert roles == ["turn", "reformulated"]
+    finally:
+        runtime.close()

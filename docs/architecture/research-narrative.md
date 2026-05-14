@@ -250,6 +250,18 @@ replay set instead of collapsing back to one runtime summary record, and the rem
 aggregate family-state index is still carried for compatibility, but it means the storage layout
 and compile input now already look like the family-replay contract rather than the older
 champion-only contract.
+The current trainer/proxy correction sharpens that same contract in three places. First, family
+father selection is no longer “most central question wins”; it now follows the product rule that
+the father is the stored trace with the best arithmetic mean across known per-trace metrics, which
+today reduces to metric-1 `hit_rate` plus any later persisted similarity metrics. Second, local
+trainer bootstrap now follows the queue-triggered family contract: the active cache is either
+reused as-is, adopted from the latest remote family-state snapshot, or rebuilt from
+`repo-rag-training-traces/processed`, with a current-cycle queue seed only as the zero-version
+bootstrap fallback before fresh `queued` traces are applied. Third, proxy
+trace persistence is no longer limited to one coarse turn payload: when a turn falls back to fresh
+mediation, the proxy now also emits lineage traces for distinct reformulated/intermediate
+prompt-like steps so trainer ingestion can observe the same prompt evolution that runtime routing
+actually saw.
 Another immediate correction now closes a trainer-quality leak: proxy mediation no longer trusts a
 matched family artifact unconditionally. When the bundle says the family artifact's validated
 `hit_rate` is below the family's current baseline, the proxy now refuses that family artifact and

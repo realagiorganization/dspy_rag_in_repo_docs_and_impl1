@@ -180,6 +180,24 @@ def _classify_task(question: str) -> str:
     tokens = _task_tokens(question)
     if len(tokens) >= _TASK_TOKEN_DEEP_THRESHOLD:
         return "deep"
+    return "trivial"
+
+
+def _looks_like_prompt_text(text: str) -> bool:
+    """Return whether one command-trace text looks like a natural-language prompt."""
+
+    cleaned = " ".join(str(text or "").split()).strip()
+    if len(cleaned) < 24:
+        return False
+    if not any(character.isalpha() for character in cleaned):
+        return False
+    lowered = cleaned.lower()
+    command_prefixes = ("pytest ", "git ", "make ", "uv ", "python ", "cargo ", "npm ")
+    if lowered.startswith(command_prefixes):
+        return False
+    if "\nstdout:" in lowered or "\nstderr:" in lowered:
+        return False
+    return True
     if any(token in _REPO_GROUNDING_HINTS for token in tokens):
         return "deep"
     return "trivial"
@@ -1831,12 +1849,12 @@ class _CodexProxyRuntime:
         if removed_any:
             self._turn_trace_entries = retained_entries
             self._rewrite_turn_trace_manifest()
-
-    def persist_turn_trace(
+    def _persist_single_turn_trace(
         self,
         mediation: CodexMediationResult,
         *,
         command_trace: list[Mapping[str, str]],
+        trace_role: str = "turn",
     ) -> Path | None:
         if mediation.family_artifact_selected and mediation.dspy_status == "success":
             self._prune_turn_traces_for_prompt(mediation)
@@ -1863,6 +1881,7 @@ class _CodexProxyRuntime:
                 for preview in mediation.evidence_previews
             ],
             "command_trace": list(command_trace),
+            "trace_role": trace_role,
             "trace": build_runtime_trace(
                 RuntimeTraceContext(
                     question=mediation.reformulated_prompt or mediation.question,
@@ -1906,6 +1925,7 @@ class _CodexProxyRuntime:
         trace_name = hashlib.sha256(
             json.dumps(
                 [
+                    trace_role,
                     mediation.original_prompt,
                     mediation.reformulated_prompt,
                     command_trace,
@@ -1924,6 +1944,56 @@ class _CodexProxyRuntime:
             self._turn_trace_entries.append(relative_path)
         self._rewrite_turn_trace_manifest()
         return trace_path
+
+    def _lineage_prompts(self, mediation: CodexMediationResult, command_trace: list[Mapping[str, str]]) -> list[tuple[str, str]]:
+        """Return unique prompt-like lineage prompts derived from one turn."""
+
+        lineage: list[tuple[str, str]] = []
+        seen: set[str] = set()
+
+        def _append(role: str, text: str) -> None:
+            cleaned = " ".join(str(text or "").split()).strip()
+            if not cleaned:
+                return
+            token = cleaned.casefold()
+            if token in seen:
+                return
+            seen.add(token)
+            lineage.append((role, cleaned))
+
+        _append("original", mediation.original_prompt)
+        if mediation.reformulated_prompt.strip() != mediation.original_prompt.strip():
+            _append("reformulated", mediation.reformulated_prompt)
+        for step in command_trace:
+            role = str(step.get("role") or "").strip().lower()
+            if role not in {"user", "assistant"}:
+                continue
+            text = str(step.get("text") or "").strip()
+            if _looks_like_prompt_text(text):
+                _append("lineage", text)
+        return lineage
+
+    def persist_turn_trace(
+        self,
+        mediation: CodexMediationResult,
+        *,
+        command_trace: list[Mapping[str, str]],
+    ) -> Path | None:
+        primary_trace_path = self._persist_single_turn_trace(
+            mediation,
+            command_trace=command_trace,
+            trace_role="turn",
+        )
+        for trace_role, prompt_text in self._lineage_prompts(mediation, command_trace):
+            if prompt_text == mediation.original_prompt.strip():
+                continue
+            lineage_mediation = self.build_mediation(prompt_text, [])
+            self._persist_single_turn_trace(
+                lineage_mediation,
+                command_trace=[],
+                trace_role=trace_role,
+            )
+        return primary_trace_path
 
     def persist_status(
         self,
