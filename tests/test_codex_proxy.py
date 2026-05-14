@@ -813,7 +813,14 @@ def test_build_codex_mediation_falls_back_to_family_state_when_bundle_registry_p
     repo.mkdir()
     (repo / "README.md").write_text("repo summary\n", encoding="utf-8")
     bundle_root = tmp_path / "bundle-root"
-    family_state_path = repo / "artifacts" / "trainer" / "remote-family-state" / "state-1" / "family-state.json"
+    family_state_path = (
+        repo
+        / "artifacts"
+        / "trainer"
+        / "remote-family-state"
+        / "state-1"
+        / "family-state.json"
+    )
     family_state_path.parent.mkdir(parents=True)
     family_program_path = (
         repo
@@ -1713,3 +1720,198 @@ def test_running_codex_proxy_uses_budgeted_disk_cache(
 
     assert calls["ask_repository"] == 1
     assert len(captured) == 2
+
+
+def test_running_codex_proxy_handles_mediation_on_one_server_thread(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen_threads: list[int] = []
+
+    class UpstreamHandler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            length = int(self.headers.get("Content-Length", "0"))
+            self.rfile.read(length)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            completed_event = {
+                "type": "response.completed",
+                "response": {
+                    "id": "resp-thread",
+                    "object": "response",
+                    "status": "completed",
+                    "output": [],
+                    "usage": {
+                        "input_tokens": 1,
+                        "output_tokens": 1,
+                        "total_tokens": 2,
+                    },
+                },
+            }
+            self.wfile.write(
+                b"event: response.completed\ndata: "
+                + json.dumps(completed_event).encode("utf-8")
+                + b"\n\n"
+            )
+            self.wfile.write(b"data: [DONE]\n\n")
+            self.wfile.flush()
+
+        def log_message(self, format: str, *args: object) -> None:
+            del format, args
+
+    try:
+        upstream = HTTPServer(("127.0.0.1", 0), UpstreamHandler)
+    except PermissionError:
+        pytest.skip("Sandbox does not allow local HTTPServer sockets.")
+    upstream_thread = threading.Thread(target=upstream.serve_forever, daemon=True)
+    upstream_thread.start()
+    upstream_port = upstream.server_address[1]
+
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", f"http://127.0.0.1:{upstream_port}")
+    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5.4")
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
+
+    def fake_build_codex_mediation(question: str, **kwargs: object) -> CodexMediationResult:
+        del kwargs
+        seen_threads.append(threading.get_ident())
+        return CodexMediationResult(
+            question=question,
+            original_prompt=question,
+            reformulated_prompt=question,
+            reformulation_status="identity",
+            mediation_mode="passthrough",
+            rag_status="skipped",
+            dspy_status="skipped",
+            dspy_lm_model=None,
+            summary="",
+            retrieval_mode="lexical",
+            sources=[],
+            warnings=[],
+            bundle_version=None,
+            program_path=None,
+            evidence_previews=[],
+            developer_message="",
+            injected=False,
+        )
+
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.build_codex_mediation",
+        fake_build_codex_mediation,
+    )
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    config = CodexProxyConfig(
+        repository_root=repo,
+        bundle_root=repo,
+        artifact_dir=tmp_path / "artifacts",
+    )
+
+    with running_codex_proxy(config) as proxy:
+        for task in ("task one", "task two"):
+            response = httpx.post(
+                f"{proxy.base_url}/responses?api-version=2024-12-01-preview",
+                headers={"Accept": "text/event-stream"},
+                json={
+                    "model": "gpt-5.4",
+                    "input": [
+                        {
+                            "type": "message",
+                            "role": "user",
+                            "content": [{"type": "input_text", "text": task}],
+                        }
+                    ],
+                    "stream": True,
+                },
+                timeout=10,
+            )
+            assert response.status_code == 200
+
+    upstream.shutdown()
+    upstream_thread.join(timeout=5)
+
+    assert len(seen_threads) == 2
+    assert len(set(seen_threads)) == 1
+
+
+def test_persist_turn_trace_skips_successful_family_reuse_and_dedupes_same_prompt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.resolve_azure_openai_runtime",
+        lambda env: SimpleNamespace(
+            endpoint="http://127.0.0.1:9",
+            api_key="test-key",
+            api_version="2024-12-01-preview",
+        ),
+    )
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    config = CodexProxyConfig(
+        repository_root=repo,
+        bundle_root=repo,
+        artifact_dir=tmp_path / "artifacts",
+    )
+    runtime = codex_proxy_module._CodexProxyRuntime(config)
+    try:
+        successful_family_reuse = CodexMediationResult(
+            question="same prompt",
+            original_prompt="same prompt",
+            reformulated_prompt="same prompt",
+            reformulation_status="identity",
+            mediation_mode="dspy_rag",
+            rag_status="success",
+            dspy_status="success",
+            dspy_lm_model="azure/gpt-5.4-nano",
+            summary="already solved",
+            retrieval_mode="lexical",
+            sources=["README.md"],
+            warnings=[],
+            bundle_version="stable-1",
+            program_path="families/pf-demo/program.json",
+            evidence_previews=[],
+            developer_message="repo mediation",
+            prompt_family_id="pf-demo",
+            prompt_family_similarity=1.0,
+            prompt_family_band="match",
+            family_runtime_hit_rate=1.0,
+            family_artifact_hit_rate=1.0,
+            family_artifact_selected=True,
+        )
+        assert runtime.persist_turn_trace(successful_family_reuse, command_trace=[]) is None
+        assert runtime._turn_trace_entries == []
+
+        repeated_failure = CodexMediationResult(
+            question="same prompt",
+            original_prompt="same prompt",
+            reformulated_prompt="same prompt",
+            reformulation_status="identity",
+            mediation_mode="rag_heuristic_dspy",
+            rag_status="success",
+            dspy_status="heuristic",
+            dspy_lm_model="azure/gpt-5.4-nano",
+            summary="fallback",
+            retrieval_mode="lexical",
+            sources=["README.md"],
+            warnings=["DSPy mediation was unavailable."],
+            bundle_version="stable-1",
+            program_path=None,
+            evidence_previews=[],
+            developer_message="repo mediation",
+            prompt_family_id="pf-demo",
+            prompt_family_similarity=1.0,
+            prompt_family_band="match",
+            family_runtime_hit_rate=1.0,
+            family_artifact_hit_rate=1.0,
+            family_artifact_selected=True,
+        )
+        first_trace = runtime.persist_turn_trace(repeated_failure, command_trace=[])
+        second_trace = runtime.persist_turn_trace(repeated_failure, command_trace=[])
+
+        assert first_trace is not None
+        assert second_trace is None
+        manifest = json.loads(runtime.turn_trace_manifest_path.read_text(encoding="utf-8"))
+        assert manifest["trace_paths"] == [first_trace.relative_to(config.artifact_dir).as_posix()]
+    finally:
+        runtime.close()
