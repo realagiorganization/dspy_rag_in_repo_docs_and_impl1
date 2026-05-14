@@ -1784,12 +1784,63 @@ class _CodexProxyRuntime:
         self._persisted_trace_keys.add(dedupe_key)
         return True
 
+    def _rewrite_turn_trace_manifest(self) -> None:
+        """Persist the current local turn-trace manifest after one mutation."""
+
+        if not self._turn_trace_entries:
+            if self.turn_trace_manifest_path.exists():
+                self.turn_trace_manifest_path.unlink()
+            return
+        manifest = {
+            "schema_version": 1,
+            "batch_kind": "repo-rag-codex-proxy-turn-trace-batch",
+            "batch_name": self.turn_trace_batch_name,
+            "trace_dir": self.turn_trace_dir.relative_to(self.config.artifact_dir).as_posix(),
+            "trace_paths": list(self._turn_trace_entries),
+        }
+        self.turn_trace_manifest_path.write_text(
+            f"{json.dumps(manifest, indent=2)}\n",
+            encoding="utf-8",
+        )
+
+    def _prune_turn_traces_for_prompt(self, mediation: CodexMediationResult) -> None:
+        """Drop stale local turn traces once one prompt is satisfied by family reuse."""
+
+        retained_entries: list[str] = []
+        removed_any = False
+        for relative_path in self._turn_trace_entries:
+            trace_path = self.config.artifact_dir / relative_path
+            matches_prompt = False
+            try:
+                payload = json.loads(trace_path.read_text(encoding="utf-8"))
+                if isinstance(payload, dict):
+                    matches_prompt = (
+                        str(payload.get("original_prompt") or "").strip()
+                        == mediation.original_prompt.strip()
+                        and str(payload.get("reformulated_prompt") or "").strip()
+                        == mediation.reformulated_prompt.strip()
+                    )
+            except Exception:
+                matches_prompt = False
+            if matches_prompt:
+                removed_any = True
+                if trace_path.exists():
+                    trace_path.unlink()
+                continue
+            retained_entries.append(relative_path)
+        if removed_any:
+            self._turn_trace_entries = retained_entries
+            self._rewrite_turn_trace_manifest()
+
     def persist_turn_trace(
         self,
         mediation: CodexMediationResult,
         *,
         command_trace: list[Mapping[str, str]],
     ) -> Path | None:
+        if mediation.family_artifact_selected and mediation.dspy_status == "success":
+            self._prune_turn_traces_for_prompt(mediation)
+            return None
         if not self._should_persist_turn_trace(mediation):
             return None
         metric_hits = 1 if mediation.dspy_status == "success" else 0
@@ -1871,17 +1922,7 @@ class _CodexProxyRuntime:
         relative_path = trace_path.relative_to(self.config.artifact_dir).as_posix()
         if relative_path not in self._turn_trace_entries:
             self._turn_trace_entries.append(relative_path)
-        manifest = {
-            "schema_version": 1,
-            "batch_kind": "repo-rag-codex-proxy-turn-trace-batch",
-            "batch_name": self.turn_trace_batch_name,
-            "trace_dir": self.turn_trace_dir.relative_to(self.config.artifact_dir).as_posix(),
-            "trace_paths": list(self._turn_trace_entries),
-        }
-        self.turn_trace_manifest_path.write_text(
-            f"{json.dumps(manifest, indent=2)}\n",
-            encoding="utf-8",
-        )
+        self._rewrite_turn_trace_manifest()
         return trace_path
 
     def persist_status(

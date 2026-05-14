@@ -1855,33 +1855,6 @@ def test_persist_turn_trace_skips_successful_family_reuse_and_dedupes_same_promp
     )
     runtime = codex_proxy_module._CodexProxyRuntime(config)
     try:
-        successful_family_reuse = CodexMediationResult(
-            question="same prompt",
-            original_prompt="same prompt",
-            reformulated_prompt="same prompt",
-            reformulation_status="identity",
-            mediation_mode="dspy_rag",
-            rag_status="success",
-            dspy_status="success",
-            dspy_lm_model="azure/gpt-5.4-nano",
-            summary="already solved",
-            retrieval_mode="lexical",
-            sources=["README.md"],
-            warnings=[],
-            bundle_version="stable-1",
-            program_path="families/pf-demo/program.json",
-            evidence_previews=[],
-            developer_message="repo mediation",
-            prompt_family_id="pf-demo",
-            prompt_family_similarity=1.0,
-            prompt_family_band="match",
-            family_runtime_hit_rate=1.0,
-            family_artifact_hit_rate=1.0,
-            family_artifact_selected=True,
-        )
-        assert runtime.persist_turn_trace(successful_family_reuse, command_trace=[]) is None
-        assert runtime._turn_trace_entries == []
-
         repeated_failure = CodexMediationResult(
             question="same prompt",
             original_prompt="same prompt",
@@ -1913,5 +1886,33 @@ def test_persist_turn_trace_skips_successful_family_reuse_and_dedupes_same_promp
         assert second_trace is None
         manifest = json.loads(runtime.turn_trace_manifest_path.read_text(encoding="utf-8"))
         assert manifest["trace_paths"] == [first_trace.relative_to(config.artifact_dir).as_posix()]
+
+        successful_family_reuse = CodexMediationResult(
+            question="same prompt",
+            original_prompt="same prompt",
+            reformulated_prompt="same prompt",
+            reformulation_status="identity",
+            mediation_mode="dspy_rag",
+            rag_status="success",
+            dspy_status="success",
+            dspy_lm_model="azure/gpt-5.4-nano",
+            summary="already solved",
+            retrieval_mode="lexical",
+            sources=["README.md"],
+            warnings=[],
+            bundle_version="stable-1",
+            program_path="families/pf-demo/program.json",
+            evidence_previews=[],
+            developer_message="repo mediation",
+            prompt_family_id="pf-demo",
+            prompt_family_similarity=1.0,
+            prompt_family_band="match",
+            family_runtime_hit_rate=1.0,
+            family_artifact_hit_rate=1.0,
+            family_artifact_selected=True,
+        )
+        assert runtime.persist_turn_trace(successful_family_reuse, command_trace=[]) is None
+        assert runtime._turn_trace_entries == []
+        assert not runtime.turn_trace_manifest_path.exists()
     finally:
         runtime.close()
