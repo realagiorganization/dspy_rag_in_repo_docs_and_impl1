@@ -12,7 +12,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -20,7 +20,11 @@ import httpx
 
 from .azure_runtime import resolve_azure_openai_runtime
 from .corpus import build_corpus_manifest, write_corpus_manifest
-from .dspy_training import DSPyLMConfig, configure_dspy_lm, resolve_dspy_lm_config
+from .dspy_training import (
+    DSPyLMConfig,
+    configure_dspy_lm,
+    resolve_dspy_helper_lm_config,
+)
 from .dspy_workflow import RepositoryRAG
 from .retrieval import RetrievalMode
 from .runtime_artifacts import (
@@ -45,6 +49,9 @@ try:
     import dspy as _dspy
 except ImportError:  # pragma: no cover - optional runtime dependency during scaffolding
     _dspy = None
+
+# Backward-compatible alias retained for tests and older local integrations.
+resolve_dspy_lm_config = resolve_dspy_helper_lm_config
 
 _DEFAULT_SNIPPET_LIMIT = 280
 _DEFAULT_PREVIEW_COUNT = 4
@@ -141,7 +148,7 @@ class CodexProxyConfig:
 class RunningCodexProxy:
     """One running local Codex proxy instance."""
 
-    server: ThreadingHTTPServer
+    server: HTTPServer
     thread: threading.Thread
     base_url: str
     status_path: Path
@@ -411,9 +418,7 @@ def _strip_forwarded_discord_tail(text: str) -> str:
         if _FORWARDED_DISCORD_LINE_PATTERN.match(stripped):
             skipping_forwarded_followups = True
             continue
-        if skipping_forwarded_followups and (
-            stripped.startswith("Attachments:") or stripped.startswith("- ")
-        ):
+        if skipping_forwarded_followups and stripped.startswith(("Attachments:", "- ")):
             continue
         if stripped:
             skipping_forwarded_followups = False
@@ -1595,6 +1600,7 @@ class _CodexProxyRuntime:
         self.turn_trace_dir.mkdir(parents=True, exist_ok=True)
         self.turn_trace_manifest_path = self.turn_trace_dir / "manifest.json"
         self._turn_trace_entries: list[str] = []
+        self._persisted_trace_keys: set[str] = set()
         self.cache_dir = (
             config.cache_dir.resolve()
             if config.cache_dir is not None
@@ -1745,12 +1751,47 @@ class _CodexProxyRuntime:
         self._store_cached_mediation(original_prompt, command_trace, mediation)
         return mediation
 
+    def _turn_trace_dedupe_key(self, mediation: CodexMediationResult) -> str:
+        """Return one stable per-rollout key for same-prompt trace suppression."""
+
+        identity = [
+            mediation.original_prompt.strip(),
+            mediation.reformulated_prompt.strip(),
+            str(mediation.prompt_family_id or ""),
+            mediation.prompt_family_band,
+            mediation.dspy_status,
+            str(bool(mediation.family_artifact_selected)),
+            str(mediation.bundle_version or ""),
+            str(mediation.program_path or ""),
+        ]
+        return hashlib.sha256(
+            json.dumps(
+                identity,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+
+    def _should_persist_turn_trace(self, mediation: CodexMediationResult) -> bool:
+        """Return whether this mediation should become a trainer-facing trace."""
+
+        if mediation.family_artifact_selected and mediation.dspy_status == "success":
+            return False
+        dedupe_key = self._turn_trace_dedupe_key(mediation)
+        if dedupe_key in self._persisted_trace_keys:
+            return False
+        self._persisted_trace_keys.add(dedupe_key)
+        return True
+
     def persist_turn_trace(
         self,
         mediation: CodexMediationResult,
         *,
         command_trace: list[Mapping[str, str]],
-    ) -> Path:
+    ) -> Path | None:
+        if not self._should_persist_turn_trace(mediation):
+            return None
         metric_hits = 1 if mediation.dspy_status == "success" else 0
         metric_total = 1
         trace_payload = {
@@ -1863,10 +1904,10 @@ class _CodexProxyRuntime:
 
 @contextmanager
 def running_codex_proxy(config: CodexProxyConfig) -> Iterator[RunningCodexProxy]:
-    """Run one local ThreadingHTTPServer that mediates Codex responses requests."""
+    """Run one local single-threaded HTTP server for Codex mediation."""
 
     runtime = _CodexProxyRuntime(config)
-    server = ThreadingHTTPServer((config.host, config.port), _CodexProxyHandler)
+    server = HTTPServer((config.host, config.port), _CodexProxyHandler)
     server.runtime = runtime  # type: ignore[attr-defined]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

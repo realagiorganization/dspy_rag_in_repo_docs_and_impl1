@@ -1241,14 +1241,14 @@ def test_run_trainer_cycle_blocks_promotion_when_gate_fails(
         lambda root, queue_name="default", limit=None, keep_queued=False: {
             "queue_name": queue_name,
             "queue_found": True,
-            "queued_count_before": 0,
-            "selected_count": 0,
-            "drained_count": 0,
+            "queued_count_before": 1,
+            "selected_count": 1,
+            "drained_count": 1,
             "failed_count": 0,
             "remaining_count": 0,
             "keep_queued": keep_queued,
             "status": "success",
-            "items": [],
+            "items": [{"imported_trace_record_path": "artifacts/traces/imported/demo.json"}],
             "failures": [],
         },
     )
@@ -1666,12 +1666,14 @@ def test_run_trainer_cycle_skips_recompile_and_publish_without_new_candidates(
 
     assert payload["command"] == "trainer-cycle"
     assert payload["command_status"] == "success"
+    assert payload["current_cycle_input_detected"] is False
     assert payload["training_candidates"]["new_candidate_count"] == 0
-    assert payload["recompile"]["recompile_status"] == "skipped-no-new-candidates"
+    assert payload["family_cache_preparation"]["status"] == "skipped-no-queued-input"
+    assert payload["recompile"]["recompile_status"] == "skipped-no-queued-input"
     assert payload["publish_requested"] is False
     assert payload["publish"] is None
     assert payload["bundle_gate"]["status"] == "not-requested"
-    assert any("no new training candidates" in warning for warning in payload["warnings"])
+    assert any("no queued trace inputs were drained" in warning for warning in payload["warnings"])
 
 
 def test_run_trainer_cycle_does_not_replay_full_imported_ledger_when_no_new_traces_exist(
@@ -1732,31 +1734,17 @@ def test_run_trainer_cycle_does_not_replay_full_imported_ledger_when_no_new_trac
         lambda summary, minimum_pass_rate=None, minimum_source_recall=None: [],
     )
 
-    def fake_materialize_training_candidates(
-        root: Path,
-        trace_paths: list[Path],
-        output_path: Path,
-        summary_path: Path,
-        include_statuses: tuple[str, ...] = ("accepted", "candidate"),
-        seed_existing_output: bool = True,
-        upload_remote_state: bool = True,
-    ) -> dict[str, object]:
-        del root, output_path, summary_path, include_statuses, upload_remote_state
-        assert trace_paths == []
-        assert seed_existing_output is True
-        return {
-            "candidate_count": 0,
-            "new_candidate_count": 0,
-            "prompt_family_count": 0,
-            "context_group_count": 0,
-            "family_state_path": "artifacts/trainer/family-state.json",
-            "output_path": "artifacts/trainer/training-candidates.yaml",
-            "summary_path": "artifacts/trainer/training-candidates-summary.json",
-        }
-
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._prepare_local_trainer_family_cache",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("trainer cache preparation should not run without queued traces")
+        ),
+    )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.materialize_training_candidates",
-        fake_materialize_training_candidates,
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("training candidates should not materialize without queued traces")
+        ),
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities._trainer_recompile_payload",
@@ -1783,7 +1771,8 @@ def test_run_trainer_cycle_does_not_replay_full_imported_ledger_when_no_new_trac
     assert payload["durable_trace_recovery"]["restored_count"] == 0
     assert payload["ingestion_summary"]["record_count"] == 0
     assert payload["training_candidates"]["new_candidate_count"] == 0
-    assert payload["recompile"]["recompile_status"] == "skipped-no-new-candidates"
+    assert payload["family_cache_preparation"]["status"] == "skipped-no-queued-input"
+    assert payload["recompile"]["recompile_status"] == "skipped-no-queued-input"
 
 
 def test_run_trainer_cycle_recompiles_when_published_bundle_lags_current_champion_set(
@@ -1886,14 +1875,14 @@ def test_run_trainer_cycle_recompiles_when_published_bundle_lags_current_champio
         lambda root, queue_name="default", limit=None, keep_queued=False: {
             "queue_name": queue_name,
             "queue_found": True,
-            "queued_count_before": 0,
-            "selected_count": 0,
-            "drained_count": 0,
+            "queued_count_before": 1,
+            "selected_count": 1,
+            "drained_count": 1,
             "failed_count": 0,
             "remaining_count": 0,
             "keep_queued": keep_queued,
             "status": "success",
-            "items": [],
+            "items": [{"imported_trace_record_path": "artifacts/traces/imported/demo.json"}],
             "failures": [],
         },
     )
@@ -1904,6 +1893,14 @@ def test_run_trainer_cycle_recompiles_when_published_bundle_lags_current_champio
             restored_count=0,
             trace_paths=[],
         ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._prepare_local_trainer_family_cache",
+        lambda *args, **kwargs: {
+            "status": "using-local-cache",
+            "family_state_path": "artifacts/trainer/family-state.json",
+            "family_cache_dir": "artifacts/trainer/families",
+        },
     )
     monkeypatch.setattr("repo_rag_lab.utilities.load_training_examples", lambda path: ["example"])
     monkeypatch.setattr(
@@ -1994,14 +1991,12 @@ def test_run_trainer_cycle_recompiles_when_published_bundle_lags_current_champio
     assert payload["pending_recompile"]["pending_recompile"] is True
     assert payload["pending_recompile"]["reason"] == "family-trace-path-drift"
     assert payload["pending_recompile"]["current_bundle_version"] == "stable-run"
-    assert payload["current_cycle_input_detected"] is False
-    assert payload["recompile"]["recompile_status"] == "skipped-no-new-candidates"
-    assert payload["publish_requested"] is False
-    assert payload["publish"] is None
-    assert any(
-        "skipping auto-recompile to avoid repeated bundle versions" in warning
-        for warning in payload["warnings"]
-    )
+    assert payload["current_cycle_input_detected"] is True
+    assert payload["family_cache_preparation"]["status"] == "using-local-cache"
+    assert payload["recompile"]["recompile_status"] == "compiled"
+    assert payload["publish_requested"] is True
+    assert payload["publish"]["bundle_version"] == "20260507T180000Z"
+    assert payload["promotion_status"] == "not-requested"
 
 
 def test_run_trainer_cycle_recompiles_pending_family_drift_once_new_traces_arrive(
@@ -2187,14 +2182,14 @@ def test_run_trainer_cycle_does_not_fail_promotion_without_new_bundle_candidate(
         lambda root, queue_name="default", limit=None, keep_queued=False: {
             "queue_name": queue_name,
             "queue_found": True,
-            "queued_count_before": 0,
-            "selected_count": 0,
-            "drained_count": 0,
+            "queued_count_before": 1,
+            "selected_count": 1,
+            "drained_count": 1,
             "failed_count": 0,
             "remaining_count": 0,
             "keep_queued": keep_queued,
             "status": "success",
-            "items": [],
+            "items": [{"imported_trace_record_path": "artifacts/traces/imported/demo.json"}],
             "failures": [],
         },
     )

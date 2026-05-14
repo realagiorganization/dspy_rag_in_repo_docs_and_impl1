@@ -27,7 +27,7 @@ from .dspy_training import (
     DSPyLMConfig,
     DSPyTrainingConfig,
     describe_dspy_artifacts,
-    resolve_dspy_lm_config,
+    resolve_dspy_trainer_lm_config,
     train_repository_program,
 )
 from .exploratorium_translation import sync_exploratorium_translation
@@ -1610,6 +1610,11 @@ def run_trainer_cycle(
         for item in normalized_queue_items
         if isinstance(item, Mapping) and item.get("imported_trace_record_path")
     ]
+    current_cycle_trace_input_count = len(imported_trace_paths)
+    current_cycle_queue_drain_count = int(queue_payload.get("drained_count") or 0)
+    current_cycle_input_detected = (
+        current_cycle_trace_input_count > 0 or current_cycle_queue_drain_count > 0
+    )
     durable_trace_recovery = {
         "storage_backend": "disabled",
         "queue_name": queue_name,
@@ -1624,6 +1629,128 @@ def run_trainer_cycle(
             "Processed-ledger recovery no longer triggers or augments active cycles."
         ),
     }
+    if not current_cycle_input_detected:
+        cycle_warnings: list[str] = []
+        if not queue_payload.get("queue_found"):
+            cycle_warnings.append(
+                "No queued trace items were available for this trainer cycle."
+            )
+        if queue_payload.get("failed_count"):
+            cycle_warnings.append(
+                "One or more queued trace items failed during trainer drain."
+            )
+        cycle_warnings.append(
+            "Trainer cycle skipped cache preparation, processed replay, and publish because "
+            "no queued trace inputs were drained."
+        )
+        cycle_payload: dict[str, object] = {
+            "queue_name": queue_name,
+            "queue_drain": queue_payload,
+            "durable_trace_recovery": durable_trace_recovery,
+            "family_cache_preparation": {
+                "status": "skipped-no-queued-input",
+                "note": (
+                    "Trainer cache preparation runs only inside a queue-triggered cycle."
+                ),
+            },
+            "ingestion_summary": {
+                "record_count": 0,
+                "processed_paths": [],
+                "trace_record_paths": [],
+                "acceptance_status_counts": {},
+                "execution_status_counts": {},
+                "retrieval_mode_counts": {},
+                "bundle_version_counts": {},
+                "missing_source_count": 0,
+                "missing_context_count": 0,
+                "source_error_count": 0,
+                "used_baseline_fallback_count": 0,
+                "invalid_record_count": 0,
+            },
+            "training_candidates": {
+                "candidate_count": 0,
+                "family_candidate_count": 0,
+                "dirty_family_count": 0,
+                "dirty_family_ids": [],
+                "new_candidate_count": 0,
+                "duplicate_count": 0,
+                "replaced_count": 0,
+                "family_count": 0,
+                "prompt_family_count": 0,
+                "prompt_family_ids": [],
+                "family_trace_record_paths": [],
+                "family_exact_snapshot_ids": [],
+                "family_record_hashes": [],
+                "context_group_count": 0,
+                "new_context_group_count": 0,
+                "skipped_reasons": {},
+                "include_statuses": [],
+                "trace_paths": [],
+                "output_path": None,
+                "summary_path": None,
+                "family_state_path": None,
+                "remote_family_state": None,
+            },
+            "pending_recompile": {
+                "pending_recompile": False,
+                "reason": "no-queued-input",
+                "channel_name": promote_channel or "stable",
+                "current_bundle_version": None,
+            },
+            "min_new_candidates_for_recompile": max(1, int(min_new_candidates_for_recompile)),
+            "current_cycle_trace_input_count": current_cycle_trace_input_count,
+            "current_cycle_queue_drain_count": current_cycle_queue_drain_count,
+            "current_cycle_recovered_count": 0,
+            "current_cycle_input_detected": False,
+            "recompile_threshold_met": False,
+            "recompile": {
+                "recompile_status": "skipped-no-queued-input",
+                "generated_training": None,
+                "training_result": None,
+                "new_candidate_count": 0,
+                "min_new_candidates_for_recompile": max(
+                    1, int(min_new_candidates_for_recompile)
+                ),
+            },
+            "recompile_error": None,
+            "retrieval_gate": {
+                "status": "not-requested",
+                "reason": "no-queued-input",
+            },
+            "gate_passed": True,
+            "bundle_gate": {
+                "status": "not-requested",
+                "reason": "no-queued-input",
+            },
+            "bundle_gate_passed": True,
+            "publish_requested": False,
+            "promotion_requested": False,
+            "publish": None,
+            "publish_error": None,
+            "promote_channel": promote_channel,
+            "promotion_status": "not-requested" if promote_channel is not None else "not-requested",
+            "promotion": None,
+            "promotion_error": None,
+            "note": note,
+        }
+        return _json_command_payload(
+            "trainer-cycle",
+            root=root,
+            payload=cycle_payload,
+            command_status="success" if not bool(queue_payload.get("failed_count")) else "fail",
+            warnings=cycle_warnings,
+            artifact_metadata=_artifact_metadata(
+                input_paths=[],
+                generated_paths=[],
+                related_paths=[
+                    "artifacts/traces/queued",
+                    "artifacts/traces/imported",
+                    "artifacts/trainer/recovered-imported-traces",
+                    "artifacts/dspy/published",
+                    "artifacts/dspy/channels",
+                ],
+            ),
+        )
     family_cache_preparation = _prepare_local_trainer_family_cache(
         root,
         queue_name=queue_name,
@@ -1651,13 +1778,9 @@ def run_trainer_cycle(
     recompile_requested = recompile_run_name is not None
     recompile_threshold_met = new_candidate_count >= effective_min_new_candidates
     pending_recompile = bool(pending_recompile_summary.get("pending_recompile"))
-    current_cycle_trace_input_count = len(trainer_trace_paths)
-    current_cycle_queue_drain_count = int(queue_payload.get("drained_count") or 0)
     current_cycle_recovered_count = 0
     current_cycle_input_detected = (
-        current_cycle_trace_input_count > 0
-        or current_cycle_queue_drain_count > 0
-        or new_candidate_count > 0
+        current_cycle_trace_input_count > 0 or current_cycle_queue_drain_count > 0
     )
     pending_recompile_with_new_inputs = pending_recompile and current_cycle_input_detected
     recompile_triggered = recompile_requested and (
@@ -2080,7 +2203,7 @@ def _trainer_recompile_payload(
         output_path=generated_training_path,
         summary_path=generated_training_summary_path,
     )
-    resolved_lm_config = lm_config or resolve_dspy_lm_config()
+    resolved_lm_config = lm_config or resolve_dspy_trainer_lm_config()
     if resolved_lm_config is None:
         if skip_without_lm:
             return {

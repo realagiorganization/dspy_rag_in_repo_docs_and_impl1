@@ -1066,6 +1066,17 @@ family trace `hit_rate`. Persisted family runtime artifacts now carry their own 
 decide “matched family artifact vs heuristic fallback” on the same semantic quantity the trainer
 stores in family state.
 
+The next runtime hardening pass fixes two more worker-side leaks that the family-first trace
+contract could not tolerate. First, the local proxy no longer spawns a fresh request-handling
+thread per Codex turn; it now serves the worker-side mediation path on one dedicated HTTP server
+thread, which keeps `dspy.settings.configure(...)` on a single DSPy thread and removes the
+live-only fallback that previously emitted `dspy.settings can only be changed by the thread that
+initially configured it.` Second, the proxy now stops exporting trainer-facing traces when a
+matched family artifact already ran successfully and dedupes repeated same-prompt snapshots within
+one rollout even if the visible `command_trace` keeps growing. That shifts trace generation back
+toward the intended contract: new trainer traces should come from genuinely new mediation misses,
+not from later snapshots of one unchanged outer prompt.
+
 The next operational bug was not about routing correctness but about hidden Azure spend. Even
 after GitHub Actions variables were switched to `gpt-4o`, live AKS traffic still burned mostly on
 `gpt-5.4` because two stale-default paths preserved the expensive model: trainer deployment

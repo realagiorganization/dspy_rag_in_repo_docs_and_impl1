@@ -441,6 +441,12 @@ Not implemented yet:
     the persisted family trace `hit_rate` (metric 1) and keeps compile-time
     `benchmark_pass_rate` as diagnostics only, so an exact family match no longer drops into
     heuristic mode merely because the bundle carried a separate benchmark score.
+38. Keep runtime DSPy on one proxy thread and stop exporting repeated same-prompt traces.
+    Stage 38 locally: the local Codex proxy now serves requests on one dedicated HTTP server
+    thread instead of a new request thread per turn, which keeps `dspy.settings.configure(...)`
+    on one thread and removes the live thread-affinity fallback to heuristic mode. The same stage
+    also suppresses trainer-facing trace export when family reuse already succeeded and dedupes
+    repeated same-prompt snapshots within one rollout even when `command_trace` keeps growing.
 28. Align runtime father matching and deploy-stage recovery with the family-first trace contract.
     Stage 28 locally: family lookup now routes by `original_prompt` instead of the helper's
     reformulated text, so existing fathers are compared against the raw task surface that the user
