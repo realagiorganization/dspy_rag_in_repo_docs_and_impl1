@@ -1347,9 +1347,7 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
                 local_member_paths["runtime_artifact"] = local_runtime_paths
                 remote_member_blobs["runtime_artifact_blobs"] = runtime_artifact_blob_map
         family_entry["family_path"] = str(
-            Path("families")
-            / _sanitize_name(prompt_family_id, default="family")
-            / "family.json"
+            Path("families") / _sanitize_name(prompt_family_id, default="family") / "family.json"
         )
         if "father" in local_member_paths:
             family_entry["father_path"] = str(

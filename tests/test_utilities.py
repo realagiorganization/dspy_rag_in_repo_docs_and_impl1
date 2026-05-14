@@ -1365,7 +1365,10 @@ def test_run_trainer_cycle_defers_recompile_and_publish_while_queue_backlog_is_v
     assert payload["publish_requested"] is False
     assert payload["publish"] is None
     assert payload["remote_family_state"] is None
-    assert any("deferred because queued trace items were still arriving" in warning for warning in payload["warnings"])
+    assert any(
+        "deferred because queued trace items were still arriving" in warning
+        for warning in payload["warnings"]
+    )
 
 
 def test_run_trace_drain_reports_queue_missing_and_failed_item_warnings(

@@ -1154,8 +1154,7 @@ def build_codex_mediation(
             )
     if (
         prefer_dspy
-        and
-        supported_family
+        and supported_family
         and prompt_family_id is not None
         and isinstance(family_registry, Mapping)
     ):
@@ -1849,6 +1848,7 @@ class _CodexProxyRuntime:
         if removed_any:
             self._turn_trace_entries = retained_entries
             self._rewrite_turn_trace_manifest()
+
     def _persist_single_turn_trace(
         self,
         mediation: CodexMediationResult,
@@ -1945,7 +1945,9 @@ class _CodexProxyRuntime:
         self._rewrite_turn_trace_manifest()
         return trace_path
 
-    def _lineage_prompts(self, mediation: CodexMediationResult, command_trace: list[Mapping[str, str]]) -> list[tuple[str, str]]:
+    def _lineage_prompts(
+        self, mediation: CodexMediationResult, command_trace: list[Mapping[str, str]]
+    ) -> list[tuple[str, str]]:
         """Return unique prompt-like lineage prompts derived from one turn."""
 
         lineage: list[tuple[str, str]] = []

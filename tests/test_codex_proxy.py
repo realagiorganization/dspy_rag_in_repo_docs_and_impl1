@@ -814,12 +814,7 @@ def test_build_codex_mediation_falls_back_to_family_state_when_bundle_registry_p
     (repo / "README.md").write_text("repo summary\n", encoding="utf-8")
     bundle_root = tmp_path / "bundle-root"
     family_state_path = (
-        repo
-        / "artifacts"
-        / "trainer"
-        / "remote-family-state"
-        / "state-1"
-        / "family-state.json"
+        repo / "artifacts" / "trainer" / "remote-family-state" / "state-1" / "family-state.json"
     )
     family_state_path.parent.mkdir(parents=True)
     family_program_path = (
@@ -1963,7 +1958,9 @@ def test_persist_turn_trace_emits_additional_lineage_trace_for_reformulated_prom
             family_artifact_selected=False,
         )
 
-        def fake_build_mediation(original_prompt: str, command_trace: list[Mapping[str, str]]) -> CodexMediationResult:
+        def fake_build_mediation(
+            original_prompt: str, command_trace: list[Mapping[str, str]]
+        ) -> CodexMediationResult:
             del command_trace
             return CodexMediationResult(
                 question=original_prompt,

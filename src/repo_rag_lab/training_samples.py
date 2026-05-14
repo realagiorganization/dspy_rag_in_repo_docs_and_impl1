@@ -164,9 +164,7 @@ def _sanitize_family_cache_token(value: object, *, default: str) -> str:
     """Return a filesystem-safe cache token for one family-scoped path."""
 
     cleaned = "-".join(
-        part
-        for part in _FAMILY_CACHE_TOKEN_PATTERN.split(str(value or "").strip())
-        if part
+        part for part in _FAMILY_CACHE_TOKEN_PATTERN.split(str(value or "").strip()) if part
     )
     return cleaned or default
 
@@ -752,12 +750,10 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
         question=family_payload.get("family_father_question")
         or family_payload.get("question")
         or family_payload.get("normalized_question"),
-        original_prompt=(
-            _family_father_record(family_payload) or {}
-        ).get("original_prompt"),
-        reformulated_prompt=(
-            _family_father_record(family_payload) or {}
-        ).get("reformulated_prompt"),
+        original_prompt=(_family_father_record(family_payload) or {}).get("original_prompt"),
+        reformulated_prompt=(_family_father_record(family_payload) or {}).get(
+            "reformulated_prompt"
+        ),
     )
     if not family_father_question:
         return 0.0
@@ -1143,9 +1139,7 @@ def _strip_family_state_inline_payload(
         "prompt_family_id": str(family_payload.get("prompt_family_id") or "").strip(),
         "family_needs_recompile": bool(family_payload.get("family_needs_recompile")),
         "question": _normalize_question_text(family_payload.get("question")),
-        "normalized_question": _normalize_question_text(
-            family_payload.get("normalized_question")
-        ),
+        "normalized_question": _normalize_question_text(family_payload.get("normalized_question")),
         "question_variants": _family_question_variants(family_payload),
         "question_variant_count": int(family_payload.get("question_variant_count") or 0),
         "family_father_question": _normalize_question_text(
@@ -1675,7 +1669,9 @@ def _rebuild_family_context_groups(family_payload: dict[str, Any]) -> list[dict[
 def _refresh_family_champion(family_payload: dict[str, Any]) -> tuple[bool, str | None, str | None]:
     """Refresh the family runtime/father records directly from stored trace records."""
 
-    previous_record = _family_runtime_record(family_payload) or _family_champion_record(family_payload)
+    previous_record = _family_runtime_record(family_payload) or _family_champion_record(
+        family_payload
+    )
     previous_snapshot_id = (
         str(previous_record.get("exact_snapshot_id") or "").strip()
         if isinstance(previous_record, Mapping)
@@ -1708,7 +1704,9 @@ def _refresh_family_champion(family_payload: dict[str, Any]) -> tuple[bool, str 
     context_groups = _rebuild_family_context_groups(family_payload)
     runtime_context_group_id = None
     if context_groups:
-        runtime_context_group_id = str(context_groups[0].get("context_group_id") or "").strip() or None
+        runtime_context_group_id = (
+            str(context_groups[0].get("context_group_id") or "").strip() or None
+        )
     family_payload["family_runtime_context_group_id"] = None
     family_payload["family_runtime_score"] = runtime_ratio
     family_payload["family_metric_1_mean"] = _family_metric_1_mean(family_payload)
@@ -1724,9 +1722,7 @@ def _refresh_family_champion(family_payload: dict[str, Any]) -> tuple[bool, str 
         "hit_rate": runtime_ratio,
     }
     _refresh_prompt_family_summary(family_payload, best_runtime_record.get("question") or "")
-    current_snapshot_id = (
-        str(best_runtime_record.get("exact_snapshot_id") or "").strip() or None
-    )
+    current_snapshot_id = str(best_runtime_record.get("exact_snapshot_id") or "").strip() or None
     changed = previous_snapshot_id != current_snapshot_id
     return changed, previous_snapshot_id, current_snapshot_id
 
@@ -2377,9 +2373,10 @@ def _upsert_family_replay_record(
         existing_key = _stable_family_replay_key(existing_normalized)
         if existing_key != candidate_key:
             continue
-        if str(existing_normalized.get("exact_snapshot_id") or "").strip() == str(
-            normalized.get("exact_snapshot_id") or ""
-        ).strip():
+        if (
+            str(existing_normalized.get("exact_snapshot_id") or "").strip()
+            == str(normalized.get("exact_snapshot_id") or "").strip()
+        ):
             raw_records[index] = _merge_equivalent_candidate_records(
                 existing_normalized,
                 normalized,
@@ -2638,9 +2635,7 @@ def materialize_training_candidates(
             max(0, len(family_by_id) - prompt_family_count_before),
         ),
         "context_group_count": sum(
-            1
-            for family_payload in family_by_id.values()
-            if _family_replay_records(family_payload)
+            1 for family_payload in family_by_id.values() if _family_replay_records(family_payload)
         ),
         "new_context_group_count": max(
             new_context_group_count,

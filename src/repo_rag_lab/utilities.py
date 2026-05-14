@@ -300,9 +300,7 @@ def _prepare_local_trainer_family_cache(
                 else (resolved_root / seed_trace_path).resolve()
             )
             destination_name = (
-                resolved_seed_path.name
-                if resolved_seed_path.name
-                else Path(seed_trace_path).name
+                resolved_seed_path.name if resolved_seed_path.name else Path(seed_trace_path).name
             )
             if not destination_name:
                 continue
@@ -1663,13 +1661,9 @@ def run_trainer_cycle(
     if not current_cycle_input_detected:
         cycle_warnings: list[str] = []
         if not queue_payload.get("queue_found"):
-            cycle_warnings.append(
-                "No queued trace items were available for this trainer cycle."
-            )
+            cycle_warnings.append("No queued trace items were available for this trainer cycle.")
         if queue_payload.get("failed_count"):
-            cycle_warnings.append(
-                "One or more queued trace items failed during trainer drain."
-            )
+            cycle_warnings.append("One or more queued trace items failed during trainer drain.")
         cycle_warnings.append(
             "Trainer cycle skipped cache preparation, processed replay, and publish because "
             "no queued trace inputs were drained."
@@ -1680,9 +1674,7 @@ def run_trainer_cycle(
             "durable_trace_recovery": durable_trace_recovery,
             "family_cache_preparation": {
                 "status": "skipped-no-queued-input",
-                "note": (
-                    "Trainer cache preparation runs only inside a queue-triggered cycle."
-                ),
+                "note": ("Trainer cache preparation runs only inside a queue-triggered cycle."),
             },
             "ingestion_summary": {
                 "record_count": 0,
@@ -1739,9 +1731,7 @@ def run_trainer_cycle(
                 "generated_training": None,
                 "training_result": None,
                 "new_candidate_count": 0,
-                "min_new_candidates_for_recompile": max(
-                    1, int(min_new_candidates_for_recompile)
-                ),
+                "min_new_candidates_for_recompile": max(1, int(min_new_candidates_for_recompile)),
             },
             "recompile_error": None,
             "retrieval_gate": {
