@@ -50,11 +50,11 @@ from .runtime_artifacts import (
     TRAINER_SERVICE_CYCLE_KIND,
     TRAINER_SERVICE_STATE_KIND,
     drain_trace_queue,
-    fetch_remote_family_state,
     fetch_remote_bundle,
+    fetch_remote_family_state,
     initialize_local_overlay,
-    inspect_pending_trainer_inputs,
     inspect_bundle_channel,
+    inspect_pending_trainer_inputs,
     inspect_remote_bundle_channel,
     inspect_remote_bundle_version,
     load_json_object,
@@ -64,12 +64,14 @@ from .runtime_artifacts import (
     queue_trace_record,
     resolve_azure_artifact_config,
     resolve_bundle_manifest,
-    restore_processed_trace_records as _restore_processed_trace_records_compat,
     rollback_bundle,
-    upload_remote_family_state,
     upload_remote_bundle,
     upload_remote_bundle_channel,
+    upload_remote_family_state,
     write_trace_record,
+)
+from .runtime_artifacts import (
+    restore_processed_trace_records as _restore_processed_trace_records_compat,
 )
 from .todo_backlog import sync_todo_backlog
 from .trainer_deployment import (
@@ -1749,7 +1751,7 @@ def run_trainer_cycle(
             "publish": None,
             "publish_error": None,
             "promote_channel": promote_channel,
-            "promotion_status": "not-requested" if promote_channel is not None else "not-requested",
+            "promotion_status": "not-requested",
             "promotion": None,
             "promotion_error": None,
             "note": note,
@@ -1881,7 +1883,8 @@ def run_trainer_cycle(
                 if pending_recompile:
                     if current_cycle_input_detected:
                         cycle_warnings.append(
-                            "Trainer-side bundle recompilation remained pending because the current "
+                            "Trainer-side bundle recompilation remained pending because "
+                            "the current "
                             "family set still differs from the published bundle."
                         )
                     else:

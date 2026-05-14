@@ -195,12 +195,7 @@ def _looks_like_prompt_text(text: str) -> bool:
     command_prefixes = ("pytest ", "git ", "make ", "uv ", "python ", "cargo ", "npm ")
     if lowered.startswith(command_prefixes):
         return False
-    if "\nstdout:" in lowered or "\nstderr:" in lowered:
-        return False
-    return True
-    if any(token in _REPO_GROUNDING_HINTS for token in tokens):
-        return "deep"
-    return "trivial"
+    return "\nstdout:" not in lowered and "\nstderr:" not in lowered
 
 
 def _dedupe_previews(previews: list[dict[str, str]]) -> list[dict[str, str]]:

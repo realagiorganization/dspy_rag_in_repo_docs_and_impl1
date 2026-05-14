@@ -686,7 +686,9 @@ def test_materialize_training_candidates_dedupes_replayed_queue_item_prefixes(
                 "source_queue_item_path": (
                     "queued/repo-rag-training/20260514T192732Z-worker-readme-5.json"
                 ),
-                "trace_record_path": "artifacts/traces/imported/20260514T192732Z-worker-readme-5.json",
+                "trace_record_path": (
+                    "artifacts/traces/imported/20260514T192732Z-worker-readme-5.json"
+                ),
             }
         ),
         encoding="utf-8",

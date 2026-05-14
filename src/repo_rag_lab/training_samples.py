@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import yaml
 

@@ -9,8 +9,8 @@ from typing import Any, cast
 import pytest
 
 from repo_rag_lab.dspy_training import (
-    DEFAULT_DSPY_MODEL,
     DEFAULT_DSPY_HELPER_MODEL,
+    DEFAULT_DSPY_MODEL,
     DEFAULT_DSPY_TRAINER_MODEL,
     DSPyLMConfig,
     DSPyTrainingConfig,
@@ -28,8 +28,8 @@ from repo_rag_lab.dspy_training import (
     resolve_dspy_artifact_paths,
     resolve_dspy_helper_lm_config,
     resolve_dspy_lm_config,
-    resolve_dspy_trainer_lm_config,
     resolve_dspy_program_path,
+    resolve_dspy_trainer_lm_config,
     train_repository_program,
 )
 from repo_rag_lab.runtime_artifacts import load_bundle_manifest
