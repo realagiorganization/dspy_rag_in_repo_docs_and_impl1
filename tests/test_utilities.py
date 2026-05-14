@@ -1214,6 +1214,13 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
             "channel_name": channel,
         },
     )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.upload_remote_family_state",
+        lambda root, family_state_path: {
+            "family_state_path": str(family_state_path),
+            "family_state_version": "family-v1",
+        },
+    )
 
     payload = json.loads(
         run_trainer_cycle(
@@ -1237,19 +1244,128 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
         {
             "trace_paths": [Path("artifacts/traces/imported/demo.json")],
             "seed_existing_output": True,
-            "upload_remote_state": True,
+            "upload_remote_state": False,
         },
     ]
     assert payload["family_cache_preparation"]["status"] == "rebuilt-from-processed-history"
     assert payload["durable_trace_recovery"]["status"] == "queue-only-disabled"
     assert payload["durable_trace_recovery"]["restored_count"] == 0
     assert payload["training_candidates"]["candidate_count"] == 1
+    assert payload["remote_family_state"]["family_state_version"] == "family-v1"
     assert payload["gate_passed"] is True
     assert payload["recompile"]["requested_run_name"] == "trainer-auto"
     assert payload["recompile"]["resolved_run_name"] == "20260501T170000Z"
     assert payload["publish"]["publish_status"] == "published"
     assert payload["promotion_status"] == "promoted"
     assert payload["promotion"]["channel_name"] == "stable"
+
+
+def test_run_trainer_cycle_defers_recompile_and_publish_while_queue_backlog_is_visible(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.drain_trace_queue",
+        lambda root, queue_name="default", limit=None, keep_queued=False: {
+            "queue_name": queue_name,
+            "queue_found": True,
+            "queued_count_before": 2,
+            "selected_count": 2,
+            "drained_count": 2,
+            "failed_count": 0,
+            "remaining_count": 0,
+            "keep_queued": keep_queued,
+            "status": "success",
+            "items": [{"imported_trace_record_path": "artifacts/traces/imported/one.json"}],
+            "failures": [],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.restore_processed_trace_records",
+        _restore_processed_trace_records_stub(
+            processed_count=0,
+            restored_count=0,
+            trace_paths=[],
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.inspect_pending_trainer_inputs",
+        lambda root, queue_name="default", output_dir=None: {
+            "queue_name": queue_name,
+            "queue_visible_count": 3,
+            "queue_message_count": 3,
+            "processed_count": 0,
+            "recoverable_processed_count": 0,
+            "current_cycle_input_detected": True,
+        },
+    )
+    monkeypatch.setattr("repo_rag_lab.utilities.load_training_examples", lambda path: ["example"])
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.build_retrieval_benchmarks",
+        lambda examples: [{"question": "demo"}],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.evaluate_retrieval_quality_suite",
+        lambda root, benchmarks, top_k, top_k_values, retrieval_mode=None: {
+            "retrieval_mode": "idf-rerank",
+            "default_top_k": 4,
+            "default_summary": {
+                "top_k": 4,
+                "pass_rate": 1.0,
+                "source_recall": 1.0,
+                "tag_summaries": [],
+            },
+            "top_k_summaries": [{"top_k": 4, "pass_rate": 1.0, "source_recall": 1.0}],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.check_retrieval_quality_thresholds",
+        lambda summary, minimum_pass_rate=None, minimum_source_recall=None: [],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.materialize_training_candidates",
+        _materialize_training_candidates_stub(
+            candidate_count=1,
+            new_candidate_count=1,
+            prompt_family_count=1,
+            context_group_count=1,
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._trainer_recompile_payload",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("trainer recompile should be deferred while queue backlog is visible")
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.publish_bundle",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("bundle publish should be deferred while queue backlog is visible")
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.upload_remote_family_state",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("family-state upload should be deferred while queue backlog is visible")
+        ),
+    )
+
+    payload = json.loads(
+        run_trainer_cycle(
+            tmp_path,
+            queue_name="dataset",
+            recompile_run_name="trainer-auto",
+        )
+    )
+
+    assert payload["command"] == "trainer-cycle"
+    assert payload["command_status"] == "success"
+    assert payload["post_drain_queue_state"]["queue_visible_count"] == 3
+    assert payload["recompile"]["recompile_status"] == "deferred-queue-backlog"
+    assert payload["publish_requested"] is False
+    assert payload["publish"] is None
+    assert payload["remote_family_state"] is None
+    assert any("deferred because queued trace items were still arriving" in warning for warning in payload["warnings"])
 
 
 def test_run_trace_drain_reports_queue_missing_and_failed_item_warnings(

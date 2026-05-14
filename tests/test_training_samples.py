@@ -645,6 +645,93 @@ def test_materialize_training_candidates_dedupes_replayed_processed_trace_import
     )
 
 
+def test_materialize_training_candidates_dedupes_replayed_queue_item_prefixes(
+    tmp_path: Path,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    base_payload = {
+        "trace_record_kind": "repo-rag-trace-record",
+        "question": "Inspect the README demo GIF flow",
+        "original_prompt": "Inspect the README demo GIF flow",
+        "reformulated_prompt": "Check whether README already documents the GIF flow.",
+        "answer": "No father-backed prompt-family support was found for this turn.",
+        "source_trace_name": "worker-readme-5",
+        "trace": {
+            "schema_version": 1,
+            "trace_kind": "repo-rag-runtime",
+            "question": "Inspect the README demo GIF flow",
+            "recorded_at": "2026-05-14T19:27:32+00:00",
+            "mode": "codex-proxy-turn-mediation",
+            "retrieval_mode": "lexical",
+            "sources": [],
+            "source_count": 0,
+            "context_count": 0,
+            "context_field": "evidence_previews",
+            "mcp_candidate_count": 0,
+            "answer_length": 63,
+        },
+        "outcome": {
+            "acceptance_status": "candidate",
+            "accepted": None,
+            "execution_status": "success",
+            "method": "codex_cli",
+            "backend": "codex_cli_repo_rag_proxy",
+        },
+    }
+    (imported_dir / "direct.json").write_text(
+        json.dumps(
+            {
+                **base_payload,
+                "source_queue_item_path": (
+                    "queued/repo-rag-training/20260514T192732Z-worker-readme-5.json"
+                ),
+                "trace_record_path": "artifacts/traces/imported/20260514T192732Z-worker-readme-5.json",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (imported_dir / "replayed.json").write_text(
+        json.dumps(
+            {
+                **base_payload,
+                "source_queue_item_path": (
+                    "queued/repo-rag-training/"
+                    "20260514T192921Z-20260514T192732Z-worker-readme-5.json"
+                ),
+                "trace_record_path": (
+                    "artifacts/traces/imported/"
+                    "20260514T193012Z-20260514T192921Z-20260514T192732Z-worker-readme-5.json"
+                ),
+                "trace": {
+                    **base_payload["trace"],
+                    "recorded_at": "2026-05-14T19:30:12+00:00",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        trace_paths=[
+            Path("artifacts/traces/imported/direct.json"),
+            Path("artifacts/traces/imported/replayed.json"),
+        ],
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+    )
+
+    assert summary["loaded_candidate_count"] == 2
+    family_state = load_family_state_payload(
+        tmp_path / "artifacts" / "trainer" / "family-state.json"
+    )
+    family_payload = family_state["prompt_families"][0]
+    family_records = family_payload["family_records"]
+    assert len(family_records) == 1
+    assert family_records[0]["exact_snapshot_id"].startswith("ts-")
+
+
 def test_resolve_prompt_family_support_matches_best_family_father(tmp_path: Path) -> None:
     trainer_dir = tmp_path / "artifacts" / "trainer"
     trainer_dir.mkdir(parents=True, exist_ok=True)

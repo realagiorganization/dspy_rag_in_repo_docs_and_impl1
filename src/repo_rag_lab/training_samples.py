@@ -969,12 +969,14 @@ def _stable_trace_source_identity(
 
     source_queue_item_path = str(payload.get("source_queue_item_path") or "").strip()
     if source_queue_item_path:
-        return f"trace-file:{Path(source_queue_item_path).name}"
+        canonical_queue_item_path = _canonical_trace_record_path(source_queue_item_path)
+        return f"trace-file:{Path(canonical_queue_item_path).name}"
     provenance = payload.get("provenance")
     if isinstance(provenance, Mapping):
         provenance_queue_item_path = str(provenance.get("source_queue_item_path") or "").strip()
         if provenance_queue_item_path:
-            return f"trace-file:{Path(provenance_queue_item_path).name}"
+            canonical_queue_item_path = _canonical_trace_record_path(provenance_queue_item_path)
+            return f"trace-file:{Path(canonical_queue_item_path).name}"
     source_trace_name = str(payload.get("source_trace_name") or "").strip()
     source_batch_name = str(payload.get("source_batch_name") or "").strip()
     if source_trace_name:
@@ -2199,7 +2201,8 @@ def _stable_family_replay_key(record: Mapping[str, Any]) -> str:
             return stable_source_identity
         source_queue_item_path = str(provenance.get("source_queue_item_path") or "").strip()
         if source_queue_item_path:
-            return f"trace-file:{Path(source_queue_item_path).name}"
+            canonical_queue_item_path = _canonical_trace_record_path(source_queue_item_path)
+            return f"trace-file:{Path(canonical_queue_item_path).name}"
         trace_record_path = str(provenance.get("trace_record_path") or "").strip()
         canonical_trace_path = _canonical_trace_record_path(trace_record_path)
         if canonical_trace_path:
