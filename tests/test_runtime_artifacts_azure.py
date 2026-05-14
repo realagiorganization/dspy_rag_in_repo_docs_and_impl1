@@ -1276,10 +1276,9 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
         cached_runtime_paths["program"]
     )
     cached_family_state_payload = json.loads(cached_family_state.read_text(encoding="utf-8"))
-    assert (
-        cached_family_state_payload["prompt_families"][0]["family_runtime_artifact"]["program_path"]
-        == str(cached_runtime_paths["program"])
-    )
+    assert cached_family_state_payload["prompt_families"][0]["family_runtime_artifact"][
+        "program_path"
+    ] == str(cached_runtime_paths["program"])
     cached_father_payload = json.loads(cached_father_path.read_text(encoding="utf-8"))
     assert cached_father_payload["exact_snapshot_id"] == "ts-father"
 

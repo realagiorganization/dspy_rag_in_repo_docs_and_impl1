@@ -228,21 +228,43 @@ def add_trainer_recompile_arguments(parser: argparse.ArgumentParser) -> None:
 def resolve_dspy_lm_config_from_args(args: argparse.Namespace) -> DSPyLMConfig | None:
     """Resolve optional DSPy LM configuration from parsed CLI args."""
 
-    common_kwargs = dict(
-        model=getattr(args, "dspy_model", None),
-        api_key=getattr(args, "dspy_api_key", None),
-        api_base=getattr(args, "dspy_api_base", None),
-        api_version=getattr(args, "dspy_api_version", None),
-        model_type=getattr(args, "dspy_model_type", "chat"),
-        temperature=getattr(args, "dspy_temperature", None),
-        max_tokens=getattr(args, "dspy_max_tokens", None),
-    )
+    model = getattr(args, "dspy_model", None)
+    api_key = getattr(args, "dspy_api_key", None)
+    api_base = getattr(args, "dspy_api_base", None)
+    api_version = getattr(args, "dspy_api_version", None)
+    model_type = getattr(args, "dspy_model_type", "chat")
+    temperature = getattr(args, "dspy_temperature", None)
+    max_tokens = getattr(args, "dspy_max_tokens", None)
     command = str(getattr(args, "command", "") or "")
     if command in {"dspy-train", "trainer-recompile", "trainer-cycle", "trainer-service"}:
-        return resolve_dspy_trainer_lm_config(**common_kwargs)
+        return resolve_dspy_trainer_lm_config(
+            model=model,
+            api_key=api_key,
+            api_base=api_base,
+            api_version=api_version,
+            model_type=model_type,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
     if command == "ask" and bool(getattr(args, "use_dspy", False)):
-        return resolve_dspy_helper_lm_config(**common_kwargs)
-    return resolve_dspy_lm_config(**common_kwargs)
+        return resolve_dspy_helper_lm_config(
+            model=model,
+            api_key=api_key,
+            api_base=api_base,
+            api_version=api_version,
+            model_type=model_type,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+    return resolve_dspy_lm_config(
+        model=model,
+        api_key=api_key,
+        api_base=api_base,
+        api_version=api_version,
+        model_type=model_type,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -50,11 +50,11 @@ from .runtime_artifacts import (
     TRAINER_SERVICE_CYCLE_KIND,
     TRAINER_SERVICE_STATE_KIND,
     drain_trace_queue,
-    fetch_remote_family_state,
     fetch_remote_bundle,
+    fetch_remote_family_state,
     initialize_local_overlay,
-    inspect_pending_trainer_inputs,
     inspect_bundle_channel,
+    inspect_pending_trainer_inputs,
     inspect_remote_bundle_channel,
     inspect_remote_bundle_version,
     load_json_object,
@@ -64,11 +64,14 @@ from .runtime_artifacts import (
     queue_trace_record,
     resolve_azure_artifact_config,
     resolve_bundle_manifest,
-    restore_processed_trace_records as _restore_processed_trace_records_compat,
     rollback_bundle,
     upload_remote_bundle,
     upload_remote_bundle_channel,
+    upload_remote_family_state,
     write_trace_record,
+)
+from .runtime_artifacts import (
+    restore_processed_trace_records as _restore_processed_trace_records_compat,
 )
 from .todo_backlog import sync_todo_backlog
 from .trainer_deployment import (
@@ -282,9 +285,10 @@ def _prepare_local_trainer_family_cache(
         queue_name=queue_name,
         output_dir=DEFAULT_TRAINER_RECOVERED_TRACES_DIR,
     )
+    recovered_path_items = recovered.get("trace_paths")
     recovered_trace_paths = [
         Path(path_text)
-        for path_text in recovered.get("trace_paths", [])
+        for path_text in (recovered_path_items if isinstance(recovered_path_items, list) else [])
         if isinstance(path_text, str) and path_text.strip()
     ]
     seed_recovery: dict[str, object] | None = None
@@ -299,9 +303,7 @@ def _prepare_local_trainer_family_cache(
                 else (resolved_root / seed_trace_path).resolve()
             )
             destination_name = (
-                resolved_seed_path.name
-                if resolved_seed_path.name
-                else Path(seed_trace_path).name
+                resolved_seed_path.name if resolved_seed_path.name else Path(seed_trace_path).name
             )
             if not destination_name:
                 continue
@@ -1641,7 +1643,10 @@ def run_trainer_cycle(
         if isinstance(item, Mapping) and item.get("imported_trace_record_path")
     ]
     current_cycle_trace_input_count = len(imported_trace_paths)
-    current_cycle_queue_drain_count = int(queue_payload.get("drained_count") or 0)
+    raw_cycle_queue_drain_count = queue_payload.get("drained_count")
+    current_cycle_queue_drain_count = (
+        raw_cycle_queue_drain_count if isinstance(raw_cycle_queue_drain_count, int) else 0
+    )
     current_cycle_input_detected = (
         current_cycle_trace_input_count > 0 or current_cycle_queue_drain_count > 0
     )
@@ -1662,13 +1667,9 @@ def run_trainer_cycle(
     if not current_cycle_input_detected:
         cycle_warnings: list[str] = []
         if not queue_payload.get("queue_found"):
-            cycle_warnings.append(
-                "No queued trace items were available for this trainer cycle."
-            )
+            cycle_warnings.append("No queued trace items were available for this trainer cycle.")
         if queue_payload.get("failed_count"):
-            cycle_warnings.append(
-                "One or more queued trace items failed during trainer drain."
-            )
+            cycle_warnings.append("One or more queued trace items failed during trainer drain.")
         cycle_warnings.append(
             "Trainer cycle skipped cache preparation, processed replay, and publish because "
             "no queued trace inputs were drained."
@@ -1679,9 +1680,7 @@ def run_trainer_cycle(
             "durable_trace_recovery": durable_trace_recovery,
             "family_cache_preparation": {
                 "status": "skipped-no-queued-input",
-                "note": (
-                    "Trainer cache preparation runs only inside a queue-triggered cycle."
-                ),
+                "note": ("Trainer cache preparation runs only inside a queue-triggered cycle."),
             },
             "ingestion_summary": {
                 "record_count": 0,
@@ -1738,9 +1737,7 @@ def run_trainer_cycle(
                 "generated_training": None,
                 "training_result": None,
                 "new_candidate_count": 0,
-                "min_new_candidates_for_recompile": max(
-                    1, int(min_new_candidates_for_recompile)
-                ),
+                "min_new_candidates_for_recompile": max(1, int(min_new_candidates_for_recompile)),
             },
             "recompile_error": None,
             "retrieval_gate": {
@@ -1758,7 +1755,7 @@ def run_trainer_cycle(
             "publish": None,
             "publish_error": None,
             "promote_channel": promote_channel,
-            "promotion_status": "not-requested" if promote_channel is not None else "not-requested",
+            "promotion_status": "not-requested",
             "promotion": None,
             "promotion_error": None,
             "note": note,
@@ -1794,7 +1791,15 @@ def run_trainer_cycle(
         output_path=DEFAULT_TRAINER_TRAINING_CANDIDATES_PATH,
         summary_path=DEFAULT_TRAINER_TRAINING_CANDIDATES_SUMMARY_PATH,
         seed_existing_output=True,
+        upload_remote_state=False,
     )
+    post_drain_queue_state = inspect_pending_trainer_inputs(root, queue_name=queue_name)
+    raw_queue_backlog_visible_count = post_drain_queue_state.get("queue_visible_count")
+    queue_backlog_visible_count = max(
+        0,
+        raw_queue_backlog_visible_count if isinstance(raw_queue_backlog_visible_count, int) else 0,
+    )
+    queue_backlog_detected = queue_backlog_visible_count > 0
     pending_recompile_summary = _trainer_pending_recompile_summary(
         root,
         training_candidates=training_candidates,
@@ -1814,8 +1819,10 @@ def run_trainer_cycle(
         current_cycle_trace_input_count > 0 or current_cycle_queue_drain_count > 0
     )
     pending_recompile_with_new_inputs = pending_recompile and current_cycle_input_detected
-    recompile_triggered = recompile_requested and (
-        recompile_threshold_met or pending_recompile_with_new_inputs
+    recompile_triggered = (
+        recompile_requested
+        and not queue_backlog_detected
+        and (recompile_threshold_met or pending_recompile_with_new_inputs)
     )
     explicit_publish_requested = run_name is not None or bundle_version is not None
     retrieval_payload = _build_retrieval_evaluation_payload(
@@ -1833,7 +1840,7 @@ def run_trainer_cycle(
     promote_payload: dict[str, object] | None = None
     recompile_payload: dict[str, object] | None = None
     bundle_gate_payload: dict[str, object] | None = None
-    cycle_warnings: list[str] = []
+    active_cycle_warnings: list[str] = []
     publish_requested = explicit_publish_requested
     promotion_requested = False
     promotion_status = "not-requested" if promote_channel is None else "blocked"
@@ -1842,16 +1849,30 @@ def run_trainer_cycle(
     recompile_error: dict[str, str] | None = None
 
     if not queue_payload.get("queue_found"):
-        cycle_warnings.append("No queued trace items were available for this trainer cycle.")
+        active_cycle_warnings.append("No queued trace items were available for this trainer cycle.")
     if queue_payload.get("failed_count"):
-        cycle_warnings.append("One or more queued trace items failed during trainer drain.")
+        active_cycle_warnings.append("One or more queued trace items failed during trainer drain.")
     if ingestion_summary.get("invalid_record_count"):
-        cycle_warnings.append(
+        active_cycle_warnings.append(
             "One or more imported trace records could not be summarized during trainer ingestion."
+        )
+    if queue_backlog_detected:
+        active_cycle_warnings.append(
+            "Trainer-cycle publish and recompilation were deferred because queued trace items "
+            "were still arriving after this drain."
         )
 
     if recompile_requested:
-        if not recompile_triggered:
+        if queue_backlog_detected:
+            recompile_payload = {
+                "recompile_status": "deferred-queue-backlog",
+                "generated_training": None,
+                "training_result": None,
+                "new_candidate_count": new_candidate_count,
+                "min_new_candidates_for_recompile": effective_min_new_candidates,
+                "queue_backlog_visible_count": queue_backlog_visible_count,
+            }
+        elif not recompile_triggered:
             recompile_status = (
                 "skipped-no-new-candidates"
                 if new_candidate_count == 0
@@ -1867,23 +1888,24 @@ def run_trainer_cycle(
             if new_candidate_count == 0:
                 if pending_recompile:
                     if current_cycle_input_detected:
-                        cycle_warnings.append(
-                            "Trainer-side bundle recompilation remained pending because the current "
+                        active_cycle_warnings.append(
+                            "Trainer-side bundle recompilation remained pending because "
+                            "the current "
                             "family set still differs from the published bundle."
                         )
                     else:
-                        cycle_warnings.append(
+                        active_cycle_warnings.append(
                             "Trainer-side bundle recompilation remained pending, but this idle "
                             "cycle imported no new traces; skipping auto-recompile to avoid "
                             "repeated bundle versions."
                         )
                 else:
-                    cycle_warnings.append(
+                    active_cycle_warnings.append(
                         "Trainer-side bundle recompilation was skipped because no new training "
                         "candidates were imported during this cycle."
                     )
             else:
-                cycle_warnings.append(
+                active_cycle_warnings.append(
                     "Trainer-side bundle recompilation was skipped because the number of new "
                     "training candidates did not reach the configured minimum threshold."
                 )
@@ -1943,7 +1965,7 @@ def run_trainer_cycle(
                 recompile_payload["resolved_run_name"] = resolved_recompile_run_name
                 recompile_payload["lineage_metadata"] = recompile_lineage
                 if recompile_payload.get("recompile_status") != "compiled":
-                    cycle_warnings.append(
+                    active_cycle_warnings.append(
                         "Trainer-side bundle recompilation was skipped because DSPy LM "
                         "configuration is unavailable."
                     )
@@ -1952,7 +1974,7 @@ def run_trainer_cycle(
                     "type": type(exc).__name__,
                     "message": str(exc),
                 }
-                cycle_warnings.append(
+                active_cycle_warnings.append(
                     "Trainer-side bundle recompilation failed during trainer cycle."
                 )
 
@@ -1964,6 +1986,8 @@ def run_trainer_cycle(
             if isinstance(training_run_name, str) and training_run_name.strip():
                 effective_publish_run_name = training_run_name.strip()
                 publish_requested = True
+    if queue_backlog_detected:
+        publish_requested = False
     promotion_requested = promote_channel is not None and publish_requested
     if promote_channel is not None and not promotion_requested:
         promotion_status = "not-requested"
@@ -1981,7 +2005,9 @@ def run_trainer_cycle(
     )
     bundle_gate_passed = bundle_gate_payload.get("status") in {"pass", "not-requested"}
     if publish_requested and not bundle_gate_passed:
-        cycle_warnings.append("Bundle publish was blocked by trainer-side DSPy benchmark gates.")
+        active_cycle_warnings.append(
+            "Bundle publish was blocked by trainer-side DSPy benchmark gates."
+        )
 
     if publish_requested and bundle_gate_passed:
         try:
@@ -2008,20 +2034,59 @@ def run_trainer_cycle(
                 "type": type(exc).__name__,
                 "message": str(exc),
             }
-            cycle_warnings.append("Bundle publish failed during trainer cycle.")
+            active_cycle_warnings.append("Bundle publish failed during trainer cycle.")
+
+    final_recompile_status: str | None = (
+        str(recompile_payload.get("recompile_status"))
+        if isinstance(recompile_payload, Mapping)
+        and recompile_payload.get("recompile_status") is not None
+        else None
+    )
+    resolved_family_state_path = (
+        root / DEFAULT_TRAINER_FAMILY_STATE_PATH
+        if not DEFAULT_TRAINER_FAMILY_STATE_PATH.is_absolute()
+        else DEFAULT_TRAINER_FAMILY_STATE_PATH
+    )
+    final_family_state_summary = summarize_family_state(resolved_family_state_path)
+    final_dirty_family_count = int(final_family_state_summary.get("dirty_family_count") or 0)
+    family_state_changed = any(
+        int(training_candidates.get(field) or 0) > 0
+        for field in ("new_candidate_count", "replaced_count", "new_prompt_family_count")
+    )
+    remote_family_state = None
+    if family_state_changed and not queue_backlog_detected:
+        if final_dirty_family_count == 0:
+            try:
+                remote_family_state = upload_remote_family_state(
+                    root,
+                    family_state_path=resolved_family_state_path,
+                )
+            except Exception as exc:
+                active_cycle_warnings.append(
+                    "Remote family-state publish failed during trainer cycle."
+                )
+                recompile_error = recompile_error or {
+                    "type": type(exc).__name__,
+                    "message": str(exc),
+                }
+        elif final_recompile_status != "compiled":
+            active_cycle_warnings.append(
+                "Remote family-state publish was deferred because dirty prompt families "
+                "remain uncompiled."
+            )
 
     if promotion_requested:
         if not gate_passed:
-            cycle_warnings.append(
+            active_cycle_warnings.append(
                 f"Promotion to `{promote_channel}` was blocked by retrieval gate failures."
             )
         elif not bundle_gate_passed:
-            cycle_warnings.append(
+            active_cycle_warnings.append(
                 f"Promotion to `{promote_channel}` was blocked by trainer-side DSPy "
                 "benchmark gates."
             )
         elif publish_error is not None:
-            cycle_warnings.append(
+            active_cycle_warnings.append(
                 f"Promotion to `{promote_channel}` was skipped because bundle publish failed."
             )
         else:
@@ -2064,12 +2129,12 @@ def run_trainer_cycle(
                     "message": str(exc),
                 }
                 promotion_status = "failed"
-                cycle_warnings.append("Bundle promotion failed during trainer cycle.")
+                active_cycle_warnings.append("Bundle promotion failed during trainer cycle.")
 
     if promotion_requested and gate_passed and publish_error is None and promote_payload is None:
         promotion_status = "failed"
 
-    cycle_payload: dict[str, object] = {
+    active_cycle_payload: dict[str, object] = {
         "queue_name": queue_name,
         "queue_drain": queue_payload,
         "durable_trace_recovery": durable_trace_recovery,
@@ -2085,12 +2150,15 @@ def run_trainer_cycle(
         "recompile_threshold_met": recompile_threshold_met,
         "recompile": recompile_payload,
         "recompile_error": recompile_error,
+        "post_drain_queue_state": post_drain_queue_state,
         "retrieval_gate": retrieval_payload,
         "gate_passed": gate_passed,
         "bundle_gate": bundle_gate_payload,
         "bundle_gate_passed": bundle_gate_passed,
         "publish_requested": publish_requested,
         "promotion_requested": promotion_requested,
+        "remote_family_state": remote_family_state,
+        "final_family_state": final_family_state_summary,
         "publish": publish_payload,
         "publish_error": publish_error,
         "promote_channel": promote_channel,
@@ -2099,12 +2167,6 @@ def run_trainer_cycle(
         "promotion_error": promote_error,
         "note": note,
     }
-    final_recompile_status: str | None = (
-        str(recompile_payload.get("recompile_status"))
-        if isinstance(recompile_payload, Mapping)
-        and recompile_payload.get("recompile_status") is not None
-        else None
-    )
     recompile_failed = recompile_error is not None or (
         recompile_triggered and final_recompile_status != "compiled"
     )
@@ -2131,9 +2193,9 @@ def run_trainer_cycle(
     return _json_command_payload(
         "trainer-cycle",
         root=root,
-        payload=cycle_payload,
+        payload=active_cycle_payload,
         command_status="success" if not cycle_failed else "fail",
-        warnings=cycle_warnings,
+        warnings=active_cycle_warnings,
         artifact_metadata=_artifact_metadata(
             input_paths=[str(retrieval_payload.get("training_path") or "")],
             generated_paths=[
