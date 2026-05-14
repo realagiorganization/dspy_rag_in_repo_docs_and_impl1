@@ -246,6 +246,7 @@ def _prepare_local_trainer_family_cache(
     root: Path,
     *,
     queue_name: str,
+    seed_trace_paths: Sequence[Path] = (),
 ) -> dict[str, object]:
     """Ensure one active local trainer family cache exists before queued traces are applied."""
 
@@ -286,6 +287,34 @@ def _prepare_local_trainer_family_cache(
         for path_text in recovered.get("trace_paths", [])
         if isinstance(path_text, str) and path_text.strip()
     ]
+    seed_recovery: dict[str, object] | None = None
+    if not recovered_trace_paths and seed_trace_paths:
+        recovered_output_dir = (resolved_root / DEFAULT_TRAINER_RECOVERED_TRACES_DIR).resolve()
+        recovered_output_dir.mkdir(parents=True, exist_ok=True)
+        seeded_paths: list[Path] = []
+        for seed_trace_path in seed_trace_paths:
+            resolved_seed_path = (
+                seed_trace_path
+                if seed_trace_path.is_absolute()
+                else (resolved_root / seed_trace_path).resolve()
+            )
+            destination_name = (
+                resolved_seed_path.name
+                if resolved_seed_path.name
+                else Path(seed_trace_path).name
+            )
+            if not destination_name:
+                continue
+            destination_path = recovered_output_dir / destination_name
+            if resolved_seed_path.is_file():
+                shutil.copy2(resolved_seed_path, destination_path)
+            seeded_paths.append(destination_path.relative_to(resolved_root))
+        recovered_trace_paths = seeded_paths
+        seed_recovery = {
+            "status": "seeded-from-current-queue-cycle",
+            "trace_paths": [str(path) for path in seeded_paths],
+            "restored_count": len(seeded_paths),
+        }
     if recovered_trace_paths:
         materialize_training_candidates(
             resolved_root,
@@ -301,6 +330,7 @@ def _prepare_local_trainer_family_cache(
         "family_cache_dir": _path_text_for_root(local_family_cache_dir, resolved_root),
         "processed_recovery": recovered,
         "recovered_trace_count": len(recovered_trace_paths),
+        "seed_recovery": seed_recovery,
     }
 
 
@@ -1754,6 +1784,7 @@ def run_trainer_cycle(
     family_cache_preparation = _prepare_local_trainer_family_cache(
         root,
         queue_name=queue_name,
+        seed_trace_paths=[Path(path) for path in imported_trace_paths],
     )
     trainer_trace_paths = _stable_ordered_strings(imported_trace_paths)
     ingestion_summary = _summarize_imported_trace_records(root, trainer_trace_paths)

@@ -267,6 +267,65 @@ def test_prepare_local_trainer_family_cache_adopts_latest_remote_version(
     assert (tmp_path / "artifacts" / "trainer" / "families" / "pf-demo" / "family.json").is_file()
 
 
+def test_prepare_local_trainer_family_cache_rebuilds_from_processed_history(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.restore_processed_trace_records",
+        _restore_processed_trace_records_stub(
+            processed_count=1,
+            restored_count=1,
+            trace_paths=["artifacts/trainer/recovered-imported-traces/demo.json"],
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.fetch_remote_family_state",
+        lambda root: None,
+    )
+    materialize_calls: list[dict[str, object]] = []
+
+    def fake_materialize_training_candidates(
+        root: Path,
+        *,
+        trace_paths: list[Path],
+        output_path: Path,
+        summary_path: Path,
+        seed_existing_output: bool = True,
+        upload_remote_state: bool = True,
+    ) -> dict[str, object]:
+        del root, output_path, summary_path
+        materialize_calls.append(
+            {
+                "trace_paths": list(trace_paths),
+                "seed_existing_output": seed_existing_output,
+                "upload_remote_state": upload_remote_state,
+            }
+        )
+        return {}
+
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.materialize_training_candidates",
+        fake_materialize_training_candidates,
+    )
+
+    payload = utilities_module._prepare_local_trainer_family_cache(
+        tmp_path,
+        queue_name="dataset",
+    )
+
+    assert payload["status"] == "rebuilt-from-processed-history"
+    assert payload["recovered_trace_count"] == 1
+    assert payload["processed_recovery"]["restored_count"] == 1
+    assert materialize_calls == [
+        {
+            "trace_paths": [Path("artifacts/trainer/recovered-imported-traces/demo.json")],
+            "seed_existing_output": False,
+            "upload_remote_state": False,
+        }
+    ]
+
+
 def _write_demo_repo_for_exploratorium(tmp_path: Path) -> None:
     (tmp_path / "documentation").mkdir(parents=True)
     (tmp_path / "publication").mkdir(parents=True)
@@ -1047,14 +1106,6 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
             ],
             "failures": [],
         },
-    )
-    monkeypatch.setattr(
-        "repo_rag_lab.utilities.restore_processed_trace_records",
-        _restore_processed_trace_records_stub(
-            processed_count=1,
-            restored_count=1,
-            trace_paths=["artifacts/trainer/recovered-imported-traces/demo.json"],
-        ),
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.load_training_examples",

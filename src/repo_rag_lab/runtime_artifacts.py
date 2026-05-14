@@ -252,12 +252,15 @@ def _bundle_family_entry(family_payload: Mapping[str, object]) -> dict[str, obje
     runtime_metric = (
         _family_runtime_metric_payload(runtime_record) if runtime_record is not None else {}
     )
+    family_metric_1_mean = _float_or_none(family_payload.get("family_metric_1_mean"))
     persisted_runtime_artifact = _mapping_or_none(family_payload.get("family_runtime_artifact"))
     runtime_artifact: dict[str, object]
     if persisted_runtime_artifact is not None:
         runtime_artifact = dict(persisted_runtime_artifact)
         if runtime_artifact.get("hit_rate") is None:
             runtime_artifact["hit_rate"] = _float_or_none(runtime_metric.get("hit_rate"))
+        if runtime_artifact.get("predicted_hit_rate") is None:
+            runtime_artifact["predicted_hit_rate"] = family_metric_1_mean
     else:
         runtime_artifact = {
             "artifact_kind": (
@@ -267,6 +270,7 @@ def _bundle_family_entry(family_payload: Mapping[str, object]) -> dict[str, obje
             ),
             "artifact_ready": False,
             "artifact_source": ("family_runtime_record" if runtime_record is not None else None),
+            "predicted_hit_rate": family_metric_1_mean,
             **runtime_metric,
         }
     return {
@@ -282,6 +286,7 @@ def _bundle_family_entry(family_payload: Mapping[str, object]) -> dict[str, obje
         "family_father_record": father_record,
         "family_runtime_record": runtime_record,
         "family_runtime_score": _float_or_none(family_payload.get("family_runtime_score")),
+        "family_metric_1_mean": family_metric_1_mean,
         "family_runtime_metric": runtime_metric or None,
         "runtime_artifact": runtime_artifact,
     }
@@ -447,8 +452,7 @@ def _resolved_family_state_family_payload(
                 "family_runtime_record",
                 "family_runtime_artifact",
                 "family_runtime_score",
-                "family_champion_record",
-                "family_champion_score",
+                "family_metric_1_mean",
             ):
                 if field_name in family_payload and field_name not in merged_payload:
                     merged_payload[field_name] = family_payload[field_name]
@@ -493,15 +497,15 @@ def _family_state_records_from_payload(
     if isinstance(raw_family_records, list):
         for value in raw_family_records:
             _append_record(value)
-    raw_context_groups = family_payload.get("context_groups")
-    if isinstance(raw_context_groups, list):
-        for group in raw_context_groups:
-            group_mapping = _mapping_or_none(group)
-            if group_mapping is None:
-                continue
-            _append_record(group_mapping.get("champion_record"))
+    if not records:
+        raw_context_groups = family_payload.get("context_groups")
+        if isinstance(raw_context_groups, list):
+            for group in raw_context_groups:
+                group_mapping = _mapping_or_none(group)
+                if group_mapping is None:
+                    continue
+                _append_record(group_mapping.get("champion_record"))
     _append_record(family_payload.get("family_runtime_record"))
-    _append_record(family_payload.get("family_champion_record"))
     _append_record(family_payload.get("family_father_record"))
     return records
 

@@ -196,6 +196,7 @@ class DSPyFamilyArtifactResult:
     benchmark_example_count: int
     benchmark_summary: dict[str, object]
     hit_rate: float | None = None
+    predicted_hit_rate: float | None = None
     artifact_ready: bool = True
     artifact_source: str = "recompiled"
 
@@ -1270,15 +1271,15 @@ def _family_candidate_records(payload: Mapping[str, object]) -> list[dict[str, o
     if isinstance(raw_family_records, list):
         for record in raw_family_records:
             _append_record(record)
-    raw_context_groups = payload.get("context_groups")
-    if isinstance(raw_context_groups, list):
-        for group in raw_context_groups:
-            if not isinstance(group, Mapping):
-                continue
-            _append_record(group.get("champion_record"))
+    if not records:
+        raw_context_groups = payload.get("context_groups")
+        if isinstance(raw_context_groups, list):
+            for group in raw_context_groups:
+                if not isinstance(group, Mapping):
+                    continue
+                _append_record(group.get("champion_record"))
     _append_record(payload.get("family_runtime_record"))
     _append_record(payload.get("family_father_record"))
-    _append_record(payload.get("family_champion_record"))
     return records
 
 
@@ -1419,6 +1420,35 @@ def _family_runtime_hit_rate(family_payload: Mapping[str, object]) -> float | No
     return None
 
 
+def _family_predicted_hit_rate(family_payload: Mapping[str, object]) -> float | None:
+    """Return a family-level predicted hit-rate from all stored replay traces."""
+
+    raw_records = family_payload.get("family_records")
+    if not isinstance(raw_records, list) or not raw_records:
+        return _family_runtime_hit_rate(family_payload)
+    ratios: list[float] = []
+    for record in raw_records:
+        if not isinstance(record, Mapping):
+            continue
+        metric_ratio = record.get("metric_ratio")
+        if isinstance(metric_ratio, (int, float)) and not isinstance(metric_ratio, bool):
+            ratios.append(float(metric_ratio))
+            continue
+        metric_hits = record.get("metric_hits")
+        metric_total = record.get("metric_total")
+        if (
+            isinstance(metric_hits, int)
+            and isinstance(metric_total, int)
+            and not isinstance(metric_hits, bool)
+            and not isinstance(metric_total, bool)
+            and metric_total > 0
+        ):
+            ratios.append(round(max(0, min(metric_hits, metric_total)) / metric_total, 6))
+    if not ratios:
+        return _family_runtime_hit_rate(family_payload)
+    return round(sum(ratios) / len(ratios), 6)
+
+
 def _compile_family_artifacts(
     root: Path,
     *,
@@ -1506,6 +1536,7 @@ def _compile_family_artifacts(
             "training_example_count": len(examples),
             "benchmark_example_count": len(examples),
             "benchmark_summary": benchmark_summary,
+            "predicted_hit_rate": _family_predicted_hit_rate(family),
             "family_state_path": str(resolved_family_state_path.relative_to(resolved_root)),
         }
         artifact_paths.metadata_path.write_text(
@@ -1522,6 +1553,7 @@ def _compile_family_artifacts(
             benchmark_example_count=len(examples),
             benchmark_summary=cast(dict[str, object], benchmark_summary),
             hit_rate=_family_runtime_hit_rate(family),
+            predicted_hit_rate=_family_predicted_hit_rate(family),
             artifact_ready=artifact_paths.program_path.is_file(),
             artifact_source="recompiled",
         ).to_payload()
