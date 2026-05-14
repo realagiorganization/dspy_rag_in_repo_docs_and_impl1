@@ -316,7 +316,9 @@ def test_prepare_local_trainer_family_cache_rebuilds_from_processed_history(
 
     assert payload["status"] == "rebuilt-from-processed-history"
     assert payload["recovered_trace_count"] == 1
-    assert payload["processed_recovery"]["restored_count"] == 1
+    processed_recovery = payload["processed_recovery"]
+    assert isinstance(processed_recovery, dict)
+    assert processed_recovery["restored_count"] == 1
     assert materialize_calls == [
         {
             "trace_paths": [Path("artifacts/trainer/recovered-imported-traces/demo.json")],

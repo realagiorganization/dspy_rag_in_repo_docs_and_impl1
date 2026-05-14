@@ -1356,10 +1356,9 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
                 / "father.json"
             )
         family_entry["family_record_count"] = len(record_paths)
-        family_entry["context_group_count"] = len(
-            full_family_payload.get("context_groups")
-            if isinstance(full_family_payload.get("context_groups"), list)
-            else []
+        context_groups = full_family_payload.get("context_groups")
+        family_entry["context_group_count"] = (
+            len(context_groups) if isinstance(context_groups, list) else 0
         )
         if isinstance(raw_prompt_families, list):
             raw_prompt_families[family_index] = family_entry

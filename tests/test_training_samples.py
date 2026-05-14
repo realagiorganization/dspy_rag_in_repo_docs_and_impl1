@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -565,7 +566,7 @@ def test_materialize_training_candidates_dedupes_replayed_processed_trace_import
 ) -> None:
     imported_dir = tmp_path / "artifacts" / "traces" / "imported"
     imported_dir.mkdir(parents=True, exist_ok=True)
-    base_payload = {
+    base_payload: dict[str, Any] = {
         "trace_record_kind": "repo-rag-trace-record",
         "question": "Add a demo GIF to README",
         "original_prompt": "Add a demo GIF to README",
@@ -650,7 +651,7 @@ def test_materialize_training_candidates_dedupes_replayed_queue_item_prefixes(
 ) -> None:
     imported_dir = tmp_path / "artifacts" / "traces" / "imported"
     imported_dir.mkdir(parents=True, exist_ok=True)
-    base_payload = {
+    base_payload: dict[str, Any] = {
         "trace_record_kind": "repo-rag-trace-record",
         "question": "Inspect the README demo GIF flow",
         "original_prompt": "Inspect the README demo GIF flow",
