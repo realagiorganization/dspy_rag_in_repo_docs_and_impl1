@@ -890,6 +890,10 @@ def test_run_trace_export_preserves_family_runtime_metadata(tmp_path: Path) -> N
                     "prompt_family_band": "match",
                     "family_runtime_hit_rate": 0.8,
                     "family_artifact_hit_rate": 1.0,
+                    "family_predicted_hit_rate": 0.666667,
+                    "family_predicted_hit_rate_lower_bound": 0.364602,
+                    "family_prediction_uncertainty": 0.235702,
+                    "family_feedback_count": 1,
                     "family_artifact_selected": True,
                     "mediation_metric_hits": 1,
                     "mediation_metric_total": 1,
@@ -912,6 +916,14 @@ def test_run_trace_export_preserves_family_runtime_metadata(tmp_path: Path) -> N
     assert trace_record["prompt_family_band"] == "match"
     assert trace_record["family_runtime_hit_rate"] == 0.8
     assert trace_record["family_artifact_hit_rate"] == 1.0
+    assert trace_record["family_predicted_hit_rate"] == 0.666667
+    assert trace_record["family_predicted_hit_rate_lower_bound"] == 0.364602
+    assert trace_record["family_prediction_uncertainty"] == 0.235702
+    assert trace_record["family_feedback_count"] == 1
+    assert trace_record["trace"]["family_predicted_hit_rate"] == 0.666667
+    assert trace_record["trace"]["family_predicted_hit_rate_lower_bound"] == 0.364602
+    assert trace_record["trace"]["family_prediction_uncertainty"] == 0.235702
+    assert trace_record["trace"]["family_feedback_count"] == 1
     assert trace_record["family_artifact_selected"] is True
     assert trace_record["mediation_metric_hits"] == 1
     assert trace_record["mediation_metric_total"] == 1

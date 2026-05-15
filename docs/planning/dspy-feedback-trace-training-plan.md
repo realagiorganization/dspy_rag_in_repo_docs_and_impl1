@@ -147,6 +147,17 @@ Implemented slice in this turn:
 
 - family similarity now evaluates the stored prompt profile, not only `family_father_question`
 - the profile already includes persisted original/reformulated variants from stored family traces
+- family state now also persists lightweight routing summaries:
+  - `family_prompt_profile_terms`
+  - `family_command_pattern_summary`
+  - `family_constraint_summary`
+- routing score now blends:
+  - base prompt similarity
+  - profile overlap
+  - feedback-aware success prior
+  - uncertainty penalty
+- `trace-export` / `trace-import` / trusted worker handoff now preserve the richer family-success
+  profile instead of dropping it at the outer payload layer
 
 ## Current Work In This Turn
 

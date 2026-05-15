@@ -593,6 +593,45 @@ def test_resolve_prompt_family_support_can_match_family_variant_not_only_father(
     assert support_from_payload.similarity >= 0.8
 
 
+def test_resolve_prompt_family_support_can_use_family_profile_summaries() -> None:
+    payload = {
+        "prompt_families": [
+            {
+                "prompt_family_id": "pf-profile",
+                "question": "Generate demo animation assets",
+                "normalized_question": "generate demo animation assets",
+                "family_father_question": "Generate demo animation assets",
+                "question_variants": ["Generate demo animation assets"],
+                "family_prompt_profile_terms": [
+                    "record",
+                    "demo",
+                    "gif",
+                    "readme",
+                    "animation",
+                    "assets",
+                ],
+                "family_command_pattern_summary": ["record", "gif", "readme"],
+                "family_constraint_summary": ["readme.md", "demo.gif"],
+                "family_success_metric": {
+                    "posterior_mean": 0.95,
+                    "lower_bound": 0.8,
+                    "uncertainty": 0.05,
+                },
+                "family_records": [],
+            }
+        ]
+    }
+
+    support_from_payload = resolve_prompt_family_support_from_payload(
+        "Update README.md with a demo GIF",
+        payload,
+    )
+
+    assert support_from_payload.prompt_family_id == "pf-profile"
+    assert support_from_payload.supported is True
+    assert support_from_payload.similarity >= 0.8
+
+
 def test_materialize_training_candidates_strips_execution_envelope_from_family_father(
     tmp_path: Path,
 ) -> None:
@@ -2027,6 +2066,8 @@ def test_materialize_training_candidates_groups_similar_prompt_variants_into_one
         "Continue developing this game",
         "Continue developing this game further",
     ]
+    assert "continue" in family["family_prompt_profile_terms"]
+    assert "game" in family["family_prompt_profile_terms"]
 
 
 def test_materialize_training_candidates_splits_prompt_family_on_large_prompt_delta(
