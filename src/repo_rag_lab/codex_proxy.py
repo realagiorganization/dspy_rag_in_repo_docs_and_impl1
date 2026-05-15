@@ -35,6 +35,7 @@ from .runtime_artifacts import (
     fetch_remote_bundle,
     fetch_remote_family_state,
     inspect_bundle_channel,
+    inspect_remote_bundle_channel,
     load_bundle_manifest,
     resolve_bundle_manifest,
     resolve_bundle_version_for_program,
@@ -700,6 +701,12 @@ def _resolve_bundle_version_hint(
 
     if bundle_version is not None:
         return bundle_version
+    remote_channel_state = inspect_remote_bundle_channel(bundle_channel)
+    if remote_channel_state is not None:
+        resolved_bundle_version = str(
+            remote_channel_state.get("current_bundle_version") or ""
+        ).strip()
+        return resolved_bundle_version or None
     channel_state = inspect_bundle_channel(bundle_root, channel=bundle_channel)
     resolved_bundle_version = str(channel_state.get("current_bundle_version") or "").strip()
     if resolved_bundle_version:
@@ -794,6 +801,27 @@ def _resolve_bundle_family_registry(
             remote_bundle = fetch_remote_bundle(
                 bundle_root,
                 bundle_version=bundle_version,
+                channel=None,
+            )
+        except Exception:
+            remote_bundle = None
+        remote_family_registry = (
+            remote_bundle.get("family_registry") if isinstance(remote_bundle, dict) else None
+        )
+        if isinstance(remote_family_registry, Mapping):
+            return dict(remote_family_registry)
+        return None
+    remote_channel_state = inspect_remote_bundle_channel(bundle_channel)
+    if remote_channel_state is not None:
+        staged_bundle_version = (
+            str(remote_channel_state.get("current_bundle_version") or "").strip() or None
+        )
+        if staged_bundle_version is None:
+            return None
+        try:
+            remote_bundle = fetch_remote_bundle(
+                bundle_root,
+                bundle_version=staged_bundle_version,
                 channel=None,
             )
         except Exception:
@@ -1000,6 +1028,35 @@ def _resolve_program_path_and_bundle_version(
             if candidate.is_file():
                 return candidate.resolve(), bundle_version
     else:
+        remote_channel_state = inspect_remote_bundle_channel(bundle_channel)
+        if remote_channel_state is not None:
+            resolved_bundle_version = (
+                str(remote_channel_state.get("current_bundle_version") or "").strip() or None
+            )
+            if resolved_bundle_version is None:
+                return None, None
+            for candidate in _staged_bundle_program_candidates(
+                bundle_root=bundle_root,
+                bundle_version=resolved_bundle_version,
+            ):
+                if candidate.is_file():
+                    return candidate.resolve(), resolved_bundle_version
+            try:
+                remote_bundle = fetch_remote_bundle(
+                    bundle_root,
+                    bundle_version=resolved_bundle_version,
+                    channel=None,
+                )
+            except Exception:
+                remote_bundle = None
+            remote_program_path_text = (
+                remote_bundle.get("program_path") if isinstance(remote_bundle, dict) else None
+            )
+            if isinstance(remote_program_path_text, str) and remote_program_path_text.strip():
+                remote_program_path = (bundle_root / remote_program_path_text).resolve()
+                if remote_program_path.is_file():
+                    return remote_program_path, resolved_bundle_version
+            return None, resolved_bundle_version
         channel_state = inspect_bundle_channel(bundle_root, channel=bundle_channel)
         resolved_bundle_version = (
             str(channel_state.get("current_bundle_version") or "").strip() or None

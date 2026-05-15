@@ -605,6 +605,52 @@ def test_run_bundle_inspection_prefers_remote_channel_state(
     assert payload["current_bundle_version"] == "remote-stable"
 
 
+def test_run_bundle_inspection_does_not_fallback_to_local_channel_when_remote_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_bundle_manifest(tmp_path, "local-stale")
+    json.loads(run_bundle_promote(tmp_path, channel="stable", run_name="local-stale"))
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.inspect_remote_bundle_channel",
+        lambda channel: {
+            "channel_found": False,
+            "requested_channel": channel,
+            "channel_path": "channels/stable.json",
+            "storage_backend": "azure-blob",
+            "bundle_container": "repo-rag-bundles",
+        },
+    )
+
+    payload = json.loads(run_bundle_inspection(tmp_path, channel="stable"))
+
+    assert payload["command"] == "bundle-inspect"
+    assert payload["channel_found"] is False
+    assert payload["bundle_found"] is False
+    assert payload["storage_backend"] == "azure-blob"
+
+
+def test_run_bundle_inspection_does_not_fallback_to_local_version_when_remote_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_bundle_manifest(tmp_path, "local-stale")
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.resolve_azure_artifact_config",
+        lambda: type("Cfg", (), {"bundles_enabled": True})(),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.inspect_remote_bundle_version",
+        lambda bundle_version: None,
+    )
+
+    payload = json.loads(run_bundle_inspection(tmp_path, bundle_version="local-stale"))
+
+    assert payload["command"] == "bundle-inspect"
+    assert payload["bundle_found"] is False
+    assert payload["storage_backend"] == "azure-blob"
+
+
 def test_run_bundle_promote_and_rollback_manage_channel_history(tmp_path: Path) -> None:
     _write_bundle_manifest(tmp_path, "older-run", created_at="2026-04-29T00:00:00+00:00")
     _write_bundle_manifest(tmp_path, "newer-run", created_at="2026-04-29T01:00:00+00:00")

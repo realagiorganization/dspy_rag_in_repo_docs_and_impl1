@@ -1100,6 +1100,19 @@ overrides as the highest-priority Codex path. That preserves the intended split 
 `codex exec` follows `CODEX_AZURE_CONFIG(+model_hint)`, whereas trainer/helper DSPy calls continue
 to follow `DSPY_*` first and then `AZURE_OPENAI_*`.
 
+The next runtime hardening pass closed three more live leaks that showed up only in AKS artifact
+inspection. First, bundle lookup now treats the remote Azure `stable` channel as authoritative
+whenever blob-backed bundle storage is configured; workers no longer silently fall back to an old
+local `.repo_rag_bundle_store` mirror after the remote bundle channel or version was deleted.
+Second, trusted trace handoff now prefers the final `repo_rag_trace.json` surface and mirrors the
+selected prompt-family/runtime fields onto the outer queue payload, so queued traces no longer
+report `prompt_family_id = null` while the local runtime trace in the same run says a family
+artifact was matched and executed. Third, Codex reset-on-rollover is now a real lifecycle reset:
+when a lane is reset because of resumed-run caps, session age, prompt-token growth, operator
+reset, or resume-failure thresholds, the worker clears the persisted lane counters and prior
+session identifiers before the next snapshot is written instead of continuing the old lane's
+metadata under a nominal `reset`.
+
 ## Tensions And Open Work
 
 The narrative is coherent, but not complete. The main open tensions are:
