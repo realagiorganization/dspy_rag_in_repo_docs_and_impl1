@@ -1693,7 +1693,19 @@ def run_trainer_cycle(
             "Processed-ledger recovery no longer triggers or augments active cycles."
         ),
     }
-    if not current_cycle_input_detected:
+    idle_family_state_path = (
+        root / DEFAULT_TRAINER_FAMILY_STATE_PATH
+        if not DEFAULT_TRAINER_FAMILY_STATE_PATH.is_absolute()
+        else DEFAULT_TRAINER_FAMILY_STATE_PATH
+    )
+    idle_pending_recompile_summary = _trainer_pending_recompile_summary(
+        root,
+        training_candidates={"family_state_path": _path_text_for_root(idle_family_state_path, root)},
+        channel=promote_channel or "stable",
+    )
+    if not current_cycle_input_detected and not bool(
+        idle_pending_recompile_summary.get("pending_recompile")
+    ):
         cycle_warnings: list[str] = []
         if not queue_payload.get("queue_found"):
             cycle_warnings.append("No queued trace items were available for this trainer cycle.")
@@ -1749,12 +1761,7 @@ def run_trainer_cycle(
                 "family_state_path": None,
                 "remote_family_state": None,
             },
-            "pending_recompile": {
-                "pending_recompile": False,
-                "reason": "no-queued-input",
-                "channel_name": promote_channel or "stable",
-                "current_bundle_version": None,
-            },
+            "pending_recompile": idle_pending_recompile_summary,
             "min_new_candidates_for_recompile": max(1, int(min_new_candidates_for_recompile)),
             "current_cycle_trace_input_count": current_cycle_trace_input_count,
             "current_cycle_queue_drain_count": current_cycle_queue_drain_count,
@@ -1847,11 +1854,10 @@ def run_trainer_cycle(
     current_cycle_input_detected = (
         current_cycle_trace_input_count > 0 or current_cycle_queue_drain_count > 0
     )
-    pending_recompile_with_new_inputs = pending_recompile and current_cycle_input_detected
     recompile_triggered = (
         recompile_requested
         and not queue_backlog_detected
-        and (recompile_threshold_met or pending_recompile_with_new_inputs)
+        and (recompile_threshold_met or pending_recompile)
     )
     explicit_publish_requested = run_name is not None or bundle_version is not None
     retrieval_payload = _build_retrieval_evaluation_payload(
@@ -1916,18 +1922,10 @@ def run_trainer_cycle(
             }
             if new_candidate_count == 0:
                 if pending_recompile:
-                    if current_cycle_input_detected:
-                        active_cycle_warnings.append(
-                            "Trainer-side bundle recompilation remained pending because "
-                            "the current "
-                            "family set still differs from the published bundle."
-                        )
-                    else:
-                        active_cycle_warnings.append(
-                            "Trainer-side bundle recompilation remained pending, but this idle "
-                            "cycle imported no new traces; skipping auto-recompile to avoid "
-                            "repeated bundle versions."
-                        )
+                    active_cycle_warnings.append(
+                        "Trainer-side bundle recompilation remained pending because the current "
+                        "family set still differs from the published bundle."
+                    )
                 else:
                     active_cycle_warnings.append(
                         "Trainer-side bundle recompilation was skipped because no new training "
@@ -2078,7 +2076,7 @@ def run_trainer_cycle(
     )
     final_family_state_summary = summarize_family_state(resolved_family_state_path)
     final_dirty_family_count = int(final_family_state_summary.get("dirty_family_count") or 0)
-    family_state_changed = any(
+    family_state_changed = pending_recompile or any(
         int(training_candidates.get(field) or 0) > 0
         for field in ("new_candidate_count", "replaced_count", "new_prompt_family_count")
     )

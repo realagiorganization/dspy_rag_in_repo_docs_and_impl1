@@ -1947,6 +1947,45 @@ def _normalize_runtime_trace(payload: Mapping[str, object]) -> dict[str, object]
     }
 
 
+def _runtime_trace_signal_fields(payload: Mapping[str, object]) -> dict[str, object]:
+    """Extract the family-routing and trainer-signal surface from one trace-like payload."""
+
+    trace_payload = _mapping_or_none(payload.get("trace"))
+    trace = trace_payload if trace_payload is not None else payload
+    return {
+        "prompt_family_id": _string_or_none(trace.get("prompt_family_id")),
+        "prompt_family_similarity": _float_or_none(trace.get("prompt_family_similarity")),
+        "prompt_family_band": _string_or_none(trace.get("prompt_family_band")),
+        "family_runtime_hit_rate": _float_or_none(trace.get("family_runtime_hit_rate")),
+        "family_artifact_hit_rate": _float_or_none(trace.get("family_artifact_hit_rate")),
+        "family_predicted_hit_rate": _float_or_none(trace.get("family_predicted_hit_rate")),
+        "family_predicted_hit_rate_lower_bound": _float_or_none(
+            trace.get("family_predicted_hit_rate_lower_bound")
+        ),
+        "family_prediction_uncertainty": _float_or_none(
+            trace.get("family_prediction_uncertainty")
+        ),
+        "family_feedback_count": _int_or_none(trace.get("family_feedback_count")),
+        "family_artifact_selected": (
+            trace.get("family_artifact_selected")
+            if isinstance(trace.get("family_artifact_selected"), bool)
+            else None
+        ),
+        "trainer_signal_kind": _trainer_signal_kind_or_none(trace.get("trainer_signal_kind")),
+    }
+
+
+def _mirror_trace_signal_fields(payload: Mapping[str, object]) -> dict[str, object]:
+    """Mirror nested trace signal fields onto the payload top level when missing."""
+
+    mirrored = {str(key): value for key, value in payload.items()}
+    for key, value in _runtime_trace_signal_fields(mirrored).items():
+        current_value = mirrored.get(key)
+        if current_value is None or (isinstance(current_value, str) and not current_value.strip()):
+            mirrored[key] = value
+    return mirrored
+
+
 def _trace_record_snapshot(payload: Mapping[str, object]) -> dict[str, object]:
     return {
         "question": _string_or_none(payload.get("question")),
@@ -2483,7 +2522,8 @@ def queue_trace_record(
     """Persist one queued trainer-side handoff item for later asynchronous trace import."""
 
     resolved_root = root.resolve()
-    normalized_payload = normalize_trace_record_payload(payload)
+    mirrored_payload = _mirror_trace_signal_fields(payload)
+    normalized_payload = normalize_trace_record_payload(mirrored_payload)
     normalized_outcome = _mapping_or_none(normalized_payload.get("outcome"))
     if outcome is not None:
         normalized_outcome = _normalize_outcome_payload(outcome)
@@ -2504,6 +2544,7 @@ def queue_trace_record(
     queue_item_path = queue_dir / f"{timestamp}-{safe_trace_name}.json"
     snapshot = _mapping_or_none(normalized_payload.get("snapshot")) or {}
     trace = _mapping_or_none(normalized_payload.get("trace")) or {}
+    mirrored_signal_fields = _runtime_trace_signal_fields(mirrored_payload)
     queue_item: dict[str, object] = {
         "schema_version": TRACE_QUEUE_ITEM_SCHEMA_VERSION,
         "queue_item_kind": TRACE_QUEUE_ITEM_KIND,
@@ -2523,8 +2564,9 @@ def queue_trace_record(
         ),
         "batch_name": safe_batch_name,
         "batch_trace_path": None,
-        "trace_payload": payload,
+        "trace_payload": mirrored_payload,
         "outcome": normalized_outcome,
+        **mirrored_signal_fields,
     }
     config = resolve_azure_artifact_config(queue_name=queue_name)
     if config is not None and config.queue_enabled:

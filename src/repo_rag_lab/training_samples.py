@@ -95,6 +95,10 @@ _FAMILY_ROUTING_PROFILE_PRIMARY_WEIGHT = 1.45
 _FAMILY_ROUTING_PROMPT_SUPPORT_WEIGHT = 0.15
 _FAMILY_ROUTING_SUCCESS_BOOST = 0.2
 _FAMILY_ROUTING_UNCERTAINTY_PENALTY = 0.05
+_FAMILY_PROMPT_PROFILE_LIMIT = 24
+_FAMILY_COMMAND_PROFILE_LIMIT = 16
+_FAMILY_CONSTRAINT_PROFILE_LIMIT = 12
+_FAMILY_PROFILE_MIN_COUNT = 2
 
 
 def _coerce_int(value: object) -> int | None:
@@ -776,6 +780,69 @@ def _profile_terms(values: Sequence[object], *, limit: int = 24) -> list[str]:
     return terms
 
 
+def _increment_term_counts(
+    counts: dict[str, int],
+    terms: Sequence[str],
+) -> None:
+    """Update one term-frequency mapping from one ordered term sequence."""
+
+    for term in terms:
+        cleaned = str(term or "").strip().casefold()
+        if not cleaned:
+            continue
+        counts[cleaned] = counts.get(cleaned, 0) + 1
+
+
+def _sorted_term_count_items(counts: Mapping[str, object]) -> list[tuple[str, int]]:
+    """Return one deterministic descending list of normalized term counts."""
+
+    normalized: list[tuple[str, int]] = []
+    for key, value in counts.items():
+        term = str(key or "").strip().casefold()
+        if not term:
+            continue
+        count = _coerce_int(value)
+        if count is None or count <= 0:
+            continue
+        normalized.append((term, count))
+    normalized.sort(key=lambda item: (-item[1], item[0]))
+    return normalized
+
+
+def _term_count_mapping(
+    counts: Mapping[str, object],
+) -> dict[str, int]:
+    """Return one deterministic normalized term-frequency dictionary."""
+
+    return {term: count for term, count in _sorted_term_count_items(counts)}
+
+
+def _stable_profile_terms_from_counts(
+    counts: Mapping[str, object],
+    *,
+    limit: int,
+    min_count: int = _FAMILY_PROFILE_MIN_COUNT,
+) -> list[str]:
+    """Return one top-k stable routing profile from one term-frequency mapping."""
+
+    sorted_items = _sorted_term_count_items(counts)
+    if not sorted_items:
+        return []
+    filtered = [term for term, count in sorted_items if count >= min_count]
+    if filtered:
+        return filtered[:limit]
+    return [term for term, _count in sorted_items[:limit]]
+
+
+def _stable_profile_min_count(record_count: int) -> int:
+    """Return one family-size-aware stability threshold for routing-profile terms."""
+
+    bounded_count = max(0, int(record_count))
+    if bounded_count <= 1:
+        return 1
+    return max(2, math.ceil(bounded_count * 0.75))
+
+
 def _constraint_terms(values: Sequence[object], *, limit: int = 16) -> list[str]:
     """Return stable file/path/constraint-like tokens from prompt or trace text."""
 
@@ -818,6 +885,48 @@ def _command_trace_constraint_terms(command_trace: Sequence[Mapping[str, Any]]) 
             if value not in (None, ""):
                 values.append(value)
     return _constraint_terms(values, limit=16)
+
+
+def _profile_term_counts(
+    values: Sequence[object],
+) -> dict[str, int]:
+    """Return one frequency mapping for prompt-profile terms."""
+
+    counts: dict[str, int] = {}
+    for value in values:
+        _increment_term_counts(
+            counts,
+            _profile_terms([value], limit=_FAMILY_PROMPT_PROFILE_LIMIT * 4),
+        )
+    return _term_count_mapping(counts)
+
+
+def _constraint_term_counts(
+    values: Sequence[object],
+) -> dict[str, int]:
+    """Return one frequency mapping for constraint/path profile terms."""
+
+    counts: dict[str, int] = {}
+    for value in values:
+        _increment_term_counts(
+            counts,
+            _constraint_terms([value], limit=_FAMILY_CONSTRAINT_PROFILE_LIMIT * 4),
+        )
+    return _term_count_mapping(counts)
+
+
+def _command_trace_profile_term_counts(
+    command_trace: Sequence[Mapping[str, Any]],
+) -> dict[str, int]:
+    """Return one frequency mapping for command-pattern terms."""
+
+    values: list[object] = []
+    for entry in command_trace:
+        for key in ("text", "command", "path", "source", "tool", "type", "role"):
+            value = entry.get(key)
+            if value not in (None, ""):
+                values.append(value)
+    return _profile_term_counts(values)
 
 
 def _question_similarity(left: object, right: object) -> float:
@@ -887,21 +996,62 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
     best_similarity = 0.0
     for candidate_question in candidate_questions:
         best_similarity = max(best_similarity, _question_similarity(question, candidate_question))
-    family_prompt_profile_terms = _profile_terms(
-        [
-            *candidate_questions,
-            *_string_list(family_payload.get("family_prompt_profile_terms")),
-        ]
+    family_record_count = max(1, len(_family_candidate_records(family_payload)))
+    profile_min_count = _stable_profile_min_count(family_record_count)
+    family_prompt_term_counts = _term_count_mapping(
+        family_payload.get("family_prompt_profile_term_counts")
+        if isinstance(family_payload.get("family_prompt_profile_term_counts"), Mapping)
+        else {}
     )
-    family_command_pattern_summary = _profile_terms(
-        _string_list(family_payload.get("family_command_pattern_summary"))
+    if family_prompt_term_counts:
+        family_prompt_profile_terms = _stable_profile_terms_from_counts(
+            family_prompt_term_counts,
+            limit=_FAMILY_PROMPT_PROFILE_LIMIT,
+            min_count=profile_min_count,
+        )
+    else:
+        family_prompt_profile_terms = _profile_terms(
+            [
+                *candidate_questions,
+                *_string_list(family_payload.get("family_prompt_profile_terms")),
+            ],
+            limit=_FAMILY_PROMPT_PROFILE_LIMIT,
+        )
+    family_command_term_counts = _term_count_mapping(
+        family_payload.get("family_command_pattern_counts")
+        if isinstance(family_payload.get("family_command_pattern_counts"), Mapping)
+        else {}
     )
-    family_constraint_summary = _constraint_terms(
-        [
-            *_string_list(family_payload.get("family_constraint_summary")),
-            *family_command_pattern_summary,
-        ]
+    if family_command_term_counts:
+        family_command_pattern_summary = _stable_profile_terms_from_counts(
+            family_command_term_counts,
+            limit=_FAMILY_COMMAND_PROFILE_LIMIT,
+            min_count=profile_min_count,
+        )
+    else:
+        family_command_pattern_summary = _profile_terms(
+            _string_list(family_payload.get("family_command_pattern_summary")),
+            limit=_FAMILY_COMMAND_PROFILE_LIMIT,
+        )
+    family_constraint_term_counts = _term_count_mapping(
+        family_payload.get("family_constraint_counts")
+        if isinstance(family_payload.get("family_constraint_counts"), Mapping)
+        else {}
     )
+    if family_constraint_term_counts:
+        family_constraint_summary = _stable_profile_terms_from_counts(
+            family_constraint_term_counts,
+            limit=_FAMILY_CONSTRAINT_PROFILE_LIMIT,
+            min_count=profile_min_count,
+        )
+    else:
+        family_constraint_summary = _constraint_terms(
+            [
+                *_string_list(family_payload.get("family_constraint_summary")),
+                *family_command_pattern_summary,
+            ],
+            limit=_FAMILY_CONSTRAINT_PROFILE_LIMIT,
+        )
     question_profile_terms = _profile_terms([question])
     question_constraint_terms = _constraint_terms([question])
     profile_overlap = max(
@@ -952,42 +1102,69 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
 def _refresh_family_profile_summary(family_payload: dict[str, Any]) -> None:
     """Persist one lightweight routing profile derived from stored family traces."""
 
-    prompt_values: list[object] = [
-        family_payload.get("question"),
-        family_payload.get("normalized_question"),
-        family_payload.get("family_father_question"),
-    ]
-    prompt_values.extend(family_payload.get("question_variants", []))
-    command_trace_rows: list[Mapping[str, Any]] = []
-    command_values: list[object] = []
-    for record in _family_candidate_records(family_payload):
-        prompt_values.extend(
-            [
-                record.get("question"),
-                record.get("original_prompt"),
-                record.get("reformulated_prompt"),
-            ]
-        )
-        command_trace = _ordered_unique_command_trace(record.get("command_trace"))
-        command_trace_rows.extend(command_trace)
-        command_values.extend(
-            [
-                record.get("question"),
-                record.get("original_prompt"),
-                record.get("reformulated_prompt"),
-            ]
-        )
-    family_payload["family_prompt_profile_terms"] = _profile_terms(prompt_values, limit=24)
-    family_payload["family_command_pattern_summary"] = _command_trace_profile_terms(
-        command_trace_rows
-    )
-    family_payload["family_constraint_summary"] = _constraint_terms(
+    family_record_count = len(_family_candidate_records(family_payload))
+    profile_min_count = _stable_profile_min_count(family_record_count)
+    prompt_term_counts: dict[str, int] = {}
+    command_term_counts: dict[str, int] = {}
+    constraint_term_counts: dict[str, int] = {}
+
+    seed_prompt_terms = _profile_terms(
         [
-            *prompt_values,
-            *command_values,
-            *_command_trace_constraint_terms(command_trace_rows),
+            family_payload.get("question"),
+            family_payload.get("normalized_question"),
+            family_payload.get("family_father_question"),
+            *(family_payload.get("question_variants", []) or []),
         ],
-        limit=16,
+        limit=_FAMILY_PROMPT_PROFILE_LIMIT * 4,
+    )
+    _increment_term_counts(prompt_term_counts, seed_prompt_terms)
+
+    for record in _family_candidate_records(family_payload):
+        record_prompt_terms = _profile_terms(
+            [
+                record.get("question"),
+                record.get("original_prompt"),
+                record.get("reformulated_prompt"),
+            ],
+            limit=_FAMILY_PROMPT_PROFILE_LIMIT * 4,
+        )
+        _increment_term_counts(prompt_term_counts, record_prompt_terms)
+
+        command_trace = _ordered_unique_command_trace(record.get("command_trace"))
+        record_command_terms = _command_trace_profile_terms(command_trace)
+        _increment_term_counts(command_term_counts, record_command_terms)
+
+        record_constraint_terms = _constraint_terms(
+            [
+                record.get("question"),
+                record.get("original_prompt"),
+                record.get("reformulated_prompt"),
+                *_command_trace_constraint_terms(command_trace),
+            ],
+            limit=_FAMILY_CONSTRAINT_PROFILE_LIMIT * 4,
+        )
+        _increment_term_counts(constraint_term_counts, record_constraint_terms)
+
+    prompt_term_counts = _term_count_mapping(prompt_term_counts)
+    command_term_counts = _term_count_mapping(command_term_counts)
+    constraint_term_counts = _term_count_mapping(constraint_term_counts)
+    family_payload["family_prompt_profile_term_counts"] = prompt_term_counts
+    family_payload["family_command_pattern_counts"] = command_term_counts
+    family_payload["family_constraint_counts"] = constraint_term_counts
+    family_payload["family_prompt_profile_terms"] = _stable_profile_terms_from_counts(
+        prompt_term_counts,
+        limit=_FAMILY_PROMPT_PROFILE_LIMIT,
+        min_count=profile_min_count,
+    )
+    family_payload["family_command_pattern_summary"] = _stable_profile_terms_from_counts(
+        command_term_counts,
+        limit=_FAMILY_COMMAND_PROFILE_LIMIT,
+        min_count=profile_min_count,
+    )
+    family_payload["family_constraint_summary"] = _stable_profile_terms_from_counts(
+        constraint_term_counts,
+        limit=_FAMILY_CONSTRAINT_PROFILE_LIMIT,
+        min_count=profile_min_count,
     )
 
 
@@ -1128,6 +1305,9 @@ def _find_or_create_prompt_family(
         "normalized_question": "",
         "question_variants": [],
         "question_variant_count": 0,
+        "family_prompt_profile_term_counts": {},
+        "family_command_pattern_counts": {},
+        "family_constraint_counts": {},
         "family_prompt_profile_terms": [],
         "family_command_pattern_summary": [],
         "family_constraint_summary": [],
@@ -1489,6 +1669,9 @@ def _family_state_entry_to_payload(
         "normalized_question",
         "question_variants",
         "question_variant_count",
+        "family_prompt_profile_term_counts",
+        "family_command_pattern_counts",
+        "family_constraint_counts",
         "family_prompt_profile_terms",
         "family_command_pattern_summary",
         "family_constraint_summary",
@@ -1520,14 +1703,59 @@ def _strip_family_state_inline_payload(
         "normalized_question": _normalize_question_text(family_payload.get("normalized_question")),
         "question_variants": _family_question_variants(family_payload),
         "question_variant_count": int(family_payload.get("question_variant_count") or 0),
+        "family_prompt_profile_term_counts": _term_count_mapping(
+            family_payload.get("family_prompt_profile_term_counts")
+            if isinstance(family_payload.get("family_prompt_profile_term_counts"), Mapping)
+            else {}
+        ),
+        "family_command_pattern_counts": _term_count_mapping(
+            family_payload.get("family_command_pattern_counts")
+            if isinstance(family_payload.get("family_command_pattern_counts"), Mapping)
+            else {}
+        ),
+        "family_constraint_counts": _term_count_mapping(
+            family_payload.get("family_constraint_counts")
+            if isinstance(family_payload.get("family_constraint_counts"), Mapping)
+            else {}
+        ),
         "family_prompt_profile_terms": _profile_terms(
-            _string_list(family_payload.get("family_prompt_profile_terms"))
+            _stable_profile_terms_from_counts(
+                family_payload.get("family_prompt_profile_term_counts")
+                if isinstance(family_payload.get("family_prompt_profile_term_counts"), Mapping)
+                else {},
+                limit=_FAMILY_PROMPT_PROFILE_LIMIT,
+                min_count=_stable_profile_min_count(
+                    len(_family_replay_records(family_payload))
+                ),
+            )
+            or _string_list(family_payload.get("family_prompt_profile_terms")),
+            limit=_FAMILY_PROMPT_PROFILE_LIMIT,
         ),
         "family_command_pattern_summary": _profile_terms(
-            _string_list(family_payload.get("family_command_pattern_summary"))
+            _stable_profile_terms_from_counts(
+                family_payload.get("family_command_pattern_counts")
+                if isinstance(family_payload.get("family_command_pattern_counts"), Mapping)
+                else {},
+                limit=_FAMILY_COMMAND_PROFILE_LIMIT,
+                min_count=_stable_profile_min_count(
+                    len(_family_replay_records(family_payload))
+                ),
+            )
+            or _string_list(family_payload.get("family_command_pattern_summary")),
+            limit=_FAMILY_COMMAND_PROFILE_LIMIT,
         ),
         "family_constraint_summary": _constraint_terms(
-            _string_list(family_payload.get("family_constraint_summary"))
+            _stable_profile_terms_from_counts(
+                family_payload.get("family_constraint_counts")
+                if isinstance(family_payload.get("family_constraint_counts"), Mapping)
+                else {},
+                limit=_FAMILY_CONSTRAINT_PROFILE_LIMIT,
+                min_count=_stable_profile_min_count(
+                    len(_family_replay_records(family_payload))
+                ),
+            )
+            or _string_list(family_payload.get("family_constraint_summary")),
+            limit=_FAMILY_CONSTRAINT_PROFILE_LIMIT,
         ),
         "family_father_question": _normalize_question_text(
             family_payload.get("family_father_question")
