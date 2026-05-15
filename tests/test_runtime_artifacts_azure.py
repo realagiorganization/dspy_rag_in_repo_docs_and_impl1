@@ -59,6 +59,14 @@ def _sample_trace_payload() -> dict[str, object]:
             "mcp_candidate_count": 0,
             "answer_length": 42,
             "bundle_version": "stable-42",
+            "prompt_family_id": "trainer-ingestion",
+            "prompt_family_similarity": 0.91,
+            "prompt_family_band": "match",
+            "family_predicted_hit_rate": 0.666667,
+            "family_predicted_hit_rate_lower_bound": 0.364602,
+            "family_prediction_uncertainty": 0.235702,
+            "family_feedback_count": 3,
+            "trainer_signal_kind": "feedback_trace",
         },
     }
 
@@ -362,11 +370,23 @@ def test_queue_trace_record_and_drain_trace_queue_use_azure_blob_queue(
         "20260508T223000Z",
         Path(str(queued["queue_item_path"])).name,
     )
+    assert queued["prompt_family_band"] == "match"
+    assert queued["trainer_signal_kind"] == "feedback_trace"
+    assert queued["family_predicted_hit_rate"] == 0.666667
     assert str(queued["queue_item_path"]).startswith("queued/repo-rag-training/")
     assert store.blob_exists(
         "repo-rag-training-traces",
         str(queued["batch_trace_path"]),
     )
+    queued_blob = store.download_json(
+        "repo-rag-training-traces",
+        str(queued["queue_item_path"]),
+    )
+    assert queued_blob["prompt_family_band"] == "match"
+    assert queued_blob["trainer_signal_kind"] == "feedback_trace"
+    assert queued_blob["trace_payload"]["prompt_family_band"] == "match"
+    assert queued_blob["trace_payload"]["trainer_signal_kind"] == "feedback_trace"
+    assert queued_blob["trace_payload"]["family_predicted_hit_rate"] == 0.666667
     assert store.messages
 
     drained = drain_trace_queue(tmp_path, queue_name="dataset")

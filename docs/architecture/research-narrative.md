@@ -1156,6 +1156,34 @@ reset, or resume-failure thresholds, the worker clears the persisted lane counte
 session identifiers before the next snapshot is written instead of continuing the old lane's
 metadata under a nominal `reset`.
 
+One more wrapper-level follow-up remained after that fix. Batch trace export/enqueue summaries and
+trusted queue items now also mirror the nested trainer-family signal surface
+(`prompt_family_band`, `trainer_signal_kind`, and the family success-posterior fields) onto the
+outer payload instead of leaving that state only inside `trace_payload.trace`. The same handoff
+pass also fixes one stale batch-name bug where every generated queue-path summary could inherit the
+last `...-N.json` suffix from the export loop even though the underlying queue items were distinct.
+
+The next trainer-cycle fix closed a separate publish deadlock. A cycle that drained fresh traces
+but still observed queue backlog would defer recompile and remote publish, yet the first later
+idle cycle still exited down the `no-queued-input` fast path before it could compile the pending
+family-state. That left both `repo-rag-training-families` and `repo-rag-bundles` empty even
+though the queue had already been processed. `run_trainer_cycle(...)` now treats a pending family
+state as sufficient reason to continue past that idle fast path, recompile on the first backlog-
+free cycle, and upload the resulting family-state/bundle instead of stranding them locally.
+
+The prompt-family anti-drift pass stayed intentionally conservative. Rather than splitting or
+merging families after the fact, the trainer now keeps term-frequency maps for prompt, command,
+and constraint signals and derives the active routing summaries from only the stable top-k terms.
+The stability threshold scales with family size, so young families still get a usable profile
+immediately while larger families stop promoting one-off trace vocabulary into the live routing
+surface.
+
+That profile state is now also normalized into one per-term statistics payload instead of being
+spread across separate count and weight structures. Each prompt/command/constraint term can carry
+its raw count plus normalized weight inside one `*_term_stats` mapping, while the legacy
+`family_*_terms` lists remain only as derived routing summaries for fast lookup and human
+inspection.
+
 ## Tensions And Open Work
 
 The narrative is coherent, but not complete. The main open tensions are:

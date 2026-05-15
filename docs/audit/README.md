@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-05-15-family-profile-routing-and-handoff-hardening.md`
+- `2026-05-15-unified-family-term-stats.md`
 
 ## Usage
 

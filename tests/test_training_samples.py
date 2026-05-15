@@ -2188,6 +2188,101 @@ def test_materialize_training_candidates_splits_prompt_family_on_large_prompt_de
     assert summary["new_prompt_family_count"] == 2
 
 
+def test_materialize_training_candidates_profile_terms_ignore_one_off_noise(
+    tmp_path: Path,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    prompts = (
+        (
+            "accepted-a.json",
+            "2026-05-15T12:00:00+00:00",
+            "Update README with demo GIF walkthrough",
+            "Chromium bootstrap detail for the README walkthrough GIF refresh",
+        ),
+        (
+            "accepted-b.json",
+            "2026-05-15T12:05:00+00:00",
+            "Refresh README demo GIF walkthrough",
+            "Playwright dependency note for the README walkthrough GIF refresh",
+        ),
+        (
+            "accepted-c.json",
+            "2026-05-15T12:10:00+00:00",
+            "Adjust README walkthrough GIF in docs",
+            "Timeout mitigation note for the README walkthrough GIF refresh",
+        ),
+    )
+    for name, recorded_at, question, reformulated_prompt in prompts:
+        (imported_dir / name).write_text(
+            f"""{{
+  "trace_record_kind": "repo-rag-trace-record",
+  "trace_record_path": "artifacts/traces/imported/{name}",
+  "question": "{question}",
+  "original_prompt": "{question}",
+  "reformulated_prompt": "{reformulated_prompt}",
+  "answer": "README walkthrough GIF updated.",
+  "command_trace": [
+    {{
+      "type": "message",
+      "role": "user",
+      "text": "{reformulated_prompt}"
+    }}
+  ],
+  "trace": {{
+    "schema_version": 1,
+    "trace_kind": "repo-rag-runtime",
+    "recorded_at": "{recorded_at}",
+    "question": "{question}",
+    "original_prompt": "{question}",
+    "reformulated_prompt": "{reformulated_prompt}",
+    "mode": "codex-proxy",
+    "retrieval_mode": "lexical",
+    "sources": ["README.md"],
+    "source_count": 1,
+    "context_count": 1,
+    "context_field": "evidence_previews",
+    "mcp_candidate_count": 0,
+    "answer_length": 29
+  }},
+  "outcome": {{
+    "acceptance_status": "candidate",
+    "accepted": null,
+    "execution_status": "success",
+    "method": "codex_cli",
+    "backend": "codex_cli_repo_rag_proxy",
+    "used_baseline_fallback": false
+  }}
+}}
+""",
+            encoding="utf-8",
+        )
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+    )
+
+    assert summary["prompt_family_count"] == 1
+    family_state = load_family_state_payload(tmp_path / "artifacts" / "trainer" / "family-state.json")
+    family = family_state["prompt_families"][0]
+    assert family["family_prompt_profile_term_stats"]["readme"]["count"] >= 3
+    assert family["family_prompt_profile_term_stats"]["gif"]["count"] >= 3
+    assert family["family_prompt_profile_term_stats"]["walkthrough"]["count"] >= 3
+    assert family["family_prompt_profile_term_stats"]["chromium"]["count"] >= 1
+    assert family["family_prompt_profile_term_stats"]["playwright"]["count"] >= 1
+    assert family["family_prompt_profile_term_stats"]["timeout"]["count"] >= 1
+    assert 0.0 < family["family_prompt_profile_term_stats"]["readme"]["weight"] <= 1.0
+    assert 0.0 < family["family_prompt_profile_term_stats"]["gif"]["weight"] <= 1.0
+    assert "readme" in family["family_prompt_profile_terms"]
+    assert "gif" in family["family_prompt_profile_terms"]
+    assert "walkthrough" in family["family_prompt_profile_terms"]
+    assert "chromium" not in family["family_prompt_profile_terms"]
+    assert "playwright" not in family["family_prompt_profile_terms"]
+    assert "timeout" not in family["family_prompt_profile_terms"]
+
+
 def test_materialize_training_candidates_keeps_gradual_source_drift_in_one_context_group(
     tmp_path: Path,
 ) -> None:

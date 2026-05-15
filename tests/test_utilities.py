@@ -1431,6 +1431,154 @@ def test_run_trainer_cycle_defers_recompile_and_publish_while_queue_backlog_is_v
     )
 
 
+def test_run_trainer_cycle_recompiles_and_publishes_pending_family_state_after_backlog_clears(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.drain_trace_queue",
+        lambda root, queue_name="default", limit=None, keep_queued=False: {
+            "queue_name": queue_name,
+            "queue_found": True,
+            "queued_count_before": 0,
+            "selected_count": 0,
+            "drained_count": 0,
+            "failed_count": 0,
+            "remaining_count": 0,
+            "keep_queued": keep_queued,
+            "status": "success",
+            "items": [],
+            "failures": [],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.restore_processed_trace_records",
+        _restore_processed_trace_records_stub(
+            processed_count=0,
+            restored_count=0,
+            trace_paths=[],
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.inspect_pending_trainer_inputs",
+        lambda root, queue_name="default", output_dir=None: {
+            "queue_name": queue_name,
+            "queue_visible_count": 0,
+            "queue_message_count": 0,
+            "processed_count": 0,
+            "recoverable_processed_count": 0,
+            "current_cycle_input_detected": False,
+        },
+    )
+    monkeypatch.setattr("repo_rag_lab.utilities.load_training_examples", lambda path: ["example"])
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.build_retrieval_benchmarks",
+        lambda examples: [{"question": "demo"}],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.evaluate_retrieval_quality_suite",
+        lambda root, benchmarks, top_k, top_k_values, retrieval_mode=None: {
+            "retrieval_mode": "idf-rerank",
+            "default_top_k": 4,
+            "default_summary": {
+                "top_k": 4,
+                "pass_rate": 1.0,
+                "source_recall": 1.0,
+                "tag_summaries": [],
+            },
+            "top_k_summaries": [{"top_k": 4, "pass_rate": 1.0, "source_recall": 1.0}],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.check_retrieval_quality_thresholds",
+        lambda summary, minimum_pass_rate=None, minimum_source_recall=None: [],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.materialize_training_candidates",
+        lambda *args, **kwargs: {
+            "candidate_count": 4,
+            "new_candidate_count": 0,
+            "prompt_family_count": 3,
+            "context_group_count": 4,
+            "dirty_family_count": 1,
+            "family_state_path": "artifacts/trainer/family-state.json",
+            "output_path": "artifacts/trainer/training-candidates.yaml",
+            "summary_path": "artifacts/trainer/training-candidates-summary.json",
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._trainer_pending_recompile_summary",
+        lambda *args, **kwargs: {
+            "pending_recompile": True,
+            "reason": "family-state-awaiting-compile",
+            "current_bundle_version": None,
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._versioned_training_run_name",
+        lambda run_family, recorded_at=None: "20260515T191500Z",
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._trainer_recompile_payload",
+        lambda *args, **kwargs: {
+            "recompile_status": "compiled",
+            "generated_training": {
+                "output_path": "artifacts/trainer/generated-training.yaml",
+                "summary_path": "artifacts/trainer/generated-training-summary.json",
+            },
+            "training_result": {
+                "run_name": "20260515T191500Z",
+                "bundle_version": "20260515T191500Z",
+                "metadata_path": "artifacts/dspy/20260515T191500Z/metadata.json",
+                "bundle_path": "artifacts/dspy/20260515T191500Z/bundle.json",
+                "benchmark_summary": {"pass_rate": 1.0},
+            },
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.publish_bundle",
+        lambda *args, **kwargs: {
+            "bundle_version": "20260515T191500Z",
+            "run_name": "20260515T191500Z",
+            "published_bundle_path": "artifacts/dspy/published/20260515T191500Z.json",
+            "bundle_path": "artifacts/dspy/20260515T191500Z/bundle.json",
+            "metadata_path": "artifacts/dspy/20260515T191500Z/metadata.json",
+            "program_path": "artifacts/dspy/20260515T191500Z/program.json",
+            "publish_status": "published",
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.upload_remote_family_state",
+        lambda root, family_state_path: {
+            "family_state_path": str(family_state_path),
+            "family_state_version": "20260515T191500Z",
+        },
+    )
+    monkeypatch.setattr("repo_rag_lab.utilities.resolve_azure_artifact_config", lambda: None)
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.summarize_family_state",
+        lambda path: {
+            "dirty_family_count": 0,
+            "family_state_path": str(path),
+        },
+    )
+
+    payload = json.loads(
+        run_trainer_cycle(
+            tmp_path,
+            queue_name="dataset",
+            recompile_run_name="trainer-auto",
+        )
+    )
+
+    assert payload["command_status"] == "success"
+    assert payload["current_cycle_input_detected"] is False
+    assert payload["recompile"]["recompile_status"] == "compiled"
+    assert payload["publish_requested"] is True
+    assert payload["publish"]["bundle_version"] == "20260515T191500Z"
+    assert payload["remote_family_state"]["family_state_version"] == "20260515T191500Z"
+
+
 def test_run_trace_drain_reports_queue_missing_and_failed_item_warnings(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
