@@ -197,6 +197,8 @@ class DSPyFamilyArtifactResult:
     benchmark_summary: dict[str, object]
     hit_rate: float | None = None
     predicted_hit_rate: float | None = None
+    predicted_hit_rate_lower_bound: float | None = None
+    prediction_uncertainty: float | None = None
     artifact_ready: bool = True
     artifact_source: str = "recompiled"
 
@@ -1420,9 +1422,52 @@ def _family_runtime_hit_rate(family_payload: Mapping[str, object]) -> float | No
     return None
 
 
-def _family_predicted_hit_rate(family_payload: Mapping[str, object]) -> float | None:
-    """Return a family-level predicted hit-rate from all stored replay traces."""
+def _family_success_metric(family_payload: Mapping[str, object]) -> Mapping[str, object] | None:
+    """Return the normalized family success-profile payload when available."""
 
+    success_metric = family_payload.get("family_success_metric")
+    return success_metric if isinstance(success_metric, Mapping) else None
+
+
+def _family_prediction_uncertainty(family_payload: Mapping[str, object]) -> float | None:
+    """Return the posterior uncertainty stored for one family."""
+
+    success_metric = _family_success_metric(family_payload)
+    if success_metric is None:
+        return None
+    uncertainty = success_metric.get("uncertainty")
+    if isinstance(uncertainty, (int, float)) and not isinstance(uncertainty, bool):
+        return round(float(uncertainty), 6)
+    return None
+
+
+def _family_predicted_hit_rate_lower_bound(family_payload: Mapping[str, object]) -> float | None:
+    """Return the conservative lower-bound success score for one family."""
+
+    success_metric = _family_success_metric(family_payload)
+    if success_metric is None:
+        return None
+    lower_bound = success_metric.get("lower_bound")
+    if isinstance(lower_bound, (int, float)) and not isinstance(lower_bound, bool):
+        return round(float(lower_bound), 6)
+    return None
+
+
+def _family_predicted_hit_rate(family_payload: Mapping[str, object]) -> float | None:
+    """Return a family-level predicted hit-rate, preferring runtime feedback when present."""
+
+    success_metric = _family_success_metric(family_payload)
+    if success_metric is not None:
+        posterior_mean = success_metric.get("posterior_mean")
+        if isinstance(posterior_mean, (int, float)) and not isinstance(posterior_mean, bool):
+            return round(float(posterior_mean), 6)
+    feedback_metric = family_payload.get("family_feedback_metric")
+    if isinstance(feedback_metric, Mapping):
+        feedback_hit_rate = feedback_metric.get("hit_rate")
+        if isinstance(feedback_hit_rate, (int, float)) and not isinstance(
+            feedback_hit_rate, bool
+        ):
+            return round(float(feedback_hit_rate), 6)
     raw_records = family_payload.get("family_records")
     if not isinstance(raw_records, list) or not raw_records:
         return _family_runtime_hit_rate(family_payload)
@@ -1537,6 +1582,8 @@ def _compile_family_artifacts(
             "benchmark_example_count": len(examples),
             "benchmark_summary": benchmark_summary,
             "predicted_hit_rate": _family_predicted_hit_rate(family),
+            "predicted_hit_rate_lower_bound": _family_predicted_hit_rate_lower_bound(family),
+            "prediction_uncertainty": _family_prediction_uncertainty(family),
             "family_state_path": str(resolved_family_state_path.relative_to(resolved_root)),
         }
         artifact_paths.metadata_path.write_text(
@@ -1554,6 +1601,8 @@ def _compile_family_artifacts(
             benchmark_summary=cast(dict[str, object], benchmark_summary),
             hit_rate=_family_runtime_hit_rate(family),
             predicted_hit_rate=_family_predicted_hit_rate(family),
+            predicted_hit_rate_lower_bound=_family_predicted_hit_rate_lower_bound(family),
+            prediction_uncertainty=_family_prediction_uncertainty(family),
             artifact_ready=artifact_paths.program_path.is_file(),
             artifact_source="recompiled",
         ).to_payload()

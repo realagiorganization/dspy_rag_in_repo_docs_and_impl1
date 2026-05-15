@@ -13,6 +13,7 @@ from repo_rag_lab.training_samples import (
     materialize_combined_training_examples,
     materialize_training_candidates,
     resolve_prompt_family_support,
+    resolve_prompt_family_support_from_payload,
     summarize_champion_index,
     summarize_family_state,
     summarize_training_examples,
@@ -439,6 +440,157 @@ def test_materialize_training_candidates_keeps_prompt_reformulation_and_command_
     assert family_records[0]["reformulated_prompt"] == (
         "Inspect whether the README already embeds a demo GIF."
     )
+
+
+def test_materialize_training_candidates_routes_feedback_trace_without_dirty_recompile(
+    tmp_path: Path,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    trainer_dir = tmp_path / "artifacts" / "trainer"
+    trainer_dir.mkdir(parents=True, exist_ok=True)
+    family_state_path = trainer_dir / "family-state.json"
+    family_state_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "record_kind": "repo-rag-trainer-champion-index",
+                "family_state_kind": "repo-rag-trainer-family-state",
+                "family_state_layout": "thin-index",
+                "generated_at": "2026-05-15T12:00:00+00:00",
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-docs",
+                        "family_needs_recompile": False,
+                        "question": "Inspect repository and update docs",
+                        "normalized_question": "inspect repository and update docs",
+                        "question_variants": ["Inspect repository and update docs"],
+                        "question_variant_count": 1,
+                        "family_father_question": "Inspect repository and update docs",
+                        "family_runtime_score": 1.0,
+                        "family_metric_1_mean": 1.0,
+                        "family_runtime_artifact": {
+                            "artifact_kind": "compiled-family-program",
+                            "artifact_ready": True,
+                            "program_path": "families/pf-docs/program.json",
+                            "hit_rate": 1.0,
+                        },
+                        "family_record_count": 0,
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (imported_dir / "feedback-trace.json").write_text(
+        json.dumps(
+            {
+                "trace_record_kind": "repo-rag-trace-record",
+                "trace_record_path": "artifacts/traces/imported/feedback-trace.json",
+                "question": "Inspect README.md and update repository docs",
+                "original_prompt": "Inspect repository and update docs",
+                "reformulated_prompt": "Inspect README.md and update repository docs",
+                "answer": "Updated docs successfully.",
+                "prompt_family_id": "pf-docs",
+                "trainer_signal_kind": "feedback_trace",
+                "trace": {
+                    "schema_version": 1,
+                    "trace_kind": "repo-rag-runtime",
+                    "recorded_at": "2026-05-15T12:05:00+00:00",
+                    "question": "Inspect README.md and update repository docs",
+                    "mode": "codex-proxy",
+                    "retrieval_mode": "idf-rerank",
+                    "sources": ["README.md"],
+                    "source_count": 1,
+                    "context_count": 1,
+                    "context_field": "context",
+                    "program_loaded": True,
+                    "program_path": "families/pf-docs/program.json",
+                    "prompt_family_id": "pf-docs",
+                    "prompt_family_similarity": 0.93,
+                    "prompt_family_band": "match",
+                    "family_runtime_hit_rate": 1.0,
+                    "family_artifact_hit_rate": 1.0,
+                    "family_artifact_selected": True,
+                    "mediation_metric_hits": 1,
+                    "mediation_metric_total": 1,
+                    "trainer_signal_kind": "feedback_trace",
+                },
+                "outcome": {
+                    "acceptance_status": "candidate",
+                    "accepted": None,
+                    "execution_status": "success",
+                    "method": "codex_cli",
+                    "backend": "codex_cli_repo_rag_proxy",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        output_path=trainer_dir / "training-candidates.yaml",
+        summary_path=trainer_dir / "training-candidates-summary.json",
+        family_state_path=family_state_path,
+        upload_remote_state=False,
+    )
+
+    family_state = load_family_state_payload(family_state_path)
+    family_payload = family_state["prompt_families"][0]
+
+    assert summary["feedback_trace_count"] == 1
+    assert summary["new_candidate_count"] == 0
+    assert summary["dirty_family_count"] == 0
+    assert family_payload["family_needs_recompile"] is False
+    assert family_payload["family_feedback_count"] == 1
+    assert family_payload["family_feedback_metric"]["metric_hits"] == 1
+    assert family_payload["family_feedback_metric"]["metric_total"] == 1
+    assert family_payload["family_success_metric"]["evidence_hits"] == 1
+    assert family_payload["family_success_metric"]["evidence_total"] == 1
+    assert family_payload["family_runtime_artifact"]["predicted_hit_rate"] == 0.666667
+    assert family_payload["family_runtime_artifact"]["predicted_hit_rate_lower_bound"] == 0.364602
+    assert family_payload["family_runtime_artifact"]["prediction_uncertainty"] == 0.235702
+    assert family_payload.get("family_records", []) == []
+
+
+def test_resolve_prompt_family_support_can_match_family_variant_not_only_father() -> None:
+    payload = {
+        "prompt_families": [
+            {
+                "prompt_family_id": "pf-variant",
+                "question": "Investigate failing pytest target",
+                "normalized_question": "investigate failing pytest target",
+                "family_father_question": "Investigate failing pytest target",
+                "question_variants": [
+                    "Investigate failing pytest target",
+                    "Run the failing pytest target and inspect stderr",
+                ],
+                "family_records": [
+                    {
+                        "question": "Run the failing pytest target and inspect stderr",
+                        "original_prompt": "Fix the broken pytest target",
+                        "reformulated_prompt": "Run the failing pytest target and inspect stderr",
+                        "expected_answer": "Inspect stderr first.",
+                        "metric_hits": 1,
+                        "metric_total": 1,
+                        "metric_ratio": 1.0,
+                    }
+                ],
+            }
+        ]
+    }
+
+    support_from_payload = resolve_prompt_family_support_from_payload(
+        "Run the failing pytest target and inspect stderr",
+        payload,
+    )
+
+    assert support_from_payload.prompt_family_id == "pf-variant"
+    assert support_from_payload.supported is True
+    assert support_from_payload.similarity >= 0.8
 
 
 def test_materialize_training_candidates_strips_execution_envelope_from_family_father(

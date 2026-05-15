@@ -328,6 +328,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve_codex_proxy_parser.add_argument("--trivial-token-budget", type=int, default=280)
     serve_codex_proxy_parser.add_argument("--essentials-count", type=int, default=3)
     serve_codex_proxy_parser.add_argument("--low-signal-min-sources", type=int, default=1)
+    serve_codex_proxy_parser.add_argument("--family-exploration-rate", type=float, default=0.05)
     serve_codex_proxy_parser.add_argument("--retrieval-mode", choices=RETRIEVAL_MODE_CHOICES)
     serve_codex_proxy_parser.add_argument("--cache-dir")
     serve_codex_proxy_parser.add_argument("--cache-ttl-seconds", type=int, default=3600)
@@ -874,6 +875,7 @@ def main() -> int:
             trivial_token_budget=args.trivial_token_budget,
             essentials_count=args.essentials_count,
             low_signal_min_sources=args.low_signal_min_sources,
+            family_exploration_rate=args.family_exploration_rate,
             retrieval_mode=getattr(args, "retrieval_mode", None),
             cache_dir=(Path(args.cache_dir).expanduser().resolve() if args.cache_dir else None),
             cache_ttl_seconds=args.cache_ttl_seconds,

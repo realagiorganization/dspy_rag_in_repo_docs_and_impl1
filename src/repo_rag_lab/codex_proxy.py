@@ -60,6 +60,7 @@ _DEFAULT_ESSENTIAL_COUNT = 3
 _DEFAULT_TOKEN_BUDGET = 700
 _DEFAULT_TRIVIAL_TOKEN_BUDGET = 280
 _DEFAULT_CACHE_TTL_SECONDS = 3600
+_DEFAULT_FAMILY_EXPLORATION_RATE = 0.05
 _TASK_TOKEN_DEEP_THRESHOLD = 10
 _LOW_SIGNAL_SUMMARY_LIMIT = 40
 _FORWARDED_DISCORD_LINE_PATTERN = re.compile(r"(?is)^\[forwarded\]\s*@.*$")
@@ -109,7 +110,12 @@ class CodexMediationResult:
     prompt_family_band: str = "new"
     family_runtime_hit_rate: float | None = None
     family_artifact_hit_rate: float | None = None
+    family_predicted_hit_rate: float | None = None
+    family_predicted_hit_rate_lower_bound: float | None = None
+    family_prediction_uncertainty: float | None = None
+    family_feedback_count: int | None = None
     family_artifact_selected: bool | None = None
+    family_exploration_selected: bool | None = None
     task_classification: str = "deep"
     budget_tokens: int = _DEFAULT_TOKEN_BUDGET
     estimated_tokens: int = 0
@@ -140,6 +146,7 @@ class CodexProxyConfig:
     trivial_token_budget: int = _DEFAULT_TRIVIAL_TOKEN_BUDGET
     essentials_count: int = _DEFAULT_ESSENTIAL_COUNT
     low_signal_min_sources: int = 1
+    family_exploration_rate: float = _DEFAULT_FAMILY_EXPLORATION_RATE
     retrieval_mode: RetrievalMode | None = None
     cache_dir: Path | None = None
     cache_ttl_seconds: int = _DEFAULT_CACHE_TTL_SECONDS
@@ -167,6 +174,24 @@ def _estimate_token_count(text: str) -> int:
     if not cleaned:
         return 0
     return max(1, (len(cleaned) + 3) // 4)
+
+
+def _clamp_probability(value: float) -> float:
+    """Clamp one exploration-like probability into the closed unit interval."""
+
+    return max(0.0, min(1.0, float(value)))
+
+
+def _stable_fraction(*parts: object) -> float:
+    """Return a deterministic pseudo-random fraction derived from stable identity parts."""
+
+    payload = json.dumps(parts, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+    numerator = int(digest, 16)
+    denominator = float(16**16 - 1)
+    if denominator <= 0:
+        return 0.0
+    return numerator / denominator
 
 
 def _task_tokens(question: str) -> list[str]:
@@ -380,9 +405,27 @@ def _result_from_payload(payload: dict[str, object]) -> CodexMediationResult | N
             prompt_family_band=str(payload.get("prompt_family_band") or "new"),
             family_runtime_hit_rate=_float_or_none(payload.get("family_runtime_hit_rate")),
             family_artifact_hit_rate=_float_or_none(payload.get("family_artifact_hit_rate")),
+            family_predicted_hit_rate=_float_or_none(payload.get("family_predicted_hit_rate")),
+            family_predicted_hit_rate_lower_bound=_float_or_none(
+                payload.get("family_predicted_hit_rate_lower_bound")
+            ),
+            family_prediction_uncertainty=_float_or_none(
+                payload.get("family_prediction_uncertainty")
+            ),
+            family_feedback_count=(
+                int(payload.get("family_feedback_count"))
+                if isinstance(payload.get("family_feedback_count"), int)
+                and not isinstance(payload.get("family_feedback_count"), bool)
+                else None
+            ),
             family_artifact_selected=(
                 bool(payload.get("family_artifact_selected"))
                 if payload.get("family_artifact_selected") is not None
+                else None
+            ),
+            family_exploration_selected=(
+                bool(payload.get("family_exploration_selected"))
+                if payload.get("family_exploration_selected") is not None
                 else None
             ),
             task_classification=str(payload.get("task_classification") or "deep"),
@@ -1122,6 +1165,7 @@ def build_codex_mediation(
     trivial_token_budget: int = _DEFAULT_TRIVIAL_TOKEN_BUDGET,
     essentials_count: int = _DEFAULT_ESSENTIAL_COUNT,
     low_signal_min_sources: int = 1,
+    family_exploration_rate: float = _DEFAULT_FAMILY_EXPLORATION_RATE,
     retrieval_mode: RetrievalMode | None = None,
 ) -> CodexMediationResult:
     """Build one combined repo-grounded mediation block for Codex."""
@@ -1170,7 +1214,12 @@ def build_codex_mediation(
     prompt_family_band = "new"
     family_runtime_hit_rate: float | None = None
     family_artifact_hit_rate: float | None = None
+    family_predicted_hit_rate: float | None = None
+    family_predicted_hit_rate_lower_bound: float | None = None
+    family_prediction_uncertainty: float | None = None
+    family_feedback_count: int | None = None
     family_artifact_selected: bool | None = None
+    family_exploration_selected = False
     supported_family = False
     if isinstance(family_registry, Mapping):
         support = resolve_prompt_family_support_from_payload(
@@ -1252,6 +1301,17 @@ def build_codex_mediation(
         runtime_artifact = family_entry.get("runtime_artifact")
         if isinstance(runtime_artifact, Mapping):
             family_artifact_hit_rate = _float_or_none(runtime_artifact.get("hit_rate"))
+            family_predicted_hit_rate = _float_or_none(runtime_artifact.get("predicted_hit_rate"))
+            family_predicted_hit_rate_lower_bound = _float_or_none(
+                runtime_artifact.get("predicted_hit_rate_lower_bound")
+            )
+            family_prediction_uncertainty = _float_or_none(
+                runtime_artifact.get("prediction_uncertainty")
+            )
+            if isinstance(runtime_artifact.get("feedback_count"), int) and not isinstance(
+                runtime_artifact.get("feedback_count"), bool
+            ):
+                family_feedback_count = int(runtime_artifact.get("feedback_count"))
 
     if not supported_family:
         warnings.append(
@@ -1283,7 +1343,12 @@ def build_codex_mediation(
             prompt_family_band=prompt_family_band,
             family_runtime_hit_rate=family_runtime_hit_rate,
             family_artifact_hit_rate=family_artifact_hit_rate,
+            family_predicted_hit_rate=family_predicted_hit_rate,
+            family_predicted_hit_rate_lower_bound=family_predicted_hit_rate_lower_bound,
+            family_prediction_uncertainty=family_prediction_uncertainty,
+            family_feedback_count=family_feedback_count,
             family_artifact_selected=family_artifact_selected,
+            family_exploration_selected=family_exploration_selected,
             task_classification=task_classification,
             budget_tokens=effective_budget,
             estimated_tokens=0,
@@ -1338,16 +1403,40 @@ def build_codex_mediation(
             if lm_config is None:
                 raise RuntimeError("DSPy LM configuration is unavailable.")
             use_family_artifact = True
+            baseline_hit_rate = (
+                family_predicted_hit_rate_lower_bound
+                if family_predicted_hit_rate_lower_bound is not None
+                else family_predicted_hit_rate
+                if family_predicted_hit_rate is not None
+                else family_runtime_hit_rate
+            )
             if (
                 family_artifact_hit_rate is not None
-                and family_runtime_hit_rate is not None
-                and family_artifact_hit_rate < family_runtime_hit_rate
+                and baseline_hit_rate is not None
+                and family_artifact_hit_rate
+                < baseline_hit_rate
             ):
                 use_family_artifact = False
                 warnings.append(
-                    "Matched family runtime artifact scored below the current family hit-rate "
+                    "Matched family runtime artifact scored below the current family success "
                     "baseline, so the proxy fell back to fresh/global mediation for this turn."
                 )
+            normalized_exploration_rate = _clamp_probability(family_exploration_rate)
+            if use_family_artifact and normalized_exploration_rate > 0.0:
+                exploration_roll = _stable_fraction(
+                    original_prompt,
+                    active_prompt,
+                    prompt_family_id,
+                    resolved_bundle_version or bundle_version or "",
+                )
+                if exploration_roll < normalized_exploration_rate:
+                    use_family_artifact = False
+                    family_exploration_selected = True
+                    warnings.append(
+                        "Matched family runtime artifact was deterministically bypassed for "
+                        "controlled exploration, so the proxy used the fresh/global mediation "
+                        "path for this turn."
+                    )
             family_program_path = (
                 _resolve_family_runtime_program_path(
                     repository_root=resolved_root,
@@ -1476,7 +1565,12 @@ def build_codex_mediation(
         prompt_family_band=prompt_family_band,
         family_runtime_hit_rate=family_runtime_hit_rate,
         family_artifact_hit_rate=family_artifact_hit_rate,
+        family_predicted_hit_rate=family_predicted_hit_rate,
+        family_predicted_hit_rate_lower_bound=family_predicted_hit_rate_lower_bound,
+        family_prediction_uncertainty=family_prediction_uncertainty,
+        family_feedback_count=family_feedback_count,
         family_artifact_selected=family_artifact_selected,
+        family_exploration_selected=family_exploration_selected,
         task_classification=task_classification,
         budget_tokens=effective_budget,
         estimated_tokens=estimated_tokens,
@@ -1814,6 +1908,7 @@ class _CodexProxyRuntime:
             trivial_token_budget=self.config.trivial_token_budget,
             essentials_count=self.config.essentials_count,
             low_signal_min_sources=self.config.low_signal_min_sources,
+            family_exploration_rate=self.config.family_exploration_rate,
             retrieval_mode=self.config.retrieval_mode,
         )
         self._mediation_cache[cache_key] = mediation
@@ -1845,8 +1940,6 @@ class _CodexProxyRuntime:
     def _should_persist_turn_trace(self, mediation: CodexMediationResult) -> bool:
         """Return whether this mediation should become a trainer-facing trace."""
 
-        if mediation.family_artifact_selected and mediation.dspy_status == "success":
-            return False
         dedupe_key = self._turn_trace_dedupe_key(mediation)
         if dedupe_key in self._persisted_trace_keys:
             return False
@@ -1910,11 +2003,15 @@ class _CodexProxyRuntime:
     ) -> Path | None:
         if mediation.family_artifact_selected and mediation.dspy_status == "success":
             self._prune_turn_traces_for_prompt(mediation)
-            return None
         if not self._should_persist_turn_trace(mediation):
             return None
         metric_hits = 1 if mediation.dspy_status == "success" else 0
         metric_total = 1
+        trainer_signal_kind = (
+            "feedback_trace"
+            if mediation.family_artifact_selected and mediation.dspy_status == "success"
+            else "full_trace"
+        )
         trace_payload = {
             "command": "codex-proxy-turn-mediation",
             "command_status": "success",
@@ -1962,6 +2059,7 @@ class _CodexProxyRuntime:
                     family_artifact_selected=mediation.family_artifact_selected,
                     mediation_metric_hits=metric_hits,
                     mediation_metric_total=metric_total,
+                    trainer_signal_kind=trainer_signal_kind,
                 )
             ),
             "outcome": {
@@ -2038,6 +2136,8 @@ class _CodexProxyRuntime:
             command_trace=command_trace,
             trace_role="turn",
         )
+        if mediation.family_artifact_selected and mediation.dspy_status == "success":
+            return primary_trace_path
         for trace_role, prompt_text in self._lineage_prompts(mediation, command_trace):
             if prompt_text == mediation.original_prompt.strip():
                 continue
@@ -2107,6 +2207,7 @@ def serve_codex_proxy(
     trivial_token_budget: int = _DEFAULT_TRIVIAL_TOKEN_BUDGET,
     essentials_count: int = _DEFAULT_ESSENTIAL_COUNT,
     low_signal_min_sources: int = 1,
+    family_exploration_rate: float = _DEFAULT_FAMILY_EXPLORATION_RATE,
     retrieval_mode: RetrievalMode | None = None,
     cache_dir: Path | None = None,
     cache_ttl_seconds: int = _DEFAULT_CACHE_TTL_SECONDS,
@@ -2128,6 +2229,7 @@ def serve_codex_proxy(
         trivial_token_budget=trivial_token_budget,
         essentials_count=essentials_count,
         low_signal_min_sources=low_signal_min_sources,
+        family_exploration_rate=_clamp_probability(family_exploration_rate),
         retrieval_mode=retrieval_mode,
         cache_dir=cache_dir.resolve() if cache_dir is not None else None,
         cache_ttl_seconds=cache_ttl_seconds,
