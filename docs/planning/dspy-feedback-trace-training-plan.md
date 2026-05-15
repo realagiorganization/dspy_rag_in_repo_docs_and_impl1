@@ -152,10 +152,12 @@ Implemented slice in this turn:
   - `family_command_pattern_summary`
   - `family_constraint_summary`
 - routing score now blends:
-  - base prompt similarity
-  - profile overlap
+  - profile overlap as the primary signal
+  - base prompt similarity as a secondary precision prior
   - feedback-aware success prior
   - uncertainty penalty
+- `family-state.json` now drops inline `family_father_record`, `family_runtime_artifact`,
+  `family_records`, and `context_groups`; full payloads stay only in per-family blobs
 - `trace-export` / `trace-import` / trusted worker handoff now preserve the richer family-success
   profile instead of dropping it at the outer payload layer
 

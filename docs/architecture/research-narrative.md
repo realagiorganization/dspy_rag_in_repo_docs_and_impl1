@@ -272,10 +272,18 @@ summaries derived from the replay set itself:
 - `family_command_pattern_summary`
 - `family_constraint_summary`
 
-Runtime routing now combines base prompt similarity with overlap against those summaries plus the
-family's feedback-aware success prior and uncertainty penalty. That is still not a true embedding
-centroid, but it is no longer a pure father-text matcher either, and it reduces accidental family
-splits when one task family is rephrased through several nearby prompt surfaces.
+Runtime routing now treats that family profile as the primary routing surface rather than as a
+secondary tie-breaker behind prompt-string similarity. The score still keeps prompt similarity as
+one precision prior, but the dominant signal is now overlap against:
+
+- `family_prompt_profile_terms`
+- `family_command_pattern_summary`
+- `family_constraint_summary`
+
+plus the family's feedback-aware success prior and uncertainty penalty. That is still not a true
+embedding centroid, but it now aligns better with the product requirement that prompt families
+should follow latent task intent carried by salient keywords/constraints rather than superficial
+string resemblance alone.
 The newest Phase-1 correction now splits trainer-visible runtime evidence into two explicit signal
 classes. `full_trace` remains the replay-set exemplar that can dirty a family and later drive
 BootstrapFewShot recompilation. `feedback_trace` is now the compact reuse-path artifact emitted
@@ -1082,11 +1090,13 @@ failure mode where one trainer run could first materialize a remote family-state
 historical traces and then immediately publish a second version after applying the current queue.
 
 That redesign also finally makes `family-state.json` fit its intended role. It is no longer a full
-aggregate replay buffer duplicated beside `family.json`, `father.json`, and `records/*.json`. The
-top-level file is now a thin index with routing, score, dirty-flag, and path metadata, while the
-full transformed family payloads live only under `artifacts/trainer/families/<prompt_family_id>/`.
-In other words, the durable local cache is the per-family directory tree; `family-state.json` is
-the manifest that points at it.
+aggregate replay buffer duplicated beside `family.json`, `father.json`, and `records/*.json`, and
+it no longer embeds inline `family_father_record`, `family_runtime_artifact`, `family_records`, or
+`context_groups` payloads. The top-level file is now a thin index with routing summaries, score
+metadata, dirty flags, counts, and per-family paths, while the full transformed family payloads
+live only under `artifacts/trainer/families/<prompt_family_id>/`. In other words, the durable
+local cache is the per-family directory tree; `family-state.json` is the manifest that points at
+it.
 
 One more live bug remained after that redesign: replaying the same processed queue item into a
 fresh local cache still produced a new imported trace filename, and the trainer treated that new
