@@ -1178,6 +1178,12 @@ The stability threshold scales with family size, so young families still get a u
 immediately while larger families stop promoting one-off trace vocabulary into the live routing
 surface.
 
+That profile state is now also normalized into one per-term statistics payload instead of being
+spread across separate count and weight structures. Each prompt/command/constraint term can carry
+its raw count plus normalized weight inside one `*_term_stats` mapping, while the legacy
+`family_*_terms` lists remain only as derived routing summaries for fast lookup and human
+inspection.
+
 ## Tensions And Open Work
 
 The narrative is coherent, but not complete. The main open tensions are:

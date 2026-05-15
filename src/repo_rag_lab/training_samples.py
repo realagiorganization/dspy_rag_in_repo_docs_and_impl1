@@ -817,6 +817,41 @@ def _term_count_mapping(
     return {term: count for term, count in _sorted_term_count_items(counts)}
 
 
+def _term_counts_from_stats(
+    stats: Mapping[str, object],
+) -> dict[str, int]:
+    """Return one normalized count mapping from one term-stats payload."""
+
+    counts: dict[str, int] = {}
+    for key, value in stats.items():
+        term = str(key or "").strip().casefold()
+        if not term or not isinstance(value, Mapping):
+            continue
+        count = _coerce_int(value.get("count"))
+        if count is None or count <= 0:
+            continue
+        counts[term] = count
+    return _term_count_mapping(counts)
+
+
+def _term_stats_from_counts(
+    counts: Mapping[str, object],
+) -> dict[str, dict[str, float | int]]:
+    """Return one normalized term-stats payload with count and weight fields."""
+
+    normalized_counts = _term_count_mapping(counts)
+    total = sum(normalized_counts.values())
+    if total <= 0:
+        return {}
+    return {
+        term: {
+            "count": count,
+            "weight": round(count / total, 6),
+        }
+        for term, count in normalized_counts.items()
+    }
+
+
 def _stable_profile_terms_from_counts(
     counts: Mapping[str, object],
     *,
@@ -998,7 +1033,11 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
         best_similarity = max(best_similarity, _question_similarity(question, candidate_question))
     family_record_count = max(1, len(_family_candidate_records(family_payload)))
     profile_min_count = _stable_profile_min_count(family_record_count)
-    family_prompt_term_counts = _term_count_mapping(
+    family_prompt_term_counts = _term_counts_from_stats(
+        family_payload.get("family_prompt_profile_term_stats")
+        if isinstance(family_payload.get("family_prompt_profile_term_stats"), Mapping)
+        else {}
+    ) or _term_count_mapping(
         family_payload.get("family_prompt_profile_term_counts")
         if isinstance(family_payload.get("family_prompt_profile_term_counts"), Mapping)
         else {}
@@ -1017,7 +1056,11 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
             ],
             limit=_FAMILY_PROMPT_PROFILE_LIMIT,
         )
-    family_command_term_counts = _term_count_mapping(
+    family_command_term_counts = _term_counts_from_stats(
+        family_payload.get("family_command_pattern_term_stats")
+        if isinstance(family_payload.get("family_command_pattern_term_stats"), Mapping)
+        else {}
+    ) or _term_count_mapping(
         family_payload.get("family_command_pattern_counts")
         if isinstance(family_payload.get("family_command_pattern_counts"), Mapping)
         else {}
@@ -1033,7 +1076,11 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
             _string_list(family_payload.get("family_command_pattern_summary")),
             limit=_FAMILY_COMMAND_PROFILE_LIMIT,
         )
-    family_constraint_term_counts = _term_count_mapping(
+    family_constraint_term_counts = _term_counts_from_stats(
+        family_payload.get("family_constraint_term_stats")
+        if isinstance(family_payload.get("family_constraint_term_stats"), Mapping)
+        else {}
+    ) or _term_count_mapping(
         family_payload.get("family_constraint_counts")
         if isinstance(family_payload.get("family_constraint_counts"), Mapping)
         else {}
@@ -1148,9 +1195,11 @@ def _refresh_family_profile_summary(family_payload: dict[str, Any]) -> None:
     prompt_term_counts = _term_count_mapping(prompt_term_counts)
     command_term_counts = _term_count_mapping(command_term_counts)
     constraint_term_counts = _term_count_mapping(constraint_term_counts)
-    family_payload["family_prompt_profile_term_counts"] = prompt_term_counts
-    family_payload["family_command_pattern_counts"] = command_term_counts
-    family_payload["family_constraint_counts"] = constraint_term_counts
+    family_payload["family_prompt_profile_term_stats"] = _term_stats_from_counts(prompt_term_counts)
+    family_payload["family_command_pattern_term_stats"] = _term_stats_from_counts(
+        command_term_counts
+    )
+    family_payload["family_constraint_term_stats"] = _term_stats_from_counts(constraint_term_counts)
     family_payload["family_prompt_profile_terms"] = _stable_profile_terms_from_counts(
         prompt_term_counts,
         limit=_FAMILY_PROMPT_PROFILE_LIMIT,
@@ -1305,9 +1354,9 @@ def _find_or_create_prompt_family(
         "normalized_question": "",
         "question_variants": [],
         "question_variant_count": 0,
-        "family_prompt_profile_term_counts": {},
-        "family_command_pattern_counts": {},
-        "family_constraint_counts": {},
+        "family_prompt_profile_term_stats": {},
+        "family_command_pattern_term_stats": {},
+        "family_constraint_term_stats": {},
         "family_prompt_profile_terms": [],
         "family_command_pattern_summary": [],
         "family_constraint_summary": [],
@@ -1672,6 +1721,9 @@ def _family_state_entry_to_payload(
         "family_prompt_profile_term_counts",
         "family_command_pattern_counts",
         "family_constraint_counts",
+        "family_prompt_profile_term_stats",
+        "family_command_pattern_term_stats",
+        "family_constraint_term_stats",
         "family_prompt_profile_terms",
         "family_command_pattern_summary",
         "family_constraint_summary",
@@ -1703,26 +1755,54 @@ def _strip_family_state_inline_payload(
         "normalized_question": _normalize_question_text(family_payload.get("normalized_question")),
         "question_variants": _family_question_variants(family_payload),
         "question_variant_count": int(family_payload.get("question_variant_count") or 0),
-        "family_prompt_profile_term_counts": _term_count_mapping(
-            family_payload.get("family_prompt_profile_term_counts")
-            if isinstance(family_payload.get("family_prompt_profile_term_counts"), Mapping)
-            else {}
+        "family_prompt_profile_term_stats": _term_stats_from_counts(
+            _term_counts_from_stats(
+                family_payload.get("family_prompt_profile_term_stats")
+                if isinstance(family_payload.get("family_prompt_profile_term_stats"), Mapping)
+                else {}
+            )
+            or _term_count_mapping(
+                family_payload.get("family_prompt_profile_term_counts")
+                if isinstance(family_payload.get("family_prompt_profile_term_counts"), Mapping)
+                else {}
+            )
         ),
-        "family_command_pattern_counts": _term_count_mapping(
-            family_payload.get("family_command_pattern_counts")
-            if isinstance(family_payload.get("family_command_pattern_counts"), Mapping)
-            else {}
+        "family_command_pattern_term_stats": _term_stats_from_counts(
+            _term_counts_from_stats(
+                family_payload.get("family_command_pattern_term_stats")
+                if isinstance(family_payload.get("family_command_pattern_term_stats"), Mapping)
+                else {}
+            )
+            or _term_count_mapping(
+                family_payload.get("family_command_pattern_counts")
+                if isinstance(family_payload.get("family_command_pattern_counts"), Mapping)
+                else {}
+            )
         ),
-        "family_constraint_counts": _term_count_mapping(
-            family_payload.get("family_constraint_counts")
-            if isinstance(family_payload.get("family_constraint_counts"), Mapping)
-            else {}
+        "family_constraint_term_stats": _term_stats_from_counts(
+            _term_counts_from_stats(
+                family_payload.get("family_constraint_term_stats")
+                if isinstance(family_payload.get("family_constraint_term_stats"), Mapping)
+                else {}
+            )
+            or _term_count_mapping(
+                family_payload.get("family_constraint_counts")
+                if isinstance(family_payload.get("family_constraint_counts"), Mapping)
+                else {}
+            )
         ),
         "family_prompt_profile_terms": _profile_terms(
             _stable_profile_terms_from_counts(
-                family_payload.get("family_prompt_profile_term_counts")
-                if isinstance(family_payload.get("family_prompt_profile_term_counts"), Mapping)
-                else {},
+                _term_counts_from_stats(
+                    family_payload.get("family_prompt_profile_term_stats")
+                    if isinstance(family_payload.get("family_prompt_profile_term_stats"), Mapping)
+                    else {}
+                )
+                or (
+                    family_payload.get("family_prompt_profile_term_counts")
+                    if isinstance(family_payload.get("family_prompt_profile_term_counts"), Mapping)
+                    else {}
+                ),
                 limit=_FAMILY_PROMPT_PROFILE_LIMIT,
                 min_count=_stable_profile_min_count(
                     len(_family_replay_records(family_payload))
@@ -1733,9 +1813,16 @@ def _strip_family_state_inline_payload(
         ),
         "family_command_pattern_summary": _profile_terms(
             _stable_profile_terms_from_counts(
-                family_payload.get("family_command_pattern_counts")
-                if isinstance(family_payload.get("family_command_pattern_counts"), Mapping)
-                else {},
+                _term_counts_from_stats(
+                    family_payload.get("family_command_pattern_term_stats")
+                    if isinstance(family_payload.get("family_command_pattern_term_stats"), Mapping)
+                    else {}
+                )
+                or (
+                    family_payload.get("family_command_pattern_counts")
+                    if isinstance(family_payload.get("family_command_pattern_counts"), Mapping)
+                    else {}
+                ),
                 limit=_FAMILY_COMMAND_PROFILE_LIMIT,
                 min_count=_stable_profile_min_count(
                     len(_family_replay_records(family_payload))
@@ -1746,9 +1833,16 @@ def _strip_family_state_inline_payload(
         ),
         "family_constraint_summary": _constraint_terms(
             _stable_profile_terms_from_counts(
-                family_payload.get("family_constraint_counts")
-                if isinstance(family_payload.get("family_constraint_counts"), Mapping)
-                else {},
+                _term_counts_from_stats(
+                    family_payload.get("family_constraint_term_stats")
+                    if isinstance(family_payload.get("family_constraint_term_stats"), Mapping)
+                    else {}
+                )
+                or (
+                    family_payload.get("family_constraint_counts")
+                    if isinstance(family_payload.get("family_constraint_counts"), Mapping)
+                    else {}
+                ),
                 limit=_FAMILY_CONSTRAINT_PROFILE_LIMIT,
                 min_count=_stable_profile_min_count(
                     len(_family_replay_records(family_payload))

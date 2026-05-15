@@ -2267,12 +2267,14 @@ def test_materialize_training_candidates_profile_terms_ignore_one_off_noise(
     assert summary["prompt_family_count"] == 1
     family_state = load_family_state_payload(tmp_path / "artifacts" / "trainer" / "family-state.json")
     family = family_state["prompt_families"][0]
-    assert family["family_prompt_profile_term_counts"]["readme"] >= 3
-    assert family["family_prompt_profile_term_counts"]["gif"] >= 3
-    assert family["family_prompt_profile_term_counts"]["walkthrough"] >= 3
-    assert family["family_prompt_profile_term_counts"]["chromium"] >= 1
-    assert family["family_prompt_profile_term_counts"]["playwright"] >= 1
-    assert family["family_prompt_profile_term_counts"]["timeout"] >= 1
+    assert family["family_prompt_profile_term_stats"]["readme"]["count"] >= 3
+    assert family["family_prompt_profile_term_stats"]["gif"]["count"] >= 3
+    assert family["family_prompt_profile_term_stats"]["walkthrough"]["count"] >= 3
+    assert family["family_prompt_profile_term_stats"]["chromium"]["count"] >= 1
+    assert family["family_prompt_profile_term_stats"]["playwright"]["count"] >= 1
+    assert family["family_prompt_profile_term_stats"]["timeout"]["count"] >= 1
+    assert 0.0 < family["family_prompt_profile_term_stats"]["readme"]["weight"] <= 1.0
+    assert 0.0 < family["family_prompt_profile_term_stats"]["gif"]["weight"] <= 1.0
     assert "readme" in family["family_prompt_profile_terms"]
     assert "gif" in family["family_prompt_profile_terms"]
     assert "walkthrough" in family["family_prompt_profile_terms"]
