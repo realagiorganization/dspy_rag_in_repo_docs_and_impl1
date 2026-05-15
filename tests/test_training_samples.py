@@ -632,6 +632,57 @@ def test_resolve_prompt_family_support_can_use_family_profile_summaries() -> Non
     assert support_from_payload.similarity >= 0.8
 
 
+def test_resolve_prompt_family_support_prefers_family_profile_over_surface_similarity() -> None:
+    payload = {
+        "prompt_families": [
+            {
+                "prompt_family_id": "pf-profile-first",
+                "question": "Generate demo animation assets",
+                "normalized_question": "generate demo animation assets",
+                "family_father_question": "Generate demo animation assets",
+                "question_variants": ["Generate demo animation assets"],
+                "family_prompt_profile_terms": [
+                    "demo",
+                    "gif",
+                    "readme",
+                    "asset",
+                    "record",
+                    "wireframe",
+                    "walkthrough",
+                    "automation",
+                ],
+                "family_command_pattern_summary": [
+                    "record",
+                    "gif",
+                    "asset",
+                    "readme",
+                ],
+                "family_constraint_summary": [
+                    "readme.md",
+                    "demo.gif",
+                    "wireframe",
+                    "walkthrough",
+                ],
+                "family_success_metric": {
+                    "posterior_mean": 0.8,
+                    "lower_bound": 0.65,
+                    "uncertainty": 0.05,
+                },
+                "family_records": [],
+            }
+        ]
+    }
+
+    support_from_payload = resolve_prompt_family_support_from_payload(
+        "Refresh the tracked walkthrough asset and update the README embed.",
+        payload,
+    )
+
+    assert support_from_payload.prompt_family_id == "pf-profile-first"
+    assert support_from_payload.supported is True
+    assert support_from_payload.similarity >= 0.8
+
+
 def test_materialize_training_candidates_strips_execution_envelope_from_family_father(
     tmp_path: Path,
 ) -> None:
@@ -738,6 +789,7 @@ def test_materialize_training_candidates_strips_execution_envelope_from_family_f
     assert "family_records" not in family_payload
     assert "context_groups" not in family_payload
     assert "family_father_record" not in family_payload
+    assert "family_runtime_artifact" not in family_payload
     assert "family_runtime_record" not in family_payload
     assert "family_champion_record" not in family_payload
     assert "Repository checkout:" not in family_payload["family_father_question"]

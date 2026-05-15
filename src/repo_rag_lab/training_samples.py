@@ -91,10 +91,10 @@ _PROFILE_STOPWORDS = {
 _PATHLIKE_TOKEN_PATTERN = re.compile(
     r"(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+|[A-Za-z0-9_.-]+\.[A-Za-z0-9_.-]+)"
 )
-_FAMILY_ROUTING_PROFILE_BOOST = 0.9
-_FAMILY_ROUTING_SUCCESS_BOOST = 0.25
-_FAMILY_ROUTING_UNCERTAINTY_PENALTY = 0.1
-_FAMILY_ROUTING_MIN_SIMILARITY_FLOOR = 0.25
+_FAMILY_ROUTING_PROFILE_PRIMARY_WEIGHT = 1.45
+_FAMILY_ROUTING_PROMPT_SUPPORT_WEIGHT = 0.15
+_FAMILY_ROUTING_SUCCESS_BOOST = 0.2
+_FAMILY_ROUTING_UNCERTAINTY_PENALTY = 0.05
 
 
 def _coerce_int(value: object) -> int | None:
@@ -633,6 +633,20 @@ def _jaccard_similarity(left: Sequence[str], right: Sequence[str]) -> float:
     return len(intersection) / len(union)
 
 
+def _profile_overlap_similarity(left: Sequence[str], right: Sequence[str]) -> float:
+    """Return one profile overlap score that favors shared anchor terms."""
+
+    left_set = {item.casefold() for item in left if str(item).strip()}
+    right_set = {item.casefold() for item in right if str(item).strip()}
+    if not left_set or not right_set:
+        return 0.0
+    intersection_size = len(left_set.intersection(right_set))
+    if intersection_size <= 0:
+        return 0.0
+    coverage = intersection_size / min(len(left_set), len(right_set))
+    return round(max(_jaccard_similarity(left, right), coverage), 6)
+
+
 def _string_match_similarity(left: object, right: object) -> float:
     """Return ``1.0`` when normalized strings match, otherwise ``0.0``."""
 
@@ -856,7 +870,7 @@ def _family_question_variants(family_payload: Mapping[str, Any]) -> list[str]:
 
 
 def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) -> float:
-    """Return the best prompt similarity between one question and the family prompt profile."""
+    """Return one profile-first routing score for a prompt against one family."""
 
     candidate_questions = _family_question_variants(family_payload)
     family_father_question = _routing_question(
@@ -873,8 +887,6 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
     best_similarity = 0.0
     for candidate_question in candidate_questions:
         best_similarity = max(best_similarity, _question_similarity(question, candidate_question))
-    if best_similarity < _FAMILY_ROUTING_MIN_SIMILARITY_FLOOR:
-        return round(best_similarity, 6)
     family_prompt_profile_terms = _profile_terms(
         [
             *candidate_questions,
@@ -893,8 +905,8 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
     question_profile_terms = _profile_terms([question])
     question_constraint_terms = _constraint_terms([question])
     profile_overlap = max(
-        _jaccard_similarity(question_profile_terms, family_prompt_profile_terms),
-        _jaccard_similarity(
+        _profile_overlap_similarity(question_profile_terms, family_prompt_profile_terms),
+        _profile_overlap_similarity(
             question_constraint_terms,
             [*family_constraint_summary, *family_command_pattern_summary],
         ),
@@ -924,16 +936,16 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
             family_metric_1_mean, bool
         ):
             predicted_success = float(family_metric_1_mean)
-    routing_score = min(
-        1.0,
-        max(
-            best_similarity,
-            best_similarity
-            + (_FAMILY_ROUTING_PROFILE_BOOST * profile_overlap)
+    routing_score = max(
+        profile_overlap,
+        (
+            (_FAMILY_ROUTING_PROFILE_PRIMARY_WEIGHT * profile_overlap)
+            + (_FAMILY_ROUTING_PROMPT_SUPPORT_WEIGHT * best_similarity)
             + (_FAMILY_ROUTING_SUCCESS_BOOST * predicted_success)
-            - (_FAMILY_ROUTING_UNCERTAINTY_PENALTY * uncertainty),
+            - (_FAMILY_ROUTING_UNCERTAINTY_PENALTY * uncertainty)
         ),
     )
+    routing_score = min(1.0, max(0.0, routing_score))
     return round(max(0.0, routing_score), 6)
 
 
@@ -1524,11 +1536,15 @@ def _strip_family_state_inline_payload(
         "family_father_similarity_mean": family_payload.get("family_father_similarity_mean"),
         "family_runtime_score": family_payload.get("family_runtime_score"),
         "family_metric_1_mean": family_payload.get("family_metric_1_mean"),
-        "family_runtime_artifact": family_payload.get("family_runtime_artifact"),
         "family_feedback_metric": family_payload.get("family_feedback_metric"),
         "family_feedback_count": int(family_payload.get("family_feedback_count") or 0),
         "family_success_metric": family_payload.get("family_success_metric"),
         "family_record_count": len(_family_replay_records(family_payload)),
+        "context_group_count": len(
+            family_payload.get("context_groups")
+            if isinstance(family_payload.get("context_groups"), list)
+            else []
+        ),
     }
 
 
