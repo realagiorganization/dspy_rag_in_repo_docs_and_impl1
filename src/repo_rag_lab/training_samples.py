@@ -72,6 +72,29 @@ _TRAINER_SIGNAL_KINDS = {"full_trace", "feedback_trace"}
 _SUCCESS_POSTERIOR_ALPHA_PRIOR = 1.0
 _SUCCESS_POSTERIOR_BETA_PRIOR = 1.0
 _SUCCESS_LOWER_BOUND_Z = 1.281552
+_PROFILE_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "for",
+    "from",
+    "into",
+    "its",
+    "the",
+    "then",
+    "this",
+    "that",
+    "with",
+    "your",
+}
+_PATHLIKE_TOKEN_PATTERN = re.compile(
+    r"(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+|[A-Za-z0-9_.-]+\.[A-Za-z0-9_.-]+)"
+)
+_FAMILY_ROUTING_PROFILE_BOOST = 0.9
+_FAMILY_ROUTING_SUCCESS_BOOST = 0.25
+_FAMILY_ROUTING_UNCERTAINTY_PENALTY = 0.1
+_FAMILY_ROUTING_MIN_SIMILARITY_FLOOR = 0.25
 
 
 def _coerce_int(value: object) -> int | None:
@@ -94,6 +117,19 @@ def _coerce_int(value: object) -> int | None:
         except ValueError:
             return None
     return None
+
+
+def _string_list(value: object) -> list[str]:
+    """Return one list of normalized strings for sequence-like values."""
+
+    if not isinstance(value, list):
+        return []
+    normalized: list[str] = []
+    for item in value:
+        text = str(item or "").strip()
+        if text:
+            normalized.append(text)
+    return normalized
 
 
 def _normalize_trainer_signal_kind(value: object) -> str:
@@ -708,6 +744,68 @@ def _question_tokens(question: object) -> list[str]:
     return [token for token in re.findall(r"[a-z0-9]+", normalized_question) if token]
 
 
+def _profile_terms(values: Sequence[object], *, limit: int = 24) -> list[str]:
+    """Return stable family-profile lexical terms from prompt-like values."""
+
+    terms: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        for token in _question_tokens(value):
+            if len(token) < 3 or token in _PROFILE_STOPWORDS:
+                continue
+            if token in seen:
+                continue
+            seen.add(token)
+            terms.append(token)
+            if len(terms) >= limit:
+                return terms
+    return terms
+
+
+def _constraint_terms(values: Sequence[object], *, limit: int = 16) -> list[str]:
+    """Return stable file/path/constraint-like tokens from prompt or trace text."""
+
+    constraints: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = str(value or "").strip()
+        if not text:
+            continue
+        for match in _PATHLIKE_TOKEN_PATTERN.findall(text):
+            token = match.strip().casefold()
+            if not token or token in seen:
+                continue
+            seen.add(token)
+            constraints.append(token)
+            if len(constraints) >= limit:
+                return constraints
+    return constraints
+
+
+def _command_trace_profile_terms(command_trace: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Return stable lexical terms extracted from one command trace summary."""
+
+    values: list[object] = []
+    for entry in command_trace:
+        for key in ("text", "command", "path", "source", "tool", "type", "role"):
+            value = entry.get(key)
+            if value not in (None, ""):
+                values.append(value)
+    return _profile_terms(values, limit=24)
+
+
+def _command_trace_constraint_terms(command_trace: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Return stable constraint/path tokens extracted from one command trace summary."""
+
+    values: list[object] = []
+    for entry in command_trace:
+        for key in ("text", "command", "path", "source"):
+            value = entry.get(key)
+            if value not in (None, ""):
+                values.append(value)
+    return _constraint_terms(values, limit=16)
+
+
 def _question_similarity(left: object, right: object) -> float:
     """Return a bounded similarity score between two prompt strings."""
 
@@ -775,7 +873,110 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
     best_similarity = 0.0
     for candidate_question in candidate_questions:
         best_similarity = max(best_similarity, _question_similarity(question, candidate_question))
-    return round(best_similarity, 6)
+    if best_similarity < _FAMILY_ROUTING_MIN_SIMILARITY_FLOOR:
+        return round(best_similarity, 6)
+    family_prompt_profile_terms = _profile_terms(
+        [
+            *candidate_questions,
+            *_string_list(family_payload.get("family_prompt_profile_terms")),
+        ]
+    )
+    family_command_pattern_summary = _profile_terms(
+        _string_list(family_payload.get("family_command_pattern_summary"))
+    )
+    family_constraint_summary = _constraint_terms(
+        [
+            *_string_list(family_payload.get("family_constraint_summary")),
+            *family_command_pattern_summary,
+        ]
+    )
+    question_profile_terms = _profile_terms([question])
+    question_constraint_terms = _constraint_terms([question])
+    profile_overlap = max(
+        _jaccard_similarity(question_profile_terms, family_prompt_profile_terms),
+        _jaccard_similarity(
+            question_constraint_terms,
+            [*family_constraint_summary, *family_command_pattern_summary],
+        ),
+    )
+    family_success_metric = family_payload.get("family_success_metric")
+    family_feedback_metric = family_payload.get("family_feedback_metric")
+    predicted_success = 0.0
+    uncertainty = 0.0
+    if isinstance(family_success_metric, Mapping):
+        posterior_mean = family_success_metric.get("posterior_mean")
+        if isinstance(posterior_mean, (int, float)) and not isinstance(posterior_mean, bool):
+            predicted_success = float(posterior_mean)
+        uncertainty_value = family_success_metric.get("uncertainty")
+        if isinstance(uncertainty_value, (int, float)) and not isinstance(
+            uncertainty_value, bool
+        ):
+            uncertainty = float(uncertainty_value)
+    if predicted_success == 0.0 and isinstance(family_feedback_metric, Mapping):
+        feedback_hit_rate = family_feedback_metric.get("hit_rate")
+        if isinstance(feedback_hit_rate, (int, float)) and not isinstance(
+            feedback_hit_rate, bool
+        ):
+            predicted_success = float(feedback_hit_rate)
+    if predicted_success == 0.0:
+        family_metric_1_mean = family_payload.get("family_metric_1_mean")
+        if isinstance(family_metric_1_mean, (int, float)) and not isinstance(
+            family_metric_1_mean, bool
+        ):
+            predicted_success = float(family_metric_1_mean)
+    routing_score = min(
+        1.0,
+        max(
+            best_similarity,
+            best_similarity
+            + (_FAMILY_ROUTING_PROFILE_BOOST * profile_overlap)
+            + (_FAMILY_ROUTING_SUCCESS_BOOST * predicted_success)
+            - (_FAMILY_ROUTING_UNCERTAINTY_PENALTY * uncertainty),
+        ),
+    )
+    return round(max(0.0, routing_score), 6)
+
+
+def _refresh_family_profile_summary(family_payload: dict[str, Any]) -> None:
+    """Persist one lightweight routing profile derived from stored family traces."""
+
+    prompt_values: list[object] = [
+        family_payload.get("question"),
+        family_payload.get("normalized_question"),
+        family_payload.get("family_father_question"),
+    ]
+    prompt_values.extend(family_payload.get("question_variants", []))
+    command_trace_rows: list[Mapping[str, Any]] = []
+    command_values: list[object] = []
+    for record in _family_candidate_records(family_payload):
+        prompt_values.extend(
+            [
+                record.get("question"),
+                record.get("original_prompt"),
+                record.get("reformulated_prompt"),
+            ]
+        )
+        command_trace = _ordered_unique_command_trace(record.get("command_trace"))
+        command_trace_rows.extend(command_trace)
+        command_values.extend(
+            [
+                record.get("question"),
+                record.get("original_prompt"),
+                record.get("reformulated_prompt"),
+            ]
+        )
+    family_payload["family_prompt_profile_terms"] = _profile_terms(prompt_values, limit=24)
+    family_payload["family_command_pattern_summary"] = _command_trace_profile_terms(
+        command_trace_rows
+    )
+    family_payload["family_constraint_summary"] = _constraint_terms(
+        [
+            *prompt_values,
+            *command_values,
+            *_command_trace_constraint_terms(command_trace_rows),
+        ],
+        limit=16,
+    )
 
 
 def resolve_prompt_family_support_from_payload(
@@ -864,6 +1065,7 @@ def _refresh_prompt_family_summary(family_payload: dict[str, Any], question: str
         family_payload["family_father_similarity_mean"] = father_similarity_mean
         family_payload["question"] = father_question
         family_payload["normalized_question"] = father_question.casefold()
+        _refresh_family_profile_summary(family_payload)
         return
     family_payload["family_father_record"] = None
     family_payload["family_father_similarity_mean"] = None
@@ -871,6 +1073,7 @@ def _refresh_prompt_family_summary(family_payload: dict[str, Any], question: str
     if normalized_question:
         family_payload["question"] = normalized_question
         family_payload["normalized_question"] = normalized_question.casefold()
+    _refresh_family_profile_summary(family_payload)
 
 
 def _find_or_create_prompt_family(
@@ -913,6 +1116,9 @@ def _find_or_create_prompt_family(
         "normalized_question": "",
         "question_variants": [],
         "question_variant_count": 0,
+        "family_prompt_profile_terms": [],
+        "family_command_pattern_summary": [],
+        "family_constraint_summary": [],
         "family_father_question": None,
         "family_father_similarity_mean": None,
         "family_father_record": None,
@@ -1271,6 +1477,9 @@ def _family_state_entry_to_payload(
         "normalized_question",
         "question_variants",
         "question_variant_count",
+        "family_prompt_profile_terms",
+        "family_command_pattern_summary",
+        "family_constraint_summary",
         "family_father_question",
         "family_father_similarity_mean",
         "family_father_record",
@@ -1299,6 +1508,15 @@ def _strip_family_state_inline_payload(
         "normalized_question": _normalize_question_text(family_payload.get("normalized_question")),
         "question_variants": _family_question_variants(family_payload),
         "question_variant_count": int(family_payload.get("question_variant_count") or 0),
+        "family_prompt_profile_terms": _profile_terms(
+            _string_list(family_payload.get("family_prompt_profile_terms"))
+        ),
+        "family_command_pattern_summary": _profile_terms(
+            _string_list(family_payload.get("family_command_pattern_summary"))
+        ),
+        "family_constraint_summary": _constraint_terms(
+            _string_list(family_payload.get("family_constraint_summary"))
+        ),
         "family_father_question": _normalize_question_text(
             family_payload.get("family_father_question")
         )

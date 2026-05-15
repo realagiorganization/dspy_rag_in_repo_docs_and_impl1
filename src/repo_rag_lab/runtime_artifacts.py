@@ -102,6 +102,10 @@ class RuntimeTraceContext:
     prompt_family_band: str | None = None
     family_runtime_hit_rate: float | None = None
     family_artifact_hit_rate: float | None = None
+    family_predicted_hit_rate: float | None = None
+    family_predicted_hit_rate_lower_bound: float | None = None
+    family_prediction_uncertainty: float | None = None
+    family_feedback_count: int | None = None
     family_artifact_selected: bool | None = None
     mediation_metric_hits: int | None = None
     mediation_metric_total: int | None = None
@@ -330,6 +334,13 @@ def _bundle_family_entry(family_payload: Mapping[str, object]) -> dict[str, obje
         "normalized_question": _string_or_none(family_payload.get("normalized_question")),
         "question_variants": question_variants,
         "question_variant_count": _int_or_none(family_payload.get("question_variant_count")),
+        "family_prompt_profile_terms": _string_list(
+            family_payload.get("family_prompt_profile_terms")
+        ),
+        "family_command_pattern_summary": _string_list(
+            family_payload.get("family_command_pattern_summary")
+        ),
+        "family_constraint_summary": _string_list(family_payload.get("family_constraint_summary")),
         "family_father_question": father_question,
         "family_father_similarity_mean": _float_or_none(
             family_payload.get("family_father_similarity_mean")
@@ -499,6 +510,9 @@ def _resolved_family_state_family_payload(
                 "normalized_question",
                 "question_variants",
                 "question_variant_count",
+                "family_prompt_profile_terms",
+                "family_command_pattern_summary",
+                "family_constraint_summary",
                 "family_father_question",
                 "family_father_similarity_mean",
                 "family_father_record",
@@ -1828,6 +1842,10 @@ def build_runtime_trace(trace: RuntimeTraceContext) -> dict[str, object]:
         "prompt_family_band": trace.prompt_family_band,
         "family_runtime_hit_rate": trace.family_runtime_hit_rate,
         "family_artifact_hit_rate": trace.family_artifact_hit_rate,
+        "family_predicted_hit_rate": trace.family_predicted_hit_rate,
+        "family_predicted_hit_rate_lower_bound": trace.family_predicted_hit_rate_lower_bound,
+        "family_prediction_uncertainty": trace.family_prediction_uncertainty,
+        "family_feedback_count": trace.family_feedback_count,
         "family_artifact_selected": trace.family_artifact_selected,
         "mediation_metric_hits": trace.mediation_metric_hits,
         "mediation_metric_total": trace.mediation_metric_total,
@@ -1868,6 +1886,14 @@ def _normalize_runtime_trace(payload: Mapping[str, object]) -> dict[str, object]
     prompt_family_similarity = _float_or_none(payload.get("prompt_family_similarity"))
     family_runtime_hit_rate = _float_or_none(payload.get("family_runtime_hit_rate"))
     family_artifact_hit_rate = _float_or_none(payload.get("family_artifact_hit_rate"))
+    family_predicted_hit_rate = _float_or_none(payload.get("family_predicted_hit_rate"))
+    family_predicted_hit_rate_lower_bound = _float_or_none(
+        payload.get("family_predicted_hit_rate_lower_bound")
+    )
+    family_prediction_uncertainty = _float_or_none(
+        payload.get("family_prediction_uncertainty")
+    )
+    family_feedback_count = _int_or_none(payload.get("family_feedback_count"))
     mediation_metric_hits = _int_or_none(payload.get("mediation_metric_hits"))
     mediation_metric_total = _int_or_none(payload.get("mediation_metric_total"))
     trainer_signal_kind = _trainer_signal_kind_or_none(payload.get("trainer_signal_kind"))
@@ -1906,6 +1932,10 @@ def _normalize_runtime_trace(payload: Mapping[str, object]) -> dict[str, object]
         "prompt_family_band": _string_or_none(payload.get("prompt_family_band")),
         "family_runtime_hit_rate": family_runtime_hit_rate,
         "family_artifact_hit_rate": family_artifact_hit_rate,
+        "family_predicted_hit_rate": family_predicted_hit_rate,
+        "family_predicted_hit_rate_lower_bound": family_predicted_hit_rate_lower_bound,
+        "family_prediction_uncertainty": family_prediction_uncertainty,
+        "family_feedback_count": family_feedback_count,
         "family_artifact_selected": (
             payload.get("family_artifact_selected")
             if isinstance(payload.get("family_artifact_selected"), bool)
@@ -2178,6 +2208,14 @@ def _build_trace_record(
         "prompt_family_band": _string_or_none(trace.get("prompt_family_band")),
         "family_runtime_hit_rate": _float_or_none(trace.get("family_runtime_hit_rate")),
         "family_artifact_hit_rate": _float_or_none(trace.get("family_artifact_hit_rate")),
+        "family_predicted_hit_rate": _float_or_none(trace.get("family_predicted_hit_rate")),
+        "family_predicted_hit_rate_lower_bound": _float_or_none(
+            trace.get("family_predicted_hit_rate_lower_bound")
+        ),
+        "family_prediction_uncertainty": _float_or_none(
+            trace.get("family_prediction_uncertainty")
+        ),
+        "family_feedback_count": _int_or_none(trace.get("family_feedback_count")),
         "family_artifact_selected": (
             trace.get("family_artifact_selected")
             if isinstance(trace.get("family_artifact_selected"), bool)

@@ -265,8 +265,17 @@ actually saw.
 The same routing layer is now slightly less brittle than the original father-only contract: family
 matching no longer compares a new prompt only against `family_father_question`, but against the
 family's accumulated prompt profile (`question_variants` plus persisted original/reformulated trace
-forms). That is still not a full latent family representation, but it already reduces accidental
-family splits when one task family is rephrased through several nearby prompt surfaces.
+forms). The newest slice pushes that one step further by persisting lightweight family-profile
+summaries derived from the replay set itself:
+
+- `family_prompt_profile_terms`
+- `family_command_pattern_summary`
+- `family_constraint_summary`
+
+Runtime routing now combines base prompt similarity with overlap against those summaries plus the
+family's feedback-aware success prior and uncertainty penalty. That is still not a true embedding
+centroid, but it is no longer a pure father-text matcher either, and it reduces accidental family
+splits when one task family is rephrased through several nearby prompt surfaces.
 The newest Phase-1 correction now splits trainer-visible runtime evidence into two explicit signal
 classes. `full_trace` remains the replay-set exemplar that can dirty a family and later drive
 BootstrapFewShot recompilation. `feedback_trace` is now the compact reuse-path artifact emitted
@@ -288,6 +297,12 @@ rewrites optimistic proxy per-turn draft metrics with the final run `execution_s
 `acceptance_status`, and real post-run `mediation_metric_hits / mediation_metric_total` before the
 turn traces are exported and queued. That matters because otherwise family replay sets would keep
 absorbing "proxy call succeeded" as if it were "full Codex run succeeded", which would poison the
+training signal. The newest worker/runtime hardening closes a second leak in the same corridor:
+the authoritative outer `trace-export`, `trace-enqueue`, and trusted-handoff payloads now preserve
+the same family success profile fields that runtime used internally, including
+`family_predicted_hit_rate`, `family_predicted_hit_rate_lower_bound`,
+`family_prediction_uncertainty`, and `family_feedback_count`, instead of only keeping those values
+inside nested runtime trace objects.
 very metric the family-first contract is supposed to optimize.
 
 A further local slice now supports divergent

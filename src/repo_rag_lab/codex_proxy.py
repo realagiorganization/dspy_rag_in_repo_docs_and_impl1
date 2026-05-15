@@ -2056,6 +2056,12 @@ class _CodexProxyRuntime:
                     prompt_family_band=mediation.prompt_family_band,
                     family_runtime_hit_rate=mediation.family_runtime_hit_rate,
                     family_artifact_hit_rate=mediation.family_artifact_hit_rate,
+                    family_predicted_hit_rate=mediation.family_predicted_hit_rate,
+                    family_predicted_hit_rate_lower_bound=(
+                        mediation.family_predicted_hit_rate_lower_bound
+                    ),
+                    family_prediction_uncertainty=mediation.family_prediction_uncertainty,
+                    family_feedback_count=mediation.family_feedback_count,
                     family_artifact_selected=mediation.family_artifact_selected,
                     mediation_metric_hits=metric_hits,
                     mediation_metric_total=metric_total,

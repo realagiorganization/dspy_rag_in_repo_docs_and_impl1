@@ -2106,6 +2106,10 @@ def test_persist_turn_trace_emits_feedback_trace_for_successful_family_reuse_and
             prompt_family_band="match",
             family_runtime_hit_rate=1.0,
             family_artifact_hit_rate=1.0,
+            family_predicted_hit_rate=0.666667,
+            family_predicted_hit_rate_lower_bound=0.364602,
+            family_prediction_uncertainty=0.235702,
+            family_feedback_count=1,
             family_artifact_selected=True,
         )
         first_trace = runtime.persist_turn_trace(repeated_failure, command_trace=[])
@@ -2138,6 +2142,10 @@ def test_persist_turn_trace_emits_feedback_trace_for_successful_family_reuse_and
             prompt_family_band="match",
             family_runtime_hit_rate=1.0,
             family_artifact_hit_rate=1.0,
+            family_predicted_hit_rate=0.666667,
+            family_predicted_hit_rate_lower_bound=0.364602,
+            family_prediction_uncertainty=0.235702,
+            family_feedback_count=1,
             family_artifact_selected=True,
         )
         feedback_trace = runtime.persist_turn_trace(successful_family_reuse, command_trace=[])
@@ -2149,6 +2157,10 @@ def test_persist_turn_trace_emits_feedback_trace_for_successful_family_reuse_and
         assert manifest["trace_paths"] == runtime._turn_trace_entries
         payload = json.loads(feedback_trace.read_text(encoding="utf-8"))
         assert payload["trace"]["trainer_signal_kind"] == "feedback_trace"
+        assert payload["trace"]["family_predicted_hit_rate"] == 0.666667
+        assert payload["trace"]["family_predicted_hit_rate_lower_bound"] == 0.364602
+        assert payload["trace"]["family_prediction_uncertainty"] == 0.235702
+        assert payload["trace"]["family_feedback_count"] == 1
         assert payload["trace_role"] == "turn"
     finally:
         runtime.close()
