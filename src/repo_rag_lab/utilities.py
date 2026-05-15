@@ -810,9 +810,14 @@ def run_bundle_inspection(
     """Serialize the latest, named, or promoted-channel DSPy bundle state as JSON."""
 
     if channel is not None:
-        channel_state = inspect_remote_bundle_channel(channel) or inspect_bundle_channel(
-            root,
-            channel=channel,
+        remote_channel_state = inspect_remote_bundle_channel(channel)
+        channel_state = (
+            remote_channel_state
+            if remote_channel_state is not None
+            else inspect_bundle_channel(
+                root,
+                channel=channel,
+            )
         )
         if not channel_state.get("channel_found", False):
             warnings = [f"Bundle channel `{channel}` is not initialized yet."]
@@ -850,8 +855,32 @@ def run_bundle_inspection(
 
     try:
         selected_bundle: dict[str, object] | None = None
+        artifact_config = resolve_azure_artifact_config()
+        remote_bundles_enabled = bool(artifact_config and artifact_config.bundles_enabled)
         if bundle_version is not None:
-            selected_bundle = inspect_remote_bundle_version(bundle_version)
+            if remote_bundles_enabled:
+                selected_bundle = inspect_remote_bundle_version(bundle_version)
+                if selected_bundle is None:
+                    payload = describe_dspy_artifacts(root)
+                    warnings = [f"No DSPy bundle version `{bundle_version}` is available yet."]
+                    return _json_command_payload(
+                        "bundle-inspect",
+                        root=root,
+                        payload={
+                            "bundle_found": False,
+                            "requested_run_name": run_name,
+                            "requested_bundle_version": bundle_version,
+                            "storage_backend": "azure-blob",
+                            **payload,
+                        },
+                        warnings=warnings,
+                        artifact_metadata=_artifact_metadata(
+                            generated_paths=list(payload.get("manifest_paths", [])),
+                            related_paths=list(payload.get("metadata_paths", [])),
+                        ),
+                    )
+            else:
+                selected_bundle = inspect_remote_bundle_version(bundle_version)
         if selected_bundle is None:
             _, selected_bundle = resolve_bundle_manifest(
                 root,

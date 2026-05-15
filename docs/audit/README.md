@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-05-14-runtime-dspy-single-thread-and-same-prompt-trace-dedupe.md`
+- `2026-05-15-remote-bundle-authority-and-lane-reset-hardening.md`
 
 ## Usage
 
