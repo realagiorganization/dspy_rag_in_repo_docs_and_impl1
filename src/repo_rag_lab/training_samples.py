@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import shutil
 from collections.abc import Mapping, Sequence
@@ -67,6 +68,10 @@ _CODEX_TRANSCRIPT_BLOCK_PATTERN = re.compile(
 _CODEX_STDOUT_SECTION_PATTERN = re.compile(r"(?ms)\nSTDOUT:\n(.*?)(?:\nSTDERR:\n|\Z)")
 _FORWARDED_DISCORD_TAIL_PATTERN = re.compile(r"(?is)\s*\[forwarded\]\s*@.*$")
 _FAMILY_CACHE_TOKEN_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
+_TRAINER_SIGNAL_KINDS = {"full_trace", "feedback_trace"}
+_SUCCESS_POSTERIOR_ALPHA_PRIOR = 1.0
+_SUCCESS_POSTERIOR_BETA_PRIOR = 1.0
+_SUCCESS_LOWER_BOUND_Z = 1.281552
 
 
 def _coerce_int(value: object) -> int | None:
@@ -89,6 +94,15 @@ def _coerce_int(value: object) -> int | None:
         except ValueError:
             return None
     return None
+
+
+def _normalize_trainer_signal_kind(value: object) -> str:
+    """Return one normalized trainer-signal kind, defaulting to replay traces."""
+
+    cleaned = str(value or "").strip()
+    if cleaned in _TRAINER_SIGNAL_KINDS:
+        return cleaned
+    return "full_trace"
 
 
 def _strip_forwarded_discord_tail(text: str) -> str:
@@ -744,8 +758,9 @@ def _family_question_variants(family_payload: Mapping[str, Any]) -> list[str]:
 
 
 def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) -> float:
-    """Return the prompt similarity between one question and the family father."""
+    """Return the best prompt similarity between one question and the family prompt profile."""
 
+    candidate_questions = _family_question_variants(family_payload)
     family_father_question = _routing_question(
         question=family_payload.get("family_father_question")
         or family_payload.get("question")
@@ -755,9 +770,12 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
             "reformulated_prompt"
         ),
     )
-    if not family_father_question:
-        return 0.0
-    return _question_similarity(question, family_father_question)
+    if family_father_question:
+        candidate_questions = [family_father_question, *candidate_questions]
+    best_similarity = 0.0
+    for candidate_question in candidate_questions:
+        best_similarity = max(best_similarity, _question_similarity(question, candidate_question))
+    return round(best_similarity, 6)
 
 
 def resolve_prompt_family_support_from_payload(
@@ -902,6 +920,9 @@ def _find_or_create_prompt_family(
         "family_runtime_context_group_id": None,
         "family_runtime_score": None,
         "family_runtime_record": None,
+        "family_feedback_metric": None,
+        "family_feedback_count": 0,
+        "family_success_metric": None,
         "family_champion_context_group_id": None,
         "family_champion_score": None,
         "family_champion_record": None,
@@ -1023,6 +1044,139 @@ def _record_metric(record: Mapping[str, Any]) -> tuple[int, int, float]:
     return hits, total, ratio
 
 
+def _feedback_metric_payload(
+    *,
+    hits: int,
+    total: int,
+) -> dict[str, Any]:
+    """Return one normalized family feedback-metric payload."""
+
+    return {
+        "metric_hits": max(0, hits),
+        "metric_total": max(0, total),
+        "hit_rate": _metric_ratio(max(0, hits), max(0, total)),
+    }
+
+
+def _aggregate_record_metric(records: Sequence[Mapping[str, Any]]) -> tuple[int, int]:
+    """Return aggregated `hits / total` counts across one record sequence."""
+
+    aggregate_hits = 0
+    aggregate_total = 0
+    for record in records:
+        hits, total, _ = _record_metric(record)
+        aggregate_hits += hits
+        aggregate_total += total
+    return aggregate_hits, aggregate_total
+
+
+def _success_metric_payload(
+    *,
+    replay_hits: int,
+    replay_total: int,
+    feedback_hits: int,
+    feedback_total: int,
+) -> dict[str, Any] | None:
+    """Return one posterior success-profile payload for one prompt family."""
+
+    replay_hits = max(0, replay_hits)
+    replay_total = max(0, replay_total)
+    feedback_hits = max(0, feedback_hits)
+    feedback_total = max(0, feedback_total)
+    evidence_hits = replay_hits + feedback_hits
+    evidence_total = replay_total + feedback_total
+    if evidence_total <= 0:
+        return None
+    posterior_alpha = _SUCCESS_POSTERIOR_ALPHA_PRIOR + evidence_hits
+    posterior_beta = _SUCCESS_POSTERIOR_BETA_PRIOR + max(0, evidence_total - evidence_hits)
+    posterior_mass = posterior_alpha + posterior_beta
+    posterior_mean = posterior_alpha / posterior_mass
+    posterior_variance = (
+        posterior_alpha * posterior_beta / ((posterior_mass**2) * (posterior_mass + 1.0))
+    )
+    posterior_stddev = math.sqrt(max(0.0, posterior_variance))
+    lower_bound = max(0.0, posterior_mean - (_SUCCESS_LOWER_BOUND_Z * posterior_stddev))
+    return {
+        "evidence_hits": evidence_hits,
+        "evidence_total": evidence_total,
+        "replay_hits": replay_hits,
+        "replay_total": replay_total,
+        "feedback_hits": feedback_hits,
+        "feedback_total": feedback_total,
+        "posterior_alpha": round(posterior_alpha, 6),
+        "posterior_beta": round(posterior_beta, 6),
+        "posterior_mean": round(posterior_mean, 6),
+        "lower_bound": round(lower_bound, 6),
+        "uncertainty": round(posterior_stddev, 6),
+    }
+
+
+def _family_feedback_metric(family_payload: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Return the normalized aggregated feedback metric for one family."""
+
+    raw_metric = family_payload.get("family_feedback_metric")
+    if not isinstance(raw_metric, Mapping):
+        return None
+    hits = max(0, _coerce_int(raw_metric.get("metric_hits")) or 0)
+    total = max(0, _coerce_int(raw_metric.get("metric_total")) or 0)
+    return _feedback_metric_payload(hits=hits, total=total)
+
+
+def _family_success_metric(family_payload: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Return the posterior success profile for one prompt family."""
+
+    replay_hits, replay_total = _aggregate_record_metric(_family_replay_records(family_payload))
+    feedback_metric = _family_feedback_metric(family_payload)
+    feedback_hits = max(0, _coerce_int((feedback_metric or {}).get("metric_hits")) or 0)
+    feedback_total = max(0, _coerce_int((feedback_metric or {}).get("metric_total")) or 0)
+    raw_metric = family_payload.get("family_success_metric")
+    if not isinstance(raw_metric, Mapping):
+        return _success_metric_payload(
+            replay_hits=replay_hits,
+            replay_total=replay_total,
+            feedback_hits=feedback_hits,
+            feedback_total=feedback_total,
+        )
+    return _success_metric_payload(
+        replay_hits=max(0, _coerce_int(raw_metric.get("replay_hits")) or replay_hits),
+        replay_total=max(0, _coerce_int(raw_metric.get("replay_total")) or replay_total),
+        feedback_hits=max(0, _coerce_int(raw_metric.get("feedback_hits")) or feedback_hits),
+        feedback_total=max(0, _coerce_int(raw_metric.get("feedback_total")) or feedback_total),
+    )
+
+
+def _apply_family_feedback_trace(
+    family_payload: dict[str, Any],
+    record: Mapping[str, Any],
+) -> None:
+    """Update family-level runtime priors from one feedback-only trace."""
+
+    normalized = _serialize_candidate_record(record)
+    metric_hits, metric_total, _ = _record_metric(normalized)
+    current_metric = _family_feedback_metric(family_payload)
+    next_hits = metric_hits + (current_metric.get("metric_hits") if current_metric else 0)
+    next_total = metric_total + (current_metric.get("metric_total") if current_metric else 0)
+    family_payload["family_feedback_metric"] = _feedback_metric_payload(
+        hits=next_hits,
+        total=next_total,
+    )
+    family_payload["family_feedback_count"] = max(
+        0, int(family_payload.get("family_feedback_count") or 0)
+    ) + 1
+    runtime_artifact = family_payload.get("family_runtime_artifact")
+    if not isinstance(runtime_artifact, dict):
+        runtime_artifact = {}
+        family_payload["family_runtime_artifact"] = runtime_artifact
+    family_success_metric = _family_success_metric(family_payload)
+    family_payload["family_success_metric"] = family_success_metric
+    runtime_artifact["feedback_metric"] = family_payload["family_feedback_metric"]
+    runtime_artifact["feedback_count"] = family_payload["family_feedback_count"]
+    if family_success_metric is not None:
+        runtime_artifact["predicted_hit_rate"] = family_success_metric["posterior_mean"]
+        runtime_artifact["predicted_hit_rate_lower_bound"] = family_success_metric["lower_bound"]
+        runtime_artifact["prediction_uncertainty"] = family_success_metric["uncertainty"]
+
+
 def _extract_benchmark_context(
     payload: Mapping[str, Any],
 ) -> tuple[list[str], list[str]]:
@@ -1124,6 +1278,9 @@ def _family_state_entry_to_payload(
         "family_runtime_score",
         "family_metric_1_mean",
         "family_runtime_record",
+        "family_feedback_metric",
+        "family_feedback_count",
+        "family_success_metric",
     ):
         if field_name in family_entry and field_name not in loaded_payload:
             loaded_payload[field_name] = family_entry[field_name]
@@ -1150,6 +1307,9 @@ def _strip_family_state_inline_payload(
         "family_runtime_score": family_payload.get("family_runtime_score"),
         "family_metric_1_mean": family_payload.get("family_metric_1_mean"),
         "family_runtime_artifact": family_payload.get("family_runtime_artifact"),
+        "family_feedback_metric": family_payload.get("family_feedback_metric"),
+        "family_feedback_count": int(family_payload.get("family_feedback_count") or 0),
+        "family_success_metric": family_payload.get("family_success_metric"),
         "family_record_count": len(_family_replay_records(family_payload)),
     }
 
@@ -1270,6 +1430,31 @@ def _load_champion_index(path: Path) -> dict[str, Any]:
         if not isinstance(family, dict):
             continue
         family["family_needs_recompile"] = bool(family.get("family_needs_recompile"))
+        family["family_feedback_count"] = max(0, int(family.get("family_feedback_count") or 0))
+        feedback_metric = _family_feedback_metric(family)
+        family["family_feedback_metric"] = feedback_metric
+        family["family_success_metric"] = _family_success_metric(family)
+        runtime_artifact = family.get("family_runtime_artifact")
+        if isinstance(runtime_artifact, Mapping):
+            runtime_artifact_payload = dict(runtime_artifact)
+            if feedback_metric is not None:
+                runtime_artifact_payload["feedback_metric"] = feedback_metric
+                runtime_artifact_payload["feedback_count"] = family["family_feedback_count"]
+            success_metric = family.get("family_success_metric")
+            if isinstance(success_metric, Mapping):
+                runtime_artifact_payload.setdefault(
+                    "predicted_hit_rate",
+                    success_metric.get("posterior_mean"),
+                )
+                runtime_artifact_payload.setdefault(
+                    "predicted_hit_rate_lower_bound",
+                    success_metric.get("lower_bound"),
+                )
+                runtime_artifact_payload.setdefault(
+                    "prediction_uncertainty",
+                    success_metric.get("uncertainty"),
+                )
+            family["family_runtime_artifact"] = runtime_artifact_payload
         stored_family_question = _normalize_question_text(family.get("question"))
         if stored_family_question:
             family["question"] = stored_family_question
@@ -1682,6 +1867,7 @@ def _refresh_family_champion(family_payload: dict[str, Any]) -> tuple[bool, str 
         family_payload["family_runtime_context_group_id"] = None
         family_payload["family_runtime_score"] = None
         family_payload["family_metric_1_mean"] = None
+        family_payload["family_success_metric"] = _family_success_metric(family_payload)
         family_payload["family_runtime_record"] = None
         family_payload["family_champion_context_group_id"] = None
         family_payload["family_champion_score"] = None
@@ -1710,6 +1896,7 @@ def _refresh_family_champion(family_payload: dict[str, Any]) -> tuple[bool, str 
     family_payload["family_runtime_context_group_id"] = None
     family_payload["family_runtime_score"] = runtime_ratio
     family_payload["family_metric_1_mean"] = _family_metric_1_mean(family_payload)
+    family_payload["family_success_metric"] = _family_success_metric(family_payload)
     family_payload["family_runtime_record"] = _serialize_candidate_record(best_runtime_record)
     family_payload["family_runtime_context_group_id"] = runtime_context_group_id
     family_payload["family_champion_context_group_id"] = runtime_context_group_id
@@ -1965,6 +2152,9 @@ def _normalize_materialized_candidate_record(record: Mapping[str, Any]) -> dict[
             if str(source).strip()
         ],
         "command_trace": _ordered_unique_command_trace(record.get("command_trace", [])),
+        "trainer_signal_kind": _normalize_trainer_signal_kind(
+            record.get("trainer_signal_kind")
+        ),
     }
     if original_prompt:
         normalized["original_prompt"] = original_prompt
@@ -2283,6 +2473,9 @@ def _training_candidate_from_trace_record(
         trace_mapping,
         context_snapshot,
     )
+    trainer_signal_kind = _normalize_trainer_signal_kind(
+        payload.get("trainer_signal_kind") or trace_mapping.get("trainer_signal_kind")
+    )
     tags = _dedupe_tags(
         [
             "trainer-candidate",
@@ -2315,6 +2508,7 @@ def _training_candidate_from_trace_record(
         "metric_total": metric_total,
         "metric_ratio": metric_ratio,
         "support_count": 1,
+        "trainer_signal_kind": trainer_signal_kind,
         "provenance": {
             "trace_record_path": trace_record_path,
             "source_queue_item_path": str(payload.get("source_queue_item_path") or ""),
@@ -2342,6 +2536,7 @@ def _training_candidate_from_trace_record(
             "metric_hits": metric_hits,
             "metric_total": metric_total,
             "metric_ratio": metric_ratio,
+            "trainer_signal_kind": trainer_signal_kind,
         },
     }
     if not _trainer_candidate_record_is_supported(candidate_record):
@@ -2522,15 +2717,18 @@ def materialize_training_candidates(
     duplicate_count = 0
     replaced_count = 0
     new_candidate_count = 0
+    feedback_trace_count = 0
     new_context_group_count = 0
     new_prompt_family_count = 0
     families_with_new_candidates: set[str] = set()
     families_with_replacements: set[str] = set()
+    families_with_feedback: set[str] = set()
     prompt_family_count_before = len(family_by_id)
     for record in loaded_records:
         prompt_family_id_hint = str(record.get("prompt_family_id") or "").strip()
         exact_snapshot_id = str(record.get("exact_snapshot_id") or "").strip()
         question = _normalize_question_text(record.get("question"))
+        trainer_signal_kind = _normalize_trainer_signal_kind(record.get("trainer_signal_kind"))
         if not exact_snapshot_id or not question:
             continue
         if exact_snapshot_id in seen_snapshot_ids:
@@ -2547,6 +2745,18 @@ def materialize_training_candidates(
         if created_family:
             new_prompt_family_count += 1
         prompt_family_id = str(family_payload.get("prompt_family_id") or "").strip()
+        if trainer_signal_kind == "feedback_trace":
+            family_payload["family_needs_recompile"] = bool(
+                family_payload.get("family_needs_recompile")
+            ) and not created_family
+            serialized_record = _serialize_candidate_record(record)
+            serialized_record["prompt_family_id"] = prompt_family_id
+            serialized_record["trainer_signal_kind"] = "feedback_trace"
+            _apply_family_feedback_trace(family_payload, serialized_record)
+            families_with_feedback.add(prompt_family_id)
+            feedback_trace_count += 1
+            continue
+
         family_payload["family_needs_recompile"] = True
 
         previous_family_record = _family_champion_record(family_payload)
@@ -2616,10 +2826,12 @@ def materialize_training_candidates(
         "preexisting_dirty_family_count": len(preexisting_dirty_family_ids),
         "preexisting_dirty_family_ids": sorted(preexisting_dirty_family_ids),
         "new_candidate_count": new_candidate_count,
+        "feedback_trace_count": feedback_trace_count,
         "input_trace_count": len(candidate_paths),
         "loaded_candidate_count": len(loaded_records),
         "duplicate_count": duplicate_count,
         "replaced_count": replaced_count,
+        "families_with_feedback": sorted(families_with_feedback),
         "family_count": len(family_by_id),
         "prompt_family_count": len(family_by_id),
         "prompt_family_ids": list(family_state_summary.get("prompt_family_ids", [])),

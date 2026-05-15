@@ -262,10 +262,28 @@ trace persistence is no longer limited to one coarse turn payload: when a turn f
 mediation, the proxy now also emits lineage traces for distinct reformulated/intermediate
 prompt-like steps so trainer ingestion can observe the same prompt evolution that runtime routing
 actually saw.
+The same routing layer is now slightly less brittle than the original father-only contract: family
+matching no longer compares a new prompt only against `family_father_question`, but against the
+family's accumulated prompt profile (`question_variants` plus persisted original/reformulated trace
+forms). That is still not a full latent family representation, but it already reduces accidental
+family splits when one task family is rephrased through several nearby prompt surfaces.
+The newest Phase-1 correction now splits trainer-visible runtime evidence into two explicit signal
+classes. `full_trace` remains the replay-set exemplar that can dirty a family and later drive
+BootstrapFewShot recompilation. `feedback_trace` is now the compact reuse-path artifact emitted
+when a compiled family program handled the turn successfully; it does not expand the replay set by
+default, but it does update family/runtime-artifact success priors and feeds the artifact's
+`predicted_hit_rate`. That split matters because pure “reuse means no trainer input” had been
+freezing the family library: the runtime could succeed repeatedly without teaching the trainer that
+the deployed family artifact was actually good.
+That success signal is no longer stored as a raw mean alone. Family state now persists one
+`family_success_metric` posterior profile that combines replay-set evidence with compact reuse
+feedback and records `posterior_mean`, `lower_bound`, and `uncertainty` for the current family
+artifact.
 Another immediate correction now closes a trainer-quality leak: proxy mediation no longer trusts a
 matched family artifact unconditionally. When the bundle says the family artifact's validated
-`hit_rate` is below the family's current baseline, the proxy now refuses that family artifact and
-falls back to fresh/global mediation. In the other direction, worker-side batch handoff now
+`hit_rate` is below the family's current conservative success baseline, the proxy now refuses
+that family artifact and falls back to fresh/global mediation. In the other direction, worker-side
+batch handoff now
 rewrites optimistic proxy per-turn draft metrics with the final run `execution_status`,
 `acceptance_status`, and real post-run `mediation_metric_hits / mediation_metric_total` before the
 turn traces are exported and queued. That matters because otherwise family replay sets would keep
@@ -963,7 +981,7 @@ staged bundle version directly from `.repo_rag_bundle_store/versions/<bundle>/..
 missing. Second, the worker now builds a task-first `codex exec` prompt body, so Discord channel
 headers, forwarded tails, and attachment-dump noise stay in persisted artifacts instead of being
 sent to the model as live context. Third, the generated AKS pod env now enables the already
-implemented resumed-lane reset policy by default through `DATASET_CODEX_MAX_RESUMED_RUNS=3` and
+implemented resumed-lane reset policy by default through `DATASET_CODEX_MAX_RESUMED_RUNS=9` and
 `DATASET_CODEX_PROMPT_TOKEN_GROWTH_RESET_RATIO=2.0`, which should cap the repeated
 `queue_and_slug` rerun pattern that previously drove prompt-token usage back into six figures.
 

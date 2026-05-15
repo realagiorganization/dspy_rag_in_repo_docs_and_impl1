@@ -70,6 +70,7 @@ TRACE_QUEUE_ITEM_KIND = "repo-rag-trace-queue-item"
 OUTCOME_KIND = "repo-rag-outcome"
 TRAINER_SERVICE_STATE_KIND = "repo-rag-trainer-service-state"
 TRAINER_SERVICE_CYCLE_KIND = "repo-rag-trainer-service-cycle"
+TRAINER_SIGNAL_KINDS: tuple[str, ...] = ("full_trace", "feedback_trace")
 BundleChannelName = Literal["stable", "canary"]
 BUNDLE_CHANNEL_NAMES: tuple[BundleChannelName, ...] = ("stable", "canary")
 
@@ -104,6 +105,7 @@ class RuntimeTraceContext:
     family_artifact_selected: bool | None = None
     mediation_metric_hits: int | None = None
     mediation_metric_total: int | None = None
+    trainer_signal_kind: str | None = None
 
 
 def _relative_to_root(path: Path, root: Path) -> str:
@@ -216,6 +218,15 @@ def _float_or_none(value: object) -> float | None:
     return None
 
 
+def _trainer_signal_kind_or_none(value: object) -> str | None:
+    """Return one normalized runtime trainer-signal kind when supported."""
+
+    cleaned = _string_or_none(value)
+    if cleaned is None:
+        return None
+    return cleaned if cleaned in TRAINER_SIGNAL_KINDS else None
+
+
 def _utc_now_isoformat() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -253,6 +264,28 @@ def _bundle_family_entry(family_payload: Mapping[str, object]) -> dict[str, obje
         _family_runtime_metric_payload(runtime_record) if runtime_record is not None else {}
     )
     family_metric_1_mean = _float_or_none(family_payload.get("family_metric_1_mean"))
+    family_feedback_metric = _mapping_or_none(family_payload.get("family_feedback_metric"))
+    family_success_metric = _mapping_or_none(family_payload.get("family_success_metric"))
+    family_feedback_hit_rate = (
+        _float_or_none(family_feedback_metric.get("hit_rate"))
+        if family_feedback_metric is not None
+        else None
+    )
+    family_posterior_mean = (
+        _float_or_none(family_success_metric.get("posterior_mean"))
+        if family_success_metric is not None
+        else None
+    )
+    family_lower_bound = (
+        _float_or_none(family_success_metric.get("lower_bound"))
+        if family_success_metric is not None
+        else None
+    )
+    family_uncertainty = (
+        _float_or_none(family_success_metric.get("uncertainty"))
+        if family_success_metric is not None
+        else None
+    )
     persisted_runtime_artifact = _mapping_or_none(family_payload.get("family_runtime_artifact"))
     runtime_artifact: dict[str, object]
     if persisted_runtime_artifact is not None:
@@ -260,7 +293,17 @@ def _bundle_family_entry(family_payload: Mapping[str, object]) -> dict[str, obje
         if runtime_artifact.get("hit_rate") is None:
             runtime_artifact["hit_rate"] = _float_or_none(runtime_metric.get("hit_rate"))
         if runtime_artifact.get("predicted_hit_rate") is None:
-            runtime_artifact["predicted_hit_rate"] = family_metric_1_mean
+            runtime_artifact["predicted_hit_rate"] = (
+                family_posterior_mean
+                if family_posterior_mean is not None
+                else family_feedback_hit_rate
+                if family_feedback_hit_rate is not None
+                else family_metric_1_mean
+            )
+        if runtime_artifact.get("predicted_hit_rate_lower_bound") is None:
+            runtime_artifact["predicted_hit_rate_lower_bound"] = family_lower_bound
+        if runtime_artifact.get("prediction_uncertainty") is None:
+            runtime_artifact["prediction_uncertainty"] = family_uncertainty
     else:
         runtime_artifact = {
             "artifact_kind": (
@@ -270,7 +313,15 @@ def _bundle_family_entry(family_payload: Mapping[str, object]) -> dict[str, obje
             ),
             "artifact_ready": False,
             "artifact_source": ("family_runtime_record" if runtime_record is not None else None),
-            "predicted_hit_rate": family_metric_1_mean,
+            "predicted_hit_rate": (
+                family_posterior_mean
+                if family_posterior_mean is not None
+                else family_feedback_hit_rate
+                if family_feedback_hit_rate is not None
+                else family_metric_1_mean
+            ),
+            "predicted_hit_rate_lower_bound": family_lower_bound,
+            "prediction_uncertainty": family_uncertainty,
             **runtime_metric,
         }
     return {
@@ -288,6 +339,8 @@ def _bundle_family_entry(family_payload: Mapping[str, object]) -> dict[str, obje
         "family_runtime_score": _float_or_none(family_payload.get("family_runtime_score")),
         "family_metric_1_mean": family_metric_1_mean,
         "family_runtime_metric": runtime_metric or None,
+        "family_feedback_metric": family_feedback_metric,
+        "family_success_metric": family_success_metric,
         "runtime_artifact": runtime_artifact,
     }
 
@@ -453,6 +506,9 @@ def _resolved_family_state_family_payload(
                 "family_runtime_artifact",
                 "family_runtime_score",
                 "family_metric_1_mean",
+                "family_feedback_metric",
+                "family_feedback_count",
+                "family_success_metric",
             ):
                 if field_name in family_payload and field_name not in merged_payload:
                     merged_payload[field_name] = family_payload[field_name]
@@ -1775,6 +1831,7 @@ def build_runtime_trace(trace: RuntimeTraceContext) -> dict[str, object]:
         "family_artifact_selected": trace.family_artifact_selected,
         "mediation_metric_hits": trace.mediation_metric_hits,
         "mediation_metric_total": trace.mediation_metric_total,
+        "trainer_signal_kind": _trainer_signal_kind_or_none(trace.trainer_signal_kind),
     }
     return payload
 
@@ -1813,6 +1870,7 @@ def _normalize_runtime_trace(payload: Mapping[str, object]) -> dict[str, object]
     family_artifact_hit_rate = _float_or_none(payload.get("family_artifact_hit_rate"))
     mediation_metric_hits = _int_or_none(payload.get("mediation_metric_hits"))
     mediation_metric_total = _int_or_none(payload.get("mediation_metric_total"))
+    trainer_signal_kind = _trainer_signal_kind_or_none(payload.get("trainer_signal_kind"))
     sources = _string_list(payload.get("sources"))
     evidence_fingerprints = _dedupe_string_list(_string_list(payload.get("evidence_fingerprints")))
     return {
@@ -1855,6 +1913,7 @@ def _normalize_runtime_trace(payload: Mapping[str, object]) -> dict[str, object]
         ),
         "mediation_metric_hits": mediation_metric_hits,
         "mediation_metric_total": mediation_metric_total,
+        "trainer_signal_kind": trainer_signal_kind,
     }
 
 
@@ -2126,6 +2185,7 @@ def _build_trace_record(
         ),
         "mediation_metric_hits": _int_or_none(trace.get("mediation_metric_hits")),
         "mediation_metric_total": _int_or_none(trace.get("mediation_metric_total")),
+        "trainer_signal_kind": _trainer_signal_kind_or_none(trace.get("trainer_signal_kind")),
         "answer": _string_or_none(snapshot.get("answer")),
         "response_text": _string_or_none(snapshot.get("response_text")),
         "sources": _string_list(snapshot.get("sources")) or _string_list(trace.get("sources")),
