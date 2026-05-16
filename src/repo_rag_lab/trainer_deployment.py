@@ -25,7 +25,7 @@ DEFAULT_TRAINER_K8S_REPO_ROOT = "/workspace/repo-rag"
 DEFAULT_TRAINER_K8S_IMAGE = "ghcr.io/realagiorganization/repo-rag-lab:latest"
 DEFAULT_TRAINER_K8S_IMAGE_PULL_POLICY = "IfNotPresent"
 DEFAULT_TRAINER_K8S_IMAGE_PULL_SECRET_NAME = "acr-secret"
-DEFAULT_TRAINER_K8S_CYCLE_SCHEDULE = "*/15 * * * *"
+DEFAULT_TRAINER_K8S_CYCLE_SCHEDULE = "*/5 * * * *"
 DEFAULT_TRAINER_K8S_QUEUE_NAME = "dataset"
 DEFAULT_TRAINER_K8S_PROMOTE_CHANNEL: str | None = "stable"
 DEFAULT_TRAINER_K8S_SERVICE_POLL_INTERVAL_SECONDS = 60.0
@@ -385,7 +385,7 @@ def _cronjob_payload(config: TrainerK8sConfig) -> dict[str, object]:
 
 
 def write_trainer_k8s_manifests(root: Path, *, config: TrainerK8sConfig) -> dict[str, object]:
-    """Materialize Kubernetes manifests for the trainer service and cycle roles."""
+    """Materialize Kubernetes manifests for the cron-driven trainer cycle role."""
 
     resolved_root = root.resolve()
     output_dir = config.output_dir
@@ -397,14 +397,12 @@ def write_trainer_k8s_manifests(root: Path, *, config: TrainerK8sConfig) -> dict
     config_map_path = output_dir / "trainer-configmap.yaml"
     secret_example_path = output_dir / "trainer-secret.example.yaml"
     pvc_path = output_dir / "trainer-artifacts.pvc.yaml"
-    deployment_path = output_dir / "trainer-service.deployment.yaml"
     cronjob_path = output_dir / "trainer-cycle.cronjob.yaml"
 
     _write_yaml_document(service_account_path, _service_account_payload(config))
     _write_yaml_document(config_map_path, _config_map_payload(config))
     _write_yaml_document(secret_example_path, _secret_example_payload(config))
     _write_yaml_document(pvc_path, _pvc_payload(config))
-    _write_yaml_document(deployment_path, _deployment_payload(config))
     _write_yaml_document(cronjob_path, _cronjob_payload(config))
 
     return {
@@ -431,7 +429,6 @@ def write_trainer_k8s_manifests(root: Path, *, config: TrainerK8sConfig) -> dict
             _relative_path_text(resolved_root, config_map_path),
             _relative_path_text(resolved_root, secret_example_path),
             _relative_path_text(resolved_root, pvc_path),
-            _relative_path_text(resolved_root, deployment_path),
             _relative_path_text(resolved_root, cronjob_path),
         ],
     }

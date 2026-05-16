@@ -431,16 +431,14 @@ def test_run_trainer_k8s_manifest_generation_writes_expected_manifests(tmp_path:
     assert payload["pvc_storage_class_name"] == "azurefile-csi"
     assert payload["pvc_size"] == "10Gi"
     assert payload["pvc_access_modes"] == ["ReadWriteMany"]
-    assert len(payload["manifest_paths"]) == 6
+    assert len(payload["manifest_paths"]) == 5
 
     pvc_path = tmp_path / "artifacts" / "kubernetes" / "trainer-artifacts.pvc.yaml"
-    deployment_path = tmp_path / "artifacts" / "kubernetes" / "trainer-service.deployment.yaml"
     cronjob_path = tmp_path / "artifacts" / "kubernetes" / "trainer-cycle.cronjob.yaml"
     config_map_path = tmp_path / "artifacts" / "kubernetes" / "trainer-configmap.yaml"
     secret_example_path = tmp_path / "artifacts" / "kubernetes" / "trainer-secret.example.yaml"
 
     pvc = yaml.safe_load(pvc_path.read_text(encoding="utf-8"))
-    deployment = yaml.safe_load(deployment_path.read_text(encoding="utf-8"))
     cronjob = yaml.safe_load(cronjob_path.read_text(encoding="utf-8"))
     config_map = yaml.safe_load(config_map_path.read_text(encoding="utf-8"))
     secret_example = yaml.safe_load(secret_example_path.read_text(encoding="utf-8"))
@@ -449,26 +447,8 @@ def test_run_trainer_k8s_manifest_generation_writes_expected_manifests(tmp_path:
     assert pvc["spec"]["storageClassName"] == "azurefile-csi"
     assert pvc["spec"]["accessModes"] == ["ReadWriteMany"]
     assert pvc["spec"]["resources"]["requests"]["storage"] == "10Gi"
-    assert deployment["kind"] == "Deployment"
-    deployment_spec = deployment["spec"]["template"]["spec"]
-    assert deployment_spec["imagePullSecrets"] == [{"name": "acr-secret"}]
-    assert deployment_spec["containers"][0]["command"][:4] == [
-        "repo-rag",
-        "trainer-service",
-        "--root",
-        "/workspace/repo-rag",
-    ]
-    assert "--max-idle-cycles" not in deployment_spec["containers"][0]["command"]
-    assert "--minimum-pass-rate" not in deployment_spec["containers"][0]["command"]
-    assert "--minimum-source-recall" not in deployment_spec["containers"][0]["command"]
-    assert "--minimum-bundle-pass-rate" not in deployment_spec["containers"][0]["command"]
-    min_new_index = deployment_spec["containers"][0]["command"].index(
-        "--min-new-candidates-for-recompile"
-    )
-    assert deployment_spec["containers"][0]["command"][min_new_index + 1] == "1"
-    assert "--recompile-run-name" not in deployment_spec["containers"][0]["command"]
     assert cronjob["kind"] == "CronJob"
-    assert cronjob["spec"]["schedule"] == "*/15 * * * *"
+    assert cronjob["spec"]["schedule"] == "*/5 * * * *"
     cronjob_spec = cronjob["spec"]["jobTemplate"]["spec"]["template"]["spec"]
     assert cronjob_spec["imagePullSecrets"] == [{"name": "acr-secret"}]
     assert cronjob_spec["containers"][0]["command"][:4] == [
@@ -481,7 +461,6 @@ def test_run_trainer_k8s_manifest_generation_writes_expected_manifests(tmp_path:
     assert config_map["data"]["TRAINER_RECOMPILE_RUN_NAME"] == ""
     assert config_map["data"]["TRAINER_MIN_BUNDLE_PASS_RATE"] == ""
     assert config_map["data"]["TRAINER_MIN_NEW_CANDIDATES_FOR_RECOMPILE"] == "1"
-    assert config_map["data"]["TRAINER_SERVICE_MAX_IDLE_CYCLES"] == ""
     assert config_map["data"]["RETRIEVAL_MIN_PASS_RATE"] == ""
     assert config_map["data"]["RETRIEVAL_MIN_SOURCE_RECALL"] == ""
     assert config_map["data"]["TRAINER_PROMOTE_CHANNEL"] == "stable"

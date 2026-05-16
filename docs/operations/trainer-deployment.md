@@ -44,16 +44,9 @@ That command writes manifests under `artifacts/kubernetes/`:
 - `trainer-configmap.yaml`
 - `trainer-secret.example.yaml`
 - `trainer-artifacts.pvc.yaml`
-- `trainer-service.deployment.yaml`
 - `trainer-cycle.cronjob.yaml`
 
 ## Runtime Contract
-
-The generated trainer service runs:
-
-```bash
-repo-rag trainer-service --root /workspace/repo-rag ...
-```
 
 The generated CronJob runs:
 
@@ -80,14 +73,12 @@ to use a global bundle. The primary runtime selector is one explicit immutable b
 distributed through `DSPY_BUNDLE_VERSION`; `stable` / `canary` remain optional alias or rollback
 surfaces when a deployment wants indirection instead of direct version pinning.
 
-The generated Deployment now defaults to a non-terminating queue-consumer posture:
+The generated AKS surface now defaults to a cron-only posture:
 
-- no `--max-idle-cycles` unless it is requested explicitly
-- no retrieval gate thresholds unless they are requested explicitly
-- no bundle benchmark gate unless publish/promote or recompilation are requested explicitly
-- no automatic publish/promote/recompile until those knobs are turned on deliberately
-
-That keeps `trainer-service` alive in AKS even before the first saved DSPy bundle exists.
+- a single `trainer-cycle` CronJob scheduled every five minutes
+- no long-lived `trainer-service` Deployment in cluster manifests
+- no duplicate publish loop competing with the CronJob for the same queue
+- the existing `trainer-service` CLI remains available only for local debugging
 
 ## Required Storage And Secrets
 
