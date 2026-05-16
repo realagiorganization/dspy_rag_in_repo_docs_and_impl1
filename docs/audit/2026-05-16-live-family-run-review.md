@@ -68,9 +68,27 @@
   - The dataset deployment handoff script now mirrors trainer/family signal fields into:
     - top-level trusted queue wrappers
     - batch enqueue item summaries
+- The active prompt-family summary selector is now stricter:
+  - published `family_count` / `prompt_family_count` will be backfilled directly into the remote
+    `family-state.json` payload instead of being left `null`
+  - active `family_prompt_profile_terms` now prefer technical lookup terms only when a family has
+    any technical vocabulary at all
+  - broad narrative and low-signal terms such as `actually`, `against`, `compact`, `file`,
+    `files`, `path`, `paths`, `prompt`, `query`, and purely numeric tokens are excluded from the
+    active summary surface instead of merely being ranked lower
+  - the technical lookup now also includes additional category coverage for:
+    - `macos_commands`
+    - `mobile_dev`
+    - `package_managers`
+    - `security_infosec`
 - Verification executed for those follow-up fixes:
   - `uv run python -m compileall src tests`
+  - `uv run pytest tests/test_term_extraction.py tests/test_runtime_artifacts_azure.py -k 'profile_summary or technical_term_categories or low_signal or upload_remote_family_state'`
+  - `uv run pytest tests/test_training_samples.py -k 'profile_terms_ignore_one_off_noise or prefers_family_profile_over_surface_similarity or can_use_family_profile_summaries or strips_execution_envelope_from_family_father'`
   - `uv run pytest tests/test_dspy_training.py -k 'recompiles_only_dirty_families'`
+  - `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py`
+  - `uv run repo-rag smoke-test`
+  - `cargo build --manifest-path rust-cli/Cargo.toml`
   - `cd ../dataset && .venv/bin/pytest tests/unit/test_deployment_script_template_regressions.py -k 'trusted_trace_handoff_after_rehydration'`
   - `cd ../dataset && .venv/bin/pytest tests/unit/test_worker_execution_prompt_repo_rag_cli.py -k 'batches_turn_traces_for_queue_handoff'`
 - A fresh live run is still required to confirm those two fixes in published blob artifacts.
