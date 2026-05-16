@@ -64,12 +64,18 @@ PROFILE_STOPWORDS = frozenset(
 
 PROFILE_SUMMARY_NARRATIVE_STOPWORDS = frozenset(
     {
+        "actually",
+        "adhere",
+        "adheres",
         "already",
+        "against",
         "any",
         "anything",
         "appears",
         "approach",
+        "appropriate",
         "available",
+        "based",
         "before",
         "both",
         "but",
@@ -80,9 +86,11 @@ PROFILE_SUMMARY_NARRATIVE_STOPWORDS = frozenset(
         "cleanly",
         "close",
         "code",
+        "coding",
         "commands",
         "complete",
         "completion",
+        "compact",
         "conceptually",
         "conclusions",
         "contains",
@@ -101,6 +109,7 @@ PROFILE_SUMMARY_NARRATIVE_STOPWORDS = frozenset(
         "existing",
         "fields",
         "final",
+        "findings",
         "grabbing",
         "grounded",
         "handoff",
@@ -119,6 +128,29 @@ PROFILE_SUMMARY_NARRATIVE_STOPWORDS = frozenset(
         "requested",
         "required",
         "use",
+        "where",
+    }
+)
+
+PROFILE_SUMMARY_LOW_SIGNAL_TERMS = frozenset(
+    {
+        "command",
+        "commands",
+        "directory",
+        "directories",
+        "file",
+        "files",
+        "https",
+        "mounted",
+        "package",
+        "packages",
+        "path",
+        "paths",
+        "prompt",
+        "prompts",
+        "query",
+        "queries",
+        "shell",
     }
 )
 
@@ -141,6 +173,8 @@ TECHNICAL_TERM_CATEGORIES: dict[str, frozenset[str]] = {
             "queue",
             "queued",
             "processed",
+            "script",
+            "scripts",
             "family",
             "families",
             "submodule",
@@ -679,6 +713,31 @@ TECHNICAL_TERM_CATEGORIES: dict[str, frozenset[str]] = {
             "powershellise",
         }
     ),
+    "macos_commands": frozenset(
+        {
+            "brew",
+            "defaults",
+            "diskutil",
+            "hdiutil",
+            "launchctl",
+            "mdfind",
+            "mdutil",
+            "open",
+            "osascript",
+            "pbcopy",
+            "pbpaste",
+            "pkgutil",
+            "plutil",
+            "screencapture",
+            "security",
+            "softwareupdate",
+            "spctl",
+            "swvers",
+            "xattr",
+            "xcodebuild",
+            "xcrun",
+        }
+    ),
     "gamedev": frozenset(
         {
             "unity",
@@ -728,6 +787,51 @@ TECHNICAL_TERM_CATEGORIES: dict[str, frozenset[str]] = {
             "sfx",
         }
     ),
+    "mobile_dev": frozenset(
+        {
+            "adb",
+            "android",
+            "androidstudio",
+            "apk",
+            "appbundle",
+            "cocoapods",
+            "emulator",
+            "emulators",
+            "fastlane",
+            "gradle",
+            "ios",
+            "ipa",
+            "podfile",
+            "provisioning",
+            "simulator",
+            "simulators",
+            "swiftui",
+            "xcode",
+        }
+    ),
+    "package_managers": frozenset(
+        {
+            "apt",
+            "brew",
+            "bun",
+            "cargo",
+            "composer",
+            "conda",
+            "gem",
+            "gradle",
+            "homebrew",
+            "mamba",
+            "maven",
+            "npm",
+            "nuget",
+            "pip",
+            "pnpm",
+            "poetry",
+            "uv",
+            "winget",
+            "yarn",
+        }
+    ),
     "kubernetes": frozenset(
         {
             "kubernetes",
@@ -763,6 +867,43 @@ TECHNICAL_TERM_CATEGORIES: dict[str, frozenset[str]] = {
             "helm",
             "chart",
             "charts",
+        }
+    ),
+    "security_infosec": frozenset(
+        {
+            "authn",
+            "authz",
+            "certificate",
+            "certificates",
+            "checksum",
+            "checksums",
+            "cve",
+            "decrypt",
+            "encryption",
+            "firewall",
+            "hash",
+            "hashes",
+            "hmac",
+            "jwt",
+            "mfa",
+            "oauth",
+            "oidc",
+            "pentest",
+            "saml",
+            "sandbox",
+            "sandboxing",
+            "secret",
+            "secrets",
+            "signature",
+            "signatures",
+            "sso",
+            "ssh",
+            "ssl",
+            "tls",
+            "token",
+            "tokens",
+            "vulnerability",
+            "vulnerabilities",
         }
     ),
     "cloud_services": frozenset(
@@ -843,12 +984,16 @@ _CATEGORY_PRIORITY = {
     "cloud_services": 1,
     "linux_commands": 1,
     "windows_commands": 1,
+    "macos_commands": 1,
     "gamedev": 1,
+    "mobile_dev": 1,
     "programming_languages": 2,
     "databases_storage": 2,
     "api_web_backend": 2,
     "data_science_analytics": 2,
     "neural_networks_ai": 2,
+    "package_managers": 2,
+    "security_infosec": 2,
     "cloud_ops": 3,
     "build_ci": 3,
     "python_ml": 3,
@@ -920,6 +1065,17 @@ def is_summary_narrative_term(term: object) -> bool:
     return bool(cleaned) and cleaned in PROFILE_SUMMARY_NARRATIVE_STOPWORDS
 
 
+def is_low_signal_summary_term(term: object) -> bool:
+    """Return whether one term should be excluded from active routing summaries."""
+
+    cleaned = str(term or "").strip().casefold()
+    return bool(cleaned) and (
+        cleaned.isdigit()
+        or cleaned in PROFILE_SUMMARY_NARRATIVE_STOPWORDS
+        or cleaned in PROFILE_SUMMARY_LOW_SIGNAL_TERMS
+    )
+
+
 def select_profile_summary_terms(
     counts: Mapping[str, object],
     *,
@@ -949,21 +1105,34 @@ def select_profile_summary_terms(
         return []
     eligible = [(term, count) for term, count in normalized if count >= min_count] or normalized
 
-    def _sort_key(item: tuple[str, int]) -> tuple[int, int, int, int, str]:
+    def _sort_key(item: tuple[str, int]) -> tuple[int, int, int, str]:
         term, count = item
-        technical = 0 if term in TECHNICAL_TERM_LOOKUP else 1
-        narrative = 1 if term in PROFILE_SUMMARY_NARRATIVE_STOPWORDS else 0
         category_priority = _TERM_CATEGORY_PRIORITY.get(term, 9)
         return (
-            technical,
-            narrative,
-            -count,
             category_priority,
+            -count,
+            len(term),
             term,
         )
 
-    preferred = [item for item in eligible if item[0] not in PROFILE_SUMMARY_NARRATIVE_STOPWORDS]
-    ranked = preferred or eligible
+    technical_preferred = [
+        item
+        for item in eligible
+        if item[0] in TECHNICAL_TERM_LOOKUP and not is_low_signal_summary_term(item[0])
+    ]
+    fallback_preferred = [
+        item
+        for item in eligible
+        if item[0] not in TECHNICAL_TERM_LOOKUP and not is_low_signal_summary_term(item[0])
+    ]
+    if technical_preferred:
+        ranked = technical_preferred
+    elif fallback_preferred:
+        ranked = fallback_preferred
+    else:
+        ranked = [item for item in eligible if item[0] not in PROFILE_SUMMARY_NARRATIVE_STOPWORDS]
+        if not ranked:
+            ranked = eligible
 
     selected: list[str] = []
     seen: set[str] = set()

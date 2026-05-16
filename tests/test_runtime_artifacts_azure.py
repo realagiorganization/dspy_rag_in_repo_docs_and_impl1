@@ -415,7 +415,9 @@ def test_queue_trace_record_and_drain_trace_queue_use_azure_blob_queue(
     imported_payload = json.loads(imported_path.read_text(encoding="utf-8"))
     assert imported_payload["outcome"]["acceptance_status"] == "accepted"
     assert imported_payload["original_prompt"] == "Inspect trainer queue ingestion behavior"
-    assert imported_payload["reformulated_prompt"] == "Inspect how the trainer ingests queued traces."
+    assert (
+        imported_payload["reformulated_prompt"] == "Inspect how the trainer ingests queued traces."
+    )
     processed_blob_name = str(first_drained_item["processed_queue_item_path"])
     processed_blob = store.download_json("repo-rag-training-traces", processed_blob_name)
     assert processed_blob["original_prompt"] == "Inspect trainer queue ingestion behavior"
@@ -1277,6 +1279,11 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
         "repo-rag-training-families",
         "families/pf-demo/records/ts-demo.json",
     )
+    uploaded_family_state_payload = json.loads(
+        store.download_text("repo-rag-training-families", blob_map["family_state"])
+    )
+    assert uploaded_family_state_payload["family_count"] == 1
+    assert uploaded_family_state_payload["prompt_family_count"] == 1
 
     fetched = fetch_remote_family_state(tmp_path)
 

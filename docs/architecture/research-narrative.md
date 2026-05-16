@@ -145,7 +145,12 @@ published prompt-family state as a real routing index rather than a duplicated r
 term-level routing evidence is stored in unified `*_term_stats` mappings with both `count` and
 normalized `weight`, and the post-recompile trainer path now rewrites `family-state.json` through
 the same thin-index persistence layer so runtime routing can load compact summaries while the full
-records stay in per-family blobs.
+records stay in per-family blobs. The active family summary is now intentionally stricter than the
+full term statistics: if a family has technical lookup terms, routing uses only that technical
+core, keeps the active prompt summary at or below twelve terms, excludes broad narrative and
+low-signal terms from the live summary surface, and publishes the final remote `family-state.json`
+with explicit `family_count` and `prompt_family_count` metadata instead of leaving those summary
+fields null.
 
 Before that DSPy layer runs, the Rust wrapper now exposes a repo-local SQLite FTS index and lookup
 path over tracked UTF-8 files. The default `ask` flow now narrows retrieval through those native

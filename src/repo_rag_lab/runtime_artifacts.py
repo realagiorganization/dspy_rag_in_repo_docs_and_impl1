@@ -1185,6 +1185,9 @@ def upload_remote_family_state(
     blob_map = family_state_blob_names(family_state_version)
     prompt_families = payload.get("prompt_families")
     prompt_family_count = len(prompt_families) if isinstance(prompt_families, list) else 0
+    published_payload = dict(payload)
+    published_payload["family_count"] = prompt_family_count
+    published_payload["prompt_family_count"] = prompt_family_count
     current_payload = {
         "schema_version": 1,
         "family_state_kind": "repo-rag-family-state",
@@ -1194,9 +1197,9 @@ def upload_remote_family_state(
         "current_family_count": prompt_family_count,
         "current_prompt_family_count": prompt_family_count,
     }
-    family_state_text = resolved_family_state_path.read_text(encoding="utf-8")
+    family_state_text = json.dumps(published_payload, indent=2, ensure_ascii=False) + "\n"
     remote_family_member_blobs: dict[str, dict[str, object]] = {}
-    for family_entry in _mapping_list(payload.get("prompt_families")):
+    for family_entry in _mapping_list(published_payload.get("prompt_families")):
         prompt_family_id = _string_or_none(family_entry.get("prompt_family_id"))
         if prompt_family_id is None:
             continue
@@ -1890,9 +1893,7 @@ def _normalize_runtime_trace(payload: Mapping[str, object]) -> dict[str, object]
     family_predicted_hit_rate_lower_bound = _float_or_none(
         payload.get("family_predicted_hit_rate_lower_bound")
     )
-    family_prediction_uncertainty = _float_or_none(
-        payload.get("family_prediction_uncertainty")
-    )
+    family_prediction_uncertainty = _float_or_none(payload.get("family_prediction_uncertainty"))
     family_feedback_count = _int_or_none(payload.get("family_feedback_count"))
     mediation_metric_hits = _int_or_none(payload.get("mediation_metric_hits"))
     mediation_metric_total = _int_or_none(payload.get("mediation_metric_total"))
@@ -1962,9 +1963,7 @@ def _runtime_trace_signal_fields(payload: Mapping[str, object]) -> dict[str, obj
         "family_predicted_hit_rate_lower_bound": _float_or_none(
             trace.get("family_predicted_hit_rate_lower_bound")
         ),
-        "family_prediction_uncertainty": _float_or_none(
-            trace.get("family_prediction_uncertainty")
-        ),
+        "family_prediction_uncertainty": _float_or_none(trace.get("family_prediction_uncertainty")),
         "family_feedback_count": _int_or_none(trace.get("family_feedback_count")),
         "family_artifact_selected": (
             trace.get("family_artifact_selected")
@@ -1981,7 +1980,8 @@ def _runtime_trace_snapshot_fields(payload: Mapping[str, object]) -> dict[str, o
     trace_payload = _mapping_or_none(payload.get("trace"))
     trace = trace_payload if trace_payload is not None else payload
     return {
-        "question": _string_or_none(trace.get("question")) or _string_or_none(payload.get("question")),
+        "question": _string_or_none(trace.get("question"))
+        or _string_or_none(payload.get("question")),
         "original_prompt": _string_or_none(trace.get("original_prompt"))
         or _string_or_none(payload.get("original_prompt")),
         "reformulated_prompt": _string_or_none(trace.get("reformulated_prompt"))
@@ -2269,9 +2269,7 @@ def _build_trace_record(
         "family_predicted_hit_rate_lower_bound": _float_or_none(
             trace.get("family_predicted_hit_rate_lower_bound")
         ),
-        "family_prediction_uncertainty": _float_or_none(
-            trace.get("family_prediction_uncertainty")
-        ),
+        "family_prediction_uncertainty": _float_or_none(trace.get("family_prediction_uncertainty")),
         "family_feedback_count": _int_or_none(trace.get("family_feedback_count")),
         "family_artifact_selected": (
             trace.get("family_artifact_selected")
