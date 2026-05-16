@@ -4,6 +4,7 @@ from repo_rag_lab.term_extraction import (
     TECHNICAL_TERM_CATEGORIES,
     TECHNICAL_TERM_LOOKUP,
     extract_profile_terms,
+    select_profile_summary_terms,
 )
 
 
@@ -68,3 +69,33 @@ def test_technical_term_categories_form_large_flat_lookup() -> None:
     assert "kubectl" in TECHNICAL_TERM_LOOKUP
     assert "powershell" in TECHNICAL_TERM_LOOKUP
     assert len(TECHNICAL_TERM_LOOKUP) >= 430
+
+
+def test_select_profile_summary_terms_prefers_technical_terms_over_narrative_noise() -> None:
+    summary = select_profile_summary_terms(
+        {
+            "already": 3,
+            "commands": 3,
+            "contains": 3,
+            "decision": 3,
+            "does": 3,
+            "fields": 3,
+            "gif": 3,
+            "git": 3,
+            "readme": 3,
+            "recorder": 3,
+            "repo": 3,
+            "script": 3,
+            "worktree": 3,
+        },
+        limit=8,
+        min_count=2,
+    )
+
+    assert summary[:6] == ["gif", "recorder", "git", "readme", "repo", "worktree"]
+    assert "script" in summary
+    assert "already" not in summary
+    assert "contains" not in summary
+    assert "does" not in summary
+    assert "fields" not in summary
+    assert "commands" not in summary

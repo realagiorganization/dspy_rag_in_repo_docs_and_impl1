@@ -2289,6 +2289,98 @@ def test_materialize_training_candidates_profile_terms_ignore_one_off_noise(
     assert "timeout" not in family["family_prompt_profile_terms"]
 
 
+def test_materialize_training_candidates_prefers_technical_terms_in_active_summary(
+    tmp_path: Path,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    prompts = (
+        (
+            "accepted-a.json",
+            "2026-05-16T09:00:00+00:00",
+            "I reached the decision point: the repo already contains the requested GIF, README embed, and the recorder script, and the worktree is clean.",
+        ),
+        (
+            "accepted-b.json",
+            "2026-05-16T09:05:00+00:00",
+            "The repo already contains the GIF and README embed, so I am checking the recorder script and current worktree before the final handoff.",
+        ),
+        (
+            "accepted-c.json",
+            "2026-05-16T09:10:00+00:00",
+            "Before the final handoff I am confirming the existing README, GIF asset, recorder script, git state, and worktree contents.",
+        ),
+    )
+    for name, recorded_at, question in prompts:
+        (imported_dir / name).write_text(
+            f"""{{
+  "trace_record_kind": "repo-rag-trace-record",
+  "trace_record_path": "artifacts/traces/imported/{name}",
+  "question": "{question}",
+  "original_prompt": "{question}",
+  "reformulated_prompt": "{question}",
+  "answer": "Validation completed.",
+  "command_trace": [
+    {{
+      "type": "message",
+      "role": "user",
+      "text": "{question}"
+    }}
+  ],
+  "trace": {{
+    "schema_version": 1,
+    "trace_kind": "repo-rag-runtime",
+    "recorded_at": "{recorded_at}",
+    "question": "{question}",
+    "original_prompt": "{question}",
+    "reformulated_prompt": "{question}",
+    "mode": "codex-proxy",
+    "retrieval_mode": "lexical",
+    "sources": ["README.md"],
+    "source_count": 1,
+    "context_count": 1,
+    "context_field": "evidence_previews",
+    "mcp_candidate_count": 0,
+    "answer_length": 22
+  }},
+  "outcome": {{
+    "acceptance_status": "candidate",
+    "accepted": null,
+    "execution_status": "success",
+    "method": "codex_cli",
+    "backend": "codex_cli_repo_rag_proxy",
+    "used_baseline_fallback": false
+  }}
+}}
+""",
+            encoding="utf-8",
+        )
+
+    materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+    )
+
+    family_state = load_family_state_payload(tmp_path / "artifacts" / "trainer" / "family-state.json")
+    family = family_state["prompt_families"][0]
+    terms = family["family_prompt_profile_terms"]
+    assert "gif" in terms
+    assert "readme" in terms
+    assert "recorder" in terms
+    assert "script" in terms
+    assert "repo" in terms
+    assert "worktree" in terms
+    assert len(terms) <= 12
+    assert "already" not in terms
+    assert "before" not in terms
+    assert "contains" not in terms
+    assert "decision" not in terms
+    assert "does" not in terms
+    assert "fields" not in terms
+    assert "final" not in terms
+
+
 def test_materialize_training_candidates_keeps_gradual_source_drift_in_one_context_group(
     tmp_path: Path,
 ) -> None:
