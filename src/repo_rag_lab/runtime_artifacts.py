@@ -231,6 +231,34 @@ def _trainer_signal_kind_or_none(value: object) -> str | None:
     return cleaned if cleaned in TRAINER_SIGNAL_KINDS else None
 
 
+def _queue_item_dedupe_key(payload: Mapping[str, object] | None) -> str | None:
+    """Return one stable logical key for duplicate queue-item suppression."""
+
+    if not isinstance(payload, Mapping):
+        return None
+    trace_name = _string_or_none(payload.get("trace_name"))
+    if trace_name is not None:
+        return f"trace-name:{trace_name}"
+    source_trace_path = _string_or_none(payload.get("source_trace_path"))
+    if source_trace_path is not None:
+        return f"source-trace:{source_trace_path}"
+    question = _string_or_none(payload.get("question"))
+    original_prompt = _string_or_none(payload.get("original_prompt"))
+    reformulated_prompt = _string_or_none(payload.get("reformulated_prompt"))
+    if question is None and original_prompt is None and reformulated_prompt is None:
+        return None
+    payload_bytes = json.dumps(
+        [
+            (question or "").casefold(),
+            (original_prompt or "").casefold(),
+            (reformulated_prompt or "").casefold(),
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return f"prompt-snapshot:{hashlib.sha256(payload_bytes).hexdigest()[:16]}"
+
+
 def _utc_now_isoformat() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -2671,6 +2699,7 @@ def drain_trace_queue(
         imported_items: list[dict[str, object]] = []
         failures: list[dict[str, object]] = []
         skipped_items: list[dict[str, object]] = []
+        seen_dedupe_keys: set[str] = set()
         for message in received_messages:
             message_payload = None
             blob_name = None
@@ -2682,9 +2711,24 @@ def drain_trace_queue(
                 queued_item = store.download_json(container, blob_name)
                 if _string_or_none(queued_item.get("queue_item_kind")) != TRACE_QUEUE_ITEM_KIND:
                     raise ValueError("Queued trace blob is missing `queue_item_kind`.")
+                dedupe_key = _queue_item_dedupe_key(queued_item)
+                if dedupe_key is not None and dedupe_key in seen_dedupe_keys:
+                    if not keep_queued:
+                        store.delete_blob(container, blob_name)
+                    store.delete_queue_message(queue_name_remote, message)
+                    skipped_items.append(
+                        {
+                            "queue_item_path": blob_name,
+                            "skip_reason": "duplicate-queue-trace",
+                            "dedupe_key": dedupe_key,
+                        }
+                    )
+                    continue
                 trace_payload = _mapping_or_none(queued_item.get("trace_payload"))
                 if trace_payload is None:
                     raise ValueError("Queued trace item is missing `trace_payload`.")
+                if dedupe_key is not None:
+                    seen_dedupe_keys.add(dedupe_key)
                 trace_name = _string_or_none(queued_item.get("trace_name"))
                 outcome = _mapping_or_none(queued_item.get("outcome"))
                 imported_record = write_trace_record(
@@ -2795,13 +2839,29 @@ def drain_trace_queue(
     selected_paths = queued_paths[:limit] if isinstance(limit, int) and limit > 0 else queued_paths
     local_imported_items: list[dict[str, object]] = []
     local_failures: list[dict[str, object]] = []
+    local_skipped_items: list[dict[str, object]] = []
+    seen_dedupe_keys: set[str] = set()
 
     for queued_path in selected_paths:
         try:
             queued_item = _load_trace_queue_item(queued_path)
+            dedupe_key = _queue_item_dedupe_key(queued_item)
+            if dedupe_key is not None and dedupe_key in seen_dedupe_keys:
+                if not keep_queued and queued_path.exists():
+                    queued_path.unlink()
+                local_skipped_items.append(
+                    {
+                        "queue_item_path": _relative_to_root(queued_path, resolved_root),
+                        "skip_reason": "duplicate-queue-trace",
+                        "dedupe_key": dedupe_key,
+                    }
+                )
+                continue
             trace_payload = _mapping_or_none(queued_item.get("trace_payload"))
             if trace_payload is None:
                 raise ValueError("Queued trace item is missing `trace_payload`.")
+            if dedupe_key is not None:
+                seen_dedupe_keys.add(dedupe_key)
             trace_name = _string_or_none(queued_item.get("trace_name"))
             outcome = _mapping_or_none(queued_item.get("outcome"))
             imported_record = write_trace_record(
@@ -2859,10 +2919,12 @@ def drain_trace_queue(
         "selected_count": len(selected_paths),
         "drained_count": len(local_imported_items),
         "failed_count": len(local_failures),
+        "skipped_count": len(local_skipped_items),
         "remaining_count": queued_count_after,
         "keep_queued": keep_queued,
         "status": "success" if not local_failures else "partial",
         "storage_backend": "filesystem",
         "items": local_imported_items,
         "failures": local_failures,
+        "skipped_items": local_skipped_items,
     }

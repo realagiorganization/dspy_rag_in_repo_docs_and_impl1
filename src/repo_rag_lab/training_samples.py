@@ -785,7 +785,7 @@ def _term_count_mapping(
 ) -> dict[str, int]:
     """Return one deterministic normalized term-frequency dictionary."""
 
-    return {term: count for term, count in _sorted_term_count_items(counts)}
+    return dict(_sorted_term_count_items(counts))
 
 
 def _term_counts_from_stats(
@@ -1082,15 +1082,11 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
         if isinstance(posterior_mean, (int, float)) and not isinstance(posterior_mean, bool):
             predicted_success = float(posterior_mean)
         uncertainty_value = family_success_metric.get("uncertainty")
-        if isinstance(uncertainty_value, (int, float)) and not isinstance(
-            uncertainty_value, bool
-        ):
+        if isinstance(uncertainty_value, (int, float)) and not isinstance(uncertainty_value, bool):
             uncertainty = float(uncertainty_value)
     if predicted_success == 0.0 and isinstance(family_feedback_metric, Mapping):
         feedback_hit_rate = family_feedback_metric.get("hit_rate")
-        if isinstance(feedback_hit_rate, (int, float)) and not isinstance(
-            feedback_hit_rate, bool
-        ):
+        if isinstance(feedback_hit_rate, (int, float)) and not isinstance(feedback_hit_rate, bool):
             predicted_success = float(feedback_hit_rate)
     if predicted_success == 0.0:
         family_metric_1_mean = family_payload.get("family_metric_1_mean")
@@ -1572,9 +1568,9 @@ def _apply_family_feedback_trace(
         hits=next_hits,
         total=next_total,
     )
-    family_payload["family_feedback_count"] = max(
-        0, int(family_payload.get("family_feedback_count") or 0)
-    ) + 1
+    family_payload["family_feedback_count"] = (
+        max(0, int(family_payload.get("family_feedback_count") or 0)) + 1
+    )
     runtime_artifact = family_payload.get("family_runtime_artifact")
     if not isinstance(runtime_artifact, dict):
         runtime_artifact = {}
@@ -1769,9 +1765,7 @@ def _strip_family_state_inline_payload(
                     else {}
                 ),
                 limit=_FAMILY_PROMPT_PROFILE_LIMIT,
-                min_count=_stable_profile_min_count(
-                    len(_family_replay_records(family_payload))
-                ),
+                min_count=_stable_profile_min_count(len(_family_replay_records(family_payload))),
             )
             or _string_list(family_payload.get("family_prompt_profile_terms")),
             limit=_FAMILY_PROMPT_PROFILE_LIMIT,
@@ -1789,9 +1783,7 @@ def _strip_family_state_inline_payload(
                     else {}
                 ),
                 limit=_FAMILY_COMMAND_PROFILE_LIMIT,
-                min_count=_stable_profile_min_count(
-                    len(_family_replay_records(family_payload))
-                ),
+                min_count=_stable_profile_min_count(len(_family_replay_records(family_payload))),
             )
             or _string_list(family_payload.get("family_command_pattern_summary")),
             limit=_FAMILY_COMMAND_PROFILE_LIMIT,
@@ -1809,9 +1801,7 @@ def _strip_family_state_inline_payload(
                     else {}
                 ),
                 limit=_FAMILY_CONSTRAINT_PROFILE_LIMIT,
-                min_count=_stable_profile_min_count(
-                    len(_family_replay_records(family_payload))
-                ),
+                min_count=_stable_profile_min_count(len(_family_replay_records(family_payload))),
             )
             or _string_list(family_payload.get("family_constraint_summary")),
             limit=_FAMILY_CONSTRAINT_PROFILE_LIMIT,
@@ -2673,9 +2663,7 @@ def _normalize_materialized_candidate_record(record: Mapping[str, Any]) -> dict[
             if str(source).strip()
         ],
         "command_trace": _ordered_unique_command_trace(record.get("command_trace", [])),
-        "trainer_signal_kind": _normalize_trainer_signal_kind(
-            record.get("trainer_signal_kind")
-        ),
+        "trainer_signal_kind": _normalize_trainer_signal_kind(record.get("trainer_signal_kind")),
     }
     if original_prompt:
         normalized["original_prompt"] = original_prompt
@@ -3267,9 +3255,9 @@ def materialize_training_candidates(
             new_prompt_family_count += 1
         prompt_family_id = str(family_payload.get("prompt_family_id") or "").strip()
         if trainer_signal_kind == "feedback_trace":
-            family_payload["family_needs_recompile"] = bool(
-                family_payload.get("family_needs_recompile")
-            ) and not created_family
+            family_payload["family_needs_recompile"] = (
+                bool(family_payload.get("family_needs_recompile")) and not created_family
+            )
             serialized_record = _serialize_candidate_record(record)
             serialized_record["prompt_family_id"] = prompt_family_id
             serialized_record["trainer_signal_kind"] = "feedback_trace"

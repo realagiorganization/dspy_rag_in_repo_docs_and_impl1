@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar, cast
@@ -423,6 +424,65 @@ def test_queue_trace_record_and_drain_trace_queue_use_azure_blob_queue(
     assert processed_blob["original_prompt"] == "Inspect trainer queue ingestion behavior"
     assert processed_blob["reformulated_prompt"] == "Inspect how the trainer ingests queued traces."
     assert store.deleted_messages == ["msg-1"]
+
+
+def test_drain_trace_queue_skips_duplicate_logical_azure_items(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _FakeAzureArtifactStore()
+    config = AzureArtifactConfig(
+        account_name="acct",
+        account_key="key",
+        connection_string=None,
+        trace_container="repo-rag-training-traces",
+        bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
+        queue_name="repo-rag-training",
+    )
+
+    def fake_resolve_azure_artifact_config(queue_name: str | None = None) -> AzureArtifactConfig:
+        del queue_name
+        return config
+
+    def fake_azure_artifact_store(cfg: AzureArtifactConfig) -> _FakeAzureArtifactStore:
+        del cfg
+        return store
+
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config",
+        fake_resolve_azure_artifact_config,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
+        fake_azure_artifact_store,
+    )
+
+    queue_trace_record(
+        tmp_path,
+        _sample_trace_payload(),
+        queue_name="dataset",
+        trace_name="worker-duplicate",
+    )
+    time.sleep(1.1)
+    queue_trace_record(
+        tmp_path,
+        _sample_trace_payload(),
+        queue_name="dataset",
+        trace_name="worker-duplicate",
+    )
+
+    drained = drain_trace_queue(tmp_path, queue_name="dataset")
+
+    assert drained["storage_backend"] == "azure-blob-queue"
+    assert drained["drained_count"] == 1
+    assert drained["failed_count"] == 0
+    assert drained["skipped_count"] == 1
+    skipped_items = drained["skipped_items"]
+    assert isinstance(skipped_items, list)
+    assert isinstance(skipped_items[0], dict)
+    assert skipped_items[0]["skip_reason"] == "duplicate-queue-trace"
+    assert len(store.deleted_messages) == 2
 
 
 def test_drain_trace_queue_skips_stale_failed_blob_messages(

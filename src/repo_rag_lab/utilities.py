@@ -1947,9 +1947,7 @@ def run_trainer_cycle(
                 )
         else:
             assert effective_recompile_run_name is not None
-            resolved_recompile_run_name = _versioned_training_run_name(
-                effective_recompile_run_name
-            )
+            resolved_recompile_run_name = _versioned_training_run_name(effective_recompile_run_name)
             recompile_lineage = {
                 "run_family": effective_recompile_run_name,
                 "resolved_run_name": resolved_recompile_run_name,

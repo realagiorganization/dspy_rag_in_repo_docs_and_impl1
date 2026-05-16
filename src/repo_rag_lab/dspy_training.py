@@ -1465,9 +1465,7 @@ def _family_predicted_hit_rate(family_payload: Mapping[str, object]) -> float | 
     feedback_metric = family_payload.get("family_feedback_metric")
     if isinstance(feedback_metric, Mapping):
         feedback_hit_rate = feedback_metric.get("hit_rate")
-        if isinstance(feedback_hit_rate, (int, float)) and not isinstance(
-            feedback_hit_rate, bool
-        ):
+        if isinstance(feedback_hit_rate, (int, float)) and not isinstance(feedback_hit_rate, bool):
             return round(float(feedback_hit_rate), 6)
     raw_records = family_payload.get("family_records")
     if not isinstance(raw_records, list) or not raw_records:

@@ -1228,6 +1228,16 @@ family whenever fresh candidates or a pending unpublished family-state are prese
 run family was provided. That makes the compile/publish path resilient both to stale manifests and
 to manual one-shot cycle invocations that omit the recompile flag.
 
+The next live inspection narrowed the remaining queue-layer issues to duplicate logical imports
+and thin batch summaries. The deployment-side trusted handoff could still requeue one worker batch
+when `repo_rag_backend.json` already said `trace_queued=true` but the older worker-side
+`repo_rag_turn_trace_enqueue_batch.json` surface was missing or incomplete, and trainer queue
+drain treated those duplicate queue items as distinct because their Azure blob names differed.
+The current fix therefore makes trusted handoff stand down on successful worker backend status as
+well as explicit batch-summary files, mirrors prompt snapshots into trusted batch summaries, passes
+`--batch-name` through worker-side `trace-enqueue`, and suppresses duplicate logical queue items
+inside one drain cycle before they can create extra `processed/...` blobs.
+
 ## Tensions And Open Work
 
 The narrative is coherent, but not complete. The main open tensions are:
