@@ -258,6 +258,11 @@ champion-only contract.
 The current trainer/proxy correction sharpens that same contract in three places. First, family
 father selection is no longer “most central question wins”; it now follows the product rule that
 the father is the stored trace with the best arithmetic mean across known per-trace metrics, which
+keeps the routing prototype tied to the trace contract instead of to a derived centroid. Second,
+trainer-side queue wrappers now mirror `question`, `original_prompt`, and `reformulated_prompt`
+onto their top-level payloads instead of leaving those prompt fields only inside the nested trace
+object, so queue drain, processed-ledger recovery, and dataset-side trusted handoff all preserve
+the same prompt snapshot surface that runtime traces already carried.
 today reduces to metric-1 `hit_rate` plus any later persisted similarity metrics. Second, local
 trainer bootstrap now follows the queue-triggered family contract: the active cache is either
 reused as-is, adopted from the latest remote family-state snapshot, or rebuilt from

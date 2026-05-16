@@ -46,7 +46,7 @@ This inventory is generated from the current Git index.
 | `docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md` | docs | markdown | 38 | 1555 | Implementing RAG with DSPy: Technical Guide |
 | `docs/architecture/mcp-discovery.md` | docs | markdown | 54 | 1757 | MCP Discovery Notes |
 | `docs/architecture/package-api.md` | docs | markdown | 127 | 9186 | Package API Notes |
-| `docs/architecture/research-narrative.md` | docs | markdown | 1123 | 85875 | Repository research narrative tying code, docs, and verification together |
+| `docs/architecture/research-narrative.md` | docs | markdown | 1244 | 95390 | Repository research narrative tying code, docs, and verification together |
 | `docs/archive/repo-completeness-checklist.md` | docs | markdown | 238 | 7450 | Archived completeness snapshot kept for workflow and lockfile policy context |
 | `docs/audit/2026-03-15-repo-state.md` | docs | markdown | 151 | 5989 | Repository audit note for 2026 03 15 repo state |
 | `docs/audit/2026-03-17-docs-and-uv-refresh.md` | docs | markdown | 79 | 3977 | Repository audit note for 2026 03 17 docs and uv refresh |
@@ -190,12 +190,29 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-05-11-trainer-queue-only-no-processed-replay.md` | docs | markdown | 166 | 6373 | Repository audit note for 2026 05 11 trainer queue only no processed replay |
 | `docs/audit/2026-05-11-trainer-service-preflights-queue-before-running-cycles.md` | docs | markdown | 121 | 4211 | Repository audit note for 2026 05 11 trainer service preflights queue before running cycles |
 | `docs/audit/2026-05-11-trusted-handoff-syntax-error-blocked-execution-artifact-upload.md` | docs | markdown | 86 | 4031 | Repository audit note for 2026 05 11 trusted handoff syntax error blocked execution artifact upload |
+| `docs/audit/2026-05-11-zz-latest-run-handoff-restored-but-family-runtime-still-heuristic.md` | docs | markdown | 186 | 5763 | Repository audit note for 2026 05 11 zz latest run handoff restored but family runtime still heuristic |
 | `docs/audit/2026-05-13-azure-defaults-and-codex-config-model-alignment.md` | docs | markdown | 114 | 4099 | Repository audit note for 2026 05 13 azure defaults and codex config model alignment |
+| `docs/audit/2026-05-13-latest-run-partial-family-runtime-use-and-six-same-prompt-traces.md` | docs | markdown | 180 | 6882 | Repository audit note for 2026 05 13 latest run partial family runtime use and six same prompt traces |
 | `docs/audit/2026-05-13-latest-run-used-global-dspy-bundle-but-dropped-supplemental-user-line.md` | docs | markdown | 173 | 6044 | Repository audit note for 2026 05 13 latest run used global dspy bundle but dropped supplemental user line |
+| `docs/audit/2026-05-13-live-trainer-startup-published-from-processed-with-empty-queue.md` | docs | markdown | 104 | 4129 | Repository audit note for 2026 05 13 live trainer startup published from processed with empty queue |
 | `docs/audit/2026-05-13-processed-replay-no-longer-duplicates-family-records.md` | docs | markdown | 107 | 4641 | Repository audit note for 2026 05 13 processed replay no longer duplicates family records |
 | `docs/audit/2026-05-13-scoped-dspy-helper-trainer-model-defaults.md` | docs | markdown | 55 | 2564 | Repository audit note for 2026 05 13 scoped dspy helper trainer model defaults |
 | `docs/audit/2026-05-13-trainer-local-cache-thin-index-one-version-per-queue-cycle.md` | docs | markdown | 77 | 3516 | Repository audit note for 2026 05 13 trainer local cache thin index one version per queue cycle |
-| `docs/audit/README.md` | docs | markdown | 14 | 440 | Repository audit note for README |
+| `docs/audit/2026-05-14-latest-run-partial-dspy-runtime-and-single-family-trainer-rebuild.md` | docs | markdown | 140 | 6243 | Repository audit note for 2026 05 14 latest run partial dspy runtime and single family trainer rebuild |
+| `docs/audit/2026-05-14-runtime-dspy-single-thread-and-same-prompt-trace-dedupe.md` | docs | markdown | 72 | 2985 | Repository audit note for 2026 05 14 runtime dspy single thread and same prompt trace dedupe |
+| `docs/audit/2026-05-15-family-profile-routing-and-handoff-hardening.md` | docs | markdown | 78 | 3607 | Repository audit note for 2026 05 15 family profile routing and handoff hardening |
+| `docs/audit/2026-05-15-family-profile-stability-thresholds.md` | docs | markdown | 40 | 1814 | Repository audit note for 2026 05 15 family profile stability thresholds |
+| `docs/audit/2026-05-15-feedback-trace-phase-1.md` | docs | markdown | 104 | 6689 | Repository audit note for 2026 05 15 feedback trace phase 1 |
+| `docs/audit/2026-05-15-profile-first-routing-and-real-thin-index.md` | docs | markdown | 49 | 2300 | Repository audit note for 2026 05 15 profile first routing and real thin index |
+| `docs/audit/2026-05-15-remote-bundle-authority-and-lane-reset-hardening.md` | docs | markdown | 72 | 3503 | Repository audit note for 2026 05 15 remote bundle authority and lane reset hardening |
+| `docs/audit/2026-05-15-trace-wrapper-mirroring-and-batch-summary-fix.md` | docs | markdown | 55 | 3117 | Repository audit note for 2026 05 15 trace wrapper mirroring and batch summary fix |
+| `docs/audit/2026-05-15-trainer-publish-backlog-recovery.md` | docs | markdown | 39 | 1926 | Repository audit note for 2026 05 15 trainer publish backlog recovery |
+| `docs/audit/2026-05-15-unified-family-term-stats.md` | docs | markdown | 41 | 1633 | Repository audit note for 2026 05 15 unified family term stats |
+| `docs/audit/2026-05-16-active-profile-summary-selectivity.md` | docs | markdown | 37 | 1999 | Repository audit note for 2026 05 16 active profile summary selectivity |
+| `docs/audit/2026-05-16-live-family-run-review.md` | docs | markdown | 77 | 3882 | Repository audit note for 2026 05 16 live family run review |
+| `docs/audit/2026-05-16-profile-term-selectivity-tightening.md` | docs | markdown | 21 | 1107 | Repository audit note for 2026 05 16 profile term selectivity tightening |
+| `docs/audit/2026-05-16-technical-term-lookup-module.md` | docs | markdown | 24 | 1171 | Repository audit note for 2026 05 16 technical term lookup module |
+| `docs/audit/README.md` | docs | markdown | 14 | 416 | Repository audit note for README |
 | `docs/guides/hushwheel-fixture-rag-guide.md` | docs | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
 | `docs/operations/azure-deployment.md` | docs | markdown | 111 | 4901 | Azure Deployment Notes |
 | `docs/operations/environment.md` | docs | markdown | 138 | 9211 | Environment and secret reference for local runtime and deployment workflows |
@@ -204,6 +221,7 @@ This inventory is generated from the current Git index.
 | `docs/operations/trainer-deployment.md` | docs | markdown | 152 | 6047 | Trainer Deployment Notes |
 | `docs/planning/codex-exec-resume-plan.md` | docs | markdown | 207 | 11561 | Codex Exec Resume Plan |
 | `docs/planning/dataset-integration-plan.md` | docs | markdown | 478 | 33882 | Dataset Integration Plan |
+| `docs/planning/dspy-feedback-trace-training-plan.md` | docs | markdown | 168 | 6369 | DSPy Feedback-Trace Training Plan |
 | `docs/planning/family-first-mipro-runtime-contract.md` | docs | markdown | 460 | 31012 | Family-First DSPy / MIPROv2 Contract |
 | `docs/planning/per-turn-dspy-mediation-contract.md` | docs | markdown | 115 | 4966 | Per-Turn DSPy Mediation Contract |
 | `docs/planning/repo-hardening-plan.md` | docs | markdown | 71 | 4545 | Repository Hardening Plan |
@@ -308,6 +326,38 @@ This inventory is generated from the current Git index.
 | `samples/logs/20260504T161106Z-gh-runs-develop-no-new-run-after-explicit-codex-resume-targeting-push.md` | samples | markdown | 27 | 1175 | GitHub Actions inspection after `464e16b` push |
 | `samples/logs/20260504T180441Z-gh-runs-develop-no-new-run-after-codex-session-continuity-markers-push.md` | samples | markdown | 28 | 986 | GitHub Actions inspection after `490fe41` push |
 | `samples/logs/20260505T072441Z-gh-runs-develop-no-new-run-after-mcp-first-codex-discovery-push.md` | samples | markdown | 28 | 1152 | GitHub Actions inspection after `abcf52c` push |
+| `samples/logs/20260505T084508Z-gh-runs-develop-no-new-run-after-mcp-resource-discovery-push.md` | samples | markdown | 30 | 984 | GitHub Run Inspection |
+| `samples/logs/20260505T100903Z-gh-runs-develop-no-new-run-after-codex-mcp-startup-hardening-push.md` | samples | markdown | 33 | 1422 | GitHub run inspection after `Harden Codex MCP startup diagnostics` |
+| `samples/logs/20260505T123501Z-gh-runs-develop-no-new-run-after-fix-codex-mcp-startup-regression-push.md` | samples | markdown | 36 | 1683 | GitHub Run Inspection |
+| `samples/logs/20260505T173418Z-gh-runs-develop-no-new-run-after-fix-mcp-stdio-buffering-regression-push.md` | samples | markdown | 15 | 896 | GitHub run inspection after `Fix MCP stdio buffering regression` |
+| `samples/logs/20260507T084228Z-gh-runs-develop-no-new-run-after-fix-trainer-bundle-compile-token-overflow-push.md` | samples | markdown | 19 | 738 | GitHub run inspection after repo-rag push |
+| `samples/logs/20260507T101534Z-gh-runs-develop-no-new-run-after-fix-repo-rag-mcp-post-initialize-transport-push.md` | samples | markdown | 19 | 728 | GitHub run inspection after repo-rag push |
+| `samples/logs/20260507T121155Z-gh-runs-develop-no-new-run-after-prefer-tool-first-repo-rag-mcp-discovery-push.md` | samples | markdown | 25 | 1215 | GitHub run inspection after `Prefer tool-first repo-rag MCP discovery` |
+| `samples/logs/20260507T142540Z-gh-runs-develop-no-new-run-after-fix-codex-line-delimited-mcp-transport-push.md` | samples | markdown | 22 | 1163 | GitHub run inspection after `Fix Codex line-delimited MCP transport` |
+| `samples/logs/20260507T193336Z-gh-runs-develop-no-new-run-after-fix-trainer-publication-drift-push.md` | samples | markdown | 21 | 724 | Post-push GitHub run inspection |
+| `samples/logs/20260508T104235Z-gh-runs-develop-no-new-run-after-fix-trainer-hybrid-retrieval-gate-drift-push.md` | samples | markdown | 38 | 1453 | GitHub Actions Post-Push Check |
+| `samples/logs/20260508T124852Z-gh-runs-develop-no-new-run-after-advance-global-trainer-champion-bundle-evaluation-push.md` | samples | markdown | 25 | 936 | GitHub Actions Run Check |
+| `samples/logs/20260508T135238Z-gh-runs-develop-no-new-run-after-refresh-trainer-champions-on-richer-benchmark-context-push.md` | samples | markdown | 30 | 999 | GitHub Actions Run Check |
+| `samples/logs/20260509T095052Z-gh-runs-develop-no-new-run-after-fix-ci-formatting-drift-push.md` | samples | markdown | 31 | 1164 | GitHub Actions Run Check |
+| `samples/logs/20260510T092222Z-gh-runs-develop-no-new-run-after-implement-family-first-dspy-runtime-contract-push.md` | samples | markdown | 30 | 989 | GitHub Actions Run Check |
+| `samples/logs/20260510T111300Z-gh-runs-family-first-runtime-hotfix-follow-up.md` | samples | markdown | 103 | 4366 | GitHub Actions Run Log |
+| `samples/logs/20260510T124834Z-gh-runs-develop.md` | samples | markdown | 67 | 2618 | GitHub Actions Run Log |
+| `samples/logs/20260510T144829Z-gh-runs-develop-no-new-run-after-family-first-runtime-fix-push.md` | samples | markdown | 34 | 1356 | GitHub Actions follow-up for `4032f93` on `develop` |
+| `samples/logs/20260510T162259Z-gh-runs-develop-no-new-run-after-staged-family-first-runtime-guards-push.md` | samples | markdown | 19 | 682 | Summary |
+| `samples/logs/20260510T173748Z-gh-runs-develop-no-new-run-after-family-state-root-alias-and-latest-bundle-fallback-push.md` | samples | markdown | 25 | 670 | GitHub Actions Check After `a70facc` |
+| `samples/logs/20260510T190651Z-gh-runs-develop-no-new-run-after-stale-runtime-source-fix-push.md` | samples | markdown | 26 | 729 | GitHub Actions follow-up after push on 2026-05-10 |
+| `samples/logs/20260511T090438Z-gh-runs-fix-trainer-incrementality-and-family-state-vers.md` | samples | markdown | 68 | 2843 | GitHub Actions Run Log |
+| `samples/logs/20260511T115602Z-gh-runs-develop-no-new-run-after-trainer-service-queue-preflight-push.md` | samples | markdown | 23 | 638 | 2026-05-11 GitHub Actions Status After `a17f7d2` |
+| `samples/logs/20260511T141353Z-gh-runs-develop-no-new-run-after-original-prompt-routing-and-batch-fallback-push.md` | samples | markdown | 31 | 944 | 2026-05-11 GitHub Actions Check After Original-Prompt Routing And Batch Fallback Push |
+| `samples/logs/20260511T174511Z-gh-runs-develop-no-new-run-after-family-runtime-artifact-fallback-push.md` | samples | markdown | 23 | 871 | GitHub Actions Check After Push `0cea307` |
+| `samples/logs/20260511T203404Z-gh-runs-develop-no-new-run-after-queued-blob-trainer-gate-push.md` | samples | markdown | 26 | 882 | 2026-05-11 GitHub Actions Check After `e59ea5f` |
+| `samples/logs/20260513T104534Z-gh-runs-develop-no-new-run-after-trainer-cache-lifecycle-and-family-runtime-bridge-push.md` | samples | markdown | 24 | 857 | GitHub Actions Check After `ac515aa` |
+| `samples/logs/20260513T131017Z-gh-runs-develop-no-new-run-after-trainer-processed-replay-dedupe-and-publish-gating-push.md` | samples | markdown | 24 | 689 | GitHub Actions Check |
+| `samples/logs/20260513T163922Z-gh-runs-develop-no-new-run-after-family-runtime-hit-rate-bridge-and-prompt-preservation-push.md` | samples | markdown | 23 | 767 | GitHub Actions Check After `fb7d61b` |
+| `samples/logs/20260513T184201Z-gh-runs-develop-no-new-run-after-azure-default-model-alignment-push.md` | samples | markdown | 16 | 620 | Summary |
+| `samples/logs/20260513T205928Z-gh-runs-after-split-dspy-helper-trainer-model-surfaces-push.md` | samples | markdown | 28 | 1253 | GitHub Actions Summary |
+| `samples/logs/20260514T132541Z-gh-runs-develop-no-new-run-after-fix-stale-family-trace-handoff-push.md` | samples | markdown | 28 | 1082 | GitHub Actions Check |
+| `samples/logs/20260514T184319Z-gh-runs-develop-no-new-run-after-align-trainer-families-with-trace-contract-push.md` | samples | markdown | 26 | 1105 | GitHub Actions Check |
 | `samples/logs/README.md` | samples | markdown | 11 | 331 | GitHub Run Logs |
 | `samples/population/hushwheel_fixture_population_candidates.yaml` | samples | yaml | 22 | 955 | - source: README.md |
 | `samples/population/repository_population_candidates.yaml` | samples | yaml | 16 | 690 | - source: README.md |
@@ -318,10 +368,10 @@ This inventory is generated from the current Git index.
 | `src/repo_rag_lab/azure_artifacts.py` | src | python | 436 | 16790 | Azure Blob + Queue helpers for trainer-side traces and global bundle storage. |
 | `src/repo_rag_lab/azure_runtime.py` | src | python | 577 | 20123 | Azure runtime normalization, live probes, and cloud-completion helpers. |
 | `src/repo_rag_lab/benchmarks.py` | src | python | 484 | 16524 | Retrieval benchmark helpers for notebook assertions and logging. |
-| `src/repo_rag_lab/cli.py` | src | python | 1347 | 59321 | Command-line entrypoints for the shared repository RAG workflows. |
-| `src/repo_rag_lab/codex_proxy.py` | src | python | 2002 | 77535 | Local streaming proxy that injects repo-RAG + DSPy mediation for Codex. |
+| `src/repo_rag_lab/cli.py` | src | python | 1371 | 60068 | Command-line entrypoints for the shared repository RAG workflows. |
+| `src/repo_rag_lab/codex_proxy.py` | src | python | 2275 | 90086 | Local streaming proxy that injects repo-RAG + DSPy mediation for Codex. |
 | `src/repo_rag_lab/corpus.py` | src | python | 181 | 5245 | Repository file loading helpers for the baseline text corpus. |
-| `src/repo_rag_lab/dspy_training.py` | src | python | 1809 | 68160 | DSPy training and artifact helpers for repository-grounded RAG. |
+| `src/repo_rag_lab/dspy_training.py` | src | python | 1891 | 71961 | DSPy training and artifact helpers for repository-grounded RAG. |
 | `src/repo_rag_lab/dspy_workflow.py` | src | python | 180 | 6518 | DSPy-backed runtime wrappers around the repository retrieval workflow. |
 | `src/repo_rag_lab/exploratorium_translation.py` | src | python | 1009 | 38049 | Generate the bilingual exploratorium translation publication surfaces. |
 | `src/repo_rag_lab/file_summaries.py` | src | python | 327 | 10564 | Generate tracked repository file-summary surfaces. |
@@ -336,14 +386,15 @@ This inventory is generated from the current Git index.
 | `src/repo_rag_lab/population_samples.py` | src | python | 241 | 8376 | Helpers for reviewing and batching starter corpus-population inputs. |
 | `src/repo_rag_lab/retrieval.py` | src | python | 788 | 25533 | Baseline chunking and lexical retrieval utilities for repository text. |
 | `src/repo_rag_lab/retrieval_profile.py` | src | python | 236 | 9527 | Profile-driven retrieval weighting, exclusions, and repo-local overrides. |
-| `src/repo_rag_lab/runtime_artifacts.py` | src | python | 2708 | 120524 | Versioned bundle, overlay, and runtime-trace helpers. |
+| `src/repo_rag_lab/runtime_artifacts.py` | src | python | 2871 | 128995 | Versioned bundle, overlay, and runtime-trace helpers. |
 | `src/repo_rag_lab/rust_lookup.py` | src | python | 295 | 7724 | Helpers for the native Rust-backed SQLite lookup index. |
 | `src/repo_rag_lab/semantic_retrieval.py` | src | python | 214 | 7407 | Azure OpenAI embedding-backed semantic retrieval helpers. |
 | `src/repo_rag_lab/settings.py` | src | python | 28 | 699 | Shared repository path settings derived from a repository root. |
+| `src/repo_rag_lab/term_extraction.py` | src | python | 990 | 22874 | Technical-term extraction utilities for prompt-family routing profiles. |
 | `src/repo_rag_lab/todo_backlog.py` | src | python | 276 | 8434 | Shared backlog rendering helpers for Markdown and LaTeX surfaces. |
 | `src/repo_rag_lab/trainer_deployment.py` | src | python | 438 | 18461 | Kubernetes manifest helpers for trainer-side repo-RAG deployment surfaces. |
-| `src/repo_rag_lab/training_samples.py` | src | python | 2829 | 115520 | Helpers for loading and summarizing starter DSPy training examples. |
-| `src/repo_rag_lab/utilities.py` | src | python | 2932 | 121550 | User-facing utility helpers shared by the CLI, tests, and notebooks. |
+| `src/repo_rag_lab/training_samples.py` | src | python | 3546 | 144100 | Helpers for loading and summarizing starter DSPy training examples. |
+| `src/repo_rag_lab/utilities.py` | src | python | 3052 | 127338 | User-facing utility helpers shared by the CLI, tests, and notebooks. |
 | `src/repo_rag_lab/verification.py` | src | python | 163 | 4476 | Verification helpers for Makefile and notebook contract checks. |
 | `src/repo_rag_lab/workflow.py` | src | python | 503 | 15900 | Baseline repository question-answering workflow built on file retrieval. |
 | `tests/features/repository_rag.feature` | tests | gherkin | 12 | 377 | Feature: Repository RAG |
@@ -388,8 +439,8 @@ This inventory is generated from the current Git index.
 | `tests/test_azure_runtime.py` | tests | python | 208 | 7540 | Python module for test azure runtime |
 | `tests/test_benchmarks_and_notebook_scaffolding.py` | tests | python | 274 | 11859 | Python module for test benchmarks and notebook scaffolding |
 | `tests/test_cli_and_dspy.py` | tests | python | 1876 | 68622 | Python module for test cli and dspy |
-| `tests/test_codex_proxy.py` | tests | python | 1918 | 69838 | Python module for test codex proxy |
-| `tests/test_dspy_training.py` | tests | python | 1742 | 69833 | Python module for test dspy training |
+| `tests/test_codex_proxy.py` | tests | python | 2263 | 84141 | Python module for test codex proxy |
+| `tests/test_dspy_training.py` | tests | python | 1753 | 70476 | Python module for test dspy training |
 | `tests/test_exploratorium_translation.py` | tests | python | 138 | 5239 | Python module for test exploratorium translation |
 | `tests/test_file_summaries.py` | tests | python | 230 | 9110 | Python module for test file summaries |
 | `tests/test_github_pr_gates.py` | tests | python | 183 | 5678 | Python module for test github pr gates |
@@ -406,11 +457,12 @@ This inventory is generated from the current Git index.
 | `tests/test_project_surfaces.py` | tests | python | 484 | 21471 | Python module for test project surfaces |
 | `tests/test_repository_rag_bdd.py` | tests | python | 30 | 879 | Python module for test repository rag bdd |
 | `tests/test_retrieval.py` | tests | python | 389 | 13362 | Python module for test retrieval |
-| `tests/test_runtime_artifacts_azure.py` | tests | python | 1561 | 59236 | Python module for test runtime artifacts azure |
+| `tests/test_runtime_artifacts_azure.py` | tests | python | 1595 | 61571 | Python module for test runtime artifacts azure |
 | `tests/test_rust_lookup.py` | tests | python | 95 | 3099 | Python module for test rust lookup |
+| `tests/test_term_extraction.py` | tests | python | 102 | 3488 | Python module for test term extraction |
 | `tests/test_todo_backlog.py` | tests | python | 103 | 3505 | Python module for test todo backlog |
-| `tests/test_training_samples.py` | tests | python | 2237 | 88023 | Python module for test training samples |
-| `tests/test_utilities.py` | tests | python | 3112 | 121727 | Python module for test utilities |
+| `tests/test_training_samples.py` | tests | python | 2765 | 109099 | Python module for test training samples |
+| `tests/test_utilities.py` | tests | python | 3490 | 136085 | Python module for test utilities |
 | `tests/test_verification.py` | tests | python | 66 | 3156 | Python module for test verification |
 | `tests/test_workflow.py` | tests | python | 99 | 3456 | Python module for test workflow |
 | `tests/test_workflow_live.py` | tests | python | 128 | 4292 | Python module for test workflow live |
