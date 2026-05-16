@@ -75,17 +75,52 @@ _SUCCESS_LOWER_BOUND_Z = 1.281552
 _PROFILE_STOPWORDS = {
     "a",
     "an",
+    "accessible",
+    "all",
     "and",
     "are",
+    "behavior",
+    "can",
+    "claim",
+    "clean",
+    "confirm",
+    "describe",
+    "exact",
+    "found",
     "for",
     "from",
+    "generated",
+    "inspect",
+    "instead",
     "into",
     "its",
+    "just",
+    "matches",
+    "needed",
+    "now",
+    "once",
+    "otherwise",
+    "reading",
+    "really",
+    "relevant",
+    "report",
+    "should",
+    "state",
+    "states",
+    "static",
+    "still",
+    "switch",
+    "them",
     "the",
     "then",
     "this",
     "that",
+    "through",
+    "verify",
+    "walks",
+    "whether",
     "with",
+    "you",
     "your",
 }
 _PATHLIKE_TOKEN_PATTERN = re.compile(
@@ -95,7 +130,7 @@ _FAMILY_ROUTING_PROFILE_PRIMARY_WEIGHT = 1.45
 _FAMILY_ROUTING_PROMPT_SUPPORT_WEIGHT = 0.15
 _FAMILY_ROUTING_SUCCESS_BOOST = 0.2
 _FAMILY_ROUTING_UNCERTAINTY_PENALTY = 0.05
-_FAMILY_PROMPT_PROFILE_LIMIT = 24
+_FAMILY_PROMPT_PROFILE_LIMIT = 12
 _FAMILY_COMMAND_PROFILE_LIMIT = 16
 _FAMILY_CONSTRAINT_PROFILE_LIMIT = 12
 _FAMILY_PROFILE_MIN_COUNT = 2

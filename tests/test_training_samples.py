@@ -2197,20 +2197,20 @@ def test_materialize_training_candidates_profile_terms_ignore_one_off_noise(
         (
             "accepted-a.json",
             "2026-05-15T12:00:00+00:00",
-            "Update README with demo GIF walkthrough",
-            "Chromium bootstrap detail for the README walkthrough GIF refresh",
+            "Just update README with demo GIF walkthrough and describe whether it is really needed now",
+            "Chromium bootstrap detail for the README walkthrough GIF refresh and describe whether it is really needed now",
         ),
         (
             "accepted-b.json",
             "2026-05-15T12:05:00+00:00",
-            "Refresh README demo GIF walkthrough",
-            "Playwright dependency note for the README walkthrough GIF refresh",
+            "Just refresh README demo GIF walkthrough and describe whether it is really needed now",
+            "Playwright dependency note for the README walkthrough GIF refresh and describe whether it is really needed now",
         ),
         (
             "accepted-c.json",
             "2026-05-15T12:10:00+00:00",
-            "Adjust README walkthrough GIF in docs",
-            "Timeout mitigation note for the README walkthrough GIF refresh",
+            "Just adjust README walkthrough GIF in docs and describe whether it is really needed now",
+            "Timeout mitigation note for the README walkthrough GIF refresh and describe whether it is really needed now",
         ),
     )
     for name, recorded_at, question, reformulated_prompt in prompts:
@@ -2275,9 +2275,15 @@ def test_materialize_training_candidates_profile_terms_ignore_one_off_noise(
     assert family["family_prompt_profile_term_stats"]["timeout"]["count"] >= 1
     assert 0.0 < family["family_prompt_profile_term_stats"]["readme"]["weight"] <= 1.0
     assert 0.0 < family["family_prompt_profile_term_stats"]["gif"]["weight"] <= 1.0
+    assert len(family["family_prompt_profile_terms"]) <= 12
     assert "readme" in family["family_prompt_profile_terms"]
     assert "gif" in family["family_prompt_profile_terms"]
     assert "walkthrough" in family["family_prompt_profile_terms"]
+    assert "just" not in family["family_prompt_profile_terms"]
+    assert "describe" not in family["family_prompt_profile_terms"]
+    assert "whether" not in family["family_prompt_profile_terms"]
+    assert "really" not in family["family_prompt_profile_terms"]
+    assert "needed" not in family["family_prompt_profile_terms"]
     assert "chromium" not in family["family_prompt_profile_terms"]
     assert "playwright" not in family["family_prompt_profile_terms"]
     assert "timeout" not in family["family_prompt_profile_terms"]

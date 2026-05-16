@@ -140,7 +140,12 @@ These are exposed through:
 This is the current center of gravity of the repository. The project no longer stops at “use DSPy
 at runtime if available.” It can now compile a repository-grounded program, persist it under
 `artifacts/dspy/`, inspect saved runs as a first-class surface, and reuse the latest compiled
-program automatically for later questions.
+program automatically for later questions. The family-oriented trainer path now also treats
+published prompt-family state as a real routing index rather than a duplicated replay snapshot:
+term-level routing evidence is stored in unified `*_term_stats` mappings with both `count` and
+normalized `weight`, and the post-recompile trainer path now rewrites `family-state.json` through
+the same thin-index persistence layer so runtime routing can load compact summaries while the full
+records stay in per-family blobs.
 
 Before that DSPy layer runs, the Rust wrapper now exposes a repo-local SQLite FTS index and lookup
 path over tracked UTF-8 files. The default `ask` flow now narrows retrieval through those native
@@ -1182,7 +1187,10 @@ That profile state is now also normalized into one per-term statistics payload i
 spread across separate count and weight structures. Each prompt/command/constraint term can carry
 its raw count plus normalized weight inside one `*_term_stats` mapping, while the legacy
 `family_*_terms` lists remain only as derived routing summaries for fast lookup and human
-inspection.
+inspection. The active prompt-profile summary is also capped at 12 terms and filters recurring
+conversational filler such as `just`, `really`, `whether`, and `needed`, so the published family
+surface stays biased toward technical artifacts, tools, paths, and repo-specific task vocabulary
+instead of narrative boilerplate.
 
 ## Tensions And Open Work
 
