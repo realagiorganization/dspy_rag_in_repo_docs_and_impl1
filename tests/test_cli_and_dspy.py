@@ -1651,7 +1651,7 @@ def test_cli_main_trainer_k8s_manifests_command(
                 "warnings": [],
                 "artifact_metadata": {
                     "input_paths": [str(retrieval_training_path)],
-                    "generated_paths": [str(output_dir / "trainer-service.deployment.yaml")],
+                    "generated_paths": [str(output_dir / "trainer-cycle.cronjob.yaml")],
                     "related_paths": [],
                 },
                 "image": image,
@@ -1688,7 +1688,7 @@ def test_cli_main_trainer_k8s_manifests_command(
                 "image_pull_secret": "acr-secret",
                 "output_dir": "artifacts/kubernetes",
                 "queue_name": "dataset",
-                "cycle_schedule": "*/15 * * * *",
+                "cycle_schedule": "*/5 * * * *",
                 "poll_interval_seconds": 60.0,
                 "service_max_idle_cycles": None,
                 "promote_channel": None,

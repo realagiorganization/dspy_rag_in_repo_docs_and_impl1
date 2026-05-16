@@ -512,10 +512,12 @@ At the time of this document:
 - a single-pass background trainer entrypoint is now implemented and exposed through
   `make trainer-cycle`, so queue drain, retrieval gating, and optional bundle promotion can run as
   a cron/Kubernetes job before a longer-lived trainer service exists
-- a long-lived background trainer loop is now implemented and exposed through
-  `make trainer-service`, so the same queue drain, gating, publish, and promotion workflow can
-  run continuously while recording trainer-side state/history artifacts under `artifacts/trainer/`;
-  the current live AKS trainer deployment now drains the Azure queue, uses
+- a long-lived background trainer loop is still available through `make trainer-service` for local
+  debugging, but the live AKS trainer deployment now prefers a single cron-driven
+  `make trainer-cycle` path so the same queue drain, gating, publish, and promotion workflow runs
+  once per schedule window instead of racing between two orchestrators while recording
+  trainer-side state/history artifacts under `artifacts/trainer/`; the current live AKS trainer
+  deployment now drains the Azure queue, uses
   `TRAINER_RECOMPILE_RUN_NAME=trainer-auto` as a run-family label, mints a unique timestamped
   bundle version such as `20260501T135609Z` for each successful recompile, records imported trace
   paths plus candidate dedupe counters in bundle lineage metadata, and can remote-publish those
@@ -543,7 +545,7 @@ At the time of this document:
   path; the compile-facing `training-candidates.yaml` file is now materialized from one family
   champion per prompt family, so replaying many worker traces for the same evolving prompt no
   longer necessarily creates recompile churn unless the effective family champion actually changes;
-  trainer-cycle and trainer-service summaries now also expose
+  trainer-cycle summaries now also expose
   `prompt_family_count`, `context_group_count`, and `champion_index_path`, so that grouping
   behavior is visible without reopening the raw JSON state by hand; repeated same-answer traces now
   increase explicit champion support inside one context group, and the group summary now merges
@@ -554,12 +556,12 @@ At the time of this document:
   same-source retrievals that actually used different snippets can still separate into different
   trainer context groups; family-champion selection now also has a stability gate across those
   context groups, so a small score-only edge is not enough to flip the compile-facing champion
-  when the incumbent group already has stronger support; trainer-cycle and trainer-service now
-  also expose a `min_new_candidates_for_recompile` batching gate so one or two fresh champion
+  when the incumbent group already has stronger support; trainer-cycle now also exposes a
+  `min_new_candidates_for_recompile` batching gate so one or two fresh champion
   updates can be accumulated before the next DSPy recompilation instead of forcing a new bundle on
   every single cycle, and the trainer Kubernetes/deploy helpers now thread that threshold through
-  generated ConfigMaps plus `trainer-cycle` / `trainer-service` command lines so live AKS
-  deployments can honor the same batching policy as the local CLI
+  generated ConfigMaps plus the cron-driven `trainer-cycle` command line so live AKS deployments
+  can honor the same batching policy as the local CLI
 - those cumulative candidates can now also be merged back into
   `artifacts/trainer/generated-training.yaml` and compiled into a fresh DSPy run through
   `make trainer-recompile`, so the trainer path now has an explicit bridge from worker traces to

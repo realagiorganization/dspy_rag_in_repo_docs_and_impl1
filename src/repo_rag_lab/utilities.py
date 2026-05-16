@@ -496,12 +496,12 @@ def utility_summary(root: Path) -> str:
         ),
         (
             "- make trainer-service / uv run repo-rag trainer-service: run a long-lived "
-            "background trainer loop that polls the queue, records cycle history, and writes "
-            "service state under artifacts/trainer/"
+            "background trainer loop for local debugging, queue experiments, or one-off "
+            "manual recovery checks"
         ),
         (
             "- make trainer-k8s-manifests / uv run repo-rag trainer-k8s-manifests: "
-            "materialize Kubernetes manifests for trainer-service and trainer-cycle roles"
+            "materialize Kubernetes manifests for the cron-driven trainer-cycle role"
         ),
         (
             "- make trainer-candidates / uv run repo-rag trainer-candidates: materialize "
@@ -635,7 +635,7 @@ def run_trainer_k8s_manifest_generation(
     min_new_candidates_for_recompile: int = (DEFAULT_TRAINER_K8S_MIN_NEW_CANDIDATES_FOR_RECOMPILE),
     recompile_base_training_path: Path = DEFAULT_TRAINING_PATH,
 ) -> str:
-    """Materialize Kubernetes manifests for trainer-service and trainer-cycle roles."""
+    """Materialize Kubernetes manifests for the cron-driven trainer-cycle role."""
 
     payload = write_trainer_k8s_manifests(
         root,
@@ -1700,7 +1700,9 @@ def run_trainer_cycle(
     )
     idle_pending_recompile_summary = _trainer_pending_recompile_summary(
         root,
-        training_candidates={"family_state_path": _path_text_for_root(idle_family_state_path, root)},
+        training_candidates={
+            "family_state_path": _path_text_for_root(idle_family_state_path, root)
+        },
         channel=promote_channel or "stable",
     )
     if not current_cycle_input_detected and not bool(

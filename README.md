@@ -102,8 +102,8 @@ the Rust wrapper.
 | Trainer candidates | `make trainer-candidates` | Materialize trainer-side YAML candidate examples plus a JSON summary from imported trace records under `artifacts/trainer/` for later DSPy review or compilation. |
 | Trainer recompile | `make trainer-recompile TRAINER_RECOMPILE_RUN_NAME=trainer-auto` | Merge the base training set with cumulative trainer-side candidates, write `artifacts/trainer/generated-training.yaml`, and compile a fresh DSPy run from that generated corpus. |
 | Trainer cycle | `make trainer-cycle TRACE_QUEUE_NAME=dataset` | Run one background-compatible trainer pass: drain queued traces, evaluate retrieval gates, optionally recompile from trainer-side candidates, and only publish/promote a candidate bundle when both retrieval and DSPy benchmark gates pass. |
-| Trainer service | `make trainer-service TRACE_QUEUE_NAME=dataset` | Run a long-lived trainer/publisher loop that repeatedly executes `trainer-cycle`, writes service state under `artifacts/trainer/`, and keeps queue draining plus gated publish/promotion outside the worker hot path. Set `TRAINER_SERVICE_MAX_IDLE_CYCLES` only for bounded local verification runs. |
-| Trainer manifests | `make trainer-k8s-manifests TRAINER_K8S_IMAGE=... TRACE_QUEUE_NAME=dataset` | Materialize Kubernetes manifests for the `trainer-service` Deployment and `trainer-cycle` CronJob, using one shared runtime image, Azure Blob + Queue for the global bundle/trace bus, and a trainer-local PVC for service state, generated candidates, and cached artifacts. |
+| Trainer service | `make trainer-service TRACE_QUEUE_NAME=dataset` | Run a long-lived trainer/publisher loop only for local debugging, queue experiments, or one-off recovery checks. It remains available as a repo utility, but AKS deployment no longer relies on it. |
+| Trainer manifests | `make trainer-k8s-manifests TRAINER_K8S_IMAGE=... TRACE_QUEUE_NAME=dataset` | Materialize Kubernetes manifests for the cron-driven `trainer-cycle` CronJob, using one shared runtime image, Azure Blob + Queue for the global bundle/trace bus, and a trainer-local PVC for generated candidates plus cached artifacts. |
 | Retrieval evaluation | `make retrieval-eval` | Measure retrieval quality with pass rate, recall, precision, reciprocal rank, per-tag breakdowns, a top-k sweep, and enforced minimum pass/recall thresholds. The underlying CLI emits JSON with shared command metadata for worker-side consumption. |
 | MCP discovery | `make discover-mcp` | Inspect MCP-related repository artifacts. |
 | MCP server | `make serve-mcp` | Expose a bounded stdio MCP server for short calls only: lightweight baseline ask, bundle status, DSPy artifact listing, and queued trace publish. Human/manual usage can still go through `repo-rag serve-mcp`, while worker-side Codex integration now prefers the lighter `python -m repo_rag_lab.mcp_stdio --root ...` spawn path. Heavy DSPy training and full retrieval evaluation intentionally stay on direct CLI surfaces. |
@@ -235,8 +235,8 @@ deployments and falls back to `max_tokens` only when the model rejects the newer
   trainer-side candidate-example file and, when configured, recompiling a fresh DSPy run from the
   generated merged training set; the cycle now also enforces a trainer-side DSPy benchmark gate
   before publishing or promoting an automatically recompiled bundle
-- `repo-rag trainer-service` to keep that same queue/publish/promote loop alive as a long-running
-  trainer-side service while recording state and per-cycle history under `artifacts/trainer/`
+- `repo-rag trainer-service` remains available only as a long-running local or ad hoc debug loop
+  while recording state and per-cycle history under `artifacts/trainer/`
 
 ## Trainer Deployment Path
 
@@ -254,7 +254,6 @@ That command materializes:
 - a ConfigMap
 - a Secret example
 - a PVC manifest for trainer-side local artifacts
-- a `trainer-service` Deployment
 - a `trainer-cycle` CronJob
 
 under `artifacts/kubernetes/`. The intent is one shared image family, separate worker vs.
@@ -291,14 +290,14 @@ with the same runtime contract. The same worker-side contract now also includes 
 `make bundle-promote`, and `make bundle-rollback`, overlay creation through `make overlay-init`,
 runtime traces embedded in JSON ask outputs, explicit trace export/import surfaces, and queued
 trace handoff surfaces through `make trace-enqueue` and `make trace-drain` for later
-asynchronous optimization loops. Trainer-side orchestration now also has both `make trainer-cycle`
-for one-shot background passes and `make trainer-service` for a long-lived poller that keeps
-state/history artifacts under `artifacts/trainer/`. Imported traces can also now be materialized
-into cumulative candidate examples for future DSPy review through `make trainer-candidates`, then
-merged back into `artifacts/trainer/generated-training.yaml` for automatic recompilation through
-`make trainer-recompile` or the recompile-aware `make trainer-cycle` / `make trainer-service`
-surfaces. Those automated trainer surfaces now also expose a bundle-benchmark gate, so a
-recompiled bundle is not published or promoted purely because the retrieval gate passed.
+asynchronous optimization loops. Trainer-side orchestration now centers on `make trainer-cycle`
+for one-shot background passes plus a cron-driven AKS surface that wakes every five minutes to
+drain queued traces and publish at most one new version per schedule window. Imported traces can
+also now be materialized into cumulative candidate examples for future DSPy review through
+`make trainer-candidates`, then merged back into `artifacts/trainer/generated-training.yaml` for
+automatic recompilation through `make trainer-recompile` or the recompile-aware `make trainer-cycle`
+surface. Those automated trainer surfaces now also expose a bundle-benchmark gate, so a recompiled
+bundle is not published or promoted purely because the retrieval gate passed.
 
 ## Post-Push Workflow
 
