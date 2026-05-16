@@ -1187,7 +1187,10 @@ That profile state is now also normalized into one per-term statistics payload i
 spread across separate count and weight structures. Each prompt/command/constraint term can carry
 its raw count plus normalized weight inside one `*_term_stats` mapping, while the legacy
 `family_*_terms` lists remain only as derived routing summaries for fast lookup and human
-inspection.
+inspection. The active prompt-profile summary is also capped at 12 terms and filters recurring
+conversational filler such as `just`, `really`, `whether`, and `needed`, so the published family
+surface stays biased toward technical artifacts, tools, paths, and repo-specific task vocabulary
+instead of narrative boilerplate.
 
 ## Tensions And Open Work
 
