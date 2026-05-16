@@ -1190,7 +1190,14 @@ its raw count plus normalized weight inside one `*_term_stats` mapping, while th
 inspection. The active prompt-profile summary is also capped at 12 terms and filters recurring
 conversational filler such as `just`, `really`, `whether`, and `needed`, so the published family
 surface stays biased toward technical artifacts, tools, paths, and repo-specific task vocabulary
-instead of narrative boilerplate.
+instead of narrative boilerplate. The term extraction logic now lives in its own
+`repo_rag_lab.term_extraction` module, where multiple themed technical-term `frozenset`
+collections feed one flattened O(1) hash lookup. Those categories now span repository workflow,
+Git, CI/deployment, cloud/runtime orchestration, frontend media, browser automation, programming
+languages, databases, APIs, data science, neural-network terminology, research/publication work,
+infrastructure/devops, Linux/Windows command surfaces, explicit Kubernetes vocabulary, cloud
+service names, and game-development terminology. Prompt routing still falls back to filtered
+general tokens when the technical lookup alone does not fill the active 12-term profile.
 
 ## Tensions And Open Work
 

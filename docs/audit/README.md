@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-05-16-profile-term-selectivity-tightening.md`
+- `2026-05-16-technical-term-lookup-module.md`
 
 ## Usage
 

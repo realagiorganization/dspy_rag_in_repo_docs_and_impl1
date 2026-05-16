@@ -22,6 +22,7 @@ from .runtime_artifacts import (
     load_json_object,
     upload_remote_family_state,
 )
+from .term_extraction import extract_profile_terms, extract_tokens
 
 
 @dataclass(frozen=True)
@@ -72,57 +73,6 @@ _TRAINER_SIGNAL_KINDS = {"full_trace", "feedback_trace"}
 _SUCCESS_POSTERIOR_ALPHA_PRIOR = 1.0
 _SUCCESS_POSTERIOR_BETA_PRIOR = 1.0
 _SUCCESS_LOWER_BOUND_Z = 1.281552
-_PROFILE_STOPWORDS = {
-    "a",
-    "an",
-    "accessible",
-    "all",
-    "and",
-    "are",
-    "behavior",
-    "can",
-    "claim",
-    "clean",
-    "confirm",
-    "describe",
-    "exact",
-    "found",
-    "for",
-    "from",
-    "generated",
-    "inspect",
-    "instead",
-    "into",
-    "its",
-    "just",
-    "matches",
-    "needed",
-    "now",
-    "once",
-    "otherwise",
-    "reading",
-    "really",
-    "relevant",
-    "report",
-    "should",
-    "state",
-    "states",
-    "static",
-    "still",
-    "switch",
-    "them",
-    "the",
-    "then",
-    "this",
-    "that",
-    "through",
-    "verify",
-    "walks",
-    "whether",
-    "with",
-    "you",
-    "your",
-}
 _PATHLIKE_TOKEN_PATTERN = re.compile(
     r"(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+|[A-Za-z0-9_.-]+\.[A-Za-z0-9_.-]+)"
 )
@@ -791,28 +741,14 @@ def _prompt_family_id(question: str) -> str:
 def _question_tokens(question: object) -> list[str]:
     """Return stable normalized lexical tokens for one prompt string."""
 
-    normalized_question = _normalize_question_text(question).casefold()
-    if not normalized_question:
-        return []
-    return [token for token in re.findall(r"[a-z0-9]+", normalized_question) if token]
+    return extract_tokens(_normalize_question_text(question))
 
 
 def _profile_terms(values: Sequence[object], *, limit: int = 24) -> list[str]:
     """Return stable family-profile lexical terms from prompt-like values."""
 
-    terms: list[str] = []
-    seen: set[str] = set()
-    for value in values:
-        for token in _question_tokens(value):
-            if len(token) < 3 or token in _PROFILE_STOPWORDS:
-                continue
-            if token in seen:
-                continue
-            seen.add(token)
-            terms.append(token)
-            if len(terms) >= limit:
-                return terms
-    return terms
+    normalized_values = [_normalize_question_text(value) for value in values]
+    return extract_profile_terms(normalized_values, limit=limit)
 
 
 def _increment_term_counts(
