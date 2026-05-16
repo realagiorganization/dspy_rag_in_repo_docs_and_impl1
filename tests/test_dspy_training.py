@@ -1240,12 +1240,23 @@ def test_train_repository_program_recompiles_only_dirty_families(
     updated_families = {
         family["prompt_family_id"]: family for family in updated_family_state["prompt_families"]
     }
+    assert updated_family_state["family_state_layout"] == "thin-index"
     assert updated_families["pf-dirty"]["family_needs_recompile"] is False
     assert updated_families["pf-clean"]["family_needs_recompile"] is False
-    assert updated_families["pf-dirty"]["family_runtime_artifact"]["program_path"] == (
+    assert "family_runtime_artifact" not in updated_families["pf-dirty"]
+    assert "family_runtime_artifact" not in updated_families["pf-clean"]
+    assert updated_families["pf-dirty"]["family_path"].endswith("/family.json")
+    assert updated_families["pf-clean"]["family_path"].endswith("/family.json")
+    dirty_family_payload = json.loads(
+        (trainer_dir / updated_families["pf-dirty"]["family_path"]).read_text(encoding="utf-8")
+    )
+    clean_family_payload = json.loads(
+        (trainer_dir / updated_families["pf-clean"]["family_path"]).read_text(encoding="utf-8")
+    )
+    assert dirty_family_payload["family_runtime_artifact"]["program_path"] == (
         "artifacts/dspy/family-dirty-run/families/pf-dirty/program.json"
     )
-    assert updated_families["pf-clean"]["family_runtime_artifact"]["program_path"] == (
+    assert clean_family_payload["family_runtime_artifact"]["program_path"] == (
         "artifacts/dspy/previous-run/families/pf-clean/program.json"
     )
 

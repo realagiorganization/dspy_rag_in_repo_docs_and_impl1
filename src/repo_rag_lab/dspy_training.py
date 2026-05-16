@@ -20,6 +20,7 @@ from .retrieval_profile import load_retrieval_profile
 from .runtime_artifacts import write_bundle_manifest
 from .training_samples import (
     TrainingExample,
+    _persist_local_family_state,
     load_family_state_payload,
     load_training_examples,
     normalize_training_examples,
@@ -1610,9 +1611,9 @@ def _compile_family_artifacts(
             _update_family_artifact_state(family, family_results[prompt_family_id])
             family_state_changed = True
     if family_state_changed:
-        resolved_family_state_path.write_text(
-            f"{json.dumps(payload, indent=2)}\n",
-            encoding="utf-8",
+        _persist_local_family_state(
+            resolved_family_state_path,
+            cast(dict[str, object], payload),
         )
     return family_results
 
