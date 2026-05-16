@@ -1216,6 +1216,18 @@ routing still falls back to filtered general tokens when the technical lookup al
 a usable profile, but the active routing surface is now intentionally narrower and more technical
 than the underlying full `*_term_stats` store.
 
+The latest live trainer debug pass exposed one more cron-only publish trap. Worker export,
+trusted queue handoff, and queue drain were all healthy, but a cron-only trainer cycle could still
+drain `queued/` into `processed/` and stop there if no explicit `recompile_run_name` had been
+passed into the cycle command. In that state `run_trainer_cycle(...)` observed fresh imported
+traces and even built training candidates, yet it never crossed into the recompile/publish branch,
+so `repo-rag-training-families/current.json` and `repo-rag-bundles/channels/stable.json` stayed
+missing after an otherwise successful drain. The trainer deployment defaults now pin the cron path
+to `TRAINER_RECOMPILE_RUN_NAME=trainer-auto`, and the cycle itself now auto-adopts that same run
+family whenever fresh candidates or a pending unpublished family-state are present but no explicit
+run family was provided. That makes the compile/publish path resilient both to stale manifests and
+to manual one-shot cycle invocations that omit the recompile flag.
+
 ## Tensions And Open Work
 
 The narrative is coherent, but not complete. The main open tensions are:

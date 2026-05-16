@@ -1849,7 +1849,14 @@ def run_trainer_cycle(
     except (TypeError, ValueError):
         new_candidate_count = 0
     effective_min_new_candidates = max(1, int(min_new_candidates_for_recompile))
-    recompile_requested = recompile_run_name is not None
+    effective_recompile_run_name = recompile_run_name
+    if (
+        effective_recompile_run_name is None
+        and not queue_backlog_detected
+        and (new_candidate_count > 0 or bool(pending_recompile_summary.get("pending_recompile")))
+    ):
+        effective_recompile_run_name = DEFAULT_TRAINER_K8S_RECOMPILE_RUN_NAME or "trainer-auto"
+    recompile_requested = effective_recompile_run_name is not None
     recompile_threshold_met = new_candidate_count >= effective_min_new_candidates
     pending_recompile = bool(pending_recompile_summary.get("pending_recompile"))
     current_cycle_recovered_count = 0
@@ -1939,10 +1946,12 @@ def run_trainer_cycle(
                     "training candidates did not reach the configured minimum threshold."
                 )
         else:
-            assert recompile_run_name is not None
-            resolved_recompile_run_name = _versioned_training_run_name(recompile_run_name)
+            assert effective_recompile_run_name is not None
+            resolved_recompile_run_name = _versioned_training_run_name(
+                effective_recompile_run_name
+            )
             recompile_lineage = {
-                "run_family": recompile_run_name,
+                "run_family": effective_recompile_run_name,
                 "resolved_run_name": resolved_recompile_run_name,
                 "imported_trace_record_paths": trainer_trace_paths,
                 "imported_trace_count": len(trainer_trace_paths),
@@ -1973,7 +1982,7 @@ def run_trainer_cycle(
                     root,
                     run_name=resolved_recompile_run_name,
                     bundle_version=resolved_recompile_run_name,
-                    run_family=recompile_run_name,
+                    run_family=effective_recompile_run_name,
                     lineage_metadata=recompile_lineage,
                     base_training_path=recompile_base_training_path,
                     candidates_path=recompile_candidates_path,
@@ -1990,7 +1999,7 @@ def run_trainer_cycle(
                     mipro_num_trials=recompile_mipro_num_trials,
                     skip_without_lm=True,
                 )
-                recompile_payload["requested_run_name"] = recompile_run_name
+                recompile_payload["requested_run_name"] = effective_recompile_run_name
                 recompile_payload["resolved_run_name"] = resolved_recompile_run_name
                 recompile_payload["lineage_metadata"] = recompile_lineage
                 if recompile_payload.get("recompile_status") != "compiled":

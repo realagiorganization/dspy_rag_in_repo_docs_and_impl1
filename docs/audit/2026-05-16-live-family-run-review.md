@@ -92,3 +92,40 @@
   - `cd ../dataset && .venv/bin/pytest tests/unit/test_deployment_script_template_regressions.py -k 'trusted_trace_handoff_after_rehydration'`
   - `cd ../dataset && .venv/bin/pytest tests/unit/test_worker_execution_prompt_repo_rag_cli.py -k 'batches_turn_traces_for_queue_handoff'`
 - A fresh live run is still required to confirm those two fixes in published blob artifacts.
+
+## Cron-Only Publish Follow-up
+
+The next live trainer investigation found a separate publish blocker after queue drain had already
+been repaired:
+
+- worker export, trusted queue handoff, and blob queue drain all succeeded
+- `queued/repo-rag-training/` became empty
+- `processed/repo-rag-training/` filled with fresh imported trace records
+- but `repo-rag-training-families/current.json` and `repo-rag-bundles/channels/stable.json`
+  still did not appear
+
+Root cause:
+
+- cron-only trainer runs were still allowed to execute with no explicit `recompile_run_name`
+- `run_trainer_cycle(...)` only entered the compile/publish path when `recompile_run_name` was
+  not `None`
+- therefore a cycle could drain fresh queue items, build candidates, and still exit without any
+  compile/publish attempt
+
+Source-level fix:
+
+- `DEFAULT_TRAINER_K8S_RECOMPILE_RUN_NAME` is now `trainer-auto`
+- `run_trainer_cycle(...)` now auto-adopts that same run-family when:
+  - queue backlog is clear, and
+  - either new candidates were imported, or a pending unpublished family-state already exists
+
+Verification executed for the fix:
+
+- `uv run python -m compileall src tests`
+- `uv run pytest tests/test_utilities.py -k 'trainer_k8s_manifest_generation_writes_expected_manifests or auto_uses_default_recompile_family_when_queue_drains or recompiles_pending_family_state_after_backlog_clears or recompiles_pending_family_drift_once_new_traces_arrive or skips_recompile_and_publish_without_new_candidates'`
+
+Current status:
+
+- source now matches the intended cron-only contract: a trainer cycle that drains fresh queued
+  traces should not require a separately supplied run family to compile and publish
+- a fresh live AKS run is still required to confirm that the queue-drain-only failure mode is gone

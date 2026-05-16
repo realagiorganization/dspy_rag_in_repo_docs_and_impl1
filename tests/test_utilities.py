@@ -458,7 +458,7 @@ def test_run_trainer_k8s_manifest_generation_writes_expected_manifests(tmp_path:
         "/workspace/repo-rag",
     ]
     assert config_map["kind"] == "ConfigMap"
-    assert config_map["data"]["TRAINER_RECOMPILE_RUN_NAME"] == ""
+    assert config_map["data"]["TRAINER_RECOMPILE_RUN_NAME"] == "trainer-auto"
     assert config_map["data"]["TRAINER_MIN_BUNDLE_PASS_RATE"] == ""
     assert config_map["data"]["TRAINER_MIN_NEW_CANDIDATES_FOR_RECOMPILE"] == "1"
     assert config_map["data"]["RETRIEVAL_MIN_PASS_RATE"] == ""
@@ -1587,6 +1587,137 @@ def test_run_trace_drain_reports_queue_missing_and_failed_item_warnings(
         "No queued trace items were available for the requested queue.",
         "One or more queued trace items failed during drain.",
     ]
+
+
+def test_run_trainer_cycle_auto_uses_default_recompile_family_when_queue_drains(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.drain_trace_queue",
+        lambda root, queue_name="default", limit=None, keep_queued=False: {
+            "queue_name": queue_name,
+            "queue_found": True,
+            "queued_count_before": 1,
+            "selected_count": 1,
+            "drained_count": 1,
+            "failed_count": 0,
+            "remaining_count": 0,
+            "keep_queued": keep_queued,
+            "status": "success",
+            "items": [{"imported_trace_record_path": "artifacts/traces/imported/one.json"}],
+            "failures": [],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._prepare_local_trainer_family_cache",
+        lambda *args, **kwargs: {"status": "using-local-cache"},
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._summarize_imported_trace_records",
+        lambda root, paths: {},
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.materialize_training_candidates",
+        _materialize_training_candidates_stub(
+            candidate_count=1,
+            new_candidate_count=1,
+            prompt_family_count=1,
+            context_group_count=1,
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.inspect_pending_trainer_inputs",
+        lambda *args, **kwargs: {"queue_visible_count": 0},
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._trainer_pending_recompile_summary",
+        lambda *args, **kwargs: {
+            "pending_recompile": False,
+            "reason": "new-candidates-detected",
+            "current_bundle_version": None,
+        },
+    )
+    monkeypatch.setattr("repo_rag_lab.utilities.load_training_examples", lambda path: ["example"])
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.build_retrieval_benchmarks",
+        lambda examples: [{"question": "demo"}],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.evaluate_retrieval_quality_suite",
+        lambda root, benchmarks, top_k, top_k_values, retrieval_mode=None: {
+            "retrieval_mode": "idf-rerank",
+            "default_top_k": 4,
+            "default_summary": {
+                "top_k": 4,
+                "pass_rate": 1.0,
+                "source_recall": 1.0,
+                "tag_summaries": [],
+            },
+            "top_k_summaries": [{"top_k": 4, "pass_rate": 1.0, "source_recall": 1.0}],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.check_retrieval_quality_thresholds",
+        lambda summary, minimum_pass_rate=None, minimum_source_recall=None: [],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._versioned_training_run_name",
+        lambda run_family, recorded_at=None: "20260516T160000Z",
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._trainer_recompile_payload",
+        lambda *args, **kwargs: {
+            "recompile_status": "compiled",
+            "generated_training": {
+                "output_path": "artifacts/trainer/generated-training.yaml",
+                "summary_path": "artifacts/trainer/generated-training-summary.json",
+            },
+            "training_result": {
+                "run_name": "20260516T160000Z",
+                "bundle_version": "20260516T160000Z",
+                "metadata_path": "artifacts/dspy/20260516T160000Z/metadata.json",
+                "bundle_path": "artifacts/dspy/20260516T160000Z/bundle.json",
+                "benchmark_summary": {"pass_rate": 1.0},
+            },
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.publish_bundle",
+        lambda *args, **kwargs: {
+            "bundle_version": "20260516T160000Z",
+            "run_name": "20260516T160000Z",
+            "published_bundle_path": "artifacts/dspy/published/20260516T160000Z.json",
+            "bundle_path": "artifacts/dspy/20260516T160000Z/bundle.json",
+            "metadata_path": "artifacts/dspy/20260516T160000Z/metadata.json",
+            "program_path": "artifacts/dspy/20260516T160000Z/program.json",
+            "publish_status": "published",
+        },
+    )
+    monkeypatch.setattr("repo_rag_lab.utilities.resolve_azure_artifact_config", lambda: None)
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.summarize_family_state",
+        lambda path: {
+            "dirty_family_count": 0,
+            "family_state_path": str(path),
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.upload_remote_family_state",
+        lambda root, family_state_path: {
+            "family_state_path": str(family_state_path),
+            "family_state_version": "20260516T160000Z",
+        },
+    )
+
+    payload = json.loads(run_trainer_cycle(tmp_path, queue_name="dataset"))
+
+    assert payload["command_status"] == "success"
+    assert payload["recompile"]["requested_run_name"] == "trainer-auto"
+    assert payload["recompile"]["resolved_run_name"] == "20260516T160000Z"
+    assert payload["publish_requested"] is True
+    assert payload["publish"]["bundle_version"] == "20260516T160000Z"
+    assert payload["remote_family_state"]["family_state_version"] == "20260516T160000Z"
 
 
 def test_run_trainer_cycle_blocks_promotion_when_gate_fails(
