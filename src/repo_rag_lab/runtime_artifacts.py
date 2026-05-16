@@ -1975,10 +1975,28 @@ def _runtime_trace_signal_fields(payload: Mapping[str, object]) -> dict[str, obj
     }
 
 
+def _runtime_trace_snapshot_fields(payload: Mapping[str, object]) -> dict[str, object]:
+    """Extract prompt-snapshot fields from one trace-like payload."""
+
+    trace_payload = _mapping_or_none(payload.get("trace"))
+    trace = trace_payload if trace_payload is not None else payload
+    return {
+        "question": _string_or_none(trace.get("question")) or _string_or_none(payload.get("question")),
+        "original_prompt": _string_or_none(trace.get("original_prompt"))
+        or _string_or_none(payload.get("original_prompt")),
+        "reformulated_prompt": _string_or_none(trace.get("reformulated_prompt"))
+        or _string_or_none(payload.get("reformulated_prompt")),
+    }
+
+
 def _mirror_trace_signal_fields(payload: Mapping[str, object]) -> dict[str, object]:
-    """Mirror nested trace signal fields onto the payload top level when missing."""
+    """Mirror nested trace signal + prompt fields onto the payload top level when missing."""
 
     mirrored = {str(key): value for key, value in payload.items()}
+    for key, value in _runtime_trace_snapshot_fields(mirrored).items():
+        current_value = mirrored.get(key)
+        if current_value is None or (isinstance(current_value, str) and not current_value.strip()):
+            mirrored[key] = value
     for key, value in _runtime_trace_signal_fields(mirrored).items():
         current_value = mirrored.get(key)
         if current_value is None or (isinstance(current_value, str) and not current_value.strip()):
@@ -2555,6 +2573,10 @@ def queue_trace_record(
         "trace_name": safe_trace_name,
         "question": _string_or_none(snapshot.get("question"))
         or _string_or_none(trace.get("question")),
+        "original_prompt": _string_or_none(snapshot.get("original_prompt"))
+        or _string_or_none(trace.get("original_prompt")),
+        "reformulated_prompt": _string_or_none(snapshot.get("reformulated_prompt"))
+        or _string_or_none(trace.get("reformulated_prompt")),
         "bundle_version": _string_or_none(trace.get("bundle_version")),
         "source_command": _string_or_none(normalized_payload.get("source_command")),
         "source_root": _string_or_none(normalized_payload.get("source_root")),

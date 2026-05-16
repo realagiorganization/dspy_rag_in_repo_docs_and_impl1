@@ -46,10 +46,15 @@ def _sample_trace_payload() -> dict[str, object]:
         "command": "ask",
         "command_status": "success",
         "root": "/tmp/target",
+        "question": "How does the trainer ingest traces?",
+        "original_prompt": "Inspect trainer queue ingestion behavior",
+        "reformulated_prompt": "Inspect how the trainer ingests queued traces.",
         "trace": {
             "schema_version": 1,
             "trace_kind": "repo-rag-runtime",
             "question": "How does the trainer ingest traces?",
+            "original_prompt": "Inspect trainer queue ingestion behavior",
+            "reformulated_prompt": "Inspect how the trainer ingests queued traces.",
             "mode": "baseline",
             "retrieval_mode": "idf-rerank",
             "sources": ["README.md"],
@@ -373,6 +378,8 @@ def test_queue_trace_record_and_drain_trace_queue_use_azure_blob_queue(
     assert queued["prompt_family_band"] == "match"
     assert queued["trainer_signal_kind"] == "feedback_trace"
     assert queued["family_predicted_hit_rate"] == 0.666667
+    assert queued["original_prompt"] == "Inspect trainer queue ingestion behavior"
+    assert queued["reformulated_prompt"] == "Inspect how the trainer ingests queued traces."
     assert str(queued["queue_item_path"]).startswith("queued/repo-rag-training/")
     assert store.blob_exists(
         "repo-rag-training-traces",
@@ -384,6 +391,8 @@ def test_queue_trace_record_and_drain_trace_queue_use_azure_blob_queue(
     )
     assert queued_blob["prompt_family_band"] == "match"
     assert queued_blob["trainer_signal_kind"] == "feedback_trace"
+    assert queued_blob["original_prompt"] == "Inspect trainer queue ingestion behavior"
+    assert queued_blob["reformulated_prompt"] == "Inspect how the trainer ingests queued traces."
     assert queued_blob["trace_payload"]["prompt_family_band"] == "match"
     assert queued_blob["trace_payload"]["trainer_signal_kind"] == "feedback_trace"
     assert queued_blob["trace_payload"]["family_predicted_hit_rate"] == 0.666667
@@ -405,6 +414,12 @@ def test_queue_trace_record_and_drain_trace_queue_use_azure_blob_queue(
     assert imported_path.exists()
     imported_payload = json.loads(imported_path.read_text(encoding="utf-8"))
     assert imported_payload["outcome"]["acceptance_status"] == "accepted"
+    assert imported_payload["original_prompt"] == "Inspect trainer queue ingestion behavior"
+    assert imported_payload["reformulated_prompt"] == "Inspect how the trainer ingests queued traces."
+    processed_blob_name = str(first_drained_item["processed_queue_item_path"])
+    processed_blob = store.download_json("repo-rag-training-traces", processed_blob_name)
+    assert processed_blob["original_prompt"] == "Inspect trainer queue ingestion behavior"
+    assert processed_blob["reformulated_prompt"] == "Inspect how the trainer ingests queued traces."
     assert store.deleted_messages == ["msg-1"]
 
 

@@ -4,7 +4,7 @@ This directory stores dated verification evidence for the repository.
 
 ## Latest Audit
 
-- `2026-05-16-active-profile-summary-selectivity.md`
+- `2026-05-16-queue-prompt-snapshot-mirroring.md`
 
 ## Usage
 
