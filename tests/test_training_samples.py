@@ -2265,7 +2265,9 @@ def test_materialize_training_candidates_profile_terms_ignore_one_off_noise(
     )
 
     assert summary["prompt_family_count"] == 1
-    family_state = load_family_state_payload(tmp_path / "artifacts" / "trainer" / "family-state.json")
+    family_state = load_family_state_payload(
+        tmp_path / "artifacts" / "trainer" / "family-state.json"
+    )
     family = family_state["prompt_families"][0]
     assert family["family_prompt_profile_term_stats"]["readme"]["count"] >= 3
     assert family["family_prompt_profile_term_stats"]["gif"]["count"] >= 3
@@ -2362,7 +2364,9 @@ def test_materialize_training_candidates_prefers_technical_terms_in_active_summa
         summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
     )
 
-    family_state = load_family_state_payload(tmp_path / "artifacts" / "trainer" / "family-state.json")
+    family_state = load_family_state_payload(
+        tmp_path / "artifacts" / "trainer" / "family-state.json"
+    )
     family = family_state["prompt_families"][0]
     terms = family["family_prompt_profile_terms"]
     assert "gif" in terms

@@ -1489,7 +1489,9 @@ def test_build_codex_mediation_uses_lower_bound_baseline_when_present(
 
     captured: dict[str, Path | None] = {"program_path": None}
 
-    def fake_ask_repository(*, question: str, root: Path, retrieval_mode: RetrievalMode) -> SimpleNamespace:
+    def fake_ask_repository(
+        *, question: str, root: Path, retrieval_mode: RetrievalMode
+    ) -> SimpleNamespace:
         del root, retrieval_mode
         assert question == "Run the failing pytest target and inspect stderr."
         return SimpleNamespace(

@@ -110,7 +110,9 @@ def test_select_profile_summary_terms_prefers_technical_terms_over_narrative_noi
     assert "commands" not in summary
 
 
-def test_select_profile_summary_terms_keeps_summary_short_when_only_low_signal_remainder_exists() -> None:
+def test_select_profile_summary_terms_keeps_summary_short_when_only_low_signal_remainder_exists() -> (
+    None
+):
     summary = select_profile_summary_terms(
         {
             "gif": 3,

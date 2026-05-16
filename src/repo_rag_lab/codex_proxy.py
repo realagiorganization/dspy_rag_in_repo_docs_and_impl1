@@ -1413,8 +1413,7 @@ def build_codex_mediation(
             if (
                 family_artifact_hit_rate is not None
                 and baseline_hit_rate is not None
-                and family_artifact_hit_rate
-                < baseline_hit_rate
+                and family_artifact_hit_rate < baseline_hit_rate
             ):
                 use_family_artifact = False
                 warnings.append(
