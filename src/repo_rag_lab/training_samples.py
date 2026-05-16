@@ -22,7 +22,7 @@ from .runtime_artifacts import (
     load_json_object,
     upload_remote_family_state,
 )
-from .term_extraction import extract_profile_terms, extract_tokens
+from .term_extraction import extract_profile_terms, extract_tokens, select_profile_summary_terms
 
 
 @dataclass(frozen=True)
@@ -831,13 +831,7 @@ def _stable_profile_terms_from_counts(
 ) -> list[str]:
     """Return one top-k stable routing profile from one term-frequency mapping."""
 
-    sorted_items = _sorted_term_count_items(counts)
-    if not sorted_items:
-        return []
-    filtered = [term for term, count in sorted_items if count >= min_count]
-    if filtered:
-        return filtered[:limit]
-    return [term for term, _count in sorted_items[:limit]]
+    return select_profile_summary_terms(counts, limit=limit, min_count=min_count)
 
 
 def _stable_profile_min_count(record_count: int) -> int:

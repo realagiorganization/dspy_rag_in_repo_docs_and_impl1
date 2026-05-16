@@ -1196,8 +1196,13 @@ collections feed one flattened O(1) hash lookup. Those categories now span repos
 Git, CI/deployment, cloud/runtime orchestration, frontend media, browser automation, programming
 languages, databases, APIs, data science, neural-network terminology, research/publication work,
 infrastructure/devops, Linux/Windows command surfaces, explicit Kubernetes vocabulary, cloud
-service names, and game-development terminology. Prompt routing still falls back to filtered
-general tokens when the technical lookup alone does not fill the active 12-term profile.
+service names, and game-development terminology. The active family summary is no longer chosen by
+raw count ordering alone: a dedicated selector now prefers technical lookup hits, suppresses broad
+narrative terms such as `already`, `contains`, `does`, and `fields`, and is allowed to publish
+fewer than 12 active prompt terms when the remaining candidates are only low-value filler. Prompt
+routing still falls back to filtered general tokens when the technical lookup alone does not yield
+a usable profile, but the active routing surface is now intentionally narrower and more technical
+than the underlying full `*_term_stats` store.
 
 ## Tensions And Open Work
 

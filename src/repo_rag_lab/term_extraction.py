@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from collections.abc import Iterable, Sequence
 
 _TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
@@ -58,6 +59,66 @@ PROFILE_STOPWORDS = frozenset(
         "with",
         "you",
         "your",
+    }
+)
+
+PROFILE_SUMMARY_NARRATIVE_STOPWORDS = frozenset(
+    {
+        "already",
+        "any",
+        "anything",
+        "appears",
+        "approach",
+        "available",
+        "before",
+        "both",
+        "but",
+        "change",
+        "changes",
+        "checked",
+        "checking",
+        "cleanly",
+        "close",
+        "code",
+        "commands",
+        "complete",
+        "completion",
+        "conceptually",
+        "conclusions",
+        "contains",
+        "contents",
+        "context",
+        "create",
+        "current",
+        "decision",
+        "described",
+        "does",
+        "doesn",
+        "driven",
+        "edit",
+        "ensure",
+        "execute",
+        "existing",
+        "fields",
+        "final",
+        "grabbing",
+        "grounded",
+        "handoff",
+        "identify",
+        "line",
+        "mediation",
+        "only",
+        "output",
+        "point",
+        "precise",
+        "provide",
+        "ranges",
+        "reached",
+        "references",
+        "rely",
+        "requested",
+        "required",
+        "use",
     }
 )
 
@@ -773,6 +834,35 @@ TECHNICAL_TERM_CATEGORIES: dict[str, frozenset[str]] = {
 }
 
 TECHNICAL_TERM_LOOKUP = frozenset().union(*TECHNICAL_TERM_CATEGORIES.values())
+_CATEGORY_PRIORITY = {
+    "browser_automation": 0,
+    "frontend_media": 0,
+    "git": 1,
+    "repo": 1,
+    "kubernetes": 1,
+    "cloud_services": 1,
+    "linux_commands": 1,
+    "windows_commands": 1,
+    "gamedev": 1,
+    "programming_languages": 2,
+    "databases_storage": 2,
+    "api_web_backend": 2,
+    "data_science_analytics": 2,
+    "neural_networks_ai": 2,
+    "cloud_ops": 3,
+    "build_ci": 3,
+    "python_ml": 3,
+    "infrastructure_devops": 3,
+    "research_science": 4,
+    "systems": 5,
+}
+_TERM_CATEGORY_PRIORITY: dict[str, int] = {}
+for _category_name, _terms in TECHNICAL_TERM_CATEGORIES.items():
+    _priority = _CATEGORY_PRIORITY.get(_category_name, 4)
+    for _term in _terms:
+        existing = _TERM_CATEGORY_PRIORITY.get(_term)
+        if existing is None or _priority < existing:
+            _TERM_CATEGORY_PRIORITY[_term] = _priority
 
 
 def extract_tokens(value: object) -> list[str]:
@@ -814,6 +904,77 @@ def extract_profile_terms(values: Sequence[object], *, limit: int = 12) -> list[
     if len(prioritized_terms) >= limit:
         return prioritized_terms[:limit]
     return [*prioritized_terms, *fallback_terms][:limit]
+
+
+def is_technical_term(term: object) -> bool:
+    """Return whether one term belongs to the technical lookup surface."""
+
+    cleaned = str(term or "").strip().casefold()
+    return bool(cleaned) and cleaned in TECHNICAL_TERM_LOOKUP
+
+
+def is_summary_narrative_term(term: object) -> bool:
+    """Return whether one term should be aggressively down-weighted in active summaries."""
+
+    cleaned = str(term or "").strip().casefold()
+    return bool(cleaned) and cleaned in PROFILE_SUMMARY_NARRATIVE_STOPWORDS
+
+
+def select_profile_summary_terms(
+    counts: Mapping[str, object],
+    *,
+    limit: int,
+    min_count: int = 1,
+) -> list[str]:
+    """Return one selective active routing summary from one term-frequency mapping.
+
+    The selector keeps full term statistics elsewhere, but the active summary prefers
+    technical terms, penalizes broad narrative words, and uses raw counts only after
+    those stronger routing signals have been applied.
+    """
+
+    normalized: list[tuple[str, int]] = []
+    for key, value in counts.items():
+        term = str(key or "").strip().casefold()
+        if not term:
+            continue
+        try:
+            count = int(value)
+        except (TypeError, ValueError):
+            continue
+        if count <= 0:
+            continue
+        normalized.append((term, count))
+    if not normalized:
+        return []
+    eligible = [(term, count) for term, count in normalized if count >= min_count] or normalized
+
+    def _sort_key(item: tuple[str, int]) -> tuple[int, int, int, int, str]:
+        term, count = item
+        technical = 0 if term in TECHNICAL_TERM_LOOKUP else 1
+        narrative = 1 if term in PROFILE_SUMMARY_NARRATIVE_STOPWORDS else 0
+        category_priority = _TERM_CATEGORY_PRIORITY.get(term, 9)
+        return (
+            technical,
+            narrative,
+            -count,
+            category_priority,
+            term,
+        )
+
+    preferred = [item for item in eligible if item[0] not in PROFILE_SUMMARY_NARRATIVE_STOPWORDS]
+    ranked = preferred or eligible
+
+    selected: list[str] = []
+    seen: set[str] = set()
+    for term, _count in sorted(ranked, key=_sort_key):
+        if term in seen:
+            continue
+        seen.add(term)
+        selected.append(term)
+        if len(selected) >= limit:
+            break
+    return selected
 
 
 def technical_terms_for_category(category: str) -> frozenset[str]:
