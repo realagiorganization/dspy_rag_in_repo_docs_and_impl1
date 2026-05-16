@@ -2197,20 +2197,38 @@ def test_materialize_training_candidates_profile_terms_ignore_one_off_noise(
         (
             "accepted-a.json",
             "2026-05-15T12:00:00+00:00",
-            "Just update README with demo GIF walkthrough and describe whether it is really needed now",
-            "Chromium bootstrap detail for the README walkthrough GIF refresh and describe whether it is really needed now",
+            (
+                "Just update README with demo GIF walkthrough and describe whether it is "
+                "really needed now"
+            ),
+            (
+                "Chromium bootstrap detail for the README walkthrough GIF refresh and "
+                "describe whether it is really needed now"
+            ),
         ),
         (
             "accepted-b.json",
             "2026-05-15T12:05:00+00:00",
-            "Just refresh README demo GIF walkthrough and describe whether it is really needed now",
-            "Playwright dependency note for the README walkthrough GIF refresh and describe whether it is really needed now",
+            (
+                "Just refresh README demo GIF walkthrough and describe whether it is really "
+                "needed now"
+            ),
+            (
+                "Playwright dependency note for the README walkthrough GIF refresh and "
+                "describe whether it is really needed now"
+            ),
         ),
         (
             "accepted-c.json",
             "2026-05-15T12:10:00+00:00",
-            "Just adjust README walkthrough GIF in docs and describe whether it is really needed now",
-            "Timeout mitigation note for the README walkthrough GIF refresh and describe whether it is really needed now",
+            (
+                "Just adjust README walkthrough GIF in docs and describe whether it is "
+                "really needed now"
+            ),
+            (
+                "Timeout mitigation note for the README walkthrough GIF refresh and "
+                "describe whether it is really needed now"
+            ),
         ),
     )
     for name, recorded_at, question, reformulated_prompt in prompts:
@@ -2300,17 +2318,26 @@ def test_materialize_training_candidates_prefers_technical_terms_in_active_summa
         (
             "accepted-a.json",
             "2026-05-16T09:00:00+00:00",
-            "I reached the decision point: the repo already contains the requested GIF, README embed, and the recorder script, and the worktree is clean.",
+            (
+                "I reached the decision point: the repo already contains the requested GIF, "
+                "README embed, and the recorder script, and the worktree is clean."
+            ),
         ),
         (
             "accepted-b.json",
             "2026-05-16T09:05:00+00:00",
-            "The repo already contains the GIF and README embed, so I am checking the recorder script and current worktree before the final handoff.",
+            (
+                "The repo already contains the GIF and README embed, so I am checking the "
+                "recorder script and current worktree before the final handoff."
+            ),
         ),
         (
             "accepted-c.json",
             "2026-05-16T09:10:00+00:00",
-            "Before the final handoff I am confirming the existing README, GIF asset, recorder script, git state, and worktree contents.",
+            (
+                "Before the final handoff I am confirming the existing README, GIF asset, "
+                "recorder script, git state, and worktree contents."
+            ),
         ),
     )
     for name, recorded_at, question in prompts:

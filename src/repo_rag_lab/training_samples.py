@@ -785,7 +785,7 @@ def _term_count_mapping(
 ) -> dict[str, int]:
     """Return one deterministic normalized term-frequency dictionary."""
 
-    return {term: count for term, count in _sorted_term_count_items(counts)}
+    return dict(_sorted_term_count_items(counts))
 
 
 def _term_counts_from_stats(

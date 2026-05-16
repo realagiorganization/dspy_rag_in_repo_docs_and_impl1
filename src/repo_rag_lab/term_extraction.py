@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 _TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 
@@ -968,8 +967,6 @@ TECHNICAL_TERM_CATEGORIES: dict[str, frozenset[str]] = {
             "mounted",
             "fd",
             "stdin",
-            "stdout",
-            "stderr",
         }
     ),
 }

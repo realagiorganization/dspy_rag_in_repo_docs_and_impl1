@@ -2066,8 +2066,9 @@ def test_running_codex_proxy_handles_mediation_on_one_server_thread(
     assert len(set(seen_threads)) == 1
 
 
-def test_persist_turn_trace_emits_feedback_trace_for_successful_family_reuse_and_dedupes_same_prompt(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_persist_turn_trace_emits_feedback_trace_for_successful_family_reuse_and_dedupes_same_prompt(  # noqa: E501
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy.resolve_azure_openai_runtime",
