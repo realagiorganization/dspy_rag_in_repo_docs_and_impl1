@@ -2350,6 +2350,341 @@ def test_run_trainer_cycle_does_not_replay_full_imported_ledger_when_no_new_trac
     assert payload["recompile"]["recompile_status"] == "skipped-no-queued-input"
 
 
+def test_run_trainer_cycle_resumes_pending_cycle_after_queue_was_already_drained(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    imported_trace_path = imported_dir / "pending.json"
+    imported_trace_path.write_text("{}", encoding="utf-8")
+    pending_cycle_path = tmp_path / utilities_module.DEFAULT_TRAINER_PENDING_CYCLE_PATH
+    pending_cycle_path.parent.mkdir(parents=True, exist_ok=True)
+    pending_cycle_path.write_text(
+        json.dumps(
+            {
+                "queue_name": "dataset",
+                "trace_paths": ["artifacts/traces/imported/pending.json"],
+                "queue_drain_count": 1,
+                "written_at": "2026-05-17T10:30:00+00:00",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.drain_trace_queue",
+        lambda root, queue_name="default", limit=None, keep_queued=False: {
+            "queue_name": queue_name,
+            "queue_found": True,
+            "queued_count_before": 0,
+            "selected_count": 0,
+            "drained_count": 0,
+            "failed_count": 0,
+            "remaining_count": 0,
+            "keep_queued": keep_queued,
+            "status": "success",
+            "items": [],
+            "failures": [],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._summarize_imported_trace_records",
+        lambda root, imported_trace_paths: {
+            "record_count": len(imported_trace_paths),
+            "processed_paths": list(imported_trace_paths),
+            "acceptance_status_counts": {},
+            "execution_status_counts": {},
+            "retrieval_mode_counts": {},
+            "bundle_version_counts": {},
+            "missing_source_count": 0,
+            "missing_context_count": 0,
+            "source_error_count": 0,
+            "used_baseline_fallback_count": 0,
+            "invalid_record_count": 0,
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.load_training_examples",
+        lambda path: ["example"],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.build_retrieval_benchmarks",
+        lambda examples: [{"question": "demo"}],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.evaluate_retrieval_quality_suite",
+        lambda root, benchmarks, top_k, top_k_values, retrieval_mode=None: {
+            "retrieval_mode": "idf-rerank",
+            "default_top_k": 4,
+            "default_summary": {
+                "top_k": 4,
+                "pass_rate": 1.0,
+                "source_recall": 1.0,
+                "tag_summaries": [],
+            },
+            "top_k_summaries": [{"top_k": 4, "pass_rate": 1.0, "source_recall": 1.0}],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.check_retrieval_quality_thresholds",
+        lambda summary, minimum_pass_rate=None, minimum_source_recall=None: [],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._prepare_local_trainer_family_cache",
+        lambda root, queue_name="default", seed_trace_paths=(): {
+            "status": "using-local-cache",
+            "seed_trace_paths": [str(path) for path in seed_trace_paths],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.materialize_training_candidates",
+        _materialize_training_candidates_stub(
+            candidate_count=1,
+            new_candidate_count=1,
+            prompt_family_count=1,
+            context_group_count=1,
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._trainer_pending_recompile_summary",
+        lambda *args, **kwargs: {
+            "pending_recompile": False,
+            "reason": "bundle-matches-current-family-set",
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._versioned_training_run_name",
+        lambda run_family, recorded_at=None: "20260517T103500Z",
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._trainer_recompile_payload",
+        lambda *args, **kwargs: {
+            "recompile_status": "compiled",
+            "generated_training": {
+                "output_path": "artifacts/trainer/generated-training.yaml",
+                "summary_path": "artifacts/trainer/generated-training-summary.json",
+            },
+            "training_result": {
+                "run_name": "20260517T103500Z",
+                "bundle_version": "20260517T103500Z",
+                "metadata_path": "artifacts/dspy/20260517T103500Z/metadata.json",
+                "bundle_path": "artifacts/dspy/20260517T103500Z/bundle.json",
+                "benchmark_summary": {"pass_rate": 1.0},
+            },
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.publish_bundle",
+        lambda *args, **kwargs: {
+            "bundle_version": "20260517T103500Z",
+            "run_name": "20260517T103500Z",
+            "published_bundle_path": "artifacts/dspy/published/20260517T103500Z.json",
+            "bundle_path": "artifacts/dspy/20260517T103500Z/bundle.json",
+            "metadata_path": "artifacts/dspy/20260517T103500Z/metadata.json",
+            "program_path": "artifacts/dspy/20260517T103500Z/program.json",
+            "publish_status": "published",
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.summarize_family_state",
+        lambda path: {
+            "dirty_family_count": 0,
+            "family_state_path": str(path),
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.upload_remote_family_state",
+        lambda root, family_state_path: {
+            "family_state_path": str(family_state_path),
+            "family_state_version": "20260517T103500Z",
+        },
+    )
+    monkeypatch.setattr("repo_rag_lab.utilities.resolve_azure_artifact_config", lambda: None)
+
+    payload = json.loads(run_trainer_cycle(tmp_path, queue_name="dataset"))
+
+    assert payload["command_status"] == "success"
+    assert payload["current_cycle_input_detected"] is True
+    assert payload["current_cycle_trace_input_count"] == 1
+    assert payload["durable_trace_recovery"]["status"] == "pending-cycle-resume"
+    assert payload["durable_trace_recovery"]["restored_count"] == 1
+    assert payload["family_cache_preparation"]["status"] == "using-local-cache"
+    assert payload["training_candidates"]["new_candidate_count"] == 1
+    assert not pending_cycle_path.exists()
+
+
+def test_run_trainer_cycle_keeps_pending_cycle_ledger_when_recompile_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    imported_trace_path = imported_dir / "new.json"
+    imported_trace_path.write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.drain_trace_queue",
+        lambda root, queue_name="default", limit=None, keep_queued=False: {
+            "queue_name": queue_name,
+            "queue_found": True,
+            "queued_count_before": 1,
+            "selected_count": 1,
+            "drained_count": 1,
+            "failed_count": 0,
+            "remaining_count": 0,
+            "keep_queued": keep_queued,
+            "status": "success",
+            "items": [{"imported_trace_record_path": "artifacts/traces/imported/new.json"}],
+            "failures": [],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._summarize_imported_trace_records",
+        lambda root, imported_trace_paths: {
+            "record_count": len(imported_trace_paths),
+            "processed_paths": list(imported_trace_paths),
+            "acceptance_status_counts": {},
+            "execution_status_counts": {},
+            "retrieval_mode_counts": {},
+            "bundle_version_counts": {},
+            "missing_source_count": 0,
+            "missing_context_count": 0,
+            "source_error_count": 0,
+            "used_baseline_fallback_count": 0,
+            "invalid_record_count": 0,
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.load_training_examples",
+        lambda path: ["example"],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.build_retrieval_benchmarks",
+        lambda examples: [{"question": "demo"}],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.evaluate_retrieval_quality_suite",
+        lambda root, benchmarks, top_k, top_k_values, retrieval_mode=None: {
+            "retrieval_mode": "idf-rerank",
+            "default_top_k": 4,
+            "default_summary": {
+                "top_k": 4,
+                "pass_rate": 1.0,
+                "source_recall": 1.0,
+                "tag_summaries": [],
+            },
+            "top_k_summaries": [{"top_k": 4, "pass_rate": 1.0, "source_recall": 1.0}],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.check_retrieval_quality_thresholds",
+        lambda summary, minimum_pass_rate=None, minimum_source_recall=None: [],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._prepare_local_trainer_family_cache",
+        lambda root, queue_name="default", seed_trace_paths=(): {
+            "status": "using-local-cache",
+            "seed_trace_paths": [str(path) for path in seed_trace_paths],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.materialize_training_candidates",
+        _materialize_training_candidates_stub(
+            candidate_count=1,
+            new_candidate_count=1,
+            prompt_family_count=1,
+            context_group_count=1,
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._trainer_pending_recompile_summary",
+        lambda *args, **kwargs: {
+            "pending_recompile": False,
+            "reason": "bundle-matches-current-family-set",
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._trainer_recompile_payload",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("compile exploded")),
+    )
+    monkeypatch.setattr("repo_rag_lab.utilities.resolve_azure_artifact_config", lambda: None)
+
+    payload = json.loads(run_trainer_cycle(tmp_path, queue_name="dataset"))
+
+    pending_cycle_path = tmp_path / utilities_module.DEFAULT_TRAINER_PENDING_CYCLE_PATH
+    assert payload["command_status"] == "fail"
+    assert payload["current_cycle_input_detected"] is True
+    assert payload["current_cycle_queue_drain_count"] == 1
+    assert payload["recompile_error"]["type"] == "RuntimeError"
+    assert pending_cycle_path.exists()
+    pending_payload = json.loads(pending_cycle_path.read_text(encoding="utf-8"))
+    assert pending_payload["trace_paths"] == ["artifacts/traces/imported/new.json"]
+    assert pending_payload["queue_drain_count"] == 1
+
+
+def test_run_trainer_cycle_keeps_pending_cycle_ledger_when_materialization_crashes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    imported_trace_path = imported_dir / "new.json"
+    imported_trace_path.write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.drain_trace_queue",
+        lambda root, queue_name="default", limit=None, keep_queued=False: {
+            "queue_name": queue_name,
+            "queue_found": True,
+            "queued_count_before": 1,
+            "selected_count": 1,
+            "drained_count": 1,
+            "failed_count": 0,
+            "remaining_count": 0,
+            "keep_queued": keep_queued,
+            "status": "success",
+            "items": [{"imported_trace_record_path": "artifacts/traces/imported/new.json"}],
+            "failures": [],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._summarize_imported_trace_records",
+        lambda root, imported_trace_paths: {
+            "record_count": len(imported_trace_paths),
+            "processed_paths": list(imported_trace_paths),
+            "acceptance_status_counts": {},
+            "execution_status_counts": {},
+            "retrieval_mode_counts": {},
+            "bundle_version_counts": {},
+            "missing_source_count": 0,
+            "missing_context_count": 0,
+            "source_error_count": 0,
+            "used_baseline_fallback_count": 0,
+            "invalid_record_count": 0,
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._prepare_local_trainer_family_cache",
+        lambda root, queue_name="default", seed_trace_paths=(): {"status": "using-local-cache"},
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.materialize_training_candidates",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    with pytest.raises(RuntimeError, match="boom"):
+        run_trainer_cycle(tmp_path, queue_name="dataset")
+
+    pending_cycle_path = tmp_path / utilities_module.DEFAULT_TRAINER_PENDING_CYCLE_PATH
+    assert pending_cycle_path.is_file()
+    pending_payload = json.loads(pending_cycle_path.read_text(encoding="utf-8"))
+    assert pending_payload["queue_name"] == "dataset"
+    assert pending_payload["trace_paths"] == ["artifacts/traces/imported/new.json"]
+    assert pending_payload["queue_drain_count"] == 1
+
+
 def test_run_trainer_cycle_recompiles_when_published_bundle_lags_current_champion_set(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
