@@ -1851,6 +1851,135 @@ def test_materialize_training_candidates_preserves_all_imported_full_traces_in_f
     assert len(record_files) == 7
 
 
+def test_materialize_training_candidates_uses_symmetric_singleton_family_matching(
+    tmp_path: Path,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    repo_index_question = (
+        "The repo already appears to have the expected integration points: "
+        "a README demo section and a demo:gif script entry. I'm verifying "
+        "the working tree and whether the asset/script actually exist before "
+        "deciding whether this is a no-op or needs regeneration."
+    )
+    repo_index_reformulated = (
+        "Check the repository's current working tree state against the repo "
+        "index's suggested demo section and capture script path to determine "
+        "whether the needed change is only to regenerate/embed an asset or "
+        "whether the repository state is outdated versus the indexed "
+        "snapshot; report findings accordingly without making changes."
+    )
+    checkout_question = (
+        "I'm checking the actual checkout rather than the repo index now. "
+        "That will tell me whether the GIF and recorder already exist in the "
+        "branch I'm modifying, and whether I need to add code or just "
+        "generate/update the asset."
+    )
+    checkout_reformulated = (
+        "Check the actual git checkout, not the repository index, to "
+        "determine whether the GIF and recorder already exist in the branch "
+        "being modified and whether the right action is to add code or only "
+        "generate/update the asset."
+    )
+    wireframe_question = (
+        "I'm also checking the live wireframe directly so I'm not relying "
+        "only on repository state. That gives me a baseline for whether the "
+        "committed demo still reflects what's actually accessible today."
+    )
+    wireframe_reformulated = (
+        "Check the live wireframe directly to establish a baseline of what "
+        "is accessible today, then use that baseline to verify whether the "
+        "committed demo still reflects current behavior."
+    )
+    variants = [
+        (
+            repo_index_question,
+            repo_index_question,
+            repo_index_reformulated,
+        ),
+        (
+            checkout_question,
+            checkout_question,
+            checkout_reformulated,
+        ),
+        (
+            wireframe_question,
+            wireframe_question,
+            wireframe_reformulated,
+        ),
+    ]
+    for index, (question, original_prompt, reformulated_prompt) in enumerate(variants):
+        trace_path = imported_dir / f"symmetric-trace-{index}.json"
+        trace_path.write_text(
+            json.dumps(
+                {
+                    "trace_record_kind": "repo-rag-trace-record",
+                    "trace_record_path": f"artifacts/traces/imported/symmetric-trace-{index}.json",
+                    "source_queue_item_path": (
+                        "artifacts/traces/queued/repo-rag-training/"
+                        f"20260517T1201{index:02d}Z-symmetric-trace-{index}.json"
+                    ),
+                    "source_trace_name": f"symmetric-trace-{index}",
+                    "source_batch_name": "20260517T120100Z",
+                    "question": question,
+                    "original_prompt": original_prompt,
+                    "reformulated_prompt": reformulated_prompt,
+                    "answer": "No father-backed prompt-family support was found for this turn.",
+                    "sources": [],
+                    "context": [],
+                    "retrieved_context": [],
+                    "command_trace": [],
+                    "trace": {
+                        "schema_version": 1,
+                        "trace_kind": "repo-rag-runtime",
+                        "recorded_at": f"2026-05-17T12:0{index}:00+00:00",
+                        "question": question,
+                        "original_prompt": original_prompt,
+                        "reformulated_prompt": reformulated_prompt,
+                        "mode": "codex-proxy-turn-mediation",
+                        "retrieval_mode": "lexical",
+                        "sources": [],
+                        "source_count": 0,
+                        "context_count": 0,
+                        "context_field": "evidence_previews",
+                        "mediation_metric_hits": 1,
+                        "mediation_metric_total": 1,
+                        "trainer_signal_kind": "full_trace",
+                    },
+                    "outcome": {
+                        "acceptance_status": "candidate",
+                        "accepted": None,
+                        "execution_status": "success",
+                        "method": "codex_cli",
+                        "backend": "codex_cli_repo_rag_proxy",
+                        "used_baseline_fallback": False,
+                    },
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/generated-training.yaml"),
+        summary_path=Path("artifacts/trainer/generated-training-summary.json"),
+        seed_existing_output=False,
+        upload_remote_state=False,
+    )
+
+    assert summary["loaded_candidate_count"] == 3
+    assert summary["family_candidate_count"] == 3
+    assert summary["family_count"] == 2
+    family_state_payload = json.loads(
+        (tmp_path / "artifacts" / "trainer" / "family-state.json").read_text(encoding="utf-8")
+    )
+    prompt_families = family_state_payload["prompt_families"]
+    assert sum(int(family["family_record_count"]) for family in prompt_families) == 3
+    assert sorted(int(family["family_record_count"]) for family in prompt_families) == [1, 2]
+
+
 def test_materialize_training_candidates_tracks_context_groups_but_materializes_one_family_champion(
     tmp_path: Path,
 ) -> None:
