@@ -218,6 +218,13 @@ That evidence now motivates a separate execution-memory track based on persisten
 [docs/planning/codex-exec-resume-plan.md](../planning/codex-exec-resume-plan.md). In that design,
 the global DSPy bundle stays immutable and universal, while Codex session continuity becomes a
 local worker concern. The first dataset-side implementation slice now exists: worker temp
+artifacts, queue mirrors, and trainer-family state now move through repo-local durable surfaces on
+purpose rather than as best-effort side effects. The trainer path specifically now treats queue
+drain as a recoverable stage: once one cycle drains imported traces, it records a
+`pending-cycle.json` ledger under `artifacts/trainer/` so a replacement trainer pod can resume the
+same family-materialization/publish work even if the visible `queued/` directory has already been
+emptied. That closes the failure mode where traces reached `processed/` but no new
+`repo-rag-training-families` or `repo-rag-bundles` version was ever published after pod churn.
 `CODEX_HOME` instances restore persisted non-credential Codex state, regenerate fresh
 `auth.json` / `config.toml`, rerun guard preflight, and can switch to `codex exec resume` when
 restored state is present, preferring a persisted explicit `latest_session_id` and only falling

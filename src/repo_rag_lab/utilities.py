@@ -110,6 +110,8 @@ from .workflow import ask_repository
 # fully retired.
 restore_processed_trace_records = _restore_processed_trace_records_compat
 
+DEFAULT_TRAINER_PENDING_CYCLE_PATH = Path("artifacts/trainer/pending-cycle.json")
+
 
 def _json_command_payload(
     command: str,
@@ -343,6 +345,93 @@ def _prepare_local_trainer_family_cache(
         "remote_family_state_found": remote_family_state_available,
         "stale_local_cache_reset": bool(seed_trace_paths and not remote_family_state_available),
     }
+
+
+def _trainer_pending_cycle_path(root: Path) -> Path:
+    """Return the local trainer ledger used to resume one drained queue cycle."""
+
+    return root.resolve() / DEFAULT_TRAINER_PENDING_CYCLE_PATH
+
+
+def _load_pending_trainer_cycle(
+    root: Path,
+    *,
+    queue_name: str,
+) -> dict[str, object] | None:
+    """Load one locally persisted drained-cycle ledger if it still matches the queue."""
+
+    pending_cycle_path = _trainer_pending_cycle_path(root)
+    if not pending_cycle_path.is_file():
+        return None
+    payload = load_json_object(pending_cycle_path)
+    recorded_queue_name = str(payload.get("queue_name") or "").strip()
+    if recorded_queue_name and recorded_queue_name != queue_name:
+        return None
+    raw_trace_paths = payload.get("trace_paths")
+    trace_paths: list[str] = []
+    if isinstance(raw_trace_paths, list):
+        for path_text in raw_trace_paths:
+            cleaned = str(path_text or "").strip()
+            if not cleaned:
+                continue
+            resolved_path = (
+                Path(cleaned) if Path(cleaned).is_absolute() else root.resolve() / cleaned
+            )
+            if resolved_path.is_file():
+                trace_paths.append(
+                    str(resolved_path.relative_to(root.resolve()))
+                    if resolved_path.is_relative_to(root.resolve())
+                    else str(resolved_path)
+                )
+    if not trace_paths:
+        return None
+    raw_queue_drain_count = payload.get("queue_drain_count")
+    queue_drain_count = raw_queue_drain_count if isinstance(raw_queue_drain_count, int) else 0
+    return {
+        "queue_name": recorded_queue_name or queue_name,
+        "trace_paths": trace_paths,
+        "trace_count": len(trace_paths),
+        "queue_drain_count": max(queue_drain_count, len(trace_paths)),
+        "pending_cycle_path": _path_text_for_root(pending_cycle_path, root.resolve()),
+        "written_at": str(payload.get("written_at") or ""),
+    }
+
+
+def _write_pending_trainer_cycle(
+    root: Path,
+    *,
+    queue_name: str,
+    trace_paths: Sequence[str],
+    queue_drain_count: int,
+) -> dict[str, object]:
+    """Persist one drained-cycle ledger before trainer materialization starts."""
+
+    resolved_root = root.resolve()
+    pending_cycle_path = _trainer_pending_cycle_path(resolved_root)
+    pending_cycle_path.parent.mkdir(parents=True, exist_ok=True)
+    normalized_trace_paths = _stable_ordered_strings(trace_paths)
+    payload = {
+        "queue_name": queue_name,
+        "trace_paths": normalized_trace_paths,
+        "queue_drain_count": max(0, int(queue_drain_count)),
+        "written_at": datetime.now(UTC).isoformat(),
+    }
+    pending_cycle_path.write_text(f"{json.dumps(payload, indent=2)}\n", encoding="utf-8")
+    return {
+        "pending_cycle_path": _path_text_for_root(pending_cycle_path, resolved_root),
+        "queue_name": queue_name,
+        "trace_paths": normalized_trace_paths,
+        "trace_count": len(normalized_trace_paths),
+        "queue_drain_count": max(0, int(queue_drain_count)),
+    }
+
+
+def _clear_pending_trainer_cycle(root: Path) -> None:
+    """Remove one drained-cycle ledger after trainer materialization completes."""
+
+    pending_cycle_path = _trainer_pending_cycle_path(root)
+    if pending_cycle_path.exists():
+        pending_cycle_path.unlink()
 
 
 def _summarize_imported_trace_records(
@@ -1696,6 +1785,24 @@ def run_trainer_cycle(
     current_cycle_input_detected = (
         current_cycle_trace_input_count > 0 or current_cycle_queue_drain_count > 0
     )
+    pending_cycle_resume = None
+    if not current_cycle_input_detected:
+        pending_cycle_resume = _load_pending_trainer_cycle(
+            root,
+            queue_name=queue_name,
+        )
+        if pending_cycle_resume is not None:
+            pending_trace_paths_raw = pending_cycle_resume.get("trace_paths")
+            pending_trace_paths = (
+                list(pending_trace_paths_raw) if isinstance(pending_trace_paths_raw, list) else []
+            )
+            imported_trace_paths = pending_trace_paths
+            current_cycle_trace_input_count = len(imported_trace_paths)
+            pending_queue_drain_count = pending_cycle_resume.get("queue_drain_count")
+            current_cycle_queue_drain_count = (
+                pending_queue_drain_count if isinstance(pending_queue_drain_count, int) else 0
+            )
+            current_cycle_input_detected = current_cycle_trace_input_count > 0
     durable_trace_recovery = {
         "storage_backend": "disabled",
         "queue_name": queue_name,
@@ -1710,6 +1817,31 @@ def run_trainer_cycle(
             "Processed-ledger recovery no longer triggers or augments active cycles."
         ),
     }
+    if pending_cycle_resume is not None:
+        pending_resume_trace_count = pending_cycle_resume.get("trace_count")
+        pending_resume_trace_paths_raw = pending_cycle_resume.get("trace_paths")
+        pending_resume_trace_paths = (
+            list(pending_resume_trace_paths_raw)
+            if isinstance(pending_resume_trace_paths_raw, list)
+            else []
+        )
+        durable_trace_recovery = {
+            "storage_backend": "local-pending-cycle",
+            "queue_name": queue_name,
+            "processed_count": 0,
+            "restored_count": (
+                pending_resume_trace_count if isinstance(pending_resume_trace_count, int) else 0
+            ),
+            "failed_count": 0,
+            "trace_paths": pending_resume_trace_paths,
+            "failures": [],
+            "status": "pending-cycle-resume",
+            "pending_cycle_path": pending_cycle_resume.get("pending_cycle_path"),
+            "note": (
+                "Trainer resumed one previously drained queue cycle from the local pending-cycle "
+                "ledger after queued blobs had already been consumed."
+            ),
+        }
     idle_family_state_path = (
         root / DEFAULT_TRAINER_FAMILY_STATE_PATH
         if not DEFAULT_TRAINER_FAMILY_STATE_PATH.is_absolute()
@@ -1833,6 +1965,12 @@ def run_trainer_cycle(
                 ],
             ),
         )
+    _write_pending_trainer_cycle(
+        root,
+        queue_name=queue_name,
+        trace_paths=imported_trace_paths,
+        queue_drain_count=current_cycle_queue_drain_count,
+    )
     family_cache_preparation = _prepare_local_trainer_family_cache(
         root,
         queue_name=queue_name,
@@ -2243,6 +2381,8 @@ def run_trainer_cycle(
         raw_training_result = recompile_payload.get("training_result")
         if isinstance(raw_training_result, Mapping):
             training_result_mapping = raw_training_result
+    if not cycle_failed:
+        _clear_pending_trainer_cycle(root)
     return _json_command_payload(
         "trainer-cycle",
         root=root,
