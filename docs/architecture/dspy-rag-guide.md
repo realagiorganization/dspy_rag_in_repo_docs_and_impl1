@@ -63,9 +63,9 @@ older “inject one helpful repo block” model:
   again, because runtime resolution only needs `current.json` plus the immutable
   `versions/<family_state_version>/...` tree and the duplicate root mirror made the blob hierarchy
   noisier without adding machine value
-- trainer durable recovery is now incremental: only not-yet-restored `processed/...` trace blobs
-  are mirrored into `artifacts/trainer/recovered-imported-traces/`, and an explicit empty
-  `trace_paths=[]` no longer falls back to the whole imported ledger
+- trainer durable recovery now only preserves the current in-flight queue cycle through
+  `artifacts/trainer/pending-cycle.json`; the trainer baseline itself must come from the latest
+  remote `repo-rag-training-families` version, not from `processed/...` replay
 - dataset / AKS workflow and deploy surfaces now propagate that same family-state container
   contract through workflow env, generated storage secrets, bootstrap shell scripts, and
   `.env.example`, and those deploy/bootstrap surfaces no longer emit champion-named container env

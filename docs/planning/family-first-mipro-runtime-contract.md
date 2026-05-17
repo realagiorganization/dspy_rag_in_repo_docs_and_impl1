@@ -136,6 +136,28 @@ Target blob/container layout:
 - `repo-rag-bundles`
   - published monolithic bundles with family registry inside
 
+## Trainer Cache Contract
+
+Trainer may keep one local internal cache, but that cache is never authoritative.
+
+- The only durable baseline is the latest remote version in `repo-rag-training-families`.
+- The trainer PVC is for temporary execution artifacts in the current Codex Exec / trainer run:
+  - queued and imported trace files
+  - the current in-flight `pending-cycle.json` ledger
+  - one local mirror of the active remote family-state version
+  - generated candidate/training surfaces for the current cycle
+- Trainer must not treat a PVC-local family state as source-of-truth just because it already
+  exists on disk.
+- A smart local cache is allowed only when it is explicitly known to be a mirror of the same
+  remote `family_state_version`.
+- If the remote version changes, trainer must discard the active local family cache and adopt the
+  new remote version.
+- If no remote version exists, trainer may build one local family state from the current cycle
+  inputs only; that bootstrap stays transient until it is published remotely.
+- Trainer recompiles only dirty families created or updated by the current queued traces. It does
+  not reprocess every family on every cycle and it does not rebuild from `processed/...` as an
+  active baseline path.
+
 ## Current Stage
 
 This repository is still transitional.
@@ -253,25 +275,23 @@ Implemented locally in this stage:
 - trainer-cycle publish logic no longer injects an implicit `minimum_bundle_pass_rate = 1.0`
   whenever recompile/publish is requested; the family-first path now publishes unless an operator
   explicitly asks for a bundle gate
-- trainer-side durable recovery is now incremental: `restore_processed_trace_records(...)` restores
-  only processed queue blobs that have not already been mirrored into
-  `artifacts/trainer/recovered-imported-traces/`, and `materialize_training_candidates(...)`
-  treats `trace_paths=[]` as “process nothing new” instead of falling back to the full imported
-  ledger
+- trainer-side durable recovery now applies only to the current in-flight queue cycle through
+  `artifacts/trainer/pending-cycle.json`; the active trainer baseline no longer replays
+  `processed/...` into `artifacts/trainer/recovered-imported-traces/`
 - worker-side `trace-export` now writes under the execution directory instead of the target
   repository root, so Codex no longer risks diffing or re-editing its own exported trace files
 - AKS defaults now enable the existing resumed-lane rollover logic through
   `DATASET_CODEX_MAX_RESUMED_RUNS=9` and
   `DATASET_CODEX_PROMPT_TOKEN_GROWTH_RESET_RATIO=2.0`, so repeated verification reruns of one
   queue/slug lane do not keep compounding the same Codex transcript without bound
-- local trainer state now follows a cache-first lifecycle:
-  - if `artifacts/trainer/family-state.json` plus `artifacts/trainer/families/<id>/...` already
-    exist, trainer reuses that local cache as the base version
-  - if the local cache is missing, trainer adopts the latest remote
-    `repo-rag-training-families` version into that same local cache
-  - only if neither local nor remote family state exists does trainer rebuild the local cache from
-    `repo-rag-training-traces/processed`, and that from-scratch rebuild stays local until the
-    current `queued` traces are applied
+- local trainer state now follows a remote-baseline lifecycle:
+  - trainer first resolves the latest remote `repo-rag-training-families` version
+  - a PVC-local family cache may be reused only when metadata proves it already mirrors that same
+    remote `family_state_version`
+  - otherwise trainer refreshes the local mirror from remote before applying current `queued`
+    traces
+  - only when no remote family-state version exists at all may trainer bootstrap one transient
+    local family state from the current queue cycle before publishing the first remote version
 - `family-state.json` is now a thin index over the local family cache instead of a replay-buffer
   aggregate; full family payloads live under `artifacts/trainer/families/<prompt_family_id>/`
   (`family.json`, `father.json`, `records/*.json`), while the top-level index keeps only routing,

@@ -160,7 +160,7 @@ def _write_bundle_manifest(
     return bundle_path
 
 
-def test_prepare_local_trainer_family_cache_prefers_existing_local_cache(
+def test_prepare_local_trainer_family_cache_reuses_matching_remote_version_cache(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -191,17 +191,31 @@ def test_prepare_local_trainer_family_cache_prefers_existing_local_cache(
         json.dumps({"prompt_family_id": "pf-demo"}) + "\n",
         encoding="utf-8",
     )
+    (trainer_dir / "cache-source.json").write_text(
+        json.dumps(
+            {
+                "source_kind": "remote-family-state",
+                "family_state_version": "v-current",
+                "family_state_path": "artifacts/trainer/family-state.json",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    remote_cache_dir = trainer_dir / "remote-family-state" / "v-current"
+    remote_cache_dir.mkdir(parents=True, exist_ok=True)
+    (remote_cache_dir / "family-state.json").write_text(
+        family_state_path.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.fetch_remote_family_state",
         lambda root: {
-            "family_state_path": "artifacts/trainer/remote-family-state/v-current/family-state.json"
+            "family_state_version": "v-current",
+            "family_state_path": (
+                "artifacts/trainer/remote-family-state/v-current/family-state.json"
+            ),
         },
-    )
-    monkeypatch.setattr(
-        "repo_rag_lab.utilities.restore_processed_trace_records",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("processed recovery should not run when local cache exists")
-        ),
     )
 
     payload = utilities_module._prepare_local_trainer_family_cache(
@@ -209,7 +223,7 @@ def test_prepare_local_trainer_family_cache_prefers_existing_local_cache(
         queue_name="dataset",
     )
 
-    assert payload["status"] == "using-local-cache"
+    assert payload["status"] == "using-matching-remote-cache"
     assert payload["family_state_path"] == "artifacts/trainer/family-state.json"
     assert payload["family_cache_dir"] == "artifacts/trainer/families"
 
@@ -247,14 +261,9 @@ def test_prepare_local_trainer_family_cache_adopts_latest_remote_version(
     monkeypatch.setattr(
         "repo_rag_lab.utilities.fetch_remote_family_state",
         lambda root: {
-            "family_state_path": "artifacts/trainer/remote-family-state/v1/family-state.json"
+            "family_state_version": "v1",
+            "family_state_path": "artifacts/trainer/remote-family-state/v1/family-state.json",
         },
-    )
-    monkeypatch.setattr(
-        "repo_rag_lab.utilities.restore_processed_trace_records",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("processed recovery should not run when a remote version is available")
-        ),
     )
 
     payload = utilities_module._prepare_local_trainer_family_cache(
@@ -267,18 +276,10 @@ def test_prepare_local_trainer_family_cache_adopts_latest_remote_version(
     assert (tmp_path / "artifacts" / "trainer" / "families" / "pf-demo" / "family.json").is_file()
 
 
-def test_prepare_local_trainer_family_cache_rebuilds_from_processed_history(
+def test_prepare_local_trainer_family_cache_rebuilds_from_current_cycle_input_without_remote_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        "repo_rag_lab.utilities.restore_processed_trace_records",
-        _restore_processed_trace_records_stub(
-            processed_count=1,
-            restored_count=1,
-            trace_paths=["artifacts/trainer/recovered-imported-traces/demo.json"],
-        ),
-    )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.fetch_remote_family_state",
         lambda root: None,
@@ -312,16 +313,13 @@ def test_prepare_local_trainer_family_cache_rebuilds_from_processed_history(
     payload = utilities_module._prepare_local_trainer_family_cache(
         tmp_path,
         queue_name="dataset",
+        seed_trace_paths=[Path("artifacts/traces/imported/demo.json")],
     )
 
-    assert payload["status"] == "rebuilt-from-processed-history"
-    assert payload["recovered_trace_count"] == 1
-    processed_recovery = payload["processed_recovery"]
-    assert isinstance(processed_recovery, dict)
-    assert processed_recovery["restored_count"] == 1
+    assert payload["status"] == "rebuilt-from-current-cycle-input"
     assert materialize_calls == [
         {
-            "trace_paths": [Path("artifacts/trainer/recovered-imported-traces/demo.json")],
+            "trace_paths": [Path("artifacts/traces/imported/demo.json")],
             "seed_existing_output": False,
             "upload_remote_state": False,
         }
@@ -363,14 +361,6 @@ def test_prepare_local_trainer_family_cache_resets_stale_local_cache_when_remote
         "repo_rag_lab.utilities.fetch_remote_family_state",
         lambda root: None,
     )
-    monkeypatch.setattr(
-        "repo_rag_lab.utilities.restore_processed_trace_records",
-        _restore_processed_trace_records_stub(
-            processed_count=1,
-            restored_count=1,
-            trace_paths=["artifacts/trainer/recovered-imported-traces/fresh.json"],
-        ),
-    )
     materialize_calls: list[dict[str, object]] = []
 
     def fake_materialize_training_candidates(
@@ -403,12 +393,11 @@ def test_prepare_local_trainer_family_cache_resets_stale_local_cache_when_remote
         seed_trace_paths=[Path("artifacts/traces/imported/fresh.json")],
     )
 
-    assert payload["status"] == "rebuilt-from-processed-history"
+    assert payload["status"] == "rebuilt-from-current-cycle-input"
     assert payload["remote_family_state_found"] is False
-    assert payload["stale_local_cache_reset"] is True
     assert materialize_calls == [
         {
-            "trace_paths": [Path("artifacts/trainer/recovered-imported-traces/fresh.json")],
+            "trace_paths": [Path("artifacts/traces/imported/fresh.json")],
             "seed_existing_output": False,
             "upload_remote_state": False,
         }
@@ -520,7 +509,7 @@ def test_run_trainer_k8s_manifest_generation_writes_expected_manifests(tmp_path:
     assert payload["pvc_access_modes"] == ["ReadWriteMany"]
     assert len(payload["manifest_paths"]) == 5
 
-    pvc_path = tmp_path / "artifacts" / "kubernetes" / "trainer-artifacts.pvc.yaml"
+    pvc_path = tmp_path / "artifacts" / "kubernetes" / "repo-rag-artifacts.pvc.yaml"
     cronjob_path = tmp_path / "artifacts" / "kubernetes" / "trainer-cycle.cronjob.yaml"
     config_map_path = tmp_path / "artifacts" / "kubernetes" / "trainer-configmap.yaml"
     secret_example_path = tmp_path / "artifacts" / "kubernetes" / "trainer-secret.example.yaml"
@@ -1259,6 +1248,10 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
         "repo_rag_lab.utilities.check_retrieval_quality_thresholds",
         lambda summary, minimum_pass_rate=None, minimum_source_recall=None: [],
     )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.fetch_remote_family_state",
+        lambda root: None,
+    )
 
     materialize_calls: list[dict[str, object]] = []
 
@@ -1363,7 +1356,7 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
     assert payload["queue_drain"]["drained_count"] == 1
     assert materialize_calls == [
         {
-            "trace_paths": [Path("artifacts/trainer/recovered-imported-traces/demo.json")],
+            "trace_paths": [Path("artifacts/traces/imported/demo.json")],
             "seed_existing_output": False,
             "upload_remote_state": False,
         },
@@ -1373,7 +1366,7 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
             "upload_remote_state": False,
         },
     ]
-    assert payload["family_cache_preparation"]["status"] == "rebuilt-from-processed-history"
+    assert payload["family_cache_preparation"]["status"] == "rebuilt-from-current-cycle-input"
     assert payload["durable_trace_recovery"]["status"] == "queue-only-disabled"
     assert payload["durable_trace_recovery"]["restored_count"] == 0
     assert payload["training_candidates"]["candidate_count"] == 1
@@ -1384,6 +1377,11 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
     assert payload["publish"]["publish_status"] == "published"
     assert payload["promotion_status"] == "promoted"
     assert payload["promotion"]["channel_name"] == "stable"
+    cache_source_path = tmp_path / "artifacts" / "trainer" / "cache-source.json"
+    assert (
+        json.loads(cache_source_path.read_text(encoding="utf-8"))["family_state_version"]
+        == "family-v1"
+    )
 
 
 def test_run_trainer_cycle_defers_recompile_and_publish_while_queue_backlog_is_visible(

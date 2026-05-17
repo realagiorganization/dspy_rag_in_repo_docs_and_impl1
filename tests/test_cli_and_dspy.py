@@ -1681,7 +1681,7 @@ def test_cli_main_trainer_k8s_manifests_command(
                 "service_account_name": "repo-rag-trainer",
                 "config_map_name": "repo-rag-trainer-config",
                 "secret_name": "repo-rag-trainer-secrets",
-                "pvc_name": "repo-rag-trainer-artifacts",
+                "pvc_name": "repo-rag-artifacts",
                 "pvc_storage_class": "azurefile-csi",
                 "pvc_size": "10Gi",
                 "pvc_access_modes": "ReadWriteMany",
