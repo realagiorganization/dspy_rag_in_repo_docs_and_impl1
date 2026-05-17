@@ -14,7 +14,7 @@ DEFAULT_TRAINER_K8S_NAMESPACE = "repo-rag"
 DEFAULT_TRAINER_K8S_SERVICE_ACCOUNT_NAME = "repo-rag-trainer"
 DEFAULT_TRAINER_K8S_CONFIG_MAP_NAME = "repo-rag-trainer-config"
 DEFAULT_TRAINER_K8S_SECRET_NAME = "repo-rag-trainer-secrets"
-DEFAULT_TRAINER_K8S_PVC_NAME = "repo-rag-trainer-artifacts"
+DEFAULT_TRAINER_K8S_PVC_NAME = "repo-rag-artifacts"
 DEFAULT_TRAINER_K8S_PVC_STORAGE_CLASS = "azurefile-csi"
 DEFAULT_TRAINER_K8S_PVC_SIZE = "10Gi"
 DEFAULT_TRAINER_K8S_PVC_ACCESS_MODES = ("ReadWriteMany",)
@@ -309,7 +309,7 @@ def _container_spec(config: TrainerK8sConfig, *, role: str) -> dict[str, object]
         ],
         "volumeMounts": [
             {
-                "name": "trainer-artifacts",
+                "name": "repo-rag-artifacts",
                 "mountPath": config.artifact_mount_path,
             }
         ],
@@ -319,7 +319,7 @@ def _container_spec(config: TrainerK8sConfig, *, role: str) -> dict[str, object]
 def _volume_spec(config: TrainerK8sConfig) -> list[dict[str, object]]:
     return [
         {
-            "name": "trainer-artifacts",
+            "name": "repo-rag-artifacts",
             "persistentVolumeClaim": {"claimName": config.pvc_name},
         }
     ]
@@ -396,7 +396,7 @@ def write_trainer_k8s_manifests(root: Path, *, config: TrainerK8sConfig) -> dict
     service_account_path = output_dir / "trainer-serviceaccount.yaml"
     config_map_path = output_dir / "trainer-configmap.yaml"
     secret_example_path = output_dir / "trainer-secret.example.yaml"
-    pvc_path = output_dir / "trainer-artifacts.pvc.yaml"
+    pvc_path = output_dir / "repo-rag-artifacts.pvc.yaml"
     cronjob_path = output_dir / "trainer-cycle.cronjob.yaml"
 
     _write_yaml_document(service_account_path, _service_account_payload(config))

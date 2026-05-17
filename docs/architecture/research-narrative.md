@@ -238,10 +238,14 @@ restored state is present, preferring a persisted explicit `latest_session_id` a
 back to `--last --all` when the snapshot lacks a usable id. That slice also writes a PVC-root
 `session-index.json` plus a per-run `codex_session_state.json`, so later validation can tell
 when worker execution memory resumed correctly, while the trainer side now treats remote
-`repo-rag-training-families` state as authoritative for cold-start behavior: if operators delete
-the remote family-state versions, the next queue-triggered trainer cycle clears stale local family
-cache before rebuilding from processed and fresh queued traces instead of silently reusing the old
-PVC-local trainer cache.
+`repo-rag-training-families` state as authoritative for every queue-triggered baseline decision.
+The PVC-backed `artifacts/` mount is only a temporary workspace for queued/imported traces, one
+in-flight `pending-cycle.json` ledger, generated training surfaces, and one smart local mirror of
+the active remote `family_state_version`. That local cache is allowed only when metadata proves it
+already mirrors the same remote version; otherwise the trainer refreshes from remote before
+applying the new queued traces. If no remote family-state version exists at all, the trainer may
+bootstrap one transient local family state from the current queue cycle, but it must publish that
+state remotely before later cycles can treat it as a reusable baseline.
 which lane resumed and which latest Codex session-file hint was preserved. The same slice now
 refuses to resume when the
 persisted working-directory, repo-root / branch, model-profile, or auth/config digest contract no
@@ -293,10 +297,11 @@ onto their top-level payloads instead of leaving those prompt fields only inside
 object, so queue drain, processed-ledger recovery, and dataset-side trusted handoff all preserve
 the same prompt snapshot surface that runtime traces already carried.
 today reduces to metric-1 `hit_rate` plus any later persisted similarity metrics. Second, local
-trainer bootstrap now follows the queue-triggered family contract: the active cache is either
-reused as-is, adopted from the latest remote family-state snapshot, or rebuilt from
-`repo-rag-training-traces/processed`, with a current-cycle queue seed only as the zero-version
-bootstrap fallback before fresh `queued` traces are applied. Third, proxy
+trainer bootstrap now follows the stricter remote-baseline family contract: the active cache may
+be reused only when it is already tagged as a mirror of the same remote family-state version,
+otherwise trainer refreshes the local mirror from `repo-rag-training-families` before applying the
+current `queued` traces, and the only allowed no-remote bootstrap is one transient family state
+built from the current cycle itself. Third, proxy
 trace persistence is no longer limited to one coarse turn payload: when a turn falls back to fresh
 mediation, the proxy now also emits lineage traces for distinct reformulated/intermediate
 prompt-like steps so trainer ingestion can observe the same prompt evolution that runtime routing

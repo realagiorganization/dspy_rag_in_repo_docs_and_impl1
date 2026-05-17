@@ -43,6 +43,7 @@ from .runtime_artifacts import (
     DEFAULT_TRAINER_GENERATED_TRAINING_PATH,
     DEFAULT_TRAINER_GENERATED_TRAINING_SUMMARY_PATH,
     DEFAULT_TRAINER_RECOVERED_TRACES_DIR,
+    DEFAULT_TRAINER_SERVICE_DIR,
     DEFAULT_TRAINER_SERVICE_HISTORY_DIR,
     DEFAULT_TRAINER_SERVICE_STATE_PATH,
     DEFAULT_TRAINER_TRAINING_CANDIDATES_PATH,
@@ -111,6 +112,7 @@ from .workflow import ask_repository
 restore_processed_trace_records = _restore_processed_trace_records_compat
 
 DEFAULT_TRAINER_PENDING_CYCLE_PATH = Path("artifacts/trainer/pending-cycle.json")
+DEFAULT_TRAINER_CACHE_SOURCE_PATH = Path("artifacts/trainer/cache-source.json")
 
 
 def _json_command_payload(
@@ -223,10 +225,93 @@ def _clear_local_trainer_family_cache(root: Path) -> None:
         training_candidates_summary_path.unlink()
 
 
+def _trainer_cache_source_path(root: Path) -> Path:
+    """Return the metadata file that marks one local cache as a remote-version mirror."""
+
+    return root.resolve() / DEFAULT_TRAINER_CACHE_SOURCE_PATH
+
+
+def _load_trainer_cache_source(root: Path) -> dict[str, object] | None:
+    """Load local trainer cache provenance metadata when present."""
+
+    cache_source_path = _trainer_cache_source_path(root)
+    if not cache_source_path.is_file():
+        return None
+    return load_json_object(cache_source_path)
+
+
+def _write_trainer_cache_source(
+    root: Path,
+    *,
+    source_kind: str,
+    family_state_version: str,
+    family_state_path: str,
+) -> dict[str, object]:
+    """Persist local trainer cache provenance for one remote family-state mirror."""
+
+    resolved_root = root.resolve()
+    cache_source_path = _trainer_cache_source_path(resolved_root)
+    payload: dict[str, object] = {
+        "source_kind": source_kind,
+        "family_state_version": family_state_version,
+        "family_state_path": family_state_path,
+        "updated_at": datetime.now(UTC).isoformat(),
+    }
+    _write_json_artifact(cache_source_path, payload)
+    return payload
+
+
+def _clear_trainer_cache_source(root: Path) -> None:
+    """Remove local trainer cache provenance after the active cache becomes mutable."""
+
+    cache_source_path = _trainer_cache_source_path(root)
+    if cache_source_path.exists():
+        cache_source_path.unlink()
+
+
+def _reset_local_trainer_workspace(
+    root: Path,
+    *,
+    preserve_pending_cycle: bool = False,
+) -> None:
+    """Reset transient trainer workspace state before one fresh queue-triggered cycle.
+
+    The trainer contract treats local `artifacts/trainer/` state as disposable cache for the
+    current cycle only. The authoritative baseline always comes from the latest remote
+    `repo-rag-training-families` version, never from a prior local cache or processed-trace
+    replay.
+    """
+
+    resolved_root = root.resolve()
+    trainer_dir = resolved_root / DEFAULT_TRAINER_SERVICE_DIR
+    pending_cycle_path = _trainer_pending_cycle_path(resolved_root)
+    preserved_pending_payload: str | None = None
+    if preserve_pending_cycle and pending_cycle_path.is_file():
+        preserved_pending_payload = pending_cycle_path.read_text(encoding="utf-8")
+    _clear_local_trainer_family_cache(resolved_root)
+    for artifact_path in (
+        resolved_root / DEFAULT_TRAINER_GENERATED_TRAINING_PATH,
+        resolved_root / DEFAULT_TRAINER_GENERATED_TRAINING_SUMMARY_PATH,
+        resolved_root / DEFAULT_TRAINER_SERVICE_STATE_PATH,
+        _trainer_cache_source_path(resolved_root),
+    ):
+        if artifact_path.exists():
+            artifact_path.unlink()
+    history_dir = resolved_root / DEFAULT_TRAINER_SERVICE_HISTORY_DIR
+    if history_dir.is_dir():
+        shutil.rmtree(history_dir)
+    if trainer_dir.is_dir() and not any(trainer_dir.iterdir()):
+        trainer_dir.rmdir()
+    if preserved_pending_payload is not None:
+        pending_cycle_path.parent.mkdir(parents=True, exist_ok=True)
+        pending_cycle_path.write_text(preserved_pending_payload, encoding="utf-8")
+
+
 def _adopt_remote_family_cache(
     root: Path,
     *,
     fetched_family_state_path: Path,
+    family_state_version: str,
 ) -> dict[str, object]:
     """Promote one fetched remote family-state cache into the active local trainer cache."""
 
@@ -239,11 +324,18 @@ def _adopt_remote_family_cache(
     shutil.copy2(fetched_family_state_path, local_family_state_path)
     if source_family_cache_dir.is_dir():
         shutil.copytree(source_family_cache_dir, local_family_cache_dir, dirs_exist_ok=True)
+    cache_source = _write_trainer_cache_source(
+        resolved_root,
+        source_kind="remote-family-state",
+        family_state_version=family_state_version,
+        family_state_path=_path_text_for_root(local_family_state_path, resolved_root),
+    )
     return {
         "status": "hydrated-from-remote-version",
         "local_family_state_path": _path_text_for_root(local_family_state_path, resolved_root),
         "local_family_cache_dir": _path_text_for_root(local_family_cache_dir, resolved_root),
         "source_family_state_path": _path_text_for_root(fetched_family_state_path, resolved_root),
+        "cache_source": cache_source,
     }
 
 
@@ -253,34 +345,44 @@ def _prepare_local_trainer_family_cache(
     queue_name: str,
     seed_trace_paths: Sequence[Path] = (),
 ) -> dict[str, object]:
-    """Ensure one active local trainer family cache exists before queued traces are applied."""
+    """Hydrate one transient local family cache from remote state or current-cycle traces only."""
 
     resolved_root = root.resolve()
     local_family_state_path = _trainer_local_family_state_path(resolved_root)
     local_family_cache_dir = _trainer_local_family_cache_dir(resolved_root)
     remote_family_state = fetch_remote_family_state(resolved_root)
-    remote_family_state_available = isinstance(remote_family_state, Mapping) and bool(
-        str(remote_family_state.get("family_state_path") or "").strip()
-    )
-    if (
-        local_family_state_path.is_file()
-        and local_family_cache_dir.is_dir()
-        and not (seed_trace_paths and not remote_family_state_available)
-    ):
-        return {
-            "status": "using-local-cache",
-            "family_state_path": _path_text_for_root(local_family_state_path, resolved_root),
-            "family_cache_dir": _path_text_for_root(local_family_cache_dir, resolved_root),
-        }
-
     if isinstance(remote_family_state, Mapping):
+        remote_family_state_version = str(
+            remote_family_state.get("family_state_version") or ""
+        ).strip()
         fetched_family_state_text = str(remote_family_state.get("family_state_path") or "").strip()
         if fetched_family_state_text:
             fetched_family_state_path = resolved_root / fetched_family_state_text
             if fetched_family_state_path.is_file():
+                cache_source = _load_trainer_cache_source(resolved_root)
+                if (
+                    cache_source is not None
+                    and str(cache_source.get("source_kind") or "") == "remote-family-state"
+                    and str(cache_source.get("family_state_version") or "").strip()
+                    == remote_family_state_version
+                    and local_family_state_path.is_file()
+                    and local_family_cache_dir.is_dir()
+                ):
+                    return {
+                        "status": "using-matching-remote-cache",
+                        "family_state_path": _path_text_for_root(
+                            local_family_state_path, resolved_root
+                        ),
+                        "family_cache_dir": _path_text_for_root(
+                            local_family_cache_dir, resolved_root
+                        ),
+                        "remote_family_state": dict(remote_family_state),
+                        "cache_source": cache_source,
+                    }
                 adopted = _adopt_remote_family_cache(
                     resolved_root,
                     fetched_family_state_path=fetched_family_state_path,
+                    family_state_version=remote_family_state_version,
                 )
                 return {
                     **adopted,
@@ -288,62 +390,37 @@ def _prepare_local_trainer_family_cache(
                     "remote_family_state": dict(remote_family_state),
                 }
 
-    _clear_local_trainer_family_cache(resolved_root)
-    recovered = restore_processed_trace_records(
-        resolved_root,
-        queue_name=queue_name,
-        output_dir=DEFAULT_TRAINER_RECOVERED_TRACES_DIR,
-    )
-    recovered_path_items = recovered.get("trace_paths")
-    recovered_trace_paths = [
-        Path(path_text)
-        for path_text in (recovered_path_items if isinstance(recovered_path_items, list) else [])
-        if isinstance(path_text, str) and path_text.strip()
-    ]
-    seed_recovery: dict[str, object] | None = None
-    if not recovered_trace_paths and seed_trace_paths:
-        recovered_output_dir = (resolved_root / DEFAULT_TRAINER_RECOVERED_TRACES_DIR).resolve()
-        recovered_output_dir.mkdir(parents=True, exist_ok=True)
-        seeded_paths: list[Path] = []
-        for seed_trace_path in seed_trace_paths:
-            resolved_seed_path = (
-                seed_trace_path
-                if seed_trace_path.is_absolute()
-                else (resolved_root / seed_trace_path).resolve()
-            )
-            destination_name = (
-                resolved_seed_path.name if resolved_seed_path.name else Path(seed_trace_path).name
-            )
-            if not destination_name:
-                continue
-            destination_path = recovered_output_dir / destination_name
-            if resolved_seed_path.is_file():
-                shutil.copy2(resolved_seed_path, destination_path)
-            seeded_paths.append(destination_path.relative_to(resolved_root))
-        recovered_trace_paths = seeded_paths
-        seed_recovery = {
-            "status": "seeded-from-current-queue-cycle",
-            "trace_paths": [str(path) for path in seeded_paths],
-            "restored_count": len(seeded_paths),
-        }
-    if recovered_trace_paths:
+    if seed_trace_paths:
+        normalized_seed_trace_paths = list(seed_trace_paths)
         materialize_training_candidates(
             resolved_root,
-            trace_paths=recovered_trace_paths,
+            trace_paths=normalized_seed_trace_paths,
             output_path=DEFAULT_TRAINER_TRAINING_CANDIDATES_PATH,
             summary_path=DEFAULT_TRAINER_TRAINING_CANDIDATES_SUMMARY_PATH,
             seed_existing_output=False,
             upload_remote_state=False,
         )
+        return {
+            "status": "rebuilt-from-current-cycle-input",
+            "family_state_path": _path_text_for_root(local_family_state_path, resolved_root),
+            "family_cache_dir": _path_text_for_root(local_family_cache_dir, resolved_root),
+            "seed_trace_count": len(normalized_seed_trace_paths),
+            "seed_trace_paths": [
+                _path_text_for_root(
+                    path if path.is_absolute() else resolved_root / path,
+                    resolved_root,
+                )
+                for path in normalized_seed_trace_paths
+            ],
+            "remote_family_state_found": False,
+        }
     return {
-        "status": "rebuilt-from-processed-history",
+        "status": "missing-remote-family-state",
         "family_state_path": _path_text_for_root(local_family_state_path, resolved_root),
         "family_cache_dir": _path_text_for_root(local_family_cache_dir, resolved_root),
-        "processed_recovery": recovered,
-        "recovered_trace_count": len(recovered_trace_paths),
-        "seed_recovery": seed_recovery,
-        "remote_family_state_found": remote_family_state_available,
-        "stale_local_cache_reset": bool(seed_trace_paths and not remote_family_state_available),
+        "seed_trace_count": 0,
+        "seed_trace_paths": [],
+        "remote_family_state_found": False,
     }
 
 
@@ -1863,8 +1940,8 @@ def run_trainer_cycle(
         if queue_payload.get("failed_count"):
             cycle_warnings.append("One or more queued trace items failed during trainer drain.")
         cycle_warnings.append(
-            "Trainer cycle skipped cache preparation, processed replay, and publish because "
-            "no queued trace inputs were drained."
+            "Trainer cycle skipped remote-baseline preparation and publish because no queued "
+            "trace inputs were drained."
         )
         cycle_payload: dict[str, object] = {
             "queue_name": queue_name,
@@ -1959,7 +2036,7 @@ def run_trainer_cycle(
                 related_paths=[
                     "artifacts/traces/queued",
                     "artifacts/traces/imported",
-                    "artifacts/trainer/recovered-imported-traces",
+                    "artifacts/trainer/remote-family-state",
                     "artifacts/dspy/published",
                     "artifacts/dspy/channels",
                 ],
@@ -1971,6 +2048,8 @@ def run_trainer_cycle(
         trace_paths=imported_trace_paths,
         queue_drain_count=current_cycle_queue_drain_count,
     )
+    if pending_cycle_resume is None:
+        _reset_local_trainer_workspace(root, preserve_pending_cycle=True)
     family_cache_preparation = _prepare_local_trainer_family_cache(
         root,
         queue_name=queue_name,
@@ -1978,6 +2057,7 @@ def run_trainer_cycle(
     )
     trainer_trace_paths = _stable_ordered_strings(imported_trace_paths)
     ingestion_summary = _summarize_imported_trace_records(root, trainer_trace_paths)
+    _clear_trainer_cache_source(root)
     training_candidates = materialize_training_candidates(
         root,
         trace_paths=[Path(path) for path in trainer_trace_paths],
@@ -2252,6 +2332,20 @@ def run_trainer_cycle(
                     root,
                     family_state_path=resolved_family_state_path,
                 )
+                if isinstance(remote_family_state, Mapping):
+                    published_family_state_version = str(
+                        remote_family_state.get("family_state_version") or ""
+                    ).strip()
+                    if published_family_state_version:
+                        _write_trainer_cache_source(
+                            root,
+                            source_kind="remote-family-state",
+                            family_state_version=published_family_state_version,
+                            family_state_path=_path_text_for_root(
+                                resolved_family_state_path,
+                                root.resolve(),
+                            ),
+                        )
             except Exception as exc:
                 active_cycle_warnings.append(
                     "Remote family-state publish failed during trainer cycle."
@@ -2415,7 +2509,7 @@ def run_trainer_cycle(
             related_paths=[
                 "artifacts/traces/queued",
                 "artifacts/traces/imported",
-                "artifacts/trainer/recovered-imported-traces",
+                "artifacts/trainer/remote-family-state",
                 "artifacts/dspy/published",
                 "artifacts/dspy/channels",
             ],

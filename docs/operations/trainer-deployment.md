@@ -15,8 +15,10 @@ that image as `repo-rag-runtime`.
 - Treat the immutable bundle version directory under `versions/<timestamp>/` as the primary
   runtime artifact, with deployment-time `DSPY_BUNDLE_VERSION` pinning selecting which published
   version workers should consume.
-- Persist `artifacts/` on a trainer-local PVC so trainer history, generated candidates, cached
-  remote bundles, and local audit artifacts survive pod restarts.
+- Mount one shared artifacts PVC for temporary queue-cycle artifacts, imported traces, remote
+  family-state mirrors, and current-cycle generated trainer files.
+- Do not treat the PVC as the durable trainer baseline; the baseline must always come from the
+  latest remote `repo-rag-training-families` version.
 - Keep the older file-backed queue path as compatibility-only; it is no longer the primary worker
   to trainer contract.
 - Keep Azure/OpenAI or `DSPY_*` credentials outside source control in a Kubernetes Secret.
@@ -43,7 +45,7 @@ That command writes manifests under `artifacts/kubernetes/`:
 - `trainer-serviceaccount.yaml`
 - `trainer-configmap.yaml`
 - `trainer-secret.example.yaml`
-- `trainer-artifacts.pvc.yaml`
+- `repo-rag-artifacts.pvc.yaml`
 - `trainer-cycle.cronjob.yaml`
 
 ## Runtime Contract
@@ -84,7 +86,7 @@ The generated AKS surface now defaults to a cron-only posture:
 
 The generated manifests assume:
 
-- a PVC named `repo-rag-trainer-artifacts` by default
+- a PVC named `repo-rag-artifacts` by default
 - mounted at `/workspace/repo-rag/artifacts`
 - an image pull secret named `acr-secret` by default
 - a ConfigMap for non-secret runtime knobs
@@ -122,12 +124,13 @@ Recommended sequence:
 1. Build and publish the shared repo-RAG runtime image outside this repository.
 2. Run `make trainer-k8s-manifests ...` with the final image reference.
 3. Create the Azure Blob containers and Azure Queue used for global trainer transport.
-4. Apply `trainer-artifacts.pvc.yaml` and wait for the claim to reach `Bound`.
+4. Apply `repo-rag-artifacts.pvc.yaml` and wait for the claim to reach `Bound`.
 5. Create or patch the real secret from `trainer-secret.example.yaml`.
 6. Copy or create `acr-secret` in the target namespace when the cluster does not already have ACR pull rights.
 7. Apply the service account, config map, deployment, and cronjob.
-8. Confirm that `artifacts/trainer/service-state.json` and `artifacts/trainer/history/` begin to
-   populate on the mounted PVC.
+8. Confirm that `artifacts/traces/queued/`, `artifacts/traces/imported/`, and
+   `artifacts/trainer/remote-family-state/` begin to populate on the mounted PVC during active
+   cycles.
 
 If `../dataset/deploy_repo_rag_trainer.sh` is used, that script now automates the PVC apply,
 ACR pull-secret creation, Azure/OpenAI secret creation from `AZURE_OPENAI_*`, Azure Blob/Queue
