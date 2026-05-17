@@ -186,3 +186,44 @@ Current status:
   - `processed/repo-rag-training/` no longer receives duplicate logical copies of one batch
   - `repo_rag_turn_trace_enqueue_batch.json` in uploaded artifacts now exposes prompt snapshots
     at both top-level and per-item surfaces.
+
+## Remote Reset Follow-up
+
+The next live review exposed one more cold-start violation after operators deleted
+`repo-rag-training-families` from blob:
+
+- worker exported and queued the whole trace batch correctly
+- trainer drained and processed the queue correctly
+- publish completed, but the published family-state collapsed to a single family that reflected
+  only one final trace step instead of the full batch
+
+The most plausible root cause was stale local trainer cache reuse:
+
+- `_prepare_local_trainer_family_cache(...)` still preferred an existing local
+  `artifacts/trainer/family-state.json` + `artifacts/trainer/families/` cache before checking
+  whether any remote family-state version still existed
+- after operators deleted remote family-state versions, the next queue-triggered cycle could still
+  reuse an old local cache instead of performing the intended from-scratch rebuild
+
+Source-level fix now landed:
+
+- queue-triggered cycles with fresh imported traces no longer reuse local trainer cache when
+  `fetch_remote_family_state(...)` reports that no remote family-state version exists
+- in that scenario the trainer now clears the stale local family cache and rebuilds from
+  processed/seed traces before materializing new candidates
+
+Verification executed for the fix:
+
+- `uv run python -m compileall src tests` — `pass`
+- `uv run pytest tests/test_utilities.py -k 'prepare_local_trainer_family_cache or run_trainer_cycle'` — `pass`
+- `uv run pytest tests/test_repository_rag_bdd.py` — `pass`
+- `uv run repo-rag smoke-test` — `pass`
+- `cargo build --manifest-path rust-cli/Cargo.toml` — `pass`
+
+Current status:
+
+- source now matches the intended operator contract for remote family-state deletion:
+  a queue-triggered cycle should not silently reuse stale local family cache when the remote
+  family-state has been removed
+- a fresh live AKS run is still required to confirm that the next cold-start publish materializes
+  the whole imported batch instead of one stale-family carry-forward

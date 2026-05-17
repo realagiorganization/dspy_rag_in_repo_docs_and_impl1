@@ -193,9 +193,9 @@ def test_prepare_local_trainer_family_cache_prefers_existing_local_cache(
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.fetch_remote_family_state",
-        lambda root: (_ for _ in ()).throw(
-            AssertionError("remote family-state fetch should not run when local cache exists")
-        ),
+        lambda root: {
+            "family_state_path": "artifacts/trainer/remote-family-state/v-current/family-state.json"
+        },
     )
     monkeypatch.setattr(
         "repo_rag_lab.utilities.restore_processed_trace_records",
@@ -322,6 +322,93 @@ def test_prepare_local_trainer_family_cache_rebuilds_from_processed_history(
     assert materialize_calls == [
         {
             "trace_paths": [Path("artifacts/trainer/recovered-imported-traces/demo.json")],
+            "seed_existing_output": False,
+            "upload_remote_state": False,
+        }
+    ]
+
+
+def test_prepare_local_trainer_family_cache_resets_stale_local_cache_when_remote_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trainer_dir = tmp_path / "artifacts" / "trainer"
+    family_state_path = trainer_dir / "family-state.json"
+    family_cache_dir = trainer_dir / "families" / "pf-stale"
+    family_cache_dir.mkdir(parents=True, exist_ok=True)
+    family_state_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "record_kind": "repo-rag-trainer-champion-index",
+                "family_state_kind": "repo-rag-trainer-family-state",
+                "family_state_layout": "thin-index",
+                "generated_at": "2026-05-13T00:00:00+00:00",
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-stale",
+                        "family_path": "families/pf-stale/family.json",
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (family_cache_dir / "family.json").write_text(
+        json.dumps({"prompt_family_id": "pf-stale", "question": "stale"}) + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.fetch_remote_family_state",
+        lambda root: None,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.restore_processed_trace_records",
+        _restore_processed_trace_records_stub(
+            processed_count=1,
+            restored_count=1,
+            trace_paths=["artifacts/trainer/recovered-imported-traces/fresh.json"],
+        ),
+    )
+    materialize_calls: list[dict[str, object]] = []
+
+    def fake_materialize_training_candidates(
+        root: Path,
+        *,
+        trace_paths: list[Path],
+        output_path: Path,
+        summary_path: Path,
+        seed_existing_output: bool = True,
+        upload_remote_state: bool = True,
+    ) -> dict[str, object]:
+        del root, output_path, summary_path
+        materialize_calls.append(
+            {
+                "trace_paths": list(trace_paths),
+                "seed_existing_output": seed_existing_output,
+                "upload_remote_state": upload_remote_state,
+            }
+        )
+        return {}
+
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.materialize_training_candidates",
+        fake_materialize_training_candidates,
+    )
+
+    payload = utilities_module._prepare_local_trainer_family_cache(
+        tmp_path,
+        queue_name="dataset",
+        seed_trace_paths=[Path("artifacts/traces/imported/fresh.json")],
+    )
+
+    assert payload["status"] == "rebuilt-from-processed-history"
+    assert payload["remote_family_state_found"] is False
+    assert payload["stale_local_cache_reset"] is True
+    assert materialize_calls == [
+        {
+            "trace_paths": [Path("artifacts/trainer/recovered-imported-traces/fresh.json")],
             "seed_existing_output": False,
             "upload_remote_state": False,
         }

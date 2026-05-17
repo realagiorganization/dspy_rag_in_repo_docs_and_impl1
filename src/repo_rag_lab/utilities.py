@@ -256,14 +256,21 @@ def _prepare_local_trainer_family_cache(
     resolved_root = root.resolve()
     local_family_state_path = _trainer_local_family_state_path(resolved_root)
     local_family_cache_dir = _trainer_local_family_cache_dir(resolved_root)
-    if local_family_state_path.is_file() and local_family_cache_dir.is_dir():
+    remote_family_state = fetch_remote_family_state(resolved_root)
+    remote_family_state_available = isinstance(remote_family_state, Mapping) and bool(
+        str(remote_family_state.get("family_state_path") or "").strip()
+    )
+    if (
+        local_family_state_path.is_file()
+        and local_family_cache_dir.is_dir()
+        and not (seed_trace_paths and not remote_family_state_available)
+    ):
         return {
             "status": "using-local-cache",
             "family_state_path": _path_text_for_root(local_family_state_path, resolved_root),
             "family_cache_dir": _path_text_for_root(local_family_cache_dir, resolved_root),
         }
 
-    remote_family_state = fetch_remote_family_state(resolved_root)
     if isinstance(remote_family_state, Mapping):
         fetched_family_state_text = str(remote_family_state.get("family_state_path") or "").strip()
         if fetched_family_state_text:
@@ -333,6 +340,8 @@ def _prepare_local_trainer_family_cache(
         "processed_recovery": recovered,
         "recovered_trace_count": len(recovered_trace_paths),
         "seed_recovery": seed_recovery,
+        "remote_family_state_found": remote_family_state_available,
+        "stale_local_cache_reset": bool(seed_trace_paths and not remote_family_state_available),
     }
 
 
