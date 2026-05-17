@@ -325,7 +325,7 @@ def _volume_spec(config: TrainerK8sConfig) -> list[dict[str, object]]:
     ]
 
 
-def _deployment_payload(config: TrainerK8sConfig) -> dict[str, object]:
+def deployment_payload(config: TrainerK8sConfig) -> dict[str, object]:
     labels = _labels(config, "service")
     return {
         "apiVersion": "apps/v1",

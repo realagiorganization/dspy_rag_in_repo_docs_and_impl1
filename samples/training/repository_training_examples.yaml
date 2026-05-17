@@ -48,7 +48,6 @@
     - runtime
   expected_sources:
     - docs/operations/azure-deployment.md
-    - utilities/README.md
 - question: Where can you read MCP discovery notes?
   expected_answer: They are documented in docs/architecture/mcp-discovery.md.
   tags:

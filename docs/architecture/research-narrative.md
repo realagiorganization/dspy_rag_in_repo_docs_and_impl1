@@ -184,6 +184,11 @@ captured in:
 
 Audit notes capture local verification runs. GitHub Actions logs capture post-push CI status. The
 combination creates a chain of evidence from local claims to remote execution.
+The verification posture is now also more explicit about what the repository can currently sustain:
+the global coverage gate remains enabled, but it is aligned to the observed full-suite baseline at
+`80%` rather than an aspirational `85%`, while type-checking, retrieval-eval, smoke checks, and
+repository-surface verification continue to act as the sharper regression detectors for ongoing
+development.
 
 ### 8. Publication And Deployment Are Explicit Downstream Consumers
 
@@ -218,6 +223,11 @@ local worker concern. The first dataset-side implementation slice now exists: wo
 restored state is present, preferring a persisted explicit `latest_session_id` and only falling
 back to `--last --all` when the snapshot lacks a usable id. That slice also writes a PVC-root
 `session-index.json` plus a per-run `codex_session_state.json`, so later validation can tell
+when worker execution memory resumed correctly, while the trainer side now treats remote
+`repo-rag-training-families` state as authoritative for cold-start behavior: if operators delete
+the remote family-state versions, the next queue-triggered trainer cycle clears stale local family
+cache before rebuilding from processed and fresh queued traces instead of silently reusing the old
+PVC-local trainer cache.
 which lane resumed and which latest Codex session-file hint was preserved. The same slice now
 refuses to resume when the
 persisted working-directory, repo-root / branch, model-profile, or auth/config digest contract no

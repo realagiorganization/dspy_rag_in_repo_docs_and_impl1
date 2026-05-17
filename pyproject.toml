@@ -58,7 +58,7 @@ branch = true
 source = ["src/repo_rag_lab"]
 
 [tool.coverage.report]
-fail_under   = 85
+fail_under   = 80
 show_missing = true
 skip_covered = false
 

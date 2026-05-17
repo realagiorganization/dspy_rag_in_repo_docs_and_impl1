@@ -2085,7 +2085,7 @@ def test_persist_turn_trace_emits_feedback_trace_for_successful_family_reuse_and
         bundle_root=repo,
         artifact_dir=tmp_path / "artifacts",
     )
-    runtime = codex_proxy_module._CodexProxyRuntime(config)
+    runtime = codex_proxy_module.CodexProxyRuntime(config)
     try:
         repeated_failure = CodexMediationResult(
             question="same prompt",
@@ -2153,11 +2153,11 @@ def test_persist_turn_trace_emits_feedback_trace_for_successful_family_reuse_and
         )
         feedback_trace = runtime.persist_turn_trace(successful_family_reuse, command_trace=[])
         assert feedback_trace is not None
-        assert runtime._turn_trace_entries == [
+        assert runtime.turn_trace_entries == [
             feedback_trace.relative_to(config.artifact_dir).as_posix()
         ]
         manifest = json.loads(runtime.turn_trace_manifest_path.read_text(encoding="utf-8"))
-        assert manifest["trace_paths"] == runtime._turn_trace_entries
+        assert manifest["trace_paths"] == runtime.turn_trace_entries
         payload = json.loads(feedback_trace.read_text(encoding="utf-8"))
         assert payload["trace"]["trainer_signal_kind"] == "feedback_trace"
         assert payload["trace"]["family_predicted_hit_rate"] == 0.666667
@@ -2187,7 +2187,7 @@ def test_persist_turn_trace_emits_additional_lineage_trace_for_reformulated_prom
         bundle_root=repo,
         artifact_dir=tmp_path / "artifacts",
     )
-    runtime = codex_proxy_module._CodexProxyRuntime(config)
+    runtime = codex_proxy_module.CodexProxyRuntime(config)
     try:
         primary = CodexMediationResult(
             question="Inspect README and update docs",

@@ -2699,7 +2699,7 @@ def drain_trace_queue(
         imported_items: list[dict[str, object]] = []
         failures: list[dict[str, object]] = []
         skipped_items: list[dict[str, object]] = []
-        seen_dedupe_keys: set[str] = set()
+        azure_seen_dedupe_keys: set[str] = set()
         for message in received_messages:
             message_payload = None
             blob_name = None
@@ -2712,7 +2712,7 @@ def drain_trace_queue(
                 if _string_or_none(queued_item.get("queue_item_kind")) != TRACE_QUEUE_ITEM_KIND:
                     raise ValueError("Queued trace blob is missing `queue_item_kind`.")
                 dedupe_key = _queue_item_dedupe_key(queued_item)
-                if dedupe_key is not None and dedupe_key in seen_dedupe_keys:
+                if dedupe_key is not None and dedupe_key in azure_seen_dedupe_keys:
                     if not keep_queued:
                         store.delete_blob(container, blob_name)
                     store.delete_queue_message(queue_name_remote, message)
@@ -2728,7 +2728,7 @@ def drain_trace_queue(
                 if trace_payload is None:
                     raise ValueError("Queued trace item is missing `trace_payload`.")
                 if dedupe_key is not None:
-                    seen_dedupe_keys.add(dedupe_key)
+                    azure_seen_dedupe_keys.add(dedupe_key)
                 trace_name = _string_or_none(queued_item.get("trace_name"))
                 outcome = _mapping_or_none(queued_item.get("outcome"))
                 imported_record = write_trace_record(

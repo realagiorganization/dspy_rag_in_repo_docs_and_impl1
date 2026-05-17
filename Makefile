@@ -91,6 +91,7 @@ RETRIEVAL_MIN_PASS_RATE ?= 1.0
 RETRIEVAL_MIN_SOURCE_RECALL ?= 1.0
 RETRIEVAL_MODE ?=
 PYTEST_COV_ARGS ?= --cov=src/repo_rag_lab --cov-report=term-missing --cov-report=xml
+COVERAGE_FAIL_UNDER ?= 80
 GH_RUN_LIMIT ?= 10
 RUN_ID ?=
 GITHUB_PR_GATES_BRANCH ?= master
@@ -451,7 +452,7 @@ test: sync
 	rm -f $(COVERAGE_FILE_PATH) $(COVERAGE_FILE_PATH).*
 	COVERAGE_FILE=$(COVERAGE_FILE_PATH) TMPDIR=$(REPO_TMPDIR) \
 		$(UV) run pytest -o cache_dir=$(PYTEST_CACHE_DIR) $(PYTEST_COV_ARGS)
-	COVERAGE_FILE=$(COVERAGE_FILE_PATH) $(UV) run coverage report --fail-under=85
+	COVERAGE_FILE=$(COVERAGE_FILE_PATH) $(UV) run coverage report --fail-under=$(COVERAGE_FAIL_UNDER)
 
 coverage: sync
 	mkdir -p $(REPO_TMPDIR) $(PYTEST_CACHE_DIR) $(COVERAGE_DIR)

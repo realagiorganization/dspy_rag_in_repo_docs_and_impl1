@@ -390,13 +390,15 @@ def test_queue_trace_record_and_drain_trace_queue_use_azure_blob_queue(
         "repo-rag-training-traces",
         str(queued["queue_item_path"]),
     )
+    assert isinstance(queued_blob.get("trace_payload"), dict)
+    queued_trace_payload = cast(dict[str, object], queued_blob["trace_payload"])
     assert queued_blob["prompt_family_band"] == "match"
     assert queued_blob["trainer_signal_kind"] == "feedback_trace"
     assert queued_blob["original_prompt"] == "Inspect trainer queue ingestion behavior"
     assert queued_blob["reformulated_prompt"] == "Inspect how the trainer ingests queued traces."
-    assert queued_blob["trace_payload"]["prompt_family_band"] == "match"
-    assert queued_blob["trace_payload"]["trainer_signal_kind"] == "feedback_trace"
-    assert queued_blob["trace_payload"]["family_predicted_hit_rate"] == 0.666667
+    assert queued_trace_payload["prompt_family_band"] == "match"
+    assert queued_trace_payload["trainer_signal_kind"] == "feedback_trace"
+    assert queued_trace_payload["family_predicted_hit_rate"] == 0.666667
     assert store.messages
 
     drained = drain_trace_queue(tmp_path, queue_name="dataset")
@@ -728,14 +730,18 @@ def test_inspect_pending_trainer_inputs_reports_azure_queued_blob_visibility(
         queue_name="repo-rag-training",
     )
 
+    def _resolve_config(queue_name: str | None = None) -> AzureArtifactConfig:
+        del queue_name
+        return config
+
+    def _build_store(cfg: AzureArtifactConfig) -> _FakeAzureArtifactStore:
+        del cfg
+        return store
+
     monkeypatch.setattr(
-        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config",
-        lambda queue_name=None: config,
+        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config", _resolve_config
     )
-    monkeypatch.setattr(
-        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
-        lambda cfg: store,
-    )
+    monkeypatch.setattr("repo_rag_lab.runtime_artifacts.AzureArtifactStore", _build_store)
 
     queued = queue_trace_record(tmp_path, _sample_trace_payload(), queue_name="dataset")
     assert queued["storage_backend"] == "azure-blob-queue"
@@ -763,14 +769,18 @@ def test_inspect_pending_trainer_inputs_ignores_lingering_queue_messages_without
         queue_name="repo-rag-training",
     )
 
+    def _resolve_config(queue_name: str | None = None) -> AzureArtifactConfig:
+        del queue_name
+        return config
+
+    def _build_store(cfg: AzureArtifactConfig) -> _FakeAzureArtifactStore:
+        del cfg
+        return store
+
     monkeypatch.setattr(
-        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config",
-        lambda queue_name=None: config,
+        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config", _resolve_config
     )
-    monkeypatch.setattr(
-        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
-        lambda cfg: store,
-    )
+    monkeypatch.setattr("repo_rag_lab.runtime_artifacts.AzureArtifactStore", _build_store)
 
     store.send_queue_message(
         repo_rag_trace_queue_name(config, fallback="dataset"),
