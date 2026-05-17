@@ -1674,8 +1674,6 @@ def test_materialize_training_candidates_reports_no_new_candidates_for_unchanged
     imported_dir.mkdir(parents=True, exist_ok=True)
     trainer_dir = tmp_path / "artifacts" / "trainer"
     trainer_dir.mkdir(parents=True, exist_ok=True)
-    candidates_path = trainer_dir / "training-candidates.yaml"
-    summary_path = trainer_dir / "training-candidates-summary.json"
     trace_path = imported_dir / "accepted.json"
     trace_path.write_text(
         """{
@@ -1723,6 +1721,8 @@ def test_materialize_training_candidates_reports_no_new_candidates_for_unchanged
 
     assert first_summary["candidate_count"] == 1
     assert first_summary["new_candidate_count"] == 1
+    assert second_summary["candidate_count"] == 1
+    assert second_summary["new_candidate_count"] == 0
 
 
 def test_materialize_training_candidates_preserves_all_imported_full_traces_in_family_records(

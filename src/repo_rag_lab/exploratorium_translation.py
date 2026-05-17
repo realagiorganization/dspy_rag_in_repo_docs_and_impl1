@@ -72,6 +72,7 @@ SPECIAL_TEXT_FILENAMES = {
     "VERSION",
 }
 URL_PATTERN = re.compile(r"https?://[^\s<>{}\\|\"']+")
+CONTROL_CHAR_PATTERN = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 LATEX_ESCAPE_TABLE = str.maketrans(
     {
         "\\": r"\textbackslash{}",
@@ -212,7 +213,8 @@ def _extract_urls(text: str) -> tuple[str, ...]:
 def _read_text(path: Path) -> str:
     """Read a text file using UTF-8 with replacement for invalid bytes."""
 
-    return path.read_text(encoding="utf-8", errors="replace")
+    raw_text = path.read_text(encoding="utf-8", errors="replace")
+    return CONTROL_CHAR_PATTERN.sub("", raw_text)
 
 
 def _read_text_preview(path: Path, *, max_chars: int = 6000) -> str:

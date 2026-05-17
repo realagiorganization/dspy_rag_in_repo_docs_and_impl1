@@ -87,6 +87,26 @@ def test_sync_exploratorium_translation_writes_bilingual_outputs(tmp_path: Path)
     assert "https://github.com/example/project/blob/main/README.md\\#L1-L2" in tex
 
 
+def test_sync_exploratorium_translation_strips_control_characters_from_tracked_text(
+    tmp_path: Path,
+) -> None:
+    _write_demo_repo(tmp_path)
+    (tmp_path / "samples" / "logs").mkdir(parents=True)
+    (tmp_path / "samples" / "logs" / "bad-log.md").write_text(
+        "# GitHub Actions check after \x7fc8ed5b3\x7f\n\n"
+        "- Repository: \x7fdspy_rag_in_repo_docs_and_impl1\x7f\n",
+        encoding="utf-8",
+    )
+
+    payload = sync_exploratorium_translation(tmp_path)
+    tex_path = tmp_path / str(payload["tex_path"])
+    tex = tex_path.read_text(encoding="utf-8")
+
+    assert "\x7f" not in tex
+    assert "GitHub Actions check after c8ed5b3" in tex
+    assert "bad-log.md" in tex
+
+
 def test_sync_exploratorium_translation_reuses_timestamp_until_inventory_changes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

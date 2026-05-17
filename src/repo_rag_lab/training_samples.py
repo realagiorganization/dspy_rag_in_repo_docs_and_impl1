@@ -1781,7 +1781,9 @@ def _persist_local_family_state(
             for key, value in full_family_payload.items()
             if key not in {"family_path", "father_path", "record_paths", "family_record_count"}
         }
-        family_file_payload["family_record_count"] = len(_family_replay_records(full_family_payload))
+        family_file_payload["family_record_count"] = len(
+            _family_replay_records(full_family_payload)
+        )
         family_json_path = family_dir / "family.json"
         family_json_path.write_text(
             f"{json.dumps(family_file_payload, indent=2)}\n",

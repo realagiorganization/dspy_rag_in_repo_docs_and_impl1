@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-05-14T10:54:27Z",
-  "tracked_file_count": 412,
-  "summarized_file_count": 409,
+  "generated_at": "2026-05-17T08:19:50Z",
+  "tracked_file_count": 483,
+  "summarized_file_count": 480,
   "excluded_generated_file_count": 3,
   "explicit_link_count": 92,
-  "machine_link_occurrence_count": 2632,
-  "machine_link_unique_count": 2427,
+  "machine_link_occurrence_count": 2643,
+  "machine_link_unique_count": 2438,
   "bibliography_entry_count": 4,
   "local_documentation_count": 0,
   "file_summaries": [
@@ -273,38 +273,38 @@
     {
       "path": "FILES.csv",
       "kind": "generic",
-      "byte_size": 54065,
+      "byte_size": 62762,
       "line_count": null,
       "url_count": 0,
-      "summary_en": "Tracked repository file, 54065 bytes of binary data, 0 explicit URLs. Opening line: No non-empty preview line.",
-      "summary_ru": "\u041e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u0435\u043c\u044b\u0439 \u0444\u0430\u0439\u043b \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u044f, 54065 \u0431\u0430\u0439\u0442 \u0431\u0438\u043d\u0430\u0440\u043d\u044b\u0445 \u0434\u0430\u043d\u043d\u044b\u0445, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041f\u0435\u0440\u0432\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430: No non-empty preview line."
+      "summary_en": "Tracked repository file, 62762 bytes of binary data, 0 explicit URLs. Opening line: No non-empty preview line.",
+      "summary_ru": "\u041e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u0435\u043c\u044b\u0439 \u0444\u0430\u0439\u043b \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u044f, 62762 \u0431\u0430\u0439\u0442 \u0431\u0438\u043d\u0430\u0440\u043d\u044b\u0445 \u0434\u0430\u043d\u043d\u044b\u0445, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041f\u0435\u0440\u0432\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430: No non-empty preview line."
     },
     {
       "path": "FILES.md",
       "kind": "markdown",
-      "byte_size": 60988,
-      "line_count": 423,
+      "byte_size": 70533,
+      "line_count": 476,
       "url_count": 1,
-      "summary_en": "Markdown document, 423 lines, 1 explicit URLs. Lead heading: Repository File Inventory.",
-      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 423 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository File Inventory."
+      "summary_en": "Markdown document, 476 lines, 1 explicit URLs. Lead heading: Repository File Inventory.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 476 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository File Inventory."
     },
     {
       "path": "Makefile",
       "kind": "make",
-      "byte_size": 24202,
-      "line_count": 520,
+      "byte_size": 24247,
+      "line_count": 521,
       "url_count": 1,
-      "summary_en": "Repository Makefile, 520 lines, 1 explicit URLs. It exposes the shared automation surfaces.",
-      "summary_ru": "Makefile \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u044f, 520 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u041e\u043d \u043e\u0442\u043a\u0440\u044b\u0432\u0430\u0435\u0442 \u043e\u0431\u0449\u0438\u0435 \u043f\u043e\u0432\u0435\u0440\u0445\u043d\u043e\u0441\u0442\u0438 \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0437\u0430\u0446\u0438\u0438."
+      "summary_en": "Repository Makefile, 521 lines, 1 explicit URLs. It exposes the shared automation surfaces.",
+      "summary_ru": "Makefile \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u044f, 521 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u041e\u043d \u043e\u0442\u043a\u0440\u044b\u0432\u0430\u0435\u0442 \u043e\u0431\u0449\u0438\u0435 \u043f\u043e\u0432\u0435\u0440\u0445\u043d\u043e\u0441\u0442\u0438 \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0437\u0430\u0446\u0438\u0438."
     },
     {
       "path": "README.md",
       "kind": "markdown",
-      "byte_size": 26222,
-      "line_count": 312,
+      "byte_size": 26031,
+      "line_count": 311,
       "url_count": 6,
-      "summary_en": "Markdown document, 312 lines, 6 explicit URLs. Lead heading: Repository RAG Lab.",
-      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 312 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 6. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository RAG Lab."
+      "summary_en": "Markdown document, 311 lines, 6 explicit URLs. Lead heading: Repository RAG Lab.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 311 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 6. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository RAG Lab."
     },
     {
       "path": "TODO.MD",
@@ -381,11 +381,11 @@
     {
       "path": "docs/architecture/research-narrative.md",
       "kind": "markdown",
-      "byte_size": 85875,
-      "line_count": 1123,
+      "byte_size": 98659,
+      "line_count": 1283,
       "url_count": 0,
-      "summary_en": "Markdown document, 1123 lines, 0 explicit URLs. Lead heading: Repository Research Narrative.",
-      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 1123 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository Research Narrative."
+      "summary_en": "Markdown document, 1283 lines, 0 explicit URLs. Lead heading: Repository Research Narrative.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 1283 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository Research Narrative."
     },
     {
       "path": "docs/archive/repo-completeness-checklist.md",
@@ -1675,6 +1675,15 @@
       "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 86 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-11 Trusted Handoff Syntax Error Blocked Execution Artifact Upload."
     },
     {
+      "path": "docs/audit/2026-05-11-zz-latest-run-handoff-restored-but-family-runtime-still-heuristic.md",
+      "kind": "markdown",
+      "byte_size": 5763,
+      "line_count": 186,
+      "url_count": 0,
+      "summary_en": "Markdown document, 186 lines, 0 explicit URLs. Lead heading: 2026-05-11 Latest Run: Handoff Restored But Family Runtime Still Heuristic.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 186 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-11 Latest Run: Handoff Restored But Family Runtime Still Heuristic."
+    },
+    {
       "path": "docs/audit/2026-05-13-azure-defaults-and-codex-config-model-alignment.md",
       "kind": "markdown",
       "byte_size": 4099,
@@ -1684,6 +1693,15 @@
       "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 114 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-13 Azure Defaults And CODEX_AZURE_CONFIG Model Alignment."
     },
     {
+      "path": "docs/audit/2026-05-13-latest-run-partial-family-runtime-use-and-six-same-prompt-traces.md",
+      "kind": "markdown",
+      "byte_size": 6882,
+      "line_count": 180,
+      "url_count": 0,
+      "summary_en": "Markdown document, 180 lines, 0 explicit URLs. Lead heading: 2026-05-13 Latest Run: Partial Family Runtime Use And Six Same-Prompt Traces.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 180 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-13 Latest Run: Partial Family Runtime Use And Six Same-Prompt Traces."
+    },
+    {
       "path": "docs/audit/2026-05-13-latest-run-used-global-dspy-bundle-but-dropped-supplemental-user-line.md",
       "kind": "markdown",
       "byte_size": 6044,
@@ -1691,6 +1709,15 @@
       "url_count": 0,
       "summary_en": "Markdown document, 173 lines, 0 explicit URLs. Lead heading: 2026-05-13 Latest Run Used Global DSPy Bundle But Dropped Supplemental User Line.",
       "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 173 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-13 Latest Run Used Global DSPy Bundle But Dropped Supplemental User Line."
+    },
+    {
+      "path": "docs/audit/2026-05-13-live-trainer-startup-published-from-processed-with-empty-queue.md",
+      "kind": "markdown",
+      "byte_size": 4129,
+      "line_count": 104,
+      "url_count": 1,
+      "summary_en": "Markdown document, 104 lines, 1 explicit URLs. Lead heading: 2026-05-13 Live Trainer Startup Published From Processed With Empty Queue.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 104 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-13 Live Trainer Startup Published From Processed With Empty Queue."
     },
     {
       "path": "docs/audit/2026-05-13-processed-replay-no-longer-duplicates-family-records.md",
@@ -1720,13 +1747,166 @@
       "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 77 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-13 Trainer Local Cache Thin Index One Version Per Queue Cycle."
     },
     {
+      "path": "docs/audit/2026-05-14-latest-run-partial-dspy-runtime-and-single-family-trainer-rebuild.md",
+      "kind": "markdown",
+      "byte_size": 6243,
+      "line_count": 140,
+      "url_count": 0,
+      "summary_en": "Markdown document, 140 lines, 0 explicit URLs. Lead heading: 2026-05-14 Latest Run Partial DSPy Runtime And Single-Family Trainer Rebuild.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 140 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-14 Latest Run Partial DSPy Runtime And Single-Family Trainer Rebuild."
+    },
+    {
+      "path": "docs/audit/2026-05-14-runtime-dspy-single-thread-and-same-prompt-trace-dedupe.md",
+      "kind": "markdown",
+      "byte_size": 2985,
+      "line_count": 72,
+      "url_count": 0,
+      "summary_en": "Markdown document, 72 lines, 0 explicit URLs. Lead heading: 2026-05-14 Runtime DSPy Single-Thread And Same-Prompt Trace Dedupe.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 72 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-14 Runtime DSPy Single-Thread And Same-Prompt Trace Dedupe."
+    },
+    {
+      "path": "docs/audit/2026-05-15-family-profile-routing-and-handoff-hardening.md",
+      "kind": "markdown",
+      "byte_size": 3607,
+      "line_count": 78,
+      "url_count": 0,
+      "summary_en": "Markdown document, 78 lines, 0 explicit URLs. Lead heading: 2026-05-15 Family Profile Routing And Handoff Hardening.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 78 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-15 Family Profile Routing And Handoff Hardening."
+    },
+    {
+      "path": "docs/audit/2026-05-15-family-profile-stability-thresholds.md",
+      "kind": "markdown",
+      "byte_size": 1814,
+      "line_count": 40,
+      "url_count": 0,
+      "summary_en": "Markdown document, 40 lines, 0 explicit URLs. Lead heading: 2026-05-15 Family Profile Stability Thresholds.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 40 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-15 Family Profile Stability Thresholds."
+    },
+    {
+      "path": "docs/audit/2026-05-15-feedback-trace-phase-1.md",
+      "kind": "markdown",
+      "byte_size": 6689,
+      "line_count": 104,
+      "url_count": 0,
+      "summary_en": "Markdown document, 104 lines, 0 explicit URLs. Lead heading: 2026-05-15 Feedback Trace Phase 1.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 104 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-15 Feedback Trace Phase 1."
+    },
+    {
+      "path": "docs/audit/2026-05-15-profile-first-routing-and-real-thin-index.md",
+      "kind": "markdown",
+      "byte_size": 2300,
+      "line_count": 49,
+      "url_count": 0,
+      "summary_en": "Markdown document, 49 lines, 0 explicit URLs. Lead heading: 2026-05-15 Profile-First Routing And Real Thin Index.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 49 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-15 Profile-First Routing And Real Thin Index."
+    },
+    {
+      "path": "docs/audit/2026-05-15-remote-bundle-authority-and-lane-reset-hardening.md",
+      "kind": "markdown",
+      "byte_size": 3503,
+      "line_count": 72,
+      "url_count": 0,
+      "summary_en": "Markdown document, 72 lines, 0 explicit URLs. Lead heading: 2026-05-15 Remote Bundle Authority And Lane Reset Hardening.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 72 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-15 Remote Bundle Authority And Lane Reset Hardening."
+    },
+    {
+      "path": "docs/audit/2026-05-15-trace-wrapper-mirroring-and-batch-summary-fix.md",
+      "kind": "markdown",
+      "byte_size": 3117,
+      "line_count": 55,
+      "url_count": 0,
+      "summary_en": "Markdown document, 55 lines, 0 explicit URLs. Lead heading: 2026-05-15 Trace Wrapper Mirroring And Batch Summary Fix.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 55 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-15 Trace Wrapper Mirroring And Batch Summary Fix."
+    },
+    {
+      "path": "docs/audit/2026-05-15-trainer-publish-backlog-recovery.md",
+      "kind": "markdown",
+      "byte_size": 1926,
+      "line_count": 39,
+      "url_count": 0,
+      "summary_en": "Markdown document, 39 lines, 0 explicit URLs. Lead heading: 2026-05-15 Trainer Publish Backlog Recovery.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 39 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-15 Trainer Publish Backlog Recovery."
+    },
+    {
+      "path": "docs/audit/2026-05-15-unified-family-term-stats.md",
+      "kind": "markdown",
+      "byte_size": 1633,
+      "line_count": 41,
+      "url_count": 0,
+      "summary_en": "Markdown document, 41 lines, 0 explicit URLs. Lead heading: 2026-05-15 Unified Family Term Stats.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 41 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-15 Unified Family Term Stats."
+    },
+    {
+      "path": "docs/audit/2026-05-16-active-profile-summary-selectivity.md",
+      "kind": "markdown",
+      "byte_size": 1999,
+      "line_count": 37,
+      "url_count": 0,
+      "summary_en": "Markdown document, 37 lines, 0 explicit URLs. Lead heading: 2026-05-16 Active Profile Summary Selectivity.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 37 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-16 Active Profile Summary Selectivity."
+    },
+    {
+      "path": "docs/audit/2026-05-16-cron-only-trainer-orchestration.md",
+      "kind": "markdown",
+      "byte_size": 1613,
+      "line_count": 41,
+      "url_count": 0,
+      "summary_en": "Markdown document, 41 lines, 0 explicit URLs. Lead heading: 2026-05-16 Cron-Only Trainer Orchestration.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 41 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-16 Cron-Only Trainer Orchestration."
+    },
+    {
+      "path": "docs/audit/2026-05-16-live-family-run-review.md",
+      "kind": "markdown",
+      "byte_size": 15515,
+      "line_count": 299,
+      "url_count": 0,
+      "summary_en": "Markdown document, 299 lines, 0 explicit URLs. Lead heading: 2026-05-16 Live Family Run Review.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 299 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-16 Live Family Run Review."
+    },
+    {
+      "path": "docs/audit/2026-05-16-profile-term-selectivity-tightening.md",
+      "kind": "markdown",
+      "byte_size": 1107,
+      "line_count": 21,
+      "url_count": 0,
+      "summary_en": "Markdown document, 21 lines, 0 explicit URLs. Lead heading: 2026-05-16 Profile-Term Selectivity Tightening.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 21 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-16 Profile-Term Selectivity Tightening."
+    },
+    {
+      "path": "docs/audit/2026-05-16-queue-prompt-snapshot-mirroring.md",
+      "kind": "markdown",
+      "byte_size": 3719,
+      "line_count": 69,
+      "url_count": 0,
+      "summary_en": "Markdown document, 69 lines, 0 explicit URLs. Lead heading: 2026-05-16 Queue Prompt Snapshot Mirroring.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 69 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-16 Queue Prompt Snapshot Mirroring."
+    },
+    {
+      "path": "docs/audit/2026-05-16-technical-term-lookup-module.md",
+      "kind": "markdown",
+      "byte_size": 1171,
+      "line_count": 24,
+      "url_count": 0,
+      "summary_en": "Markdown document, 24 lines, 0 explicit URLs. Lead heading: 2026-05-16 Technical Term Lookup Module.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 24 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-16 Technical Term Lookup Module."
+    },
+    {
+      "path": "docs/audit/2026-05-17-family-trace-count-publish-repair.md",
+      "kind": "markdown",
+      "byte_size": 4528,
+      "line_count": 84,
+      "url_count": 0,
+      "summary_en": "Markdown document, 84 lines, 0 explicit URLs. Lead heading: 2026-05-17 Family Trace Count Publish Repair.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 84 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-17 Family Trace Count Publish Repair."
+    },
+    {
       "path": "docs/audit/README.md",
       "kind": "markdown",
-      "byte_size": 440,
-      "line_count": 14,
+      "byte_size": 538,
+      "line_count": 15,
       "url_count": 0,
-      "summary_en": "Markdown document, 14 lines, 0 explicit URLs. Lead heading: Repository Audit Notes.",
-      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 14 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository Audit Notes."
+      "summary_en": "Markdown document, 15 lines, 0 explicit URLs. Lead heading: Repository Audit Notes.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 15 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Repository Audit Notes."
     },
     {
       "path": "docs/guides/hushwheel-fixture-rag-guide.md",
@@ -1776,11 +1956,11 @@
     {
       "path": "docs/operations/trainer-deployment.md",
       "kind": "markdown",
-      "byte_size": 6047,
-      "line_count": 152,
+      "byte_size": 5773,
+      "line_count": 143,
       "url_count": 0,
-      "summary_en": "Markdown document, 152 lines, 0 explicit URLs. Lead heading: Trainer Deployment Notes.",
-      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 152 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Trainer Deployment Notes."
+      "summary_en": "Markdown document, 143 lines, 0 explicit URLs. Lead heading: Trainer Deployment Notes.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 143 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Trainer Deployment Notes."
     },
     {
       "path": "docs/planning/codex-exec-resume-plan.md",
@@ -1799,6 +1979,15 @@
       "url_count": 0,
       "summary_en": "Markdown document, 478 lines, 0 explicit URLs. Lead heading: Dataset Integration Plan.",
       "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 478 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Dataset Integration Plan."
+    },
+    {
+      "path": "docs/planning/dspy-feedback-trace-training-plan.md",
+      "kind": "markdown",
+      "byte_size": 6369,
+      "line_count": 168,
+      "url_count": 0,
+      "summary_en": "Markdown document, 168 lines, 0 explicit URLs. Lead heading: DSPy Feedback-Trace Training Plan.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 168 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: DSPy Feedback-Trace Training Plan."
     },
     {
       "path": "docs/planning/family-first-mipro-runtime-contract.md",
@@ -2710,6 +2899,438 @@
       "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 28 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions inspection after `abcf52c` push."
     },
     {
+      "path": "samples/logs/20260505T084508Z-gh-runs-develop-no-new-run-after-mcp-resource-discovery-push.md",
+      "kind": "markdown",
+      "byte_size": 984,
+      "line_count": 30,
+      "url_count": 0,
+      "summary_en": "Markdown document, 30 lines, 0 explicit URLs. Lead heading: GitHub Run Inspection.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 30 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Run Inspection."
+    },
+    {
+      "path": "samples/logs/20260505T100903Z-gh-runs-develop-no-new-run-after-codex-mcp-startup-hardening-push.md",
+      "kind": "markdown",
+      "byte_size": 1422,
+      "line_count": 33,
+      "url_count": 0,
+      "summary_en": "Markdown document, 33 lines, 0 explicit URLs. Lead heading: GitHub run inspection after `Harden Codex MCP startup diagnostics`.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 33 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub run inspection after `Harden Codex MCP startup diagnostics`."
+    },
+    {
+      "path": "samples/logs/20260505T123501Z-gh-runs-develop-no-new-run-after-fix-codex-mcp-startup-regression-push.md",
+      "kind": "markdown",
+      "byte_size": 1683,
+      "line_count": 36,
+      "url_count": 0,
+      "summary_en": "Markdown document, 36 lines, 0 explicit URLs. Lead heading: GitHub Run Inspection.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 36 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Run Inspection."
+    },
+    {
+      "path": "samples/logs/20260505T173418Z-gh-runs-develop-no-new-run-after-fix-mcp-stdio-buffering-regression-push.md",
+      "kind": "markdown",
+      "byte_size": 896,
+      "line_count": 15,
+      "url_count": 0,
+      "summary_en": "Markdown document, 15 lines, 0 explicit URLs. Lead heading: GitHub run inspection after `Fix MCP stdio buffering regression`.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 15 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub run inspection after `Fix MCP stdio buffering regression`."
+    },
+    {
+      "path": "samples/logs/20260507T084228Z-gh-runs-develop-no-new-run-after-fix-trainer-bundle-compile-token-overflow-push.md",
+      "kind": "markdown",
+      "byte_size": 738,
+      "line_count": 19,
+      "url_count": 0,
+      "summary_en": "Markdown document, 19 lines, 0 explicit URLs. Lead heading: GitHub run inspection after repo-rag push.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 19 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub run inspection after repo-rag push."
+    },
+    {
+      "path": "samples/logs/20260507T101534Z-gh-runs-develop-no-new-run-after-fix-repo-rag-mcp-post-initialize-transport-push.md",
+      "kind": "markdown",
+      "byte_size": 728,
+      "line_count": 19,
+      "url_count": 0,
+      "summary_en": "Markdown document, 19 lines, 0 explicit URLs. Lead heading: GitHub run inspection after repo-rag push.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 19 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub run inspection after repo-rag push."
+    },
+    {
+      "path": "samples/logs/20260507T121155Z-gh-runs-develop-no-new-run-after-prefer-tool-first-repo-rag-mcp-discovery-push.md",
+      "kind": "markdown",
+      "byte_size": 1215,
+      "line_count": 25,
+      "url_count": 0,
+      "summary_en": "Markdown document, 25 lines, 0 explicit URLs. Lead heading: GitHub run inspection after `Prefer tool-first repo-rag MCP discovery`.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 25 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub run inspection after `Prefer tool-first repo-rag MCP discovery`."
+    },
+    {
+      "path": "samples/logs/20260507T142540Z-gh-runs-develop-no-new-run-after-fix-codex-line-delimited-mcp-transport-push.md",
+      "kind": "markdown",
+      "byte_size": 1163,
+      "line_count": 22,
+      "url_count": 0,
+      "summary_en": "Markdown document, 22 lines, 0 explicit URLs. Lead heading: GitHub run inspection after `Fix Codex line-delimited MCP transport`.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 22 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub run inspection after `Fix Codex line-delimited MCP transport`."
+    },
+    {
+      "path": "samples/logs/20260507T193336Z-gh-runs-develop-no-new-run-after-fix-trainer-publication-drift-push.md",
+      "kind": "markdown",
+      "byte_size": 724,
+      "line_count": 21,
+      "url_count": 0,
+      "summary_en": "Markdown document, 21 lines, 0 explicit URLs. Lead heading: Post-push GitHub run inspection.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 21 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Post-push GitHub run inspection."
+    },
+    {
+      "path": "samples/logs/20260508T104235Z-gh-runs-develop-no-new-run-after-fix-trainer-hybrid-retrieval-gate-drift-push.md",
+      "kind": "markdown",
+      "byte_size": 1453,
+      "line_count": 38,
+      "url_count": 0,
+      "summary_en": "Markdown document, 38 lines, 0 explicit URLs. Lead heading: GitHub Actions Post-Push Check.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 38 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Post-Push Check."
+    },
+    {
+      "path": "samples/logs/20260508T124852Z-gh-runs-develop-no-new-run-after-advance-global-trainer-champion-bundle-evaluation-push.md",
+      "kind": "markdown",
+      "byte_size": 936,
+      "line_count": 25,
+      "url_count": 0,
+      "summary_en": "Markdown document, 25 lines, 0 explicit URLs. Lead heading: GitHub Actions Run Check.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 25 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Run Check."
+    },
+    {
+      "path": "samples/logs/20260508T135238Z-gh-runs-develop-no-new-run-after-refresh-trainer-champions-on-richer-benchmark-context-push.md",
+      "kind": "markdown",
+      "byte_size": 999,
+      "line_count": 30,
+      "url_count": 0,
+      "summary_en": "Markdown document, 30 lines, 0 explicit URLs. Lead heading: GitHub Actions Run Check.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 30 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Run Check."
+    },
+    {
+      "path": "samples/logs/20260509T095052Z-gh-runs-develop-no-new-run-after-fix-ci-formatting-drift-push.md",
+      "kind": "markdown",
+      "byte_size": 1164,
+      "line_count": 31,
+      "url_count": 0,
+      "summary_en": "Markdown document, 31 lines, 0 explicit URLs. Lead heading: GitHub Actions Run Check.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 31 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Run Check."
+    },
+    {
+      "path": "samples/logs/20260510T092222Z-gh-runs-develop-no-new-run-after-implement-family-first-dspy-runtime-contract-push.md",
+      "kind": "markdown",
+      "byte_size": 989,
+      "line_count": 30,
+      "url_count": 0,
+      "summary_en": "Markdown document, 30 lines, 0 explicit URLs. Lead heading: GitHub Actions Run Check.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 30 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Run Check."
+    },
+    {
+      "path": "samples/logs/20260510T111300Z-gh-runs-family-first-runtime-hotfix-follow-up.md",
+      "kind": "markdown",
+      "byte_size": 4366,
+      "line_count": 103,
+      "url_count": 5,
+      "summary_en": "Markdown document, 103 lines, 5 explicit URLs. Lead heading: GitHub Actions Run Log.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 103 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 5. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Run Log."
+    },
+    {
+      "path": "samples/logs/20260510T124834Z-gh-runs-develop.md",
+      "kind": "markdown",
+      "byte_size": 2618,
+      "line_count": 67,
+      "url_count": 3,
+      "summary_en": "Markdown document, 67 lines, 3 explicit URLs. Lead heading: GitHub Actions Run Log.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 67 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 3. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Run Log."
+    },
+    {
+      "path": "samples/logs/20260510T144829Z-gh-runs-develop-no-new-run-after-family-first-runtime-fix-push.md",
+      "kind": "markdown",
+      "byte_size": 1356,
+      "line_count": 34,
+      "url_count": 0,
+      "summary_en": "Markdown document, 34 lines, 0 explicit URLs. Lead heading: GitHub Actions follow-up for `4032f93` on `develop`.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 34 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions follow-up for `4032f93` on `develop`."
+    },
+    {
+      "path": "samples/logs/20260510T162259Z-gh-runs-develop-no-new-run-after-staged-family-first-runtime-guards-push.md",
+      "kind": "markdown",
+      "byte_size": 682,
+      "line_count": 19,
+      "url_count": 0,
+      "summary_en": "Markdown document, 19 lines, 0 explicit URLs. Lead heading: Summary.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 19 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Summary."
+    },
+    {
+      "path": "samples/logs/20260510T173748Z-gh-runs-develop-no-new-run-after-family-state-root-alias-and-latest-bundle-fallback-push.md",
+      "kind": "markdown",
+      "byte_size": 670,
+      "line_count": 25,
+      "url_count": 0,
+      "summary_en": "Markdown document, 25 lines, 0 explicit URLs. Lead heading: GitHub Actions Check After `a70facc`.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 25 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Check After `a70facc`."
+    },
+    {
+      "path": "samples/logs/20260510T190651Z-gh-runs-develop-no-new-run-after-stale-runtime-source-fix-push.md",
+      "kind": "markdown",
+      "byte_size": 729,
+      "line_count": 26,
+      "url_count": 0,
+      "summary_en": "Markdown document, 26 lines, 0 explicit URLs. Lead heading: GitHub Actions follow-up after push on 2026-05-10.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 26 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions follow-up after push on 2026-05-10."
+    },
+    {
+      "path": "samples/logs/20260511T090438Z-gh-runs-fix-trainer-incrementality-and-family-state-vers.md",
+      "kind": "markdown",
+      "byte_size": 2843,
+      "line_count": 68,
+      "url_count": 3,
+      "summary_en": "Markdown document, 68 lines, 3 explicit URLs. Lead heading: GitHub Actions Run Log.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 68 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 3. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Run Log."
+    },
+    {
+      "path": "samples/logs/20260511T115602Z-gh-runs-develop-no-new-run-after-trainer-service-queue-preflight-push.md",
+      "kind": "markdown",
+      "byte_size": 638,
+      "line_count": 23,
+      "url_count": 0,
+      "summary_en": "Markdown document, 23 lines, 0 explicit URLs. Lead heading: 2026-05-11 GitHub Actions Status After `a17f7d2`.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 23 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-11 GitHub Actions Status After `a17f7d2`."
+    },
+    {
+      "path": "samples/logs/20260511T141353Z-gh-runs-develop-no-new-run-after-original-prompt-routing-and-batch-fallback-push.md",
+      "kind": "markdown",
+      "byte_size": 944,
+      "line_count": 31,
+      "url_count": 0,
+      "summary_en": "Markdown document, 31 lines, 0 explicit URLs. Lead heading: 2026-05-11 GitHub Actions Check After Original-Prompt Routing And Batch Fallback Push.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 31 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-11 GitHub Actions Check After Original-Prompt Routing And Batch Fallback Push."
+    },
+    {
+      "path": "samples/logs/20260511T174511Z-gh-runs-develop-no-new-run-after-family-runtime-artifact-fallback-push.md",
+      "kind": "markdown",
+      "byte_size": 871,
+      "line_count": 23,
+      "url_count": 0,
+      "summary_en": "Markdown document, 23 lines, 0 explicit URLs. Lead heading: GitHub Actions Check After Push `0cea307`.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 23 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Check After Push `0cea307`."
+    },
+    {
+      "path": "samples/logs/20260511T203404Z-gh-runs-develop-no-new-run-after-queued-blob-trainer-gate-push.md",
+      "kind": "markdown",
+      "byte_size": 882,
+      "line_count": 26,
+      "url_count": 0,
+      "summary_en": "Markdown document, 26 lines, 0 explicit URLs. Lead heading: 2026-05-11 GitHub Actions Check After `e59ea5f`.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 26 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-11 GitHub Actions Check After `e59ea5f`."
+    },
+    {
+      "path": "samples/logs/20260513T104534Z-gh-runs-develop-no-new-run-after-trainer-cache-lifecycle-and-family-runtime-bridge-push.md",
+      "kind": "markdown",
+      "byte_size": 857,
+      "line_count": 24,
+      "url_count": 0,
+      "summary_en": "Markdown document, 24 lines, 0 explicit URLs. Lead heading: GitHub Actions Check After `ac515aa`.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 24 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Check After `ac515aa`."
+    },
+    {
+      "path": "samples/logs/20260513T131017Z-gh-runs-develop-no-new-run-after-trainer-processed-replay-dedupe-and-publish-gating-push.md",
+      "kind": "markdown",
+      "byte_size": 689,
+      "line_count": 24,
+      "url_count": 0,
+      "summary_en": "Markdown document, 24 lines, 0 explicit URLs. Lead heading: GitHub Actions Check.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 24 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Check."
+    },
+    {
+      "path": "samples/logs/20260513T163922Z-gh-runs-develop-no-new-run-after-family-runtime-hit-rate-bridge-and-prompt-preservation-push.md",
+      "kind": "markdown",
+      "byte_size": 767,
+      "line_count": 23,
+      "url_count": 0,
+      "summary_en": "Markdown document, 23 lines, 0 explicit URLs. Lead heading: GitHub Actions Check After `fb7d61b`.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 23 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Check After `fb7d61b`."
+    },
+    {
+      "path": "samples/logs/20260513T184201Z-gh-runs-develop-no-new-run-after-azure-default-model-alignment-push.md",
+      "kind": "markdown",
+      "byte_size": 620,
+      "line_count": 16,
+      "url_count": 0,
+      "summary_en": "Markdown document, 16 lines, 0 explicit URLs. Lead heading: Summary.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 16 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Summary."
+    },
+    {
+      "path": "samples/logs/20260513T205928Z-gh-runs-after-split-dspy-helper-trainer-model-surfaces-push.md",
+      "kind": "markdown",
+      "byte_size": 1253,
+      "line_count": 28,
+      "url_count": 0,
+      "summary_en": "Markdown document, 28 lines, 0 explicit URLs. Lead heading: GitHub Actions Summary.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 28 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Summary."
+    },
+    {
+      "path": "samples/logs/20260514T132541Z-gh-runs-develop-no-new-run-after-fix-stale-family-trace-handoff-push.md",
+      "kind": "markdown",
+      "byte_size": 1082,
+      "line_count": 28,
+      "url_count": 0,
+      "summary_en": "Markdown document, 28 lines, 0 explicit URLs. Lead heading: GitHub Actions Check.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 28 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Check."
+    },
+    {
+      "path": "samples/logs/20260514T184319Z-gh-runs-develop-no-new-run-after-align-trainer-families-with-trace-contract-push.md",
+      "kind": "markdown",
+      "byte_size": 1105,
+      "line_count": 26,
+      "url_count": 0,
+      "summary_en": "Markdown document, 26 lines, 0 explicit URLs. Lead heading: GitHub Actions Check.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 26 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Check."
+    },
+    {
+      "path": "samples/logs/20260515T103229Z-gh-runs-develop-no-new-run-after-harden-remote-bundle-authority-and-lane-reset-push.md",
+      "kind": "markdown",
+      "byte_size": 688,
+      "line_count": 26,
+      "url_count": 0,
+      "summary_en": "Markdown document, 26 lines, 0 explicit URLs. Lead heading: 2026-05-15 GitHub Runs Check After `ee9d308`.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 26 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-15 GitHub Runs Check After `ee9d308`."
+    },
+    {
+      "path": "samples/logs/20260515T143716Z-gh-runs-develop-no-new-run-after-add-feedback-aware-family-success-scoring-push.md",
+      "kind": "markdown",
+      "byte_size": 1048,
+      "line_count": 31,
+      "url_count": 0,
+      "summary_en": "Markdown document, 31 lines, 0 explicit URLs. Lead heading: GitHub Run Check.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 31 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Run Check."
+    },
+    {
+      "path": "samples/logs/20260515T161102Z-gh-runs-develop-no-new-run-after-harden-family-routing-and-trace-handoff-push.md",
+      "kind": "markdown",
+      "byte_size": 773,
+      "line_count": 18,
+      "url_count": 0,
+      "summary_en": "Markdown document, 18 lines, 0 explicit URLs. Lead heading: Summary.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 18 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Summary."
+    },
+    {
+      "path": "samples/logs/20260515T183216Z-gh-runs-develop-no-new-run-after-prefer-family-profiles-and-thin-family-state-push.md",
+      "kind": "markdown",
+      "byte_size": 824,
+      "line_count": 23,
+      "url_count": 0,
+      "summary_en": "Markdown document, 23 lines, 0 explicit URLs. Lead heading: GitHub Actions check after `c8ed5b3`.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 23 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions check after `c8ed5b3`."
+    },
+    {
+      "path": "samples/logs/20260515T183241Z-gh-runs-develop-no-new-run-after-prefer-family-profiles-and-thin-family-state-push.md",
+      "kind": "markdown",
+      "byte_size": 830,
+      "line_count": 23,
+      "url_count": 0,
+      "summary_en": "Markdown document, 23 lines, 0 explicit URLs. Lead heading: GitHub Actions check after c8ed5b3.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 23 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions check after c8ed5b3."
+    },
+    {
+      "path": "samples/logs/20260515T205800Z-gh-runs-develop-no-new-run-after-harden-trainer-publish-recovery-and-family-profiles-push.md",
+      "kind": "markdown",
+      "byte_size": 747,
+      "line_count": 24,
+      "url_count": 0,
+      "summary_en": "Markdown document, 24 lines, 0 explicit URLs. Lead heading: GitHub Runs Check.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 24 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Runs Check."
+    },
+    {
+      "path": "samples/logs/20260515T212100Z-gh-runs-develop-no-new-run-after-unify-family-term-stats-for-routing-push.md",
+      "kind": "markdown",
+      "byte_size": 745,
+      "line_count": 24,
+      "url_count": 0,
+      "summary_en": "Markdown document, 24 lines, 0 explicit URLs. Lead heading: GitHub Runs Check.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 24 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Runs Check."
+    },
+    {
+      "path": "samples/logs/20260516T000500Z-gh-runs-develop-no-new-run-after-fix-thin-family-state-and-live-queue-mirroring-push.md",
+      "kind": "markdown",
+      "byte_size": 776,
+      "line_count": 25,
+      "url_count": 0,
+      "summary_en": "Markdown document, 25 lines, 0 explicit URLs. Lead heading: GitHub Actions Check.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 25 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Actions Check."
+    },
+    {
+      "path": "samples/logs/20260516T072406Z-gh-runs-develop-no-new-run-after-tighten-family-profile-term-selectivity-push.md",
+      "kind": "markdown",
+      "byte_size": 851,
+      "line_count": 28,
+      "url_count": 0,
+      "summary_en": "Markdown document, 28 lines, 0 explicit URLs. Lead heading: GitHub Run Check After `Tighten family profile term selectivity`.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 28 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Run Check After `Tighten family profile term selectivity`."
+    },
+    {
+      "path": "samples/logs/20260516T081006Z-gh-runs-develop-no-new-run-after-add-technical-term-lookup-categories-push.md",
+      "kind": "markdown",
+      "byte_size": 1511,
+      "line_count": 46,
+      "url_count": 0,
+      "summary_en": "Markdown document, 46 lines, 0 explicit URLs. Lead heading: GitHub Run Check After `Add technical term lookup categories`.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 46 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Run Check After `Add technical term lookup categories`."
+    },
+    {
+      "path": "samples/logs/20260516T093100Z-gh-runs-develop-no-new-run-after-use-cron-only-trainer-orchestration-push.md",
+      "kind": "markdown",
+      "byte_size": 773,
+      "line_count": 21,
+      "url_count": 0,
+      "summary_en": "Markdown document, 21 lines, 0 explicit URLs. Lead heading: 2026-05-16 GH Runs Check After `Use cron-only trainer orchestration`.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 21 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-16 GH Runs Check After `Use cron-only trainer orchestration`."
+    },
+    {
+      "path": "samples/logs/20260516T101544Z-gh-runs-develop-no-new-run-after-tighten-active-family-profile-summaries-push.md",
+      "kind": "markdown",
+      "byte_size": 1295,
+      "line_count": 27,
+      "url_count": 0,
+      "summary_en": "Markdown document, 27 lines, 0 explicit URLs. Lead heading: Post-push GitHub Actions Check.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 27 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: Post-push GitHub Actions Check."
+    },
+    {
+      "path": "samples/logs/20260516T134808Z-gh-runs-develop-no-new-run-after-document-batch-prompt-snapshot-mirroring-fix-push.md",
+      "kind": "markdown",
+      "byte_size": 462,
+      "line_count": 9,
+      "url_count": 0,
+      "summary_en": "Markdown document, 9 lines, 0 explicit URLs. Lead heading: GitHub Run Check.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 9 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Run Check."
+    },
+    {
+      "path": "samples/logs/20260516T150936Z-gh-runs-develop-no-new-run-after-tighten-family-summary-selection-and-counts-push.md",
+      "kind": "markdown",
+      "byte_size": 798,
+      "line_count": 22,
+      "url_count": 0,
+      "summary_en": "Markdown document, 22 lines, 0 explicit URLs. Lead heading: 2026-05-16 GitHub Actions Check After `c8ded31`.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 22 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-16 GitHub Actions Check After `c8ded31`."
+    },
+    {
+      "path": "samples/logs/20260516T155600Z-gh-runs-develop-no-new-run-after-auto-recompile-cron-trainer-publishes-push.md",
+      "kind": "markdown",
+      "byte_size": 960,
+      "line_count": 22,
+      "url_count": 0,
+      "summary_en": "Markdown document, 22 lines, 0 explicit URLs. Lead heading: 2026-05-16 GitHub Actions Check After `Auto-recompile cron trainer publishes`.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 22 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: 2026-05-16 GitHub Actions Check After `Auto-recompile cron trainer publishes`."
+    },
+    {
+      "path": "samples/logs/20260517T050635Z-gh-runs-develop-after-reset-stale-trainer-cache-after-remote-cleanup-push.md",
+      "kind": "markdown",
+      "byte_size": 1626,
+      "line_count": 43,
+      "url_count": 0,
+      "summary_en": "Markdown document, 43 lines, 0 explicit URLs. Lead heading: GitHub Runs After `adfea05`.",
+      "summary_ru": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 Markdown, 43 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0413\u043b\u0430\u0432\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: GitHub Runs After `adfea05`."
+    },
+    {
       "path": "samples/logs/README.md",
       "kind": "markdown",
       "byte_size": 331,
@@ -2748,11 +3369,11 @@
     {
       "path": "samples/training/repository_training_examples.yaml",
       "kind": "yaml",
-      "byte_size": 2504,
-      "line_count": 80,
+      "byte_size": 2478,
+      "line_count": 79,
       "url_count": 0,
-      "summary_en": "YAML data or workflow file, 80 lines, 0 explicit URLs. Top keys: no top-level mapping keys.",
-      "summary_ru": "\u0424\u0430\u0439\u043b YAML \u0441 \u0434\u0430\u043d\u043d\u044b\u043c\u0438 \u0438\u043b\u0438 workflow, 80 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0412\u0435\u0440\u0445\u043d\u0438\u0435 \u043a\u043b\u044e\u0447\u0438: no top-level mapping keys."
+      "summary_en": "YAML data or workflow file, 79 lines, 0 explicit URLs. Top keys: no top-level mapping keys.",
+      "summary_ru": "\u0424\u0430\u0439\u043b YAML \u0441 \u0434\u0430\u043d\u043d\u044b\u043c\u0438 \u0438\u043b\u0438 workflow, 79 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u0412\u0435\u0440\u0445\u043d\u0438\u0435 \u043a\u043b\u044e\u0447\u0438: no top-level mapping keys."
     },
     {
       "path": "src/repo_rag_lab/__init__.py",
@@ -2802,20 +3423,20 @@
     {
       "path": "src/repo_rag_lab/cli.py",
       "kind": "python",
-      "byte_size": 59321,
-      "line_count": 1347,
+      "byte_size": 60068,
+      "line_count": 1371,
       "url_count": 0,
-      "summary_en": "Python module, 1347 lines, 0 explicit URLs. Module intent: Command-line entrypoints for the shared repository RAG workflows.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1347 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Command-line entrypoints for the shared repository RAG workflows."
+      "summary_en": "Python module, 1371 lines, 0 explicit URLs. Module intent: Command-line entrypoints for the shared repository RAG workflows.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1371 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Command-line entrypoints for the shared repository RAG workflows."
     },
     {
       "path": "src/repo_rag_lab/codex_proxy.py",
       "kind": "python",
-      "byte_size": 77535,
-      "line_count": 2002,
+      "byte_size": 90304,
+      "line_count": 2283,
       "url_count": 0,
-      "summary_en": "Python module, 2002 lines, 0 explicit URLs. Module intent: Local streaming proxy that injects repo-RAG + DSPy mediation for Codex.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 2002 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Local streaming proxy that injects repo-RAG + DSPy mediation for Codex."
+      "summary_en": "Python module, 2283 lines, 0 explicit URLs. Module intent: Local streaming proxy that injects repo-RAG + DSPy mediation for Codex.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 2283 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Local streaming proxy that injects repo-RAG + DSPy mediation for Codex."
     },
     {
       "path": "src/repo_rag_lab/corpus.py",
@@ -2829,11 +3450,11 @@
     {
       "path": "src/repo_rag_lab/dspy_training.py",
       "kind": "python",
-      "byte_size": 68160,
-      "line_count": 1809,
+      "byte_size": 71937,
+      "line_count": 1889,
       "url_count": 0,
-      "summary_en": "Python module, 1809 lines, 0 explicit URLs. Module intent: DSPy training and artifact helpers for repository-grounded RAG.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1809 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: DSPy training and artifact helpers for repository-grounded RAG."
+      "summary_en": "Python module, 1889 lines, 0 explicit URLs. Module intent: DSPy training and artifact helpers for repository-grounded RAG.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1889 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: DSPy training and artifact helpers for repository-grounded RAG."
     },
     {
       "path": "src/repo_rag_lab/dspy_workflow.py",
@@ -2847,11 +3468,11 @@
     {
       "path": "src/repo_rag_lab/exploratorium_translation.py",
       "kind": "python",
-      "byte_size": 38049,
-      "line_count": 1009,
+      "byte_size": 38166,
+      "line_count": 1011,
       "url_count": 0,
-      "summary_en": "Python module, 1009 lines, 0 explicit URLs. Module intent: Generate the bilingual exploratorium translation publication surfaces.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1009 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Generate the bilingual exploratorium translation publication surfaces."
+      "summary_en": "Python module, 1011 lines, 0 explicit URLs. Module intent: Generate the bilingual exploratorium translation publication surfaces.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1011 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Generate the bilingual exploratorium translation publication surfaces."
     },
     {
       "path": "src/repo_rag_lab/file_summaries.py",
@@ -2964,11 +3585,11 @@
     {
       "path": "src/repo_rag_lab/runtime_artifacts.py",
       "kind": "python",
-      "byte_size": 120524,
-      "line_count": 2708,
+      "byte_size": 132672,
+      "line_count": 2945,
       "url_count": 0,
-      "summary_en": "Python module, 2708 lines, 0 explicit URLs. Module intent: Versioned bundle, overlay, and runtime-trace helpers.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 2708 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Versioned bundle, overlay, and runtime-trace helpers."
+      "summary_en": "Python module, 2945 lines, 0 explicit URLs. Module intent: Versioned bundle, overlay, and runtime-trace helpers.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 2945 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Versioned bundle, overlay, and runtime-trace helpers."
     },
     {
       "path": "src/repo_rag_lab/rust_lookup.py",
@@ -2998,6 +3619,15 @@
       "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 28 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Shared repository path settings derived from a repository root."
     },
     {
+      "path": "src/repo_rag_lab/term_extraction.py",
+      "kind": "python",
+      "byte_size": 26846,
+      "line_count": 1168,
+      "url_count": 0,
+      "summary_en": "Python module, 1168 lines, 0 explicit URLs. Module intent: Technical-term extraction utilities for prompt-family routing profiles.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1168 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Technical-term extraction utilities for prompt-family routing profiles."
+    },
+    {
       "path": "src/repo_rag_lab/todo_backlog.py",
       "kind": "python",
       "byte_size": 8434,
@@ -3009,29 +3639,29 @@
     {
       "path": "src/repo_rag_lab/trainer_deployment.py",
       "kind": "python",
-      "byte_size": 18461,
-      "line_count": 438,
+      "byte_size": 18263,
+      "line_count": 435,
       "url_count": 0,
-      "summary_en": "Python module, 438 lines, 0 explicit URLs. Module intent: Kubernetes manifest helpers for trainer-side repo-RAG deployment surfaces.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 438 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Kubernetes manifest helpers for trainer-side repo-RAG deployment surfaces."
+      "summary_en": "Python module, 435 lines, 0 explicit URLs. Module intent: Kubernetes manifest helpers for trainer-side repo-RAG deployment surfaces.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 435 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Kubernetes manifest helpers for trainer-side repo-RAG deployment surfaces."
     },
     {
       "path": "src/repo_rag_lab/training_samples.py",
       "kind": "python",
-      "byte_size": 115520,
-      "line_count": 2829,
+      "byte_size": 136895,
+      "line_count": 3354,
       "url_count": 0,
-      "summary_en": "Python module, 2829 lines, 0 explicit URLs. Module intent: Helpers for loading and summarizing starter DSPy training examples.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 2829 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Helpers for loading and summarizing starter DSPy training examples."
+      "summary_en": "Python module, 3354 lines, 0 explicit URLs. Module intent: Helpers for loading and summarizing starter DSPy training examples.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 3354 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: Helpers for loading and summarizing starter DSPy training examples."
     },
     {
       "path": "src/repo_rag_lab/utilities.py",
       "kind": "python",
-      "byte_size": 121550,
-      "line_count": 2932,
+      "byte_size": 128584,
+      "line_count": 3078,
       "url_count": 1,
-      "summary_en": "Python module, 2932 lines, 1 explicit URLs. Module intent: User-facing utility helpers shared by the CLI, tests, and notebooks.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 2932 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: User-facing utility helpers shared by the CLI, tests, and notebooks."
+      "summary_en": "Python module, 3078 lines, 1 explicit URLs. Module intent: User-facing utility helpers shared by the CLI, tests, and notebooks.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 3078 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: User-facing utility helpers shared by the CLI, tests, and notebooks."
     },
     {
       "path": "src/repo_rag_lab/verification.py",
@@ -3423,7 +4053,7 @@
     {
       "path": "tests/test_cli_and_dspy.py",
       "kind": "python",
-      "byte_size": 68622,
+      "byte_size": 68616,
       "line_count": 1876,
       "url_count": 2,
       "summary_en": "Python module, 1876 lines, 2 explicit URLs. Module intent: No module docstring detected.",
@@ -3432,29 +4062,29 @@
     {
       "path": "tests/test_codex_proxy.py",
       "kind": "python",
-      "byte_size": 69838,
-      "line_count": 1918,
-      "url_count": 9,
-      "summary_en": "Python module, 1918 lines, 9 explicit URLs. Module intent: No module docstring detected.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1918 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 9. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
+      "byte_size": 84170,
+      "line_count": 2266,
+      "url_count": 10,
+      "summary_en": "Python module, 2266 lines, 10 explicit URLs. Module intent: No module docstring detected.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 2266 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 10. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
     },
     {
       "path": "tests/test_dspy_training.py",
       "kind": "python",
-      "byte_size": 69833,
-      "line_count": 1742,
+      "byte_size": 70476,
+      "line_count": 1753,
       "url_count": 17,
-      "summary_en": "Python module, 1742 lines, 17 explicit URLs. Module intent: No module docstring detected.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1742 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 17. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
+      "summary_en": "Python module, 1753 lines, 17 explicit URLs. Module intent: No module docstring detected.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1753 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 17. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
     },
     {
       "path": "tests/test_exploratorium_translation.py",
       "kind": "python",
-      "byte_size": 5239,
-      "line_count": 138,
+      "byte_size": 5935,
+      "line_count": 158,
       "url_count": 8,
-      "summary_en": "Python module, 138 lines, 8 explicit URLs. Module intent: No module docstring detected.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 138 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 8. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
+      "summary_en": "Python module, 158 lines, 8 explicit URLs. Module intent: No module docstring detected.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 158 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 8. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
     },
     {
       "path": "tests/test_file_summaries.py",
@@ -3567,11 +4197,11 @@
     {
       "path": "tests/test_project_surfaces.py",
       "kind": "python",
-      "byte_size": 21471,
-      "line_count": 484,
+      "byte_size": 21558,
+      "line_count": 486,
       "url_count": 1,
-      "summary_en": "Python module, 484 lines, 1 explicit URLs. Module intent: No module docstring detected.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 484 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
+      "summary_en": "Python module, 486 lines, 1 explicit URLs. Module intent: No module docstring detected.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 486 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 1. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
     },
     {
       "path": "tests/test_repository_rag_bdd.py",
@@ -3594,11 +4224,11 @@
     {
       "path": "tests/test_runtime_artifacts_azure.py",
       "kind": "python",
-      "byte_size": 59236,
-      "line_count": 1561,
+      "byte_size": 64556,
+      "line_count": 1677,
       "url_count": 4,
-      "summary_en": "Python module, 1561 lines, 4 explicit URLs. Module intent: No module docstring detected.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1561 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 4. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
+      "summary_en": "Python module, 1677 lines, 4 explicit URLs. Module intent: No module docstring detected.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 1677 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 4. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
     },
     {
       "path": "tests/test_rust_lookup.py",
@@ -3608,6 +4238,15 @@
       "url_count": 0,
       "summary_en": "Python module, 95 lines, 0 explicit URLs. Module intent: No module docstring detected.",
       "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 95 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
+    },
+    {
+      "path": "tests/test_term_extraction.py",
+      "kind": "python",
+      "byte_size": 4846,
+      "line_count": 141,
+      "url_count": 0,
+      "summary_en": "Python module, 141 lines, 0 explicit URLs. Module intent: No module docstring detected.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 141 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
     },
     {
       "path": "tests/test_todo_backlog.py",
@@ -3621,20 +4260,20 @@
     {
       "path": "tests/test_training_samples.py",
       "kind": "python",
-      "byte_size": 88023,
-      "line_count": 2237,
+      "byte_size": 114488,
+      "line_count": 2915,
       "url_count": 0,
-      "summary_en": "Python module, 2237 lines, 0 explicit URLs. Module intent: No module docstring detected.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 2237 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
+      "summary_en": "Python module, 2915 lines, 0 explicit URLs. Module intent: No module docstring detected.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 2915 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 0. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
     },
     {
       "path": "tests/test_utilities.py",
       "kind": "python",
-      "byte_size": 121727,
-      "line_count": 3112,
+      "byte_size": 143136,
+      "line_count": 3687,
       "url_count": 6,
-      "summary_en": "Python module, 3112 lines, 6 explicit URLs. Module intent: No module docstring detected.",
-      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 3112 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 6. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
+      "summary_en": "Python module, 3687 lines, 6 explicit URLs. Module intent: No module docstring detected.",
+      "summary_ru": "\u041c\u043e\u0434\u0443\u043b\u044c Python, 3687 \u0441\u0442\u0440\u043e\u043a, \u044f\u0432\u043d\u044b\u0445 URL: 6. \u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0443\u043b\u044f: No module docstring detected."
     },
     {
       "path": "tests/test_verification.py",
@@ -3728,7 +4367,7 @@
       "source_paths": [
         "tests/test_codex_proxy.py"
       ],
-      "occurrence_count": 1,
+      "occurrence_count": 2,
       "fetch_state_en": "Referenced by URL only. No repository-local mirror is currently tracked.",
       "fetch_state_ru": "\u0421\u0441\u044b\u043b\u043a\u0430 \u0445\u0440\u0430\u043d\u0438\u0442\u0441\u044f \u0442\u043e\u043b\u044c\u043a\u043e \u043a\u0430\u043a URL. \u041b\u043e\u043a\u0430\u043b\u044c\u043d\u043e\u0435 \u0437\u0435\u0440\u043a\u0430\u043b\u043e \u0432 \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u0438 \u0441\u0435\u0439\u0447\u0430\u0441 \u043d\u0435 \u043e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u0435\u0442\u0441\u044f."
     },
@@ -4492,9 +5131,10 @@
       "source_paths": [
         "README.md",
         "docs/audit/2026-04-29-live-azure-gpt54-validation.md",
+        "docs/audit/2026-05-13-live-trainer-startup-published-from-processed-with-empty-queue.md",
         "docs/operations/azure-deployment.md"
       ],
-      "occurrence_count": 3,
+      "occurrence_count": 4,
       "fetch_state_en": "Referenced by URL only. No repository-local mirror is currently tracked.",
       "fetch_state_ru": "\u0421\u0441\u044b\u043b\u043a\u0430 \u0445\u0440\u0430\u043d\u0438\u0442\u0441\u044f \u0442\u043e\u043b\u044c\u043a\u043e \u043a\u0430\u043a URL. \u041b\u043e\u043a\u0430\u043b\u044c\u043d\u043e\u0435 \u0437\u0435\u0440\u043a\u0430\u043b\u043e \u0432 \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u0438 \u0441\u0435\u0439\u0447\u0430\u0441 \u043d\u0435 \u043e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u0435\u0442\u0441\u044f."
     },
