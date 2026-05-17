@@ -2630,8 +2630,22 @@ def queue_trace_record(
         "outcome": normalized_outcome,
         **mirrored_signal_fields,
     }
+
+    local_batch_trace_path: str | None = None
+    if safe_batch_name:
+        batch_dir = _trace_batch_dir(resolved_root, safe_batch_name)
+        batch_dir.mkdir(parents=True, exist_ok=True)
+        batch_trace_path = batch_dir / queue_item_path.name
+        local_batch_trace_path = _relative_to_root(batch_trace_path, resolved_root)
+        queue_item["batch_trace_path"] = local_batch_trace_path
+
     config = resolve_azure_artifact_config(queue_name=queue_name)
     if config is not None and config.queue_enabled:
+        queue_dir.mkdir(parents=True, exist_ok=True)
+        queue_item_path.write_text(f"{json.dumps(queue_item, indent=2)}\n", encoding="utf-8")
+        if local_batch_trace_path is not None:
+            batch_trace_path = resolved_root / local_batch_trace_path
+            batch_trace_path.write_text(f"{json.dumps(queue_item, indent=2)}\n", encoding="utf-8")
         store = AzureArtifactStore(config)
         container = repo_rag_trace_container(config)
         normalized_queue_name = repo_rag_trace_queue_name(config, fallback=normalized_queue_name)
@@ -2659,14 +2673,13 @@ def queue_trace_record(
             "queue_name": normalized_queue_name,
             "trace_container": container,
             "queue_item_path": blob_name,
+            "local_queue_item_path": _relative_to_root(queue_item_path, resolved_root),
+            "local_batch_trace_path": local_batch_trace_path,
             "queue_message": message_info,
         }
 
     if safe_batch_name:
-        batch_dir = _trace_batch_dir(resolved_root, safe_batch_name)
-        batch_dir.mkdir(parents=True, exist_ok=True)
-        batch_trace_path = batch_dir / queue_item_path.name
-        queue_item["batch_trace_path"] = _relative_to_root(batch_trace_path, resolved_root)
+        batch_trace_path = _trace_batch_dir(resolved_root, safe_batch_name) / queue_item_path.name
         batch_trace_path.write_text(f"{json.dumps(queue_item, indent=2)}\n", encoding="utf-8")
     queue_item_path.write_text(f"{json.dumps(queue_item, indent=2)}\n", encoding="utf-8")
     return {

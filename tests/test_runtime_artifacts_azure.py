@@ -382,6 +382,14 @@ def test_queue_trace_record_and_drain_trace_queue_use_azure_blob_queue(
     assert queued["original_prompt"] == "Inspect trainer queue ingestion behavior"
     assert queued["reformulated_prompt"] == "Inspect how the trainer ingests queued traces."
     assert str(queued["queue_item_path"]).startswith("queued/repo-rag-training/")
+    assert queued["local_queue_item_path"] == (
+        "artifacts/traces/queued/dataset/" + Path(str(queued["queue_item_path"])).name
+    )
+    assert queued["local_batch_trace_path"] == (
+        "artifacts/traces/batches/20260508T223000Z/" + Path(str(queued["queue_item_path"])).name
+    )
+    assert (tmp_path / str(queued["local_queue_item_path"])).is_file()
+    assert (tmp_path / str(queued["local_batch_trace_path"])).is_file()
     assert store.blob_exists(
         "repo-rag-training-traces",
         str(queued["batch_trace_path"]),
@@ -745,6 +753,7 @@ def test_inspect_pending_trainer_inputs_reports_azure_queued_blob_visibility(
 
     queued = queue_trace_record(tmp_path, _sample_trace_payload(), queue_name="dataset")
     assert queued["storage_backend"] == "azure-blob-queue"
+    assert (tmp_path / str(queued["local_queue_item_path"])).is_file()
 
     inspected = inspect_pending_trainer_inputs(tmp_path, queue_name="dataset")
     assert inspected["storage_backend"] == "azure-blob-queue"

@@ -481,7 +481,10 @@ At the time of this document:
   through `repo-rag overlay-init` when no explicit overlay is supplied, exports a normalized worker
   trace through `repo-rag trace-export`, persists worker outcome manifests, and can stage those
   records into a trainer-side queue through `repo-rag trace-enqueue`, with Azure Blob + Queue now
-  acting as the primary global transport instead of a namespace-local PVC
+  acting as the primary global transport instead of a namespace-local PVC; that Azure-backed queue
+  handoff now also mirrors the same queued and batch payloads into local
+  `artifacts/traces/queued/...` and `artifacts/traces/batches/...` paths so trainer PVCs preserve
+  one first-class local audit/debug surface instead of exposing only remote blobs
 - that Codex mediation proxy now tries `RAG + DSPy` together first, degrades only the failed layer
   to heuristics when DSPy or retrieval is weak, and finally falls back to direct pass-through so
   an untrained bundle cannot block task execution
