@@ -105,6 +105,26 @@ Every saved turn trace must keep:
 Those traces accumulate locally during the run, then move together as one batch into the trainer
 queue and the durable trace store.
 
+## Trainer Ingestion Contract
+
+Trainer-side family assignment is intentionally stricter than runtime father lookup:
+
+1. Each imported trace is normalized into one trainer candidate record.
+2. Before matching, trainer lifts that record into one temporary **singleton family** with:
+   - one father question
+   - one prompt-profile summary
+   - one command-pattern summary
+   - one constraint summary
+3. Trainer compares that singleton family against every persisted family with one **symmetric**
+   family-to-family score.
+4. If the best symmetric score is `>= 0.8`, the trace joins that family.
+5. Otherwise trainer creates a new family.
+
+This is different from the older directional `trace -> family` logic. The family-first target
+contract requires matching objects of the same kind during ingestion; otherwise trace assignment
+becomes order-dependent and one trace can fail to join a family even though the singleton family
+created from that same trace would have matched it later.
+
 ## Storage Contract
 
 Target blob/container layout:
@@ -204,6 +224,9 @@ Implemented locally in this stage:
 - explicit `champion_*` Azure/blob wrapper helpers have now been removed from the repo API surface;
   compatibility continues through fallback reads instead of separate public champion-named helper
   functions
+- trainer-side prompt-family assignment now treats each new imported trace as a temporary
+  singleton family and matches it to existing families with one symmetric family-to-family score
+  instead of the older asymmetric `question -> family` routing probe
 - bundle activation now also falls back to the latest discoverable staged version directory when a
   local mirror exists but `channels/stable.json` or older published-manifest surfaces are missing
   or stale

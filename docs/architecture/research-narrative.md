@@ -225,6 +225,13 @@ drain as a recoverable stage: once one cycle drains imported traces, it records 
 same family-materialization/publish work even if the visible `queued/` directory has already been
 emptied. That closes the failure mode where traces reached `processed/` but no new
 `repo-rag-training-families` or `repo-rag-bundles` version was ever published after pod churn.
+The next trainer correction tightens family formation itself: imported traces are no longer matched
+into existing families as one-way `question -> family` probes. Instead each incoming trace is first
+lifted into a temporary singleton family with its own father, prompt-profile terms, and
+constraint/profile summaries, and trainer ingestion compares that singleton family against existing
+families with a symmetric family-to-family score. This removes the earlier order-dependent defect
+where a trace could fail to join a family, create its own singleton family, and then only
+*afterward* appear obviously close to that original family once its own family summary existed.
 `CODEX_HOME` instances restore persisted non-credential Codex state, regenerate fresh
 `auth.json` / `config.toml`, rerun guard preflight, and can switch to `codex exec resume` when
 restored state is present, preferring a persisted explicit `latest_session_id` and only falling

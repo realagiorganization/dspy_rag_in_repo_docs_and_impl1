@@ -1059,6 +1059,204 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
     return round(max(0.0, routing_score), 6)
 
 
+def _family_routing_question(family_payload: Mapping[str, Any]) -> str:
+    """Return the current routing question for one prompt family payload."""
+
+    father_record = _family_father_record(family_payload) or {}
+    return _routing_question(
+        question=family_payload.get("family_father_question")
+        or family_payload.get("question")
+        or family_payload.get("normalized_question"),
+        original_prompt=father_record.get("original_prompt"),
+        reformulated_prompt=father_record.get("reformulated_prompt"),
+    )
+
+
+def _family_profile_summary(
+    family_payload: Mapping[str, Any],
+) -> tuple[list[str], list[str], list[str]]:
+    """Return stable prompt, command, and constraint summaries for one family payload."""
+
+    family_record_count = max(1, len(_family_candidate_records(family_payload)))
+    profile_min_count = _stable_profile_min_count(family_record_count)
+    candidate_questions = _family_question_variants(family_payload)
+    family_routing_question = _family_routing_question(family_payload)
+    if family_routing_question:
+        candidate_questions = [family_routing_question, *candidate_questions]
+
+    family_prompt_term_counts = _term_counts_from_stats(
+        _term_stats_mapping(family_payload.get("family_prompt_profile_term_stats"))
+    ) or _term_count_mapping(
+        _term_stats_mapping(family_payload.get("family_prompt_profile_term_counts"))
+    )
+    if family_prompt_term_counts:
+        family_prompt_profile_terms = _stable_profile_terms_from_counts(
+            family_prompt_term_counts,
+            limit=_FAMILY_PROMPT_PROFILE_LIMIT,
+            min_count=profile_min_count,
+        )
+    else:
+        family_prompt_profile_terms = _profile_terms(
+            [
+                *candidate_questions,
+                *_string_list(family_payload.get("family_prompt_profile_terms")),
+            ],
+            limit=_FAMILY_PROMPT_PROFILE_LIMIT,
+        )
+
+    family_command_term_counts = _term_counts_from_stats(
+        _term_stats_mapping(family_payload.get("family_command_pattern_term_stats"))
+    ) or _term_count_mapping(
+        _term_stats_mapping(family_payload.get("family_command_pattern_counts"))
+    )
+    if family_command_term_counts:
+        family_command_pattern_summary = _stable_profile_terms_from_counts(
+            family_command_term_counts,
+            limit=_FAMILY_COMMAND_PROFILE_LIMIT,
+            min_count=profile_min_count,
+        )
+    else:
+        family_command_pattern_summary = _profile_terms(
+            _string_list(family_payload.get("family_command_pattern_summary")),
+            limit=_FAMILY_COMMAND_PROFILE_LIMIT,
+        )
+
+    family_constraint_term_counts = _term_counts_from_stats(
+        _term_stats_mapping(family_payload.get("family_constraint_term_stats"))
+    ) or _term_count_mapping(_term_stats_mapping(family_payload.get("family_constraint_counts")))
+    if family_constraint_term_counts:
+        family_constraint_summary = _stable_profile_terms_from_counts(
+            family_constraint_term_counts,
+            limit=_FAMILY_CONSTRAINT_PROFILE_LIMIT,
+            min_count=profile_min_count,
+        )
+    else:
+        family_constraint_summary = _constraint_terms(
+            [
+                *_string_list(family_payload.get("family_constraint_summary")),
+                *family_command_pattern_summary,
+            ],
+            limit=_FAMILY_CONSTRAINT_PROFILE_LIMIT,
+        )
+
+    return (
+        family_prompt_profile_terms,
+        family_command_pattern_summary,
+        family_constraint_summary,
+    )
+
+
+def _family_to_family_similarity(
+    left_family: Mapping[str, Any],
+    right_family: Mapping[str, Any],
+) -> float:
+    """Return a symmetric routing score between two family-like payloads."""
+
+    left_question_variants = _family_question_variants(left_family)
+    right_question_variants = _family_question_variants(right_family)
+    left_question = _family_routing_question(left_family)
+    right_question = _family_routing_question(right_family)
+    if left_question:
+        left_question_variants = [left_question, *left_question_variants]
+    if right_question:
+        right_question_variants = [right_question, *right_question_variants]
+    left_prompt_terms, left_command_terms, left_constraint_terms = _family_profile_summary(
+        left_family
+    )
+    right_prompt_terms, right_command_terms, right_constraint_terms = _family_profile_summary(
+        right_family
+    )
+    question_similarity = 0.0
+    for left_variant in left_question_variants:
+        for right_variant in right_question_variants:
+            question_similarity = max(
+                question_similarity,
+                _question_similarity(left_variant, right_variant),
+            )
+    prompt_overlap = _profile_overlap_similarity(left_prompt_terms, right_prompt_terms)
+    command_overlap = _profile_overlap_similarity(left_command_terms, right_command_terms)
+    constraint_overlap = _profile_overlap_similarity(
+        [*left_constraint_terms, *left_command_terms],
+        [*right_constraint_terms, *right_command_terms],
+    )
+    shared_prompt_anchor_count = len(
+        {term.casefold() for term in left_prompt_terms if term.strip()}.intersection(
+            {term.casefold() for term in right_prompt_terms if term.strip()}
+        )
+    )
+    shared_constraint_anchor_count = len(
+        {
+            term.casefold()
+            for term in [*left_constraint_terms, *left_command_terms]
+            if term.strip()
+        }.intersection(
+            {
+                term.casefold()
+                for term in [*right_constraint_terms, *right_command_terms]
+                if term.strip()
+            }
+        )
+    )
+    anchor_support = min(1.0, shared_prompt_anchor_count / 6.0)
+    constraint_support = min(1.0, shared_constraint_anchor_count / 4.0)
+    routing_score = max(
+        prompt_overlap,
+        constraint_overlap,
+        (
+            prompt_overlap
+            + (0.2 * anchor_support)
+            + (0.05 * constraint_support)
+            + (0.05 * command_overlap)
+            + (0.05 * question_similarity)
+        ),
+    )
+    return round(min(1.0, max(0.0, routing_score)), 6)
+
+
+def _singleton_prompt_family_payload(
+    *,
+    question: str,
+    candidate_record: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Return one temporary family-like payload built from a single trace record."""
+
+    family_payload: dict[str, Any] = {
+        "prompt_family_id": _prompt_family_id(question),
+        "family_needs_recompile": True,
+        "question": "",
+        "normalized_question": "",
+        "question_variants": [],
+        "question_variant_count": 0,
+        "family_prompt_profile_term_stats": {},
+        "family_command_pattern_term_stats": {},
+        "family_constraint_term_stats": {},
+        "family_prompt_profile_terms": [],
+        "family_command_pattern_summary": [],
+        "family_constraint_summary": [],
+        "family_father_question": None,
+        "family_father_similarity_mean": None,
+        "family_father_record": None,
+        "family_runtime_artifact": None,
+        "family_runtime_context_group_id": None,
+        "family_runtime_score": None,
+        "family_runtime_record": None,
+        "family_feedback_metric": None,
+        "family_feedback_count": 0,
+        "family_success_metric": None,
+        "family_champion_context_group_id": None,
+        "family_champion_score": None,
+        "family_champion_record": None,
+        "family_records": [],
+        "context_groups": [],
+    }
+    if isinstance(candidate_record, Mapping):
+        normalized_record = _serialize_candidate_record(candidate_record)
+        if _trainer_candidate_record_is_supported(normalized_record):
+            family_payload["family_records"] = [normalized_record]
+    _refresh_prompt_family_summary(family_payload, question)
+    return family_payload
+
+
 def _refresh_family_profile_summary(family_payload: dict[str, Any]) -> None:
     """Persist one lightweight routing profile derived from stored family traces."""
 
@@ -1232,17 +1430,22 @@ def _find_or_create_prompt_family(
     family_order: list[str],
     *,
     question: str,
+    candidate_record: Mapping[str, Any] | None = None,
     preferred_family_id: str | None = None,
 ) -> tuple[dict[str, Any], bool]:
     """Return the matching prompt family for one question, creating one when needed."""
 
+    candidate_family = _singleton_prompt_family_payload(
+        question=question,
+        candidate_record=candidate_record,
+    )
     best_family: dict[str, Any] | None = None
     best_similarity = 0.0
     for family_id in family_order:
         family_payload = family_by_id.get(family_id)
         if family_payload is None:
             continue
-        similarity = _prompt_family_similarity(question, family_payload)
+        similarity = _family_to_family_similarity(candidate_family, family_payload)
         if similarity > best_similarity:
             best_family = family_payload
             best_similarity = similarity
@@ -1260,35 +1463,12 @@ def _find_or_create_prompt_family(
             suffix += 1
             candidate_id = f"{prompt_family_id}-{suffix}"
         prompt_family_id = candidate_id
-    family_payload = {
-        "prompt_family_id": prompt_family_id,
-        "family_needs_recompile": True,
-        "question": "",
-        "normalized_question": "",
-        "question_variants": [],
-        "question_variant_count": 0,
-        "family_prompt_profile_term_stats": {},
-        "family_command_pattern_term_stats": {},
-        "family_constraint_term_stats": {},
-        "family_prompt_profile_terms": [],
-        "family_command_pattern_summary": [],
-        "family_constraint_summary": [],
-        "family_father_question": None,
-        "family_father_similarity_mean": None,
-        "family_father_record": None,
-        "family_runtime_artifact": None,
-        "family_runtime_context_group_id": None,
-        "family_runtime_score": None,
-        "family_runtime_record": None,
-        "family_feedback_metric": None,
-        "family_feedback_count": 0,
-        "family_success_metric": None,
-        "family_champion_context_group_id": None,
-        "family_champion_score": None,
-        "family_champion_record": None,
-        "family_records": [],
-        "context_groups": [],
-    }
+    family_payload = _singleton_prompt_family_payload(
+        question=question,
+        candidate_record=candidate_record,
+    )
+    family_payload["prompt_family_id"] = prompt_family_id
+    family_payload["family_records"] = []
     _refresh_prompt_family_summary(family_payload, question)
     family_by_id[prompt_family_id] = family_payload
     family_order.append(prompt_family_id)
@@ -1966,6 +2146,7 @@ def _seed_champion_index_from_existing_records(
             family_by_id,
             family_order,
             question=question,
+            candidate_record=record,
             preferred_family_id=preferred_family_id,
         )
         if created_family:
@@ -3069,6 +3250,7 @@ def materialize_training_candidates(
             family_by_id,
             family_order,
             question=question,
+            candidate_record=record,
             preferred_family_id=prompt_family_id_hint or None,
         )
         if created_family:
