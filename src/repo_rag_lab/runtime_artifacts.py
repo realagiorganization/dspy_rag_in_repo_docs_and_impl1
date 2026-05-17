@@ -1216,18 +1216,10 @@ def upload_remote_family_state(
     published_payload = dict(payload)
     published_payload["family_count"] = prompt_family_count
     published_payload["prompt_family_count"] = prompt_family_count
-    current_payload = {
-        "schema_version": 1,
-        "family_state_kind": "repo-rag-family-state",
-        "updated_at": _utc_now_isoformat(),
-        "current_version": family_state_version,
-        "current_family_state_blob": blob_map["family_state"],
-        "current_family_count": prompt_family_count,
-        "current_prompt_family_count": prompt_family_count,
-    }
-    family_state_text = json.dumps(published_payload, indent=2, ensure_ascii=False) + "\n"
+    raw_prompt_families = published_payload.get("prompt_families")
+    family_record_count = 0
     remote_family_member_blobs: dict[str, dict[str, object]] = {}
-    for family_entry in _mapping_list(published_payload.get("prompt_families")):
+    for family_index, family_entry in enumerate(_mapping_list(raw_prompt_families)):
         prompt_family_id = _string_or_none(family_entry.get("prompt_family_id"))
         if prompt_family_id is None:
             continue
@@ -1241,11 +1233,14 @@ def upload_remote_family_state(
         if father_record is not None:
             store.upload_json(container, family_blob_map["father"], father_record)
         record_blob_map: dict[str, str] = {}
-        for record in _family_state_records_from_payload(family_payload):
+        family_records = _family_state_records_from_payload(family_payload)
+        for record in family_records:
             record_token = _family_state_record_token(record)
             record_blob_name = f"{family_blob_map['records_prefix']}/{record_token}.json"
             store.upload_json(container, record_blob_name, record)
             record_blob_map[record_token] = record_blob_name
+        family_record_count += len(family_records)
+        family_entry["family_record_count"] = len(family_records)
         runtime_artifact_blob_map: dict[str, str] = {}
         runtime_artifact = _mapping_or_none(family_payload.get("family_runtime_artifact"))
         if runtime_artifact is not None:
@@ -1273,12 +1268,26 @@ def upload_remote_family_state(
                         runtime_metadata_path.read_text(encoding="utf-8"),
                     )
                     runtime_artifact_blob_map["metadata"] = family_blob_map["runtime_metadata"]
+        if isinstance(raw_prompt_families, list):
+            raw_prompt_families[family_index] = family_entry
         remote_family_member_blobs[prompt_family_id] = {
             "family": family_blob_map["family"],
             "father": family_blob_map["father"],
             "record_blobs": record_blob_map,
             "runtime_artifact_blobs": runtime_artifact_blob_map,
         }
+    published_payload["family_record_count"] = family_record_count
+    current_payload = {
+        "schema_version": 1,
+        "family_state_kind": "repo-rag-family-state",
+        "updated_at": _utc_now_isoformat(),
+        "current_version": family_state_version,
+        "current_family_state_blob": blob_map["family_state"],
+        "current_family_count": prompt_family_count,
+        "current_prompt_family_count": prompt_family_count,
+        "current_family_record_count": family_record_count,
+    }
+    family_state_text = json.dumps(published_payload, indent=2, ensure_ascii=False) + "\n"
     store.upload_text(
         container,
         blob_map["family_state"],
@@ -1457,9 +1466,14 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
                 / "father.json"
             )
         family_entry["family_record_count"] = len(record_paths)
+        full_family_payload["family_record_count"] = len(record_paths)
         context_groups = full_family_payload.get("context_groups")
         family_entry["context_group_count"] = (
             len(context_groups) if isinstance(context_groups, list) else 0
+        )
+        local_family_path.write_text(
+            f"{json.dumps(full_family_payload, indent=2)}\n",
+            encoding="utf-8",
         )
         if isinstance(raw_prompt_families, list):
             raw_prompt_families[family_index] = family_entry

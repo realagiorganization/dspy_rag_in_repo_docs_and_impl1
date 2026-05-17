@@ -273,7 +273,7 @@ The target trainer/runtime split for `MIPROv2` is also explicit now:
   - the live `codex exec` prompt body is now task-first and stripped of Discord scaffolding before
     the execution contract is appended
   - generated AKS env now enables the existing resumed-lane reset policy by default through
-    `DATASET_CODEX_MAX_RESUMED_RUNS=3` and
+    `DATASET_CODEX_MAX_RESUMED_RUNS=9` and
     `DATASET_CODEX_PROMPT_TOKEN_GROWTH_RESET_RATIO=2.0`
 
 The proxy still keeps its token-budget and low-signal suppression behavior for injected developer

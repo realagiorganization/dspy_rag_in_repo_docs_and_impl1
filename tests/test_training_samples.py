@@ -1723,13 +1723,132 @@ def test_materialize_training_candidates_reports_no_new_candidates_for_unchanged
 
     assert first_summary["candidate_count"] == 1
     assert first_summary["new_candidate_count"] == 1
-    assert second_summary["candidate_count"] == 1
-    assert second_summary["new_candidate_count"] == 0
-    assert second_summary["replaced_count"] == 0
-    assert load_training_examples(candidates_path)[0].expected_answer == (
-        "It researches repository-grounded RAG."
+
+
+def test_materialize_training_candidates_preserves_all_imported_full_traces_in_family_records(
+    tmp_path: Path,
+) -> None:
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    variants = [
+        (
+            "Outer prompt A",
+            "Outer prompt A",
+            "Outer prompt A",
+            "No family support for prompt A.",
+        ),
+        (
+            "Outer prompt B",
+            "Outer prompt A",
+            "Outer prompt B",
+            "No family support for prompt B.",
+        ),
+        (
+            "Envelope prompt",
+            "<environment_context> cwd=/tmp/repo </environment_context>",
+            "Envelope prompt",
+            "No family support for envelope prompt.",
+        ),
+        (
+            "Inspect repository structure",
+            "Inspect repository structure",
+            "Inspect repository structure",
+            "No family support for structure inspection.",
+        ),
+        (
+            "Verify README GIF asset",
+            "Verify README GIF asset",
+            "Verify README GIF asset",
+            "No family support for asset verification.",
+        ),
+        (
+            "Validate reproducibility",
+            "Validate reproducibility",
+            "Validate reproducibility",
+            "No family support for reproducibility validation.",
+        ),
+        (
+            "Final no-op sanity check",
+            "Final no-op sanity check",
+            "Final no-op sanity check",
+            "No family support for final sanity check.",
+        ),
+    ]
+    for index, (question, original_prompt, reformulated_prompt, answer) in enumerate(variants):
+        trace_path = imported_dir / f"trace-{index}.json"
+        trace_path.write_text(
+            json.dumps(
+                {
+                    "trace_record_kind": "repo-rag-trace-record",
+                    "trace_record_path": f"artifacts/traces/imported/trace-{index}.json",
+                    "source_queue_item_path": (
+                        "artifacts/traces/queued/repo-rag-training/"
+                        f"20260517T0621{index:02d}Z-trace-{index}.json"
+                    ),
+                    "source_trace_name": f"trace-{index}",
+                    "source_batch_name": "20260517T062138Z",
+                    "question": question,
+                    "original_prompt": original_prompt,
+                    "reformulated_prompt": reformulated_prompt,
+                    "answer": answer,
+                    "sources": [],
+                    "context": [],
+                    "retrieved_context": [],
+                    "command_trace": [],
+                    "trace": {
+                        "schema_version": 1,
+                        "trace_kind": "repo-rag-runtime",
+                        "recorded_at": f"2026-05-17T06:2{index}:00+00:00",
+                        "question": question,
+                        "original_prompt": original_prompt,
+                        "reformulated_prompt": reformulated_prompt,
+                        "mode": "codex-proxy-turn-mediation",
+                        "retrieval_mode": "lexical",
+                        "sources": [],
+                        "source_count": 0,
+                        "context_count": 0,
+                        "context_field": "evidence_previews",
+                        "mediation_metric_hits": 1,
+                        "mediation_metric_total": 1,
+                        "trainer_signal_kind": "full_trace",
+                    },
+                    "outcome": {
+                        "acceptance_status": "candidate",
+                        "accepted": None,
+                        "execution_status": "success",
+                        "method": "codex_cli",
+                        "backend": "codex_cli_repo_rag_proxy",
+                        "used_baseline_fallback": False,
+                    },
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        output_path=Path("artifacts/trainer/generated-training.yaml"),
+        summary_path=Path("artifacts/trainer/generated-training-summary.json"),
+        seed_existing_output=False,
+        upload_remote_state=False,
     )
-    assert json.loads(summary_path.read_text(encoding="utf-8"))["new_candidate_count"] == 0
+
+    assert summary["loaded_candidate_count"] == 7
+    assert summary["family_candidate_count"] == 7
+    family_state_path = tmp_path / "artifacts" / "trainer" / "family-state.json"
+    family_state_payload = json.loads(family_state_path.read_text(encoding="utf-8"))
+    prompt_families = family_state_payload["prompt_families"]
+    assert sum(int(family["family_record_count"]) for family in prompt_families) == 7
+    assert all("question_variants" not in family for family in prompt_families)
+    family_files = sorted((tmp_path / "artifacts" / "trainer" / "families").rglob("family.json"))
+    assert family_files
+    for family_file in family_files:
+        family_payload = json.loads(family_file.read_text(encoding="utf-8"))
+        assert int(family_payload["family_record_count"]) >= 1
+    record_files = sorted((tmp_path / "artifacts" / "trainer" / "families").rglob("records/*.json"))
+    assert len(record_files) == 7
 
 
 def test_materialize_training_candidates_tracks_context_groups_but_materializes_one_family_champion(

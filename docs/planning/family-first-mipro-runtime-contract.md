@@ -238,7 +238,7 @@ Implemented locally in this stage:
 - worker-side `trace-export` now writes under the execution directory instead of the target
   repository root, so Codex no longer risks diffing or re-editing its own exported trace files
 - AKS defaults now enable the existing resumed-lane rollover logic through
-  `DATASET_CODEX_MAX_RESUMED_RUNS=3` and
+  `DATASET_CODEX_MAX_RESUMED_RUNS=9` and
   `DATASET_CODEX_PROMPT_TOKEN_GROWTH_RESET_RATIO=2.0`, so repeated verification reruns of one
   queue/slug lane do not keep compounding the same Codex transcript without bound
 - local trainer state now follows a cache-first lifecycle:
