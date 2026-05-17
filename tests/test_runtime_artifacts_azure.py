@@ -1354,6 +1354,8 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
     )
     assert uploaded_family_state_payload["family_count"] == 1
     assert uploaded_family_state_payload["prompt_family_count"] == 1
+    assert uploaded_family_state_payload["family_record_count"] == 2
+    assert current_payload["current_family_record_count"] == 2
 
     fetched = fetch_remote_family_state(tmp_path)
 
@@ -1384,10 +1386,13 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
     assert cached_runtime_metadata_path.exists()
     cached_family_payload = json.loads(cached_family_member.read_text(encoding="utf-8"))
     assert cached_family_payload["prompt_family_id"] == "pf-demo"
+    assert cached_family_payload["family_record_count"] == 2
     assert cached_family_payload["family_runtime_artifact"]["program_path"] == str(
         cached_runtime_paths["program"]
     )
     cached_family_state_payload = json.loads(cached_family_state.read_text(encoding="utf-8"))
+    assert cached_family_state_payload["family_record_count"] == 2
+    assert cached_family_state_payload["prompt_families"][0]["family_record_count"] == 2
     assert cached_family_state_payload["prompt_families"][0]["family_runtime_artifact"][
         "program_path"
     ] == str(cached_runtime_paths["program"])

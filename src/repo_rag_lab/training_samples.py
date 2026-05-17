@@ -1663,6 +1663,7 @@ def _strip_family_state_inline_payload(
 ) -> dict[str, Any]:
     """Return one thin-index family entry without replay-set duplication."""
 
+    replay_record_count = len(_family_replay_records(family_payload))
     context_groups_value = family_payload.get("context_groups")
     context_groups = context_groups_value if isinstance(context_groups_value, list) else []
 
@@ -1671,8 +1672,7 @@ def _strip_family_state_inline_payload(
         "family_needs_recompile": bool(family_payload.get("family_needs_recompile")),
         "question": _normalize_question_text(family_payload.get("question")),
         "normalized_question": _normalize_question_text(family_payload.get("normalized_question")),
-        "question_variants": _family_question_variants(family_payload),
-        "question_variant_count": int(family_payload.get("question_variant_count") or 0),
+        "question_variant_count": len(_family_question_variants(family_payload)),
         "family_prompt_profile_term_stats": _term_stats_from_counts(
             _term_counts_from_stats(
                 _term_stats_mapping(family_payload.get("family_prompt_profile_term_stats"))
@@ -1743,7 +1743,7 @@ def _strip_family_state_inline_payload(
         "family_feedback_metric": family_payload.get("family_feedback_metric"),
         "family_feedback_count": int(family_payload.get("family_feedback_count") or 0),
         "family_success_metric": family_payload.get("family_success_metric"),
-        "family_record_count": len(_family_replay_records(family_payload)),
+        "family_record_count": replay_record_count,
         "context_group_count": len(context_groups),
     }
 
@@ -1781,6 +1781,9 @@ def _persist_local_family_state(
             for key, value in full_family_payload.items()
             if key not in {"family_path", "father_path", "record_paths", "family_record_count"}
         }
+        family_file_payload["family_record_count"] = len(
+            _family_replay_records(full_family_payload)
+        )
         family_json_path = family_dir / "family.json"
         family_json_path.write_text(
             f"{json.dumps(family_file_payload, indent=2)}\n",
@@ -1929,6 +1932,7 @@ def _load_champion_index(path: Path) -> dict[str, Any]:
             )
             deduped_family_records[existing_index] = merged_record
         family["family_records"] = deduped_family_records
+        family["family_record_count"] = len(deduped_family_records)
         family["context_groups"] = []
         _refresh_family_champion(family)
         runtime_record = _family_runtime_record(family)
