@@ -805,6 +805,14 @@ def _term_counts_from_stats(
     return _term_count_mapping(counts)
 
 
+def _term_stats_mapping(value: object) -> Mapping[str, object]:
+    """Return one mapping view for term-stats payloads."""
+
+    if isinstance(value, Mapping):
+        return value
+    return {}
+
+
 def _term_stats_from_counts(
     counts: Mapping[str, object],
 ) -> dict[str, dict[str, float | int]]:
@@ -887,48 +895,6 @@ def _command_trace_constraint_terms(command_trace: Sequence[Mapping[str, Any]]) 
     return _constraint_terms(values, limit=16)
 
 
-def _profile_term_counts(
-    values: Sequence[object],
-) -> dict[str, int]:
-    """Return one frequency mapping for prompt-profile terms."""
-
-    counts: dict[str, int] = {}
-    for value in values:
-        _increment_term_counts(
-            counts,
-            _profile_terms([value], limit=_FAMILY_PROMPT_PROFILE_LIMIT * 4),
-        )
-    return _term_count_mapping(counts)
-
-
-def _constraint_term_counts(
-    values: Sequence[object],
-) -> dict[str, int]:
-    """Return one frequency mapping for constraint/path profile terms."""
-
-    counts: dict[str, int] = {}
-    for value in values:
-        _increment_term_counts(
-            counts,
-            _constraint_terms([value], limit=_FAMILY_CONSTRAINT_PROFILE_LIMIT * 4),
-        )
-    return _term_count_mapping(counts)
-
-
-def _command_trace_profile_term_counts(
-    command_trace: Sequence[Mapping[str, Any]],
-) -> dict[str, int]:
-    """Return one frequency mapping for command-pattern terms."""
-
-    values: list[object] = []
-    for entry in command_trace:
-        for key in ("text", "command", "path", "source", "tool", "type", "role"):
-            value = entry.get(key)
-            if value not in (None, ""):
-                values.append(value)
-    return _profile_term_counts(values)
-
-
 def _question_similarity(left: object, right: object) -> float:
     """Return a bounded similarity score between two prompt strings."""
 
@@ -999,13 +965,9 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
     family_record_count = max(1, len(_family_candidate_records(family_payload)))
     profile_min_count = _stable_profile_min_count(family_record_count)
     family_prompt_term_counts = _term_counts_from_stats(
-        family_payload.get("family_prompt_profile_term_stats")
-        if isinstance(family_payload.get("family_prompt_profile_term_stats"), Mapping)
-        else {}
+        _term_stats_mapping(family_payload.get("family_prompt_profile_term_stats"))
     ) or _term_count_mapping(
-        family_payload.get("family_prompt_profile_term_counts")
-        if isinstance(family_payload.get("family_prompt_profile_term_counts"), Mapping)
-        else {}
+        _term_stats_mapping(family_payload.get("family_prompt_profile_term_counts"))
     )
     if family_prompt_term_counts:
         family_prompt_profile_terms = _stable_profile_terms_from_counts(
@@ -1022,13 +984,9 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
             limit=_FAMILY_PROMPT_PROFILE_LIMIT,
         )
     family_command_term_counts = _term_counts_from_stats(
-        family_payload.get("family_command_pattern_term_stats")
-        if isinstance(family_payload.get("family_command_pattern_term_stats"), Mapping)
-        else {}
+        _term_stats_mapping(family_payload.get("family_command_pattern_term_stats"))
     ) or _term_count_mapping(
-        family_payload.get("family_command_pattern_counts")
-        if isinstance(family_payload.get("family_command_pattern_counts"), Mapping)
-        else {}
+        _term_stats_mapping(family_payload.get("family_command_pattern_counts"))
     )
     if family_command_term_counts:
         family_command_pattern_summary = _stable_profile_terms_from_counts(
@@ -1042,14 +1000,8 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
             limit=_FAMILY_COMMAND_PROFILE_LIMIT,
         )
     family_constraint_term_counts = _term_counts_from_stats(
-        family_payload.get("family_constraint_term_stats")
-        if isinstance(family_payload.get("family_constraint_term_stats"), Mapping)
-        else {}
-    ) or _term_count_mapping(
-        family_payload.get("family_constraint_counts")
-        if isinstance(family_payload.get("family_constraint_counts"), Mapping)
-        else {}
-    )
+        _term_stats_mapping(family_payload.get("family_constraint_term_stats"))
+    ) or _term_count_mapping(_term_stats_mapping(family_payload.get("family_constraint_counts")))
     if family_constraint_term_counts:
         family_constraint_summary = _stable_profile_terms_from_counts(
             family_constraint_term_counts,
@@ -1562,8 +1514,10 @@ def _apply_family_feedback_trace(
     normalized = _serialize_candidate_record(record)
     metric_hits, metric_total, _ = _record_metric(normalized)
     current_metric = _family_feedback_metric(family_payload)
-    next_hits = metric_hits + (current_metric.get("metric_hits") if current_metric else 0)
-    next_total = metric_total + (current_metric.get("metric_total") if current_metric else 0)
+    current_hits = _coerce_int((current_metric or {}).get("metric_hits")) or 0
+    current_total = _coerce_int((current_metric or {}).get("metric_total")) or 0
+    next_hits = metric_hits + current_hits
+    next_total = metric_total + current_total
     family_payload["family_feedback_metric"] = _feedback_metric_payload(
         hits=next_hits,
         total=next_total,
@@ -1709,6 +1663,9 @@ def _strip_family_state_inline_payload(
 ) -> dict[str, Any]:
     """Return one thin-index family entry without replay-set duplication."""
 
+    context_groups_value = family_payload.get("context_groups")
+    context_groups = context_groups_value if isinstance(context_groups_value, list) else []
+
     return {
         "prompt_family_id": str(family_payload.get("prompt_family_id") or "").strip(),
         "family_needs_recompile": bool(family_payload.get("family_needs_recompile")),
@@ -1718,52 +1675,34 @@ def _strip_family_state_inline_payload(
         "question_variant_count": int(family_payload.get("question_variant_count") or 0),
         "family_prompt_profile_term_stats": _term_stats_from_counts(
             _term_counts_from_stats(
-                family_payload.get("family_prompt_profile_term_stats")
-                if isinstance(family_payload.get("family_prompt_profile_term_stats"), Mapping)
-                else {}
+                _term_stats_mapping(family_payload.get("family_prompt_profile_term_stats"))
             )
             or _term_count_mapping(
-                family_payload.get("family_prompt_profile_term_counts")
-                if isinstance(family_payload.get("family_prompt_profile_term_counts"), Mapping)
-                else {}
+                _term_stats_mapping(family_payload.get("family_prompt_profile_term_counts"))
             )
         ),
         "family_command_pattern_term_stats": _term_stats_from_counts(
             _term_counts_from_stats(
-                family_payload.get("family_command_pattern_term_stats")
-                if isinstance(family_payload.get("family_command_pattern_term_stats"), Mapping)
-                else {}
+                _term_stats_mapping(family_payload.get("family_command_pattern_term_stats"))
             )
             or _term_count_mapping(
-                family_payload.get("family_command_pattern_counts")
-                if isinstance(family_payload.get("family_command_pattern_counts"), Mapping)
-                else {}
+                _term_stats_mapping(family_payload.get("family_command_pattern_counts"))
             )
         ),
         "family_constraint_term_stats": _term_stats_from_counts(
             _term_counts_from_stats(
-                family_payload.get("family_constraint_term_stats")
-                if isinstance(family_payload.get("family_constraint_term_stats"), Mapping)
-                else {}
+                _term_stats_mapping(family_payload.get("family_constraint_term_stats"))
             )
             or _term_count_mapping(
-                family_payload.get("family_constraint_counts")
-                if isinstance(family_payload.get("family_constraint_counts"), Mapping)
-                else {}
+                _term_stats_mapping(family_payload.get("family_constraint_counts"))
             )
         ),
         "family_prompt_profile_terms": _profile_terms(
             _stable_profile_terms_from_counts(
                 _term_counts_from_stats(
-                    family_payload.get("family_prompt_profile_term_stats")
-                    if isinstance(family_payload.get("family_prompt_profile_term_stats"), Mapping)
-                    else {}
+                    _term_stats_mapping(family_payload.get("family_prompt_profile_term_stats"))
                 )
-                or (
-                    family_payload.get("family_prompt_profile_term_counts")
-                    if isinstance(family_payload.get("family_prompt_profile_term_counts"), Mapping)
-                    else {}
-                ),
+                or _term_stats_mapping(family_payload.get("family_prompt_profile_term_counts")),
                 limit=_FAMILY_PROMPT_PROFILE_LIMIT,
                 min_count=_stable_profile_min_count(len(_family_replay_records(family_payload))),
             )
@@ -1773,15 +1712,9 @@ def _strip_family_state_inline_payload(
         "family_command_pattern_summary": _profile_terms(
             _stable_profile_terms_from_counts(
                 _term_counts_from_stats(
-                    family_payload.get("family_command_pattern_term_stats")
-                    if isinstance(family_payload.get("family_command_pattern_term_stats"), Mapping)
-                    else {}
+                    _term_stats_mapping(family_payload.get("family_command_pattern_term_stats"))
                 )
-                or (
-                    family_payload.get("family_command_pattern_counts")
-                    if isinstance(family_payload.get("family_command_pattern_counts"), Mapping)
-                    else {}
-                ),
+                or _term_stats_mapping(family_payload.get("family_command_pattern_counts")),
                 limit=_FAMILY_COMMAND_PROFILE_LIMIT,
                 min_count=_stable_profile_min_count(len(_family_replay_records(family_payload))),
             )
@@ -1791,15 +1724,9 @@ def _strip_family_state_inline_payload(
         "family_constraint_summary": _constraint_terms(
             _stable_profile_terms_from_counts(
                 _term_counts_from_stats(
-                    family_payload.get("family_constraint_term_stats")
-                    if isinstance(family_payload.get("family_constraint_term_stats"), Mapping)
-                    else {}
+                    _term_stats_mapping(family_payload.get("family_constraint_term_stats"))
                 )
-                or (
-                    family_payload.get("family_constraint_counts")
-                    if isinstance(family_payload.get("family_constraint_counts"), Mapping)
-                    else {}
-                ),
+                or _term_stats_mapping(family_payload.get("family_constraint_counts")),
                 limit=_FAMILY_CONSTRAINT_PROFILE_LIMIT,
                 min_count=_stable_profile_min_count(len(_family_replay_records(family_payload))),
             )
@@ -1817,11 +1744,7 @@ def _strip_family_state_inline_payload(
         "family_feedback_count": int(family_payload.get("family_feedback_count") or 0),
         "family_success_metric": family_payload.get("family_success_metric"),
         "family_record_count": len(_family_replay_records(family_payload)),
-        "context_group_count": len(
-            family_payload.get("context_groups")
-            if isinstance(family_payload.get("context_groups"), list)
-            else []
-        ),
+        "context_group_count": len(context_groups),
     }
 
 
@@ -1919,6 +1842,9 @@ def _persist_local_family_state(
     return thin_index
 
 
+persist_local_family_state = _persist_local_family_state
+
+
 def _load_champion_index(path: Path) -> dict[str, Any]:
     """Load a persisted champion index or return an empty one."""
 
@@ -1938,8 +1864,6 @@ def _load_champion_index(path: Path) -> dict[str, Any]:
         hydrated_families.append(_family_state_entry_to_payload(path, family))
     payload["prompt_families"] = hydrated_families
     for family in hydrated_families:
-        if not isinstance(family, dict):
-            continue
         family["family_needs_recompile"] = bool(family.get("family_needs_recompile"))
         family["family_feedback_count"] = max(0, int(family.get("family_feedback_count") or 0))
         feedback_metric = _family_feedback_metric(family)
@@ -2208,21 +2132,6 @@ def _family_father_record(family_payload: Mapping[str, Any] | None) -> dict[str,
         return _serialize_candidate_record(record)
     father_record, _ = _select_family_father_record(family_payload)
     return father_record
-
-
-def _group_support_count(group_payload: Mapping[str, Any]) -> int:
-    """Return the observed support count for one context group."""
-
-    try:
-        return max(0, int(group_payload.get("trace_count") or 0))
-    except (TypeError, ValueError):
-        return 0
-
-
-def _context_group_rank_key(group: Mapping[str, Any]) -> tuple[float, int, str]:
-    """Return the stable sort key for one candidate context group."""
-
-    return (float(group.get("champion_score") or 0.0), 0, "")
 
 
 def _record_acceptance_rank(record: Mapping[str, Any]) -> int:
@@ -2521,99 +2430,6 @@ def summarize_champion_index(path: Path) -> dict[str, Any]:
         "champion_exact_snapshot_ids": list(summary.get("family_exact_snapshot_ids", [])),
         "champion_record_hashes": list(summary.get("family_record_hashes", [])),
     }
-
-
-def _find_or_create_context_group(
-    family_payload: dict[str, Any],
-    *,
-    context_snapshot: Mapping[str, Any],
-    question: str,
-    prompt_family_id: str,
-    exact_snapshot_id: str,
-) -> tuple[dict[str, Any], bool]:
-    """Return one storage group for the family, creating it when needed."""
-
-    groups = family_payload.setdefault("context_groups", [])
-    if not isinstance(groups, list):
-        groups = []
-        family_payload["context_groups"] = groups
-    for group in groups:
-        if isinstance(group, dict):
-            return group, False
-    context_group_id = f"cg-{_stable_hash(prompt_family_id)}"
-    group_payload: dict[str, Any] = {
-        "context_group_id": context_group_id,
-        "sources": list(context_snapshot.get("sources", [])),
-        "evidence_fingerprints": list(context_snapshot.get("evidence_fingerprints", [])),
-        "evidence_count": int(context_snapshot.get("evidence_count") or 0),
-        "retrieval_mode": str(context_snapshot.get("retrieval_mode") or ""),
-        "mode": str(context_snapshot.get("mode") or ""),
-        "context_field": str(context_snapshot.get("context_field") or ""),
-        "source_count": int(context_snapshot.get("source_count") or 0),
-        "context_count": int(context_snapshot.get("context_count") or 0),
-        "top_k": context_snapshot.get("top_k"),
-        "trace_count": 0,
-        "support_by_record_key": {},
-        "champion_score": None,
-        "champion_record": None,
-    }
-    groups.append(group_payload)
-    return group_payload, True
-
-
-def _refresh_context_group_summary(
-    group_payload: dict[str, Any],
-    context_snapshot: Mapping[str, Any],
-    *,
-    align_strings: bool = False,
-) -> None:
-    """Update one context-group summary so gradual retrieval drift stays grouped."""
-
-    group_payload["sources"] = _normalized_source_tokens(
-        [
-            *(_normalized_source_tokens(group_payload.get("sources", []))),
-            *(_normalized_source_tokens(context_snapshot.get("sources", []))),
-        ]
-    )
-    group_payload["evidence_fingerprints"] = _normalized_source_tokens(
-        [
-            *(_normalized_source_tokens(group_payload.get("evidence_fingerprints", []))),
-            *(_normalized_source_tokens(context_snapshot.get("evidence_fingerprints", []))),
-        ]
-    )
-    group_payload["evidence_count"] = max(
-        int(group_payload.get("evidence_count") or 0),
-        int(context_snapshot.get("evidence_count") or 0),
-        len(group_payload.get("evidence_fingerprints", [])),
-    )
-    for field_name in ("retrieval_mode", "mode", "context_field"):
-        candidate_value = str(context_snapshot.get(field_name) or "").strip()
-        current_value = str(group_payload.get(field_name) or "").strip()
-        if align_strings or not current_value:
-            group_payload[field_name] = candidate_value
-    group_payload["source_count"] = max(
-        int(group_payload.get("source_count") or 0),
-        int(context_snapshot.get("source_count") or 0),
-        len(group_payload.get("sources", [])),
-    )
-    group_payload["context_count"] = max(
-        int(group_payload.get("context_count") or 0),
-        int(context_snapshot.get("context_count") or 0),
-    )
-    current_top_k = group_payload.get("top_k")
-    candidate_top_k = context_snapshot.get("top_k")
-    try:
-        current_top_k_value = int(current_top_k) if current_top_k is not None else None
-    except (TypeError, ValueError):
-        current_top_k_value = None
-    try:
-        candidate_top_k_value = int(candidate_top_k) if candidate_top_k is not None else None
-    except (TypeError, ValueError):
-        candidate_top_k_value = None
-    if align_strings or current_top_k_value is None:
-        group_payload["top_k"] = candidate_top_k_value
-    elif candidate_top_k_value is not None:
-        group_payload["top_k"] = max(current_top_k_value, candidate_top_k_value)
 
 
 def _normalize_materialized_candidate_record(record: Mapping[str, Any]) -> dict[str, Any]:

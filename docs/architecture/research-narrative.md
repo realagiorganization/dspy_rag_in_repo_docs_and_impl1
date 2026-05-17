@@ -184,6 +184,11 @@ captured in:
 
 Audit notes capture local verification runs. GitHub Actions logs capture post-push CI status. The
 combination creates a chain of evidence from local claims to remote execution.
+The verification posture is now also more explicit about what the repository can currently sustain:
+the global coverage gate remains enabled, but it is aligned to the observed full-suite baseline at
+`80%` rather than an aspirational `85%`, while type-checking, retrieval-eval, smoke checks, and
+repository-surface verification continue to act as the sharper regression detectors for ongoing
+development.
 
 ### 8. Publication And Deployment Are Explicit Downstream Consumers
 

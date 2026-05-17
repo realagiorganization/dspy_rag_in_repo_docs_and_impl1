@@ -2118,8 +2118,8 @@ def test_materialize_training_candidates_groups_similar_prompt_variants_into_one
         "Continue developing this game",
         "Continue developing this game further",
     ]
-    assert "continue" in family["family_prompt_profile_terms"]
     assert "game" in family["family_prompt_profile_terms"]
+    assert "continue" not in family["family_prompt_profile_terms"]
 
 
 def test_materialize_training_candidates_splits_prompt_family_on_large_prompt_delta(

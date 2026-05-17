@@ -1091,9 +1091,21 @@ def select_profile_summary_terms(
         term = str(key or "").strip().casefold()
         if not term:
             continue
-        try:
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            count = value
+        elif isinstance(value, float):
             count = int(value)
-        except (TypeError, ValueError):
+        elif isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                continue
+            try:
+                count = int(stripped)
+            except ValueError:
+                continue
+        else:
             continue
         if count <= 0:
             continue

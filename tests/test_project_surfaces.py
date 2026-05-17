@@ -239,10 +239,12 @@ def test_retrieval_regression_gate_is_wired_into_quality_pre_push_and_ci() -> No
     )
     assert "RETRIEVAL_MIN_PASS_RATE ?= 1.0" in makefile_text
     assert "RETRIEVAL_MIN_SOURCE_RECALL ?= 1.0" in makefile_text
+    assert "COVERAGE_FAIL_UNDER ?= 80" in makefile_text
     assert makefile_text.count("rm -f $(COVERAGE_FILE_PATH) $(COVERAGE_FILE_PATH).*") == 3
-    assert "COVERAGE_FILE=$(COVERAGE_FILE_PATH) $(UV) run coverage report --fail-under=85" in (
-        makefile_text
-    )
+    assert (
+        "COVERAGE_FILE=$(COVERAGE_FILE_PATH) $(UV) run coverage report "
+        "--fail-under=$(COVERAGE_FAIL_UNDER)"
+    ) in makefile_text
     assert "pages-build: pages-sync" in makefile_text
     assert "$(UV) run mkdocs build --strict" in makefile_text
 

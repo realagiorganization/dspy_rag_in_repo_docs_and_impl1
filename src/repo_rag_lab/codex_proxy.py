@@ -363,6 +363,7 @@ def _result_from_payload(payload: dict[str, object]) -> CodexMediationResult | N
             if isinstance(raw_estimated_tokens, (bool, int, float, str))
             else 0
         )
+        family_feedback_count_value = payload.get("family_feedback_count")
         return CodexMediationResult(
             question=str(payload.get("question") or ""),
             original_prompt=str(payload.get("original_prompt") or ""),
@@ -413,9 +414,9 @@ def _result_from_payload(payload: dict[str, object]) -> CodexMediationResult | N
                 payload.get("family_prediction_uncertainty")
             ),
             family_feedback_count=(
-                int(payload.get("family_feedback_count"))
-                if isinstance(payload.get("family_feedback_count"), int)
-                and not isinstance(payload.get("family_feedback_count"), bool)
+                family_feedback_count_value
+                if isinstance(family_feedback_count_value, int)
+                and not isinstance(family_feedback_count_value, bool)
                 else None
             ),
             family_artifact_selected=(
@@ -1308,10 +1309,9 @@ def build_codex_mediation(
             family_prediction_uncertainty = _float_or_none(
                 runtime_artifact.get("prediction_uncertainty")
             )
-            if isinstance(runtime_artifact.get("feedback_count"), int) and not isinstance(
-                runtime_artifact.get("feedback_count"), bool
-            ):
-                family_feedback_count = int(runtime_artifact.get("feedback_count"))
+            feedback_count = runtime_artifact.get("feedback_count")
+            if isinstance(feedback_count, int) and not isinstance(feedback_count, bool):
+                family_feedback_count = feedback_count
 
     if not supported_family:
         warnings.append(
@@ -1785,6 +1785,12 @@ class _CodexProxyRuntime:
         except OSError:
             return "unreadable-profile"
 
+    @property
+    def turn_trace_entries(self) -> list[str]:
+        """Return one defensive copy of the persisted turn-trace entry list."""
+
+        return list(self._turn_trace_entries)
+
     def _cache_key(self, original_prompt: str, command_trace: list[Mapping[str, str]]) -> str:
         command_trace_token = json.dumps(
             command_trace,
@@ -2170,6 +2176,9 @@ class _CodexProxyRuntime:
 
     def close(self) -> None:
         self.client.close()
+
+
+CodexProxyRuntime = _CodexProxyRuntime
 
 
 @contextmanager

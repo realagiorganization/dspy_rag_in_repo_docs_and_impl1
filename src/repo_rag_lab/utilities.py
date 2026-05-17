@@ -872,6 +872,14 @@ def run_bundle_inspection(
                 if selected_bundle is None:
                     payload = describe_dspy_artifacts(root)
                     warnings = [f"No DSPy bundle version `{bundle_version}` is available yet."]
+                    manifest_paths_value = payload.get("manifest_paths")
+                    metadata_paths_value = payload.get("metadata_paths")
+                    manifest_paths = (
+                        list(manifest_paths_value) if isinstance(manifest_paths_value, list) else []
+                    )
+                    metadata_paths = (
+                        list(metadata_paths_value) if isinstance(metadata_paths_value, list) else []
+                    )
                     return _json_command_payload(
                         "bundle-inspect",
                         root=root,
@@ -884,8 +892,8 @@ def run_bundle_inspection(
                         },
                         warnings=warnings,
                         artifact_metadata=_artifact_metadata(
-                            generated_paths=list(payload.get("manifest_paths", [])),
-                            related_paths=list(payload.get("metadata_paths", [])),
+                            generated_paths=manifest_paths,
+                            related_paths=metadata_paths,
                         ),
                     )
             else:
