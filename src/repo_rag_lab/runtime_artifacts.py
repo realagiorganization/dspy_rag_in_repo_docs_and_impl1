@@ -6,7 +6,9 @@ import hashlib
 import json
 import re
 import sqlite3
-from collections.abc import Mapping, Sequence
+import tempfile
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -157,9 +159,44 @@ def resolve_family_index_path(path: Path) -> Path:
 
 
 def _connect_family_index(path: Path) -> sqlite3.Connection:
-    connection = sqlite3.connect(path)
+    connection = sqlite3.connect(path, timeout=30.0)
     connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA busy_timeout = 30000")
     return connection
+
+
+@contextmanager
+def _local_sqlite_snapshot(path: Path) -> Iterator[Path]:
+    """Materialize one SQLite file into local temp storage for safe trainer-side access.
+
+    Trainer PVCs can be backed by networked storage where SQLite locking semantics are brittle.
+    Reading and writing through a local temporary copy keeps the authoritative on-disk artifact in
+    SQLite format without forcing the SQLite engine itself to operate directly against the shared
+    volume.
+    """
+
+    _, temp_name = tempfile.mkstemp(prefix="repo-rag-family-index-", suffix=".sqlite3")
+    Path(temp_name).unlink(missing_ok=True)
+    temp_path = Path(temp_name)
+    try:
+        if path.is_file():
+            temp_path.write_bytes(path.read_bytes())
+        yield temp_path
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+
+@contextmanager
+def _local_sqlite_build_path() -> Iterator[Path]:
+    """Return one empty local temporary path for building a fresh SQLite database."""
+
+    _, temp_name = tempfile.mkstemp(prefix="repo-rag-family-index-build-", suffix=".sqlite3")
+    Path(temp_name).unlink(missing_ok=True)
+    temp_path = Path(temp_name)
+    try:
+        yield temp_path
+    finally:
+        temp_path.unlink(missing_ok=True)
 
 
 def _fresh_family_index_payload() -> dict[str, object]:
@@ -184,46 +221,50 @@ def load_family_index_payload(path: Path) -> dict[str, object]:
         if not isinstance(payload.get("prompt_families"), list):
             payload["prompt_families"] = []
         return payload
-    connection = _connect_family_index(resolved_path)
-    try:
-        payload = _fresh_family_index_payload()
-        table_exists = connection.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='family_index_meta'"
-        ).fetchone()
-        if table_exists is None:
+    with _local_sqlite_snapshot(resolved_path) as local_copy_path:
+        connection = _connect_family_index(local_copy_path)
+        try:
+            payload = _fresh_family_index_payload()
+            table_exists = connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='family_index_meta'"
+            ).fetchone()
+            if table_exists is None:
+                return payload
+            for row in connection.execute(
+                "SELECT key, value_json FROM family_index_meta ORDER BY key"
+            ):
+                try:
+                    payload[str(row["key"])] = json.loads(str(row["value_json"]))
+                except json.JSONDecodeError:
+                    payload[str(row["key"])] = str(row["value_json"])
+            families: list[dict[str, object]] = []
+            row_query = """
+                SELECT prompt_family_id, payload_json, family_path, father_path, family_record_count
+                FROM family_index_entries
+                ORDER BY prompt_family_id
+            """
+            for row in connection.execute(row_query):
+                try:
+                    entry = json.loads(str(row["payload_json"]))
+                except json.JSONDecodeError:
+                    entry = {}
+                if not isinstance(entry, dict):
+                    entry = {}
+                prompt_family_id = str(row["prompt_family_id"] or "").strip()
+                if prompt_family_id:
+                    entry["prompt_family_id"] = prompt_family_id
+                family_path = str(row["family_path"] or "").strip()
+                if family_path:
+                    entry["family_path"] = family_path
+                father_path = str(row["father_path"] or "").strip()
+                if father_path:
+                    entry["father_path"] = father_path
+                entry["family_record_count"] = int(row["family_record_count"] or 0)
+                families.append(entry)
+            payload["prompt_families"] = families
             return payload
-        for row in connection.execute("SELECT key, value_json FROM family_index_meta ORDER BY key"):
-            try:
-                payload[str(row["key"])] = json.loads(str(row["value_json"]))
-            except json.JSONDecodeError:
-                payload[str(row["key"])] = str(row["value_json"])
-        families: list[dict[str, object]] = []
-        row_query = (
-            "SELECT prompt_family_id, payload_json, family_path, father_path, family_record_count "
-            "FROM family_index_entries ORDER BY prompt_family_id"
-        )
-        for row in connection.execute(row_query):
-            try:
-                entry = json.loads(str(row["payload_json"]))
-            except json.JSONDecodeError:
-                entry = {}
-            if not isinstance(entry, dict):
-                entry = {}
-            prompt_family_id = str(row["prompt_family_id"] or "").strip()
-            if prompt_family_id:
-                entry["prompt_family_id"] = prompt_family_id
-            family_path = str(row["family_path"] or "").strip()
-            if family_path:
-                entry["family_path"] = family_path
-            father_path = str(row["father_path"] or "").strip()
-            if father_path:
-                entry["father_path"] = father_path
-            entry["family_record_count"] = int(row["family_record_count"] or 0)
-            families.append(entry)
-        payload["prompt_families"] = families
-        return payload
-    finally:
-        connection.close()
+        finally:
+            connection.close()
 
 
 def write_family_index_payload(path: Path, payload: Mapping[str, object]) -> None:
@@ -231,95 +272,105 @@ def write_family_index_payload(path: Path, payload: Mapping[str, object]) -> Non
 
     resolved_path = path.resolve()
     resolved_path.parent.mkdir(parents=True, exist_ok=True)
-    if resolved_path.exists():
-        resolved_path.unlink()
-    connection = _connect_family_index(resolved_path)
-    try:
-        connection.execute(
-            "CREATE TABLE family_index_meta (key TEXT PRIMARY KEY, value_json TEXT NOT NULL)"
-        )
-        connection.execute(
-            """
-            CREATE TABLE family_index_entries (
-                prompt_family_id TEXT PRIMARY KEY,
-                question TEXT,
-                normalized_question TEXT,
-                family_father_question TEXT,
-                question_variant_count INTEGER NOT NULL DEFAULT 0,
-                family_record_count INTEGER NOT NULL DEFAULT 0,
-                prompt_terms_json TEXT NOT NULL,
-                command_terms_json TEXT NOT NULL,
-                constraint_terms_json TEXT NOT NULL,
-                family_path TEXT NOT NULL,
-                father_path TEXT,
-                payload_json TEXT NOT NULL
-            )
-            """
-        )
-        connection.execute(
-            "CREATE INDEX family_index_question_idx ON family_index_entries(question)"
-        )
-        connection.execute(
-            "CREATE INDEX family_index_father_idx ON family_index_entries(family_father_question)"
-        )
-        meta = {str(key): value for key, value in payload.items() if str(key) != "prompt_families"}
-        meta.setdefault("schema_version", FAMILY_INDEX_DB_SCHEMA_VERSION)
-        meta.setdefault("record_kind", "repo-rag-trainer-champion-index")
-        meta.setdefault("family_state_kind", "repo-rag-trainer-family-state")
-        meta["family_state_layout"] = "sqlite-index"
-        meta.setdefault("generated_at", datetime.now(UTC).isoformat())
-        meta["family_index_kind"] = FAMILY_INDEX_DB_KIND
-        for key, value in meta.items():
+    with _local_sqlite_build_path() as local_copy_path:
+        connection = _connect_family_index(local_copy_path)
+        try:
             connection.execute(
-                "INSERT INTO family_index_meta(key, value_json) VALUES(?, ?)",
-                (key, json.dumps(value, ensure_ascii=False)),
+                "CREATE TABLE family_index_meta (key TEXT PRIMARY KEY, value_json TEXT NOT NULL)"
             )
-        families = payload.get("prompt_families")
-        if isinstance(families, list):
-            for family in families:
-                if not isinstance(family, Mapping):
-                    continue
-                prompt_family_id = str(family.get("prompt_family_id") or "").strip()
-                family_path = str(family.get("family_path") or "").strip()
-                if not prompt_family_id or not family_path:
-                    continue
-                father_path = str(family.get("father_path") or "").strip()
-                connection.execute(
-                    """
-                    INSERT INTO family_index_entries(
-                        prompt_family_id, question, normalized_question, family_father_question,
-                        question_variant_count, family_record_count, prompt_terms_json,
-                        command_terms_json, constraint_terms_json, family_path, father_path,
-                        payload_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        prompt_family_id,
-                        str(family.get("question") or "").strip(),
-                        str(family.get("normalized_question") or "").strip(),
-                        str(family.get("family_father_question") or "").strip(),
-                        int(family.get("question_variant_count") or 0),
-                        int(family.get("family_record_count") or 0),
-                        json.dumps(
-                            list(family.get("family_prompt_profile_terms") or []),
-                            ensure_ascii=False,
-                        ),
-                        json.dumps(
-                            list(family.get("family_command_pattern_summary") or []),
-                            ensure_ascii=False,
-                        ),
-                        json.dumps(
-                            list(family.get("family_constraint_summary") or []),
-                            ensure_ascii=False,
-                        ),
-                        family_path,
-                        father_path or None,
-                        json.dumps(dict(family), ensure_ascii=False),
-                    ),
+            connection.execute(
+                """
+                CREATE TABLE family_index_entries (
+                    prompt_family_id TEXT PRIMARY KEY,
+                    question TEXT,
+                    normalized_question TEXT,
+                    family_father_question TEXT,
+                    question_variant_count INTEGER NOT NULL DEFAULT 0,
+                    family_record_count INTEGER NOT NULL DEFAULT 0,
+                    prompt_terms_json TEXT NOT NULL,
+                    command_terms_json TEXT NOT NULL,
+                    constraint_terms_json TEXT NOT NULL,
+                    family_path TEXT NOT NULL,
+                    father_path TEXT,
+                    payload_json TEXT NOT NULL
                 )
-        connection.commit()
-    finally:
-        connection.close()
+                """
+            )
+            connection.execute(
+                "CREATE INDEX family_index_question_idx ON family_index_entries(question)"
+            )
+            connection.execute(
+                """
+                CREATE INDEX family_index_father_idx
+                ON family_index_entries(family_father_question)
+                """
+            )
+            meta = {
+                str(key): value for key, value in payload.items() if str(key) != "prompt_families"
+            }
+            meta.setdefault("schema_version", FAMILY_INDEX_DB_SCHEMA_VERSION)
+            meta.setdefault("record_kind", "repo-rag-trainer-champion-index")
+            meta.setdefault("family_state_kind", "repo-rag-trainer-family-state")
+            meta["family_state_layout"] = "sqlite-index"
+            meta.setdefault("generated_at", datetime.now(UTC).isoformat())
+            meta["family_index_kind"] = FAMILY_INDEX_DB_KIND
+            for key, value in meta.items():
+                connection.execute(
+                    "INSERT INTO family_index_meta(key, value_json) VALUES(?, ?)",
+                    (key, json.dumps(value, ensure_ascii=False)),
+                )
+            families = payload.get("prompt_families")
+            if isinstance(families, list):
+                for family in families:
+                    if not isinstance(family, Mapping):
+                        continue
+                    prompt_family_id = str(family.get("prompt_family_id") or "").strip()
+                    family_path = str(family.get("family_path") or "").strip()
+                    if not prompt_family_id or not family_path:
+                        continue
+                    father_path = str(family.get("father_path") or "").strip()
+                    connection.execute(
+                        """
+                        INSERT INTO family_index_entries(
+                            prompt_family_id, question, normalized_question, family_father_question,
+                            question_variant_count, family_record_count, prompt_terms_json,
+                            command_terms_json, constraint_terms_json, family_path, father_path,
+                            payload_json
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            prompt_family_id,
+                            str(family.get("question") or "").strip(),
+                            str(family.get("normalized_question") or "").strip(),
+                            str(family.get("family_father_question") or "").strip(),
+                            int(family.get("question_variant_count") or 0),
+                            int(family.get("family_record_count") or 0),
+                            json.dumps(
+                                list(family.get("family_prompt_profile_terms") or []),
+                                ensure_ascii=False,
+                            ),
+                            json.dumps(
+                                list(family.get("family_command_pattern_summary") or []),
+                                ensure_ascii=False,
+                            ),
+                            json.dumps(
+                                list(family.get("family_constraint_summary") or []),
+                                ensure_ascii=False,
+                            ),
+                            family_path,
+                            father_path or None,
+                            json.dumps(dict(family), ensure_ascii=False),
+                        ),
+                    )
+            connection.commit()
+        finally:
+            connection.close()
+        staged_target_path = resolved_path.with_name(f".{resolved_path.name}.tmp")
+        try:
+            staged_target_path.write_bytes(local_copy_path.read_bytes())
+            staged_target_path.replace(resolved_path)
+        finally:
+            staged_target_path.unlink(missing_ok=True)
 
 
 def _sanitize_name(name: str, *, default: str) -> str:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -1422,6 +1423,57 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
     assert cached_runtime_artifact["program_path"] == str(cached_runtime_paths["program"])
     cached_father_payload = json.loads(cached_father_path.read_text(encoding="utf-8"))
     assert cached_father_payload["exact_snapshot_id"] == "ts-father"
+
+
+def test_write_family_index_payload_replaces_locked_target_file(tmp_path: Path) -> None:
+    family_state_path = tmp_path / "artifacts" / "trainer" / "family-index.sqlite3"
+    family_state_path.parent.mkdir(parents=True)
+    write_family_index_payload(
+        family_state_path,
+        {
+            "prompt_families": [
+                {
+                    "prompt_family_id": "pf-initial",
+                    "question": "Initial question",
+                    "family_father_question": "Initial question",
+                    "family_record_count": 1,
+                    "family_prompt_profile_terms": ["initial"],
+                    "family_command_pattern_summary": [],
+                    "family_constraint_summary": [],
+                    "family_path": "families/pf-initial/family.json",
+                }
+            ]
+        },
+    )
+
+    locked_connection = sqlite3.connect(family_state_path)
+    try:
+        assert locked_connection.execute(
+            "SELECT prompt_family_id FROM family_index_entries ORDER BY prompt_family_id"
+        ).fetchall() == [("pf-initial",)]
+        write_family_index_payload(
+            family_state_path,
+            {
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-updated",
+                        "question": "Updated question",
+                        "family_father_question": "Updated question",
+                        "family_record_count": 2,
+                        "family_prompt_profile_terms": ["updated"],
+                        "family_command_pattern_summary": [],
+                        "family_constraint_summary": [],
+                        "family_path": "families/pf-updated/family.json",
+                    }
+                ]
+            },
+        )
+    finally:
+        locked_connection.close()
+
+    loaded_payload = load_family_index_payload(family_state_path)
+    prompt_families = cast(list[dict[str, object]], loaded_payload["prompt_families"])
+    assert [str(family["prompt_family_id"]) for family in prompt_families] == ["pf-updated"]
 
 
 def test_inspect_bundle_channel_supports_staged_worker_bundle_store_layout(
