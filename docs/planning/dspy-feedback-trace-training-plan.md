@@ -54,13 +54,24 @@ The pipeline must carry **two distinct trainer-visible signal types**:
 
 1. Every runtime mediation result must carry `trainer_signal_kind`.
 2. When `family_artifact_selected=true` and `dspy_status=success`, runtime emits:
-   - `trainer_signal_kind = "feedback_trace"`
+   - `trainer_signal_kind = "full_trace"` for the current active policy
+   - `feedback_trace` remains a valid contract surface for future low-cost feedback-only paths, but
+     it is not the active successful-reuse policy in this slice
 3. When runtime falls back to fresh/global mediation, runtime emits:
    - `trainer_signal_kind = "full_trace"`
 4. Runtime no longer suppresses all trainer input on family reuse. It suppresses only
-   replay-set growth, not feedback.
+   trainer blindness; all successful matched runs stay exportable.
 
 ### Trainer
+
+Hard constraint:
+
+- trainer must **not** perform pairwise trace-to-trace comparisons or replay-set deduplication as
+  part of normal training ingestion
+- expensive trace rejection must happen before trainer, on the runtime / Codex Exec side
+- trainer may trust `trainer_signal_kind`, family assignment, and already-persisted family
+  metadata, but it should not scan the replay set trying to decide whether one incoming trace is
+  "too similar" to many previous traces
 
 1. Imported traces must be classified as:
    - `full_trace`
@@ -77,7 +88,9 @@ The pipeline must carry **two distinct trainer-visible signal types**:
    - `family_runtime_artifact.predicted_hit_rate`
    - optional per-program feedback summary
 4. `feedback_trace` must **not** mark a family dirty by default.
-5. Bundle recompilation remains limited to dirty families only.
+5. successful family reuse must be decided on the runtime side without trainer-side pairwise trace
+   comparison; the current active policy emits `full_trace` directly.
+6. Bundle recompilation remains limited to dirty families only.
 
 ### Routing / Scoring
 
@@ -114,7 +127,7 @@ Implemented formula in the current slice:
 
 - add `trainer_signal_kind`
 - stop treating family reuse as "no trainer input"
-- persist queue-visible `feedback_trace`
+- persist queue-visible trainer signal records
 - update family/artifact feedback counters
 - expose feedback-aware `predicted_hit_rate`
 
@@ -135,6 +148,21 @@ Implemented slice in this turn:
 - runtime artifact gating now prefers the conservative lower-bound success baseline when available
 - dataset worker handoff now mirrors posterior success fields into trainer-facing payloads so
   queue/import artifacts preserve the same family success profile that runtime used
+- successful family-artifact reuse now emits `full_trace` directly
+- the earlier similarity-floor / deterministic-sampling gate has been removed because replay
+  admission must not depend on unstable father-centric thresholds
+- proxy mediation now uses a compact injected developer block:
+  - smaller token budgets
+  - fewer retained file hints
+  - a single evidence snippet instead of a multi-preview payload
+
+Follow-up requirement clarified after this slice:
+
+- trainer-side trace-to-trace comparison is not acceptable as the main replay gate because it adds
+  too much training-time cost
+- the long-term accepted solutions must decide `feedback_trace` vs `full_trace` on the runtime
+  side, before trainer ingestion; the current temporary policy simply chooses `full_trace` for all
+  successful family reuse
 
 ### Phase 3
 

@@ -40,7 +40,7 @@ docs/architecture/inspired/dspy-rag-tutorial.md,docs,markdown,35,1474,DSPy Tutor
 docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md,docs,markdown,38,1555,Implementing RAG with DSPy: Technical Guide
 docs/architecture/mcp-discovery.md,docs,markdown,54,1757,MCP Discovery Notes
 docs/architecture/package-api.md,docs,markdown,127,9186,Package API Notes
-docs/architecture/research-narrative.md,docs,markdown,1320,102140,"Repository research narrative tying code, docs, and verification together"
+docs/architecture/research-narrative.md,docs,markdown,1329,103063,"Repository research narrative tying code, docs, and verification together"
 docs/archive/repo-completeness-checklist.md,docs,markdown,238,7450,Archived completeness snapshot kept for workflow and lockfile policy context
 docs/audit/2026-03-15-repo-state.md,docs,markdown,151,5989,Repository audit note for 2026 03 15 repo state
 docs/audit/2026-03-17-docs-and-uv-refresh.md,docs,markdown,79,3977,Repository audit note for 2026 03 17 docs and uv refresh
@@ -216,7 +216,8 @@ docs/audit/2026-05-17-stage-level-family-criterion.md,docs,markdown,68,1961,Repo
 docs/audit/2026-05-17-symmetric-singleton-family-routing.md,docs,markdown,98,4905,Repository audit note for 2026 05 17 symmetric singleton family routing
 docs/audit/2026-05-17-trainer-pending-cycle-recovery.md,docs,markdown,87,4520,Repository audit note for 2026 05 17 trainer pending cycle recovery
 docs/audit/2026-05-17-trainer-remote-baseline-transient-cache-contract.md,docs,markdown,77,3955,Repository audit note for 2026 05 17 trainer remote baseline transient cache contract
-docs/audit/README.md,docs,markdown,15,511,Repository audit note for README
+docs/audit/2026-05-18-thin-sqlite-family-index.md,docs,markdown,76,2610,Repository audit note for 2026 05 18 thin sqlite family index
+docs/audit/README.md,docs,markdown,15,568,Repository audit note for README
 docs/guides/hushwheel-fixture-rag-guide.md,docs,markdown,138,5169,RAG Guide For The Hushwheel Fixture
 docs/operations/azure-deployment.md,docs,markdown,111,4901,Azure Deployment Notes
 docs/operations/environment.md,docs,markdown,138,9211,Environment and secret reference for local runtime and deployment workflows
@@ -225,8 +226,8 @@ docs/operations/simple-end-to-end-verification-guide.md,docs,markdown,105,4111,S
 docs/operations/trainer-deployment.md,docs,markdown,146,5971,Trainer Deployment Notes
 docs/planning/codex-exec-resume-plan.md,docs,markdown,207,11561,Codex Exec Resume Plan
 docs/planning/dataset-integration-plan.md,docs,markdown,478,33882,Dataset Integration Plan
-docs/planning/dspy-feedback-trace-training-plan.md,docs,markdown,168,6369,DSPy Feedback-Trace Training Plan
-docs/planning/family-first-mipro-runtime-contract.md,docs,markdown,556,35913,Family-First DSPy / MIPROv2 Contract
+docs/planning/dspy-feedback-trace-training-plan.md,docs,markdown,179,7067,DSPy Feedback-Trace Training Plan
+docs/planning/family-first-mipro-runtime-contract.md,docs,markdown,565,36369,Family-First DSPy / MIPROv2 Contract
 docs/planning/per-turn-dspy-mediation-contract.md,docs,markdown,115,4966,Per-Turn DSPy Mediation Contract
 docs/planning/repo-hardening-plan.md,docs,markdown,71,4545,Repository Hardening Plan
 docs/planning/trainer-context-group-champion-plan.md,docs,markdown,119,7736,Trainer Context-Group Champion Plan
@@ -389,7 +390,7 @@ src/repo_rag_lab/azure_artifacts.py,src,python,446,17280,Azure Blob + Queue help
 src/repo_rag_lab/azure_runtime.py,src,python,577,20123,"Azure runtime normalization, live probes, and cloud-completion helpers."
 src/repo_rag_lab/benchmarks.py,src,python,484,16524,Retrieval benchmark helpers for notebook assertions and logging.
 src/repo_rag_lab/cli.py,src,python,1371,60068,Command-line entrypoints for the shared repository RAG workflows.
-src/repo_rag_lab/codex_proxy.py,src,python,2285,90466,Local streaming proxy that injects repo-RAG + DSPy mediation for Codex.
+src/repo_rag_lab/codex_proxy.py,src,python,2306,91439,Local streaming proxy that injects repo-RAG + DSPy mediation for Codex.
 src/repo_rag_lab/corpus.py,src,python,181,5245,Repository file loading helpers for the baseline text corpus.
 src/repo_rag_lab/dspy_training.py,src,python,1890,72051,DSPy training and artifact helpers for repository-grounded RAG.
 src/repo_rag_lab/dspy_workflow.py,src,python,180,6518,DSPy-backed runtime wrappers around the repository retrieval workflow.
@@ -459,7 +460,7 @@ tests/fixtures/hushwheel_lexiconarium/tools/regenerate_hushwheel_fixture.py,test
 tests/test_azure_runtime.py,tests,python,208,7540,Python module for test azure runtime
 tests/test_benchmarks_and_notebook_scaffolding.py,tests,python,274,11859,Python module for test benchmarks and notebook scaffolding
 tests/test_cli_and_dspy.py,tests,python,1876,68608,Python module for test cli and dspy
-tests/test_codex_proxy.py,tests,python,2266,84170,Python module for test codex proxy
+tests/test_codex_proxy.py,tests,python,2358,87863,Python module for test codex proxy
 tests/test_dspy_training.py,tests,python,1761,70610,Python module for test dspy training
 tests/test_exploratorium_translation.py,tests,python,158,5935,Python module for test exploratorium translation
 tests/test_file_summaries.py,tests,python,230,9110,Python module for test file summaries
