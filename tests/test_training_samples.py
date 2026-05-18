@@ -2200,11 +2200,13 @@ def test_materialize_training_candidates_tracks_context_groups_but_materializes_
     champion_index = load_family_state_payload(
         tmp_path / "artifacts" / "trainer" / "family-state.json"
     )
-    assert champion_index["record_kind"] == "repo-rag-trainer-champion-index"
+    assert champion_index["record_kind"] == "repo-rag-trainer-family-index"
     assert len(champion_index["prompt_families"]) == 1
     family = champion_index["prompt_families"][0]
-    assert len(family["context_groups"]) == 1
-    assert family["family_champion_record"]["candidate_status"] == "accepted"
+    family_path = tmp_path / "artifacts" / "trainer" / str(family["family_path"])
+    family_payload = json.loads(family_path.read_text(encoding="utf-8"))
+    assert len(family_payload["context_groups"]) == 1
+    assert family_payload["family_champion_record"]["candidate_status"] == "accepted"
 
 
 def test_materialize_training_candidates_accumulates_support_for_repeated_answer_variant(
