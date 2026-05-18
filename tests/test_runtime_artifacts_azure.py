@@ -34,11 +34,13 @@ from repo_rag_lab.runtime_artifacts import (
     fetch_remote_family_state,
     inspect_bundle_channel,
     inspect_pending_trainer_inputs,
+    load_family_index_payload,
     queue_trace_record,
     resolve_bundle_manifest,
     restore_processed_trace_records,
     upload_remote_bundle,
     upload_remote_family_state,
+    write_family_index_payload,
 )
 
 
@@ -79,20 +81,26 @@ def _sample_trace_payload() -> dict[str, object]:
 
 class _FakeAzureArtifactStore:
     def __init__(self) -> None:
-        self.blobs: dict[tuple[str, str], str] = {}
+        self.blobs: dict[tuple[str, str], bytes] = {}
         self.messages: list[AzureQueueMessage] = []
         self.deleted_messages: list[str] = []
 
     def upload_json(self, container_name: str, blob_name: str, payload: dict[str, object]) -> None:
-        self.blobs[(container_name, blob_name)] = json.dumps(payload)
+        self.blobs[(container_name, blob_name)] = json.dumps(payload).encode("utf-8")
 
     def upload_text(self, container_name: str, blob_name: str, text: str) -> None:
-        self.blobs[(container_name, blob_name)] = text
+        self.blobs[(container_name, blob_name)] = text.encode("utf-8")
+
+    def upload_bytes(self, container_name: str, blob_name: str, payload: bytes) -> None:
+        self.blobs[(container_name, blob_name)] = payload
 
     def download_json(self, container_name: str, blob_name: str) -> dict[str, object]:
-        return json.loads(self.blobs[(container_name, blob_name)])
+        return json.loads(self.download_text(container_name, blob_name))
 
     def download_text(self, container_name: str, blob_name: str) -> str:
+        return self.download_bytes(container_name, blob_name).decode("utf-8")
+
+    def download_bytes(self, container_name: str, blob_name: str) -> bytes:
         return self.blobs[(container_name, blob_name)]
 
     def send_queue_message(self, queue_name: str, payload: dict[str, object]) -> dict[str, object]:
@@ -1200,7 +1208,7 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
         queue_name="repo-rag-training",
         family_state_container="repo-rag-training-families",
     )
-    family_state_path = tmp_path / "artifacts" / "trainer" / "family-state.json"
+    family_state_path = tmp_path / "artifacts" / "trainer" / "family-index.sqlite3"
     family_state_path.parent.mkdir(parents=True)
     runtime_program_path = tmp_path / "artifacts" / "dspy" / "family-demo" / "program.json"
     runtime_metadata_path = tmp_path / "artifacts" / "dspy" / "family-demo" / "metadata.json"
@@ -1210,55 +1218,54 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
         json.dumps({"prompt_family_id": "pf-demo"}, indent=2) + "\n",
         encoding="utf-8",
     )
-    family_state_path.write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "family_state_kind": "repo-rag-trainer-family-state",
-                "prompt_families": [
-                    {
-                        "prompt_family_id": "pf-demo",
-                        "family_father_record": {
+    write_family_index_payload(
+        family_state_path,
+        {
+            "schema_version": 1,
+            "family_state_kind": "repo-rag-trainer-family-state",
+            "prompt_families": [
+                {
+                    "prompt_family_id": "pf-demo",
+                    "family_father_record": {
+                        "question": "Inspect whether the README already embeds a demo GIF.",
+                        "exact_snapshot_id": "ts-father",
+                        "metric_hits": 1,
+                        "metric_total": 1,
+                        "metric_ratio": 1.0,
+                    },
+                    "family_records": [
+                        {
                             "question": "Inspect whether the README already embeds a demo GIF.",
-                            "exact_snapshot_id": "ts-father",
+                            "original_prompt": "Add a demo GIF to README",
+                            "reformulated_prompt": (
+                                "Inspect whether the README already embeds a demo GIF."
+                            ),
+                            "command_trace": [
+                                {
+                                    "type": "message",
+                                    "role": "assistant",
+                                    "text": "inspect README",
+                                }
+                            ],
+                            "exact_snapshot_id": "ts-demo",
                             "metric_hits": 1,
                             "metric_total": 1,
                             "metric_ratio": 1.0,
-                        },
-                        "family_records": [
-                            {
-                                "question": "Inspect whether the README already embeds a demo GIF.",
-                                "original_prompt": "Add a demo GIF to README",
-                                "reformulated_prompt": (
-                                    "Inspect whether the README already embeds a demo GIF."
-                                ),
-                                "command_trace": [
-                                    {
-                                        "type": "message",
-                                        "role": "assistant",
-                                        "text": "inspect README",
-                                    }
-                                ],
-                                "exact_snapshot_id": "ts-demo",
-                                "metric_hits": 1,
-                                "metric_total": 1,
-                                "metric_ratio": 1.0,
-                            }
-                        ],
-                        "family_runtime_artifact": {
-                            "artifact_kind": "compiled-family-program",
-                            "artifact_ready": True,
-                            "program_path": "artifacts/dspy/family-demo/program.json",
-                            "metadata_path": "artifacts/dspy/family-demo/metadata.json",
-                            "hit_rate": 1.0,
-                        },
-                    }
-                ],
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
+                        }
+                    ],
+                    "family_runtime_artifact": {
+                        "artifact_kind": "compiled-family-program",
+                        "artifact_ready": True,
+                        "program_path": "artifacts/dspy/family-demo/program.json",
+                        "metadata_path": "artifacts/dspy/family-demo/metadata.json",
+                        "hit_rate": 1.0,
+                    },
+                    "family_path": "families/pf-demo/family.json",
+                    "father_path": "families/pf-demo/father.json",
+                    "family_record_count": 2,
+                }
+            ],
+        },
     )
 
     def fake_resolve_azure_artifact_config(queue_name: str | None = None) -> AzureArtifactConfig:
@@ -1290,7 +1297,7 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
 
     assert uploaded is not None
     assert uploaded["family_state_container"] == "repo-rag-training-families"
-    assert uploaded["family_state_path"] == "artifacts/trainer/family-state.json"
+    assert uploaded["family_state_path"] == "artifacts/trainer/family-index.sqlite3"
     blob_map = cast(dict[str, str], uploaded["remote_family_state_blobs"])
     assert blob_map == family_state_blob_names(str(uploaded["family_state_version"]))
     assert uploaded["remote_family_member_blobs"] == {
@@ -1358,9 +1365,11 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
         "repo-rag-training-families",
         "families/pf-demo/records/ts-demo.json",
     )
-    uploaded_family_state_payload = json.loads(
-        store.download_text("repo-rag-training-families", blob_map["family_state"])
+    uploaded_family_state_blob = tmp_path / "uploaded-family-index.sqlite3"
+    uploaded_family_state_blob.write_bytes(
+        store.download_bytes("repo-rag-training-families", blob_map["family_state"])
     )
+    uploaded_family_state_payload = load_family_index_payload(uploaded_family_state_blob)
     assert uploaded_family_state_payload["family_count"] == 1
     assert uploaded_family_state_payload["prompt_family_count"] == 1
     assert uploaded_family_state_payload["family_record_count"] == 2
@@ -1399,12 +1408,18 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
     assert cached_family_payload["family_runtime_artifact"]["program_path"] == str(
         cached_runtime_paths["program"]
     )
-    cached_family_state_payload = json.loads(cached_family_state.read_text(encoding="utf-8"))
+    cached_family_state_payload = load_family_index_payload(cached_family_state)
     assert cached_family_state_payload["family_record_count"] == 2
-    assert cached_family_state_payload["prompt_families"][0]["family_record_count"] == 2
-    assert cached_family_state_payload["prompt_families"][0]["family_runtime_artifact"][
-        "program_path"
-    ] == str(cached_runtime_paths["program"])
+    cached_prompt_families = cast(
+        list[dict[str, object]],
+        cached_family_state_payload["prompt_families"],
+    )
+    assert cached_prompt_families[0]["family_record_count"] == 2
+    cached_runtime_artifact = cast(
+        dict[str, object],
+        cached_prompt_families[0]["family_runtime_artifact"],
+    )
+    assert cached_runtime_artifact["program_path"] == str(cached_runtime_paths["program"])
     cached_father_payload = json.loads(cached_father_path.read_text(encoding="utf-8"))
     assert cached_father_payload["exact_snapshot_id"] == "ts-father"
 
@@ -1646,7 +1661,7 @@ def test_azure_artifact_helper_and_error_paths(
         "published": "versions/stable-42/published.json",
     }
     assert family_state_blob_names("stable-42") == {
-        "family_state": "versions/stable-42/family-state.json",
+        "family_state": "versions/stable-42/family-index.sqlite3",
         "current": "current.json",
     }
     assert queued_trace_blob_name("dataset", "trace.json") == "queued/dataset/trace.json"

@@ -17,6 +17,22 @@ a family-first model:
 - each family gets one runtime DSPy artifact produced by `MIPROv2`
 - the published bundle stays monolithic, but internally carries a registry of those families
 
+The critical semantic rule is:
+
+- a prompt family is a **stable semantic stage / code block**
+- it is **not** required to equal one whole end-to-end workflow
+- the same family may be reused by different workflows when they arrive at the same stage
+- one workflow may legitimately contribute traces to multiple families when it passes through
+  multiple distinct stages
+
+Examples of stage-level families include:
+
+- declaring or reframing the root objective
+- checking whether a repo artifact already exists
+- validating whether an existing artifact is semantically real rather than merely present
+- deciding whether regeneration is necessary
+- producing a constrained close-out when rerun is intentionally skipped
+
 ## Runtime Contract
 
 1. Every outbound request to the model passes through the local proxy.
@@ -74,6 +90,13 @@ target contract is:
 - fathers are for routing
 - family runtime artifacts are for execution
 
+Family correctness is judged against the stage-level semantic contract above:
+
+- traces from one workflow do **not** need to collapse into one family
+- traces from different workflows **may** belong to the same family when they represent the same
+  reusable stage
+- trainer should prefer stable stage reuse over workflow-local bundling
+
 ## MIPROv2 Contract
 
 `MIPROv2` is offline optimizer compute, not online per-turn routing compute.
@@ -125,6 +148,15 @@ contract requires matching objects of the same kind during ingestion; otherwise 
 becomes order-dependent and one trace can fail to join a family even though the singleton family
 created from that same trace would have matched it later.
 
+This ingestion pass must evaluate traces against the **stage-level** family definition:
+
+- if two traces belong to the same repeatable semantic stage, they should converge even when they
+  came from different workflows
+- if two traces came from the same workflow but represent different semantic stages, they may stay
+  in different families
+- therefore trainer quality should not be evaluated by asking whether one workflow produced one
+  family; it should be evaluated by asking whether stable stages were grouped consistently
+
 ## Storage Contract
 
 Target blob/container layout:
@@ -136,6 +168,25 @@ Target blob/container layout:
 - `repo-rag-bundles`
   - published monolithic bundles with family registry inside
 
+Active family-index rule:
+
+- do not generate `family-state.json`
+- generate `artifacts/trainer/family-index.sqlite3`
+- keep full family payloads in `families/<prompt_family_id>/{family.json,father.json,records/*.json}`
+
+The SQLite file is now the only generated routing index. Legacy JSON family-state paths may still
+be accepted as compatibility inputs during migration, but they are no longer the generated
+source-of-truth.
+
+Runtime routing rule:
+
+- `repo-rag-training-families` exists to find the correct `prompt_family_id`
+- `repo-rag-bundles` exists to execute the DSPy program for that selected family
+- lookup is now two-stage:
+  - coarse shortlist from `family-index.sqlite3`
+  - rich family scoring only for the shortlisted families
+- the family index must not store compiled DSPy programs
+
 ## Trainer Cache Contract
 
 Trainer may keep one local internal cache, but that cache is never authoritative.
@@ -144,7 +195,7 @@ Trainer may keep one local internal cache, but that cache is never authoritative
 - The trainer PVC is for temporary execution artifacts in the current Codex Exec / trainer run:
   - queued and imported trace files
   - the current in-flight `pending-cycle.json` ledger
-  - one local mirror of the active remote family-state version
+  - one local mirror of the active remote family-index version
   - generated candidate/training surfaces for the current cycle
 - Trainer must not treat a PVC-local family state as source-of-truth just because it already
   exists on disk.
@@ -185,6 +236,8 @@ Implemented locally in this stage:
 - family state now tracks `family_needs_recompile`, trainer-side family artifacts are recompiled
   only for dirty families, and clean families carry their previous runtime artifact references
   forward into the next monolithic bundle
+- the generated routing index is now `artifacts/trainer/family-index.sqlite3`; the older
+  `family-state.json` is no longer written on the active path
 - trainer pending-recompile detection now treats dirty-family flags as first-class recompile
   triggers instead of waiting only for lineage drift against the published bundle
 - Azure remote family-state fetch/upload now treats `REPO_RAG_FAMILY_STATE_CONTAINER` /

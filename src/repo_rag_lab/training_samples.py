@@ -7,6 +7,7 @@ import json
 import math
 import re
 import shutil
+import sqlite3
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -19,8 +20,11 @@ import yaml
 from .runtime_artifacts import (
     DEFAULT_TRAINER_FAMILY_CACHE_DIR,
     DEFAULT_TRAINER_FAMILY_STATE_PATH,
+    load_family_index_payload,
     load_json_object,
+    resolve_family_index_path,
     upload_remote_family_state,
+    write_family_index_payload,
 )
 from .term_extraction import extract_profile_terms, extract_tokens, select_profile_summary_terms
 
@@ -84,6 +88,7 @@ _FAMILY_PROMPT_PROFILE_LIMIT = 12
 _FAMILY_COMMAND_PROFILE_LIMIT = 16
 _FAMILY_CONSTRAINT_PROFILE_LIMIT = 12
 _FAMILY_PROFILE_MIN_COUNT = 2
+_FAMILY_ROUTING_SHORTLIST_TOP_K = 20
 
 
 def _coerce_int(value: object) -> int | None:
@@ -944,6 +949,57 @@ def _family_question_variants(family_payload: Mapping[str, Any]) -> list[str]:
     return variants
 
 
+def _coarse_prompt_family_similarity(
+    question: str,
+    family_payload: Mapping[str, Any],
+) -> float:
+    """Return one cheap shortlist score before rich family routing."""
+
+    question_profile_terms = _profile_terms([question])
+    question_constraint_terms = _constraint_terms([question])
+    family_prompt_terms = _profile_terms(
+        [
+            family_payload.get("question"),
+            family_payload.get("normalized_question"),
+            family_payload.get("family_father_question"),
+            *_string_list(family_payload.get("family_prompt_profile_terms")),
+        ],
+        limit=_FAMILY_PROMPT_PROFILE_LIMIT,
+    )
+    family_command_terms = _profile_terms(
+        _string_list(family_payload.get("family_command_pattern_summary")),
+        limit=_FAMILY_COMMAND_PROFILE_LIMIT,
+    )
+    family_constraint_terms = _constraint_terms(
+        [
+            *_string_list(family_payload.get("family_constraint_summary")),
+            *family_command_terms,
+        ],
+        limit=_FAMILY_CONSTRAINT_PROFILE_LIMIT,
+    )
+    family_question_support = max(
+        _question_similarity(question, str(family_payload.get("family_father_question") or "")),
+        _question_similarity(question, str(family_payload.get("question") or "")),
+        _question_similarity(question, str(family_payload.get("normalized_question") or "")),
+    )
+    prompt_overlap = _profile_overlap_similarity(question_profile_terms, family_prompt_terms)
+    constraint_overlap = _profile_overlap_similarity(
+        question_constraint_terms,
+        [*family_constraint_terms, *family_command_terms],
+    )
+    command_overlap = _profile_overlap_similarity(question_profile_terms, family_command_terms)
+    routing_score = max(
+        prompt_overlap,
+        (
+            (0.55 * prompt_overlap)
+            + (0.25 * constraint_overlap)
+            + (0.10 * command_overlap)
+            + (0.10 * family_question_support)
+        ),
+    )
+    return round(min(1.0, max(0.0, routing_score)), 6)
+
+
 def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) -> float:
     """Return one profile-first routing score for a prompt against one family."""
 
@@ -1213,6 +1269,140 @@ def _family_to_family_similarity(
     return round(min(1.0, max(0.0, routing_score)), 6)
 
 
+def _shortlist_prompt_families(
+    question: str,
+    families: Sequence[Mapping[str, Any]],
+    *,
+    top_k: int = _FAMILY_ROUTING_SHORTLIST_TOP_K,
+) -> list[Mapping[str, Any]]:
+    """Return one coarse top-k shortlist of prompt-family payloads."""
+
+    shortlist_limit = max(1, int(top_k))
+    ranked: list[tuple[float, Mapping[str, Any]]] = []
+    for family in families:
+        score = _coarse_prompt_family_similarity(question, family)
+        ranked.append((score, family))
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    return [family for _, family in ranked[:shortlist_limit]]
+
+
+def _sqlite_family_index_shortlist(
+    question: str,
+    family_state_path: Path,
+    *,
+    top_k: int = _FAMILY_ROUTING_SHORTLIST_TOP_K,
+) -> list[dict[str, Any]]:
+    """Return one coarse top-k shortlist from the SQLite family index."""
+
+    resolved_family_state_path = resolve_family_index_path(family_state_path)
+    if not resolved_family_state_path.is_file():
+        return []
+    ranked: list[tuple[float, dict[str, Any]]] = []
+    connection = sqlite3.connect(resolved_family_state_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        rows = connection.execute(
+            """
+            SELECT prompt_family_id, question, normalized_question, family_father_question,
+                   question_variant_count, family_record_count, prompt_terms_json,
+                   command_terms_json, constraint_terms_json, family_path, father_path
+            FROM family_index_entries
+            ORDER BY prompt_family_id
+            """
+        )
+        for row in rows:
+            try:
+                prompt_terms = json.loads(str(row["prompt_terms_json"] or "[]"))
+            except json.JSONDecodeError:
+                prompt_terms = []
+            try:
+                command_terms = json.loads(str(row["command_terms_json"] or "[]"))
+            except json.JSONDecodeError:
+                command_terms = []
+            try:
+                constraint_terms = json.loads(str(row["constraint_terms_json"] or "[]"))
+            except json.JSONDecodeError:
+                constraint_terms = []
+            family_entry = {
+                "prompt_family_id": str(row["prompt_family_id"] or "").strip(),
+                "question": str(row["question"] or "").strip(),
+                "normalized_question": str(row["normalized_question"] or "").strip(),
+                "family_father_question": str(row["family_father_question"] or "").strip(),
+                "question_variant_count": int(row["question_variant_count"] or 0),
+                "family_record_count": int(row["family_record_count"] or 0),
+                "family_prompt_profile_terms": prompt_terms
+                if isinstance(prompt_terms, list)
+                else [],
+                "family_command_pattern_summary": command_terms
+                if isinstance(command_terms, list)
+                else [],
+                "family_constraint_summary": constraint_terms
+                if isinstance(constraint_terms, list)
+                else [],
+                "family_path": str(row["family_path"] or "").strip(),
+                "father_path": str(row["father_path"] or "").strip(),
+            }
+            ranked.append((_coarse_prompt_family_similarity(question, family_entry), family_entry))
+    except sqlite3.DatabaseError:
+        return []
+    finally:
+        connection.close()
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    return [family for _, family in ranked[: max(1, int(top_k))]]
+
+
+def _resolve_prompt_family_support_from_families(
+    question: str,
+    families: Sequence[Mapping[str, Any]],
+) -> PromptFamilySupport:
+    """Resolve prompt-family support from one family sequence with shortlist routing."""
+
+    normalized_question = _normalize_question_text(question)
+    if not normalized_question:
+        return PromptFamilySupport(
+            question="",
+            prompt_family_id=None,
+            similarity=0.0,
+            band="new",
+            supported=False,
+            family_father_question=None,
+            family_father_record=None,
+            family_runtime_record=None,
+        )
+    best_family: Mapping[str, Any] | None = None
+    best_similarity = 0.0
+    shortlisted_families = _shortlist_prompt_families(normalized_question, families)
+    for family in shortlisted_families:
+        similarity = _prompt_family_similarity(normalized_question, family)
+        if similarity > best_similarity:
+            best_family = family
+            best_similarity = similarity
+    band = "match" if best_similarity >= PROMPT_FAMILY_MATCH_THRESHOLD else "new"
+    supported = bool(best_family is not None and best_similarity >= PROMPT_FAMILY_MATCH_THRESHOLD)
+    prompt_family_id = (
+        str(best_family.get("prompt_family_id") or "").strip()
+        if isinstance(best_family, Mapping)
+        else ""
+    )
+    family_father_question = (
+        _normalize_question_text(best_family.get("family_father_question"))
+        if isinstance(best_family, Mapping)
+        else ""
+    )
+    family_father_record = _family_father_record(best_family) if best_family is not None else None
+    family_runtime_record = _family_runtime_record(best_family) if best_family is not None else None
+    return PromptFamilySupport(
+        question=normalized_question,
+        prompt_family_id=prompt_family_id or None,
+        similarity=best_similarity,
+        band=band,
+        supported=supported,
+        family_father_question=family_father_question or None,
+        family_father_record=family_father_record,
+        family_runtime_record=family_runtime_record,
+    )
+
+
 def _singleton_prompt_family_payload(
     *,
     question: str,
@@ -1334,58 +1524,22 @@ def resolve_prompt_family_support_from_payload(
 ) -> PromptFamilySupport:
     """Resolve the best stored prompt-family support from one in-memory family payload."""
 
-    normalized_question = _normalize_question_text(question)
-    if not normalized_question:
-        return PromptFamilySupport(
-            question="",
-            prompt_family_id=None,
-            similarity=0.0,
-            band="new",
-            supported=False,
-            family_father_question=None,
-            family_father_record=None,
-            family_runtime_record=None,
-        )
     families = payload.get("prompt_families")
-    best_family: Mapping[str, Any] | None = None
-    best_similarity = 0.0
-    if isinstance(families, list):
-        for family in families:
-            if not isinstance(family, Mapping):
-                continue
-            similarity = _prompt_family_similarity(normalized_question, family)
-            if similarity > best_similarity:
-                best_family = family
-                best_similarity = similarity
-    band = "match" if best_similarity >= PROMPT_FAMILY_MATCH_THRESHOLD else "new"
-    supported = bool(best_family is not None and best_similarity >= PROMPT_FAMILY_MATCH_THRESHOLD)
-    prompt_family_id = (
-        str(best_family.get("prompt_family_id") or "").strip()
-        if isinstance(best_family, Mapping)
-        else ""
-    )
-    family_father_question = (
-        _normalize_question_text(best_family.get("family_father_question"))
-        if isinstance(best_family, Mapping)
-        else ""
-    )
-    family_father_record = _family_father_record(best_family) if best_family is not None else None
-    family_runtime_record = _family_runtime_record(best_family) if best_family is not None else None
-    return PromptFamilySupport(
-        question=normalized_question,
-        prompt_family_id=prompt_family_id or None,
-        similarity=best_similarity,
-        band=band,
-        supported=supported,
-        family_father_question=family_father_question or None,
-        family_father_record=family_father_record,
-        family_runtime_record=family_runtime_record,
-    )
+    if not isinstance(families, list):
+        families = []
+    mapped_families = [family for family in families if isinstance(family, Mapping)]
+    return _resolve_prompt_family_support_from_families(question, mapped_families)
 
 
 def resolve_prompt_family_support(question: str, family_state_path: Path) -> PromptFamilySupport:
     """Resolve the best stored prompt-family support for one prompt string."""
 
+    sqlite_shortlist = _sqlite_family_index_shortlist(question, family_state_path)
+    if sqlite_shortlist:
+        hydrated_families = [
+            _family_state_entry_to_payload(family_state_path, family) for family in sqlite_shortlist
+        ]
+        return _resolve_prompt_family_support_from_families(question, hydrated_families)
     index_payload = _load_champion_index(family_state_path)
     return resolve_prompt_family_support_from_payload(question, index_payload)
 
@@ -1783,7 +1937,7 @@ def _fresh_champion_index() -> dict[str, Any]:
         "schema_version": TRAINER_FAMILY_STATE_SCHEMA_VERSION,
         "record_kind": TRAINER_CHAMPION_INDEX_KIND,
         "family_state_kind": TRAINER_FAMILY_STATE_KIND,
-        "family_state_layout": "thin-index",
+        "family_state_layout": "sqlite-index",
         "generated_at": datetime.now(UTC).isoformat(),
         "prompt_families": [],
     }
@@ -1808,6 +1962,8 @@ def _family_state_entry_to_payload(
         loaded_payload = {str(key): value for key, value in family_entry.items()}
     for field_name in (
         "prompt_family_id",
+        "family_path",
+        "father_path",
         "family_needs_recompile",
         "question",
         "normalized_question",
@@ -1932,7 +2088,7 @@ def _persist_local_family_state(
     family_state_path: Path,
     index_payload: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Persist the local family cache plus a thin family-state index."""
+    """Persist the local family cache plus a SQLite-backed family index."""
 
     resolved_family_state_path = family_state_path.resolve()
     family_state_dir = _family_state_dir(resolved_family_state_path)
@@ -2013,15 +2169,12 @@ def _persist_local_family_state(
         "schema_version": index_payload.get("schema_version", TRAINER_FAMILY_STATE_SCHEMA_VERSION),
         "record_kind": index_payload.get("record_kind", TRAINER_CHAMPION_INDEX_KIND),
         "family_state_kind": index_payload.get("family_state_kind", TRAINER_FAMILY_STATE_KIND),
-        "family_state_layout": "thin-index",
+        "family_state_layout": "sqlite-index",
         "generated_at": index_payload.get("generated_at") or datetime.now(UTC).isoformat(),
         "prompt_families": thin_families,
     }
     resolved_family_state_path.parent.mkdir(parents=True, exist_ok=True)
-    resolved_family_state_path.write_text(
-        f"{json.dumps(thin_index, indent=2)}\n",
-        encoding="utf-8",
-    )
+    write_family_index_payload(resolved_family_state_path, thin_index)
     return thin_index
 
 
@@ -2031,11 +2184,7 @@ persist_local_family_state = _persist_local_family_state
 def _load_champion_index(path: Path) -> dict[str, Any]:
     """Load a persisted champion index or return an empty one."""
 
-    if not path.is_file():
-        return _fresh_champion_index()
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        return _fresh_champion_index()
+    payload = load_family_index_payload(path)
     families = payload.get("prompt_families")
     if not isinstance(families, list):
         payload["prompt_families"] = []
