@@ -14,6 +14,10 @@ import yaml
 import repo_rag_lab.utilities as utilities_module
 from repo_rag_lab.azure_artifacts import AzureArtifactConfig
 from repo_rag_lab.dspy_training import DSPyLMConfig
+from repo_rag_lab.runtime_artifacts import (
+    load_family_index_payload,
+    write_family_index_payload,
+)
 from repo_rag_lab.utilities import (
     run_azure_inference_probe,
     run_azure_openai_probe,
@@ -165,7 +169,7 @@ def test_prepare_local_trainer_family_cache_reuses_matching_remote_version_cache
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     trainer_dir = tmp_path / "artifacts" / "trainer"
-    family_state_path = trainer_dir / "family-state.json"
+    family_state_path = trainer_dir / "family-index.sqlite3"
     family_cache_dir = trainer_dir / "families" / "pf-demo"
     family_cache_dir.mkdir(parents=True, exist_ok=True)
     family_state_path.write_text(
@@ -196,7 +200,7 @@ def test_prepare_local_trainer_family_cache_reuses_matching_remote_version_cache
             {
                 "source_kind": "remote-family-state",
                 "family_state_version": "v-current",
-                "family_state_path": "artifacts/trainer/family-state.json",
+                "family_state_path": "artifacts/trainer/family-index.sqlite3",
             }
         )
         + "\n",
@@ -204,16 +208,13 @@ def test_prepare_local_trainer_family_cache_reuses_matching_remote_version_cache
     )
     remote_cache_dir = trainer_dir / "remote-family-state" / "v-current"
     remote_cache_dir.mkdir(parents=True, exist_ok=True)
-    (remote_cache_dir / "family-state.json").write_text(
-        family_state_path.read_text(encoding="utf-8"),
-        encoding="utf-8",
-    )
+    (remote_cache_dir / "family-index.sqlite3").write_bytes(family_state_path.read_bytes())
     monkeypatch.setattr(
         "repo_rag_lab.utilities.fetch_remote_family_state",
         lambda root: {
             "family_state_version": "v-current",
             "family_state_path": (
-                "artifacts/trainer/remote-family-state/v-current/family-state.json"
+                "artifacts/trainer/remote-family-state/v-current/family-index.sqlite3"
             ),
         },
     )
@@ -224,7 +225,7 @@ def test_prepare_local_trainer_family_cache_reuses_matching_remote_version_cache
     )
 
     assert payload["status"] == "using-matching-remote-cache"
-    assert payload["family_state_path"] == "artifacts/trainer/family-state.json"
+    assert payload["family_state_path"] == "artifacts/trainer/family-index.sqlite3"
     assert payload["family_cache_dir"] == "artifacts/trainer/families"
 
 
@@ -235,24 +236,23 @@ def test_prepare_local_trainer_family_cache_adopts_latest_remote_version(
     remote_cache_dir = tmp_path / "artifacts" / "trainer" / "remote-family-state" / "v1"
     remote_family_dir = remote_cache_dir / "families" / "pf-demo"
     remote_family_dir.mkdir(parents=True, exist_ok=True)
-    (remote_cache_dir / "family-state.json").write_text(
-        json.dumps(
+    (remote_cache_dir / "family-index.sqlite3").write_bytes(b"")
+    family_state_payload = {
+        "schema_version": 1,
+        "record_kind": "repo-rag-trainer-champion-index",
+        "family_state_kind": "repo-rag-trainer-family-state",
+        "family_state_layout": "sqlite-index",
+        "generated_at": "2026-05-13T00:00:00+00:00",
+        "prompt_families": [
             {
-                "schema_version": 1,
-                "record_kind": "repo-rag-trainer-champion-index",
-                "family_state_kind": "repo-rag-trainer-family-state",
-                "family_state_layout": "thin-index",
-                "generated_at": "2026-05-13T00:00:00+00:00",
-                "prompt_families": [
-                    {
-                        "prompt_family_id": "pf-demo",
-                        "family_path": "families/pf-demo/family.json",
-                    }
-                ],
+                "prompt_family_id": "pf-demo",
+                "family_path": "families/pf-demo/family.json",
             }
-        )
-        + "\n",
-        encoding="utf-8",
+        ],
+    }
+    write_family_index_payload(
+        remote_cache_dir / "family-index.sqlite3",
+        family_state_payload,
     )
     (remote_family_dir / "family.json").write_text(
         json.dumps({"prompt_family_id": "pf-demo", "question": "demo"}) + "\n",
@@ -262,7 +262,7 @@ def test_prepare_local_trainer_family_cache_adopts_latest_remote_version(
         "repo_rag_lab.utilities.fetch_remote_family_state",
         lambda root: {
             "family_state_version": "v1",
-            "family_state_path": "artifacts/trainer/remote-family-state/v1/family-state.json",
+            "family_state_path": "artifacts/trainer/remote-family-state/v1/family-index.sqlite3",
         },
     )
 
@@ -272,7 +272,7 @@ def test_prepare_local_trainer_family_cache_adopts_latest_remote_version(
     )
 
     assert payload["status"] == "using-remote-version-as-local-cache"
-    assert (tmp_path / "artifacts" / "trainer" / "family-state.json").is_file()
+    assert (tmp_path / "artifacts" / "trainer" / "family-index.sqlite3").is_file()
     assert (tmp_path / "artifacts" / "trainer" / "families" / "pf-demo" / "family.json").is_file()
 
 
@@ -3512,7 +3512,7 @@ def test_run_trainer_candidates_materializes_yaml_from_imported_traces(tmp_path:
         "README.md",
         "publication/README.md",
     ]
-    family_state = json.loads(family_state_path.read_text(encoding="utf-8"))
+    family_state = load_family_index_payload(family_state_path)
     assert family_state["family_state_kind"] == "repo-rag-trainer-family-state"
 
 

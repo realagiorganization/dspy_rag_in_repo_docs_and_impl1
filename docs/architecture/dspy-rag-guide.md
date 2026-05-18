@@ -90,9 +90,13 @@ older “inject one helpful repo block” model:
   runtime compilation is no longer limited to one runtime/father summary record; the remote family
   container mirrors those replay members as `records/<snapshot>.json` beside `family.json` and
   `father.json` for each family version directory
-- the primary local trainer filename is now `artifacts/trainer/family-state.json`, while
-  older local `artifacts/trainer/champion-index.json` snapshots can still be read through the
-  migration fallback when `family-state.json` is absent
+- the generated local trainer family index is now `artifacts/trainer/family-index.sqlite3`
+- older local `artifacts/trainer/family-state.json` / `champion-index.json` snapshots can still be
+  read through migration fallback, but they are no longer the generated source-of-truth
+- runtime family lookup now uses that SQLite index only to find the best `prompt_family_id`; the
+  actual DSPy execution artifact still comes from `repo-rag-bundles`
+- routing now runs as `coarse SQLite shortlist -> rich family score for top-k`, instead of rich
+  scoring every family in one full pass
 - trainer-cycle pending-recompile summaries and warning text now also describe the active state as
   `family` drift and `family` candidates, so operator-facing diagnostics no longer present the old
   champion terminology as the primary contract

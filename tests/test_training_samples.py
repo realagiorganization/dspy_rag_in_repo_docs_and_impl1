@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
+import repo_rag_lab.training_samples as training_samples_module
+from repo_rag_lab.runtime_artifacts import load_family_index_payload, write_family_index_payload
 from repo_rag_lab.training_samples import (
     batch_training_examples,
     load_family_state_payload,
@@ -683,6 +686,118 @@ def test_resolve_prompt_family_support_prefers_family_profile_over_surface_simil
     assert support_from_payload.similarity >= 0.8
 
 
+def test_resolve_prompt_family_support_uses_sqlite_shortlist_before_rich_scoring(
+    tmp_path: Path,
+) -> None:
+    trainer_dir = tmp_path / "artifacts" / "trainer"
+    family_cache_dir = trainer_dir / "families"
+    family_cache_dir.mkdir(parents=True, exist_ok=True)
+    family_state_path = trainer_dir / "family-index.sqlite3"
+    prompt_families: list[dict[str, object]] = []
+    target_family_id = "pf-target"
+
+    for index in range(25):
+        family_id = f"pf-noise-{index:02d}"
+        family_dir = family_cache_dir / family_id
+        family_dir.mkdir(parents=True, exist_ok=True)
+        family_payload = {
+            "prompt_family_id": family_id,
+            "question": f"Unrelated kubernetes deployment task {index}",
+            "normalized_question": f"unrelated kubernetes deployment task {index}",
+            "family_father_question": f"Unrelated kubernetes deployment task {index}",
+            "family_prompt_profile_terms": ["kubernetes", "cluster", "deploy", str(index)],
+            "family_command_pattern_summary": ["kubectl", "deploy"],
+            "family_constraint_summary": ["aks", "cluster"],
+            "family_record_count": 1,
+            "family_records": [],
+        }
+        (family_dir / "family.json").write_text(
+            json.dumps(family_payload, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        prompt_families.append(
+            {
+                "prompt_family_id": family_id,
+                "question": family_payload["question"],
+                "normalized_question": family_payload["normalized_question"],
+                "family_father_question": family_payload["family_father_question"],
+                "question_variant_count": 1,
+                "family_record_count": 1,
+                "family_prompt_profile_terms": family_payload["family_prompt_profile_terms"],
+                "family_command_pattern_summary": family_payload["family_command_pattern_summary"],
+                "family_constraint_summary": family_payload["family_constraint_summary"],
+                "family_path": f"families/{family_id}/family.json",
+            }
+        )
+
+    target_dir = family_cache_dir / target_family_id
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_payload = {
+        "prompt_family_id": target_family_id,
+        "question": "Update README.md with a demo GIF",
+        "normalized_question": "update readme.md with a demo gif",
+        "family_father_question": "Update README.md with a demo GIF",
+        "family_prompt_profile_terms": ["readme", "demo", "gif", "asset", "walkthrough"],
+        "family_command_pattern_summary": ["record", "gif", "readme"],
+        "family_constraint_summary": ["readme.md", "demo.gif"],
+        "family_record_count": 1,
+        "family_records": [],
+    }
+    (target_dir / "family.json").write_text(
+        json.dumps(target_payload, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    prompt_families.append(
+        {
+            "prompt_family_id": target_family_id,
+            "question": target_payload["question"],
+            "normalized_question": target_payload["normalized_question"],
+            "family_father_question": target_payload["family_father_question"],
+            "question_variant_count": 1,
+            "family_record_count": 1,
+            "family_prompt_profile_terms": target_payload["family_prompt_profile_terms"],
+            "family_command_pattern_summary": target_payload["family_command_pattern_summary"],
+            "family_constraint_summary": target_payload["family_constraint_summary"],
+            "family_path": f"families/{target_family_id}/family.json",
+        }
+    )
+
+    write_family_index_payload(
+        family_state_path,
+        {
+            "schema_version": 1,
+            "record_kind": "repo-rag-trainer-champion-index",
+            "family_state_kind": "repo-rag-trainer-family-state",
+            "family_state_layout": "sqlite-index",
+            "prompt_families": prompt_families,
+        },
+    )
+
+    original_similarity = training_samples_module.__dict__["_prompt_family_similarity"]
+    rich_scored_family_ids: list[str] = []
+
+    def _counting_similarity(question: str, family_payload: Mapping[str, Any]) -> float:
+        rich_scored_family_ids.append(str(family_payload.get("prompt_family_id") or ""))
+        if str(family_payload.get("prompt_family_id") or "") == target_family_id:
+            return 0.95
+        return 0.05
+
+    training_samples_module.__dict__["_prompt_family_similarity"] = _counting_similarity
+    try:
+        support = resolve_prompt_family_support(
+            "Refresh the tracked README walkthrough GIF asset.",
+            family_state_path,
+        )
+    finally:
+        training_samples_module.__dict__["_prompt_family_similarity"] = original_similarity
+
+    assert support.prompt_family_id == target_family_id
+    assert support.supported is True
+    assert support.similarity == 0.95
+    assert len(rich_scored_family_ids) < len(prompt_families)
+    assert target_family_id in rich_scored_family_ids
+
+
 def test_materialize_training_candidates_strips_execution_envelope_from_family_father(
     tmp_path: Path,
 ) -> None:
@@ -778,9 +893,10 @@ def test_materialize_training_candidates_strips_execution_envelope_from_family_f
         }
     ]
 
-    family_state_path = tmp_path / "artifacts" / "trainer" / "family-state.json"
-    family_state = json.loads(family_state_path.read_text(encoding="utf-8"))
-    family_payload = family_state["prompt_families"][0]
+    family_state_path = tmp_path / "artifacts" / "trainer" / "family-index.sqlite3"
+    family_state = load_family_index_payload(family_state_path)
+    prompt_families = cast(list[dict[str, object]], family_state["prompt_families"])
+    family_payload = prompt_families[0]
     assert family_payload["family_father_question"] == (
         "Continue developing the national debt relief landing page"
     )
@@ -792,7 +908,7 @@ def test_materialize_training_candidates_strips_execution_envelope_from_family_f
     assert "family_runtime_artifact" not in family_payload
     assert "family_runtime_record" not in family_payload
     assert "family_champion_record" not in family_payload
-    assert "Repository checkout:" not in family_payload["family_father_question"]
+    assert "Repository checkout:" not in str(family_payload["family_father_question"])
     support = resolve_prompt_family_support(
         "Continue developing the national debt relief landing page",
         family_state_path,
@@ -1407,7 +1523,7 @@ def test_materialize_training_candidates_keeps_persisted_champions_without_bench
     )
 
     assert summary["candidate_count"] == 1
-    assert summary["family_state_path"] == "artifacts/trainer/family-state.json"
+    assert summary["family_state_path"] == "artifacts/trainer/family-index.sqlite3"
     family_state_path = tmp_path / str(summary["family_state_path"])
     assert family_state_path.exists()
     champion_index = load_family_state_payload(family_state_path)
@@ -1837,10 +1953,10 @@ def test_materialize_training_candidates_preserves_all_imported_full_traces_in_f
 
     assert summary["loaded_candidate_count"] == 7
     assert summary["family_candidate_count"] == 7
-    family_state_path = tmp_path / "artifacts" / "trainer" / "family-state.json"
-    family_state_payload = json.loads(family_state_path.read_text(encoding="utf-8"))
-    prompt_families = family_state_payload["prompt_families"]
-    assert sum(int(family["family_record_count"]) for family in prompt_families) == 7
+    family_state_path = tmp_path / "artifacts" / "trainer" / "family-index.sqlite3"
+    family_state_payload = load_family_index_payload(family_state_path)
+    prompt_families = cast(list[dict[str, object]], family_state_payload["prompt_families"])
+    assert sum(cast(int, family["family_record_count"]) for family in prompt_families) == 7
     assert all("question_variants" not in family for family in prompt_families)
     family_files = sorted((tmp_path / "artifacts" / "trainer" / "families").rglob("family.json"))
     assert family_files
@@ -1972,8 +2088,8 @@ def test_materialize_training_candidates_uses_symmetric_singleton_family_matchin
     assert summary["loaded_candidate_count"] == 3
     assert summary["family_candidate_count"] == 3
     assert summary["family_count"] == 2
-    family_state_payload = json.loads(
-        (tmp_path / "artifacts" / "trainer" / "family-state.json").read_text(encoding="utf-8")
+    family_state_payload = load_family_state_payload(
+        tmp_path / "artifacts" / "trainer" / "family-index.sqlite3"
     )
     prompt_families = family_state_payload["prompt_families"]
     assert sum(int(family["family_record_count"]) for family in prompt_families) == 3

@@ -236,6 +236,13 @@ class AzureArtifactStore:
         )
         container_client.upload_blob(name=blob_name, data=text.encode("utf-8"), overwrite=True)
 
+    def upload_bytes(self, container_name: str, blob_name: str, payload: bytes) -> None:
+        self.ensure_container(container_name)
+        container_client: AzureContainerClient = self._blob_service().get_container_client(
+            container_name
+        )
+        container_client.upload_blob(name=blob_name, data=payload, overwrite=True)
+
     def download_json(self, container_name: str, blob_name: str) -> dict[str, object]:
         payload = json.loads(self.download_text(container_name, blob_name))
         if not isinstance(payload, dict):
@@ -245,11 +252,14 @@ class AzureArtifactStore:
         return payload
 
     def download_text(self, container_name: str, blob_name: str) -> str:
+        return self.download_bytes(container_name, blob_name).decode("utf-8")
+
+    def download_bytes(self, container_name: str, blob_name: str) -> bytes:
         container_client: AzureContainerClient = self._blob_service().get_container_client(
             container_name
         )
         blob_client: AzureBlobClient = container_client.get_blob_client(blob_name)
-        return blob_client.download_blob().readall().decode("utf-8")
+        return blob_client.download_blob().readall()
 
     def blob_exists(self, container_name: str, blob_name: str) -> bool:
         container_client: AzureContainerClient = self._blob_service().get_container_client(
@@ -396,7 +406,7 @@ def family_state_current_blob_name() -> str:
 def family_state_blob_names(family_state_version: str) -> dict[str, str]:
     prefix = family_state_version_blob_prefix(family_state_version)
     return {
-        "family_state": f"{prefix}/family-state.json",
+        "family_state": f"{prefix}/family-index.sqlite3",
         "current": family_state_current_blob_name(),
     }
 

@@ -17,7 +17,7 @@ from urllib.parse import urlparse
 from .corpus import load_documents
 from .retrieval import RetrievalMode, chunk_documents, resolve_retrieval_mode, retrieve
 from .retrieval_profile import load_retrieval_profile
-from .runtime_artifacts import write_bundle_manifest
+from .runtime_artifacts import resolve_family_index_path, write_bundle_manifest
 from .training_samples import (
     TrainingExample,
     load_family_state_payload,
@@ -1515,6 +1515,7 @@ def _compile_family_artifacts(
     resolved_family_state_path = Path(family_state_path_text)
     if not resolved_family_state_path.is_absolute():
         resolved_family_state_path = resolved_root / resolved_family_state_path
+    resolved_family_state_path = resolve_family_index_path(resolved_family_state_path)
     if not resolved_family_state_path.is_file():
         return {}
     payload = load_family_state_payload(resolved_family_state_path)

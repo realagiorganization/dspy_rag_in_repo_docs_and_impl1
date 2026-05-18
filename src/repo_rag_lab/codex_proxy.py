@@ -665,6 +665,8 @@ def _resolve_family_state_path(repository_root: Path, bundle_root: Path) -> Path
     direct_candidates = [
         bundle_root.resolve() / DEFAULT_TRAINER_FAMILY_STATE_PATH,
         repository_root.resolve() / DEFAULT_TRAINER_FAMILY_STATE_PATH,
+        bundle_root.resolve() / "artifacts" / "trainer" / "family-state.json",
+        repository_root.resolve() / "artifacts" / "trainer" / "family-state.json",
     ]
     for candidate in direct_candidates:
         if candidate.is_file():

@@ -232,6 +232,21 @@ constraint/profile summaries, and trainer ingestion compares that singleton fami
 families with a symmetric family-to-family score. This removes the earlier order-dependent defect
 where a trace could fail to join a family, create its own singleton family, and then only
 *afterward* appear obviously close to that original family once its own family summary existed.
+The semantic criterion for those families is now explicit as well: the repository is not trying to
+force one entire workflow into one family. A prompt family represents one stable semantic stage or
+code block that can recur across many workflows. That means one workflow may legitimately produce
+multiple families when it moves through different stages, while two unrelated workflows may
+legitimately share one family when they enter the same stage or execute the same logical block.
+Recent GIF/recorder inspection runs clarified why this distinction matters: what first looked like
+over-splitting at workflow scope became well-formed stage-level clustering once the families were
+interpreted as reusable steps such as repo-state validation, semantic artifact validation, rerun
+decision, and constrained close-out.
+The repository now also stops generating `family-state.json` as the routing index. The generated
+index is `family-index.sqlite3`, while `family.json` and `records/*.json` remain the detailed
+payload surfaces. Runtime lookup is now split into a coarse shortlist over the SQLite index
+followed by rich family scoring only for the shortlisted families. That keeps
+`repo-rag-training-families` focused on route selection while `repo-rag-bundles` remains the
+surface that actually serves the DSPy runtime artifact for the selected `prompt_family_id`.
 `CODEX_HOME` instances restore persisted non-credential Codex state, regenerate fresh
 `auth.json` / `config.toml`, rerun guard preflight, and can switch to `codex exec resume` when
 restored state is present, preferring a persisted explicit `latest_session_id` and only falling

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import sqlite3
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -57,7 +58,8 @@ DEFAULT_TRAINER_TRAINING_CANDIDATES_PATH = DEFAULT_TRAINER_SERVICE_DIR / "traini
 DEFAULT_TRAINER_TRAINING_CANDIDATES_SUMMARY_PATH = (
     DEFAULT_TRAINER_SERVICE_DIR / "training-candidates-summary.json"
 )
-DEFAULT_TRAINER_FAMILY_STATE_PATH = DEFAULT_TRAINER_SERVICE_DIR / "family-state.json"
+DEFAULT_TRAINER_FAMILY_INDEX_PATH = DEFAULT_TRAINER_SERVICE_DIR / "family-index.sqlite3"
+DEFAULT_TRAINER_FAMILY_STATE_PATH = DEFAULT_TRAINER_FAMILY_INDEX_PATH
 DEFAULT_TRAINER_FAMILY_CACHE_DIR = DEFAULT_TRAINER_SERVICE_DIR / "families"
 DEFAULT_REMOTE_FAMILY_STATE_CACHE_DIR = DEFAULT_TRAINER_SERVICE_DIR / "remote-family-state"
 DEFAULT_TRAINER_RECOVERED_TRACES_DIR = DEFAULT_TRAINER_SERVICE_DIR / "recovered-imported-traces"
@@ -73,6 +75,8 @@ TRAINER_SERVICE_CYCLE_KIND = "repo-rag-trainer-service-cycle"
 TRAINER_SIGNAL_KINDS: tuple[str, ...] = ("full_trace", "feedback_trace")
 BundleChannelName = Literal["stable", "canary"]
 BUNDLE_CHANNEL_NAMES: tuple[BundleChannelName, ...] = ("stable", "canary")
+FAMILY_INDEX_DB_SCHEMA_VERSION = 1
+FAMILY_INDEX_DB_KIND = "repo-rag-trainer-family-index"
 
 
 @dataclass(frozen=True)
@@ -117,6 +121,205 @@ def _relative_to_root(path: Path, root: Path) -> str:
         return str(path.relative_to(root))
     except ValueError:
         return str(path)
+
+
+def _is_family_index_sqlite_path(path: Path) -> bool:
+    return path.suffix.casefold() in {".sqlite3", ".sqlite", ".db"}
+
+
+def _path_looks_like_sqlite_database(path: Path) -> bool:
+    if _is_family_index_sqlite_path(path):
+        return True
+    if not path.is_file():
+        return False
+    try:
+        return path.read_bytes().startswith(b"SQLite format 3\x00")
+    except OSError:
+        return False
+
+
+def resolve_family_index_path(path: Path) -> Path:
+    """Resolve legacy family-state paths to the active SQLite family index when present."""
+
+    resolved = path.resolve()
+    if resolved.is_file():
+        return resolved
+    if resolved.name == "family-index.sqlite3":
+        for candidate_name in ("family-state.json", "champion-index.json"):
+            candidate = resolved.with_name(candidate_name)
+            if candidate.is_file():
+                return candidate
+    if resolved.name == "family-state.json":
+        candidate = resolved.with_name("family-index.sqlite3")
+        if candidate.is_file():
+            return candidate
+    return resolved
+
+
+def _connect_family_index(path: Path) -> sqlite3.Connection:
+    connection = sqlite3.connect(path)
+    connection.row_factory = sqlite3.Row
+    return connection
+
+
+def _fresh_family_index_payload() -> dict[str, object]:
+    return {
+        "schema_version": FAMILY_INDEX_DB_SCHEMA_VERSION,
+        "record_kind": "repo-rag-trainer-champion-index",
+        "family_state_kind": "repo-rag-trainer-family-state",
+        "family_state_layout": "sqlite-index",
+        "generated_at": datetime.now(UTC).isoformat(),
+        "prompt_families": [],
+    }
+
+
+def load_family_index_payload(path: Path) -> dict[str, object]:
+    """Load a family index from SQLite or legacy JSON."""
+
+    resolved_path = resolve_family_index_path(path)
+    if not resolved_path.is_file():
+        return _fresh_family_index_payload()
+    if not _path_looks_like_sqlite_database(resolved_path):
+        payload = load_json_object(resolved_path)
+        if not isinstance(payload.get("prompt_families"), list):
+            payload["prompt_families"] = []
+        return payload
+    connection = _connect_family_index(resolved_path)
+    try:
+        payload = _fresh_family_index_payload()
+        table_exists = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='family_index_meta'"
+        ).fetchone()
+        if table_exists is None:
+            return payload
+        for row in connection.execute("SELECT key, value_json FROM family_index_meta ORDER BY key"):
+            try:
+                payload[str(row["key"])] = json.loads(str(row["value_json"]))
+            except json.JSONDecodeError:
+                payload[str(row["key"])] = str(row["value_json"])
+        families: list[dict[str, object]] = []
+        row_query = (
+            "SELECT prompt_family_id, payload_json, family_path, father_path, family_record_count "
+            "FROM family_index_entries ORDER BY prompt_family_id"
+        )
+        for row in connection.execute(row_query):
+            try:
+                entry = json.loads(str(row["payload_json"]))
+            except json.JSONDecodeError:
+                entry = {}
+            if not isinstance(entry, dict):
+                entry = {}
+            prompt_family_id = str(row["prompt_family_id"] or "").strip()
+            if prompt_family_id:
+                entry["prompt_family_id"] = prompt_family_id
+            family_path = str(row["family_path"] or "").strip()
+            if family_path:
+                entry["family_path"] = family_path
+            father_path = str(row["father_path"] or "").strip()
+            if father_path:
+                entry["father_path"] = father_path
+            entry["family_record_count"] = int(row["family_record_count"] or 0)
+            families.append(entry)
+        payload["prompt_families"] = families
+        return payload
+    finally:
+        connection.close()
+
+
+def write_family_index_payload(path: Path, payload: Mapping[str, object]) -> None:
+    """Persist a family index payload to a SQLite database."""
+
+    resolved_path = path.resolve()
+    resolved_path.parent.mkdir(parents=True, exist_ok=True)
+    if resolved_path.exists():
+        resolved_path.unlink()
+    connection = _connect_family_index(resolved_path)
+    try:
+        connection.execute(
+            "CREATE TABLE family_index_meta (key TEXT PRIMARY KEY, value_json TEXT NOT NULL)"
+        )
+        connection.execute(
+            """
+            CREATE TABLE family_index_entries (
+                prompt_family_id TEXT PRIMARY KEY,
+                question TEXT,
+                normalized_question TEXT,
+                family_father_question TEXT,
+                question_variant_count INTEGER NOT NULL DEFAULT 0,
+                family_record_count INTEGER NOT NULL DEFAULT 0,
+                prompt_terms_json TEXT NOT NULL,
+                command_terms_json TEXT NOT NULL,
+                constraint_terms_json TEXT NOT NULL,
+                family_path TEXT NOT NULL,
+                father_path TEXT,
+                payload_json TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX family_index_question_idx ON family_index_entries(question)"
+        )
+        connection.execute(
+            "CREATE INDEX family_index_father_idx ON family_index_entries(family_father_question)"
+        )
+        meta = {str(key): value for key, value in payload.items() if str(key) != "prompt_families"}
+        meta.setdefault("schema_version", FAMILY_INDEX_DB_SCHEMA_VERSION)
+        meta.setdefault("record_kind", "repo-rag-trainer-champion-index")
+        meta.setdefault("family_state_kind", "repo-rag-trainer-family-state")
+        meta["family_state_layout"] = "sqlite-index"
+        meta.setdefault("generated_at", datetime.now(UTC).isoformat())
+        meta["family_index_kind"] = FAMILY_INDEX_DB_KIND
+        for key, value in meta.items():
+            connection.execute(
+                "INSERT INTO family_index_meta(key, value_json) VALUES(?, ?)",
+                (key, json.dumps(value, ensure_ascii=False)),
+            )
+        families = payload.get("prompt_families")
+        if isinstance(families, list):
+            for family in families:
+                if not isinstance(family, Mapping):
+                    continue
+                prompt_family_id = str(family.get("prompt_family_id") or "").strip()
+                family_path = str(family.get("family_path") or "").strip()
+                if not prompt_family_id or not family_path:
+                    continue
+                father_path = str(family.get("father_path") or "").strip()
+                connection.execute(
+                    """
+                    INSERT INTO family_index_entries(
+                        prompt_family_id, question, normalized_question, family_father_question,
+                        question_variant_count, family_record_count, prompt_terms_json,
+                        command_terms_json, constraint_terms_json, family_path, father_path,
+                        payload_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        prompt_family_id,
+                        str(family.get("question") or "").strip(),
+                        str(family.get("normalized_question") or "").strip(),
+                        str(family.get("family_father_question") or "").strip(),
+                        int(family.get("question_variant_count") or 0),
+                        int(family.get("family_record_count") or 0),
+                        json.dumps(
+                            list(family.get("family_prompt_profile_terms") or []),
+                            ensure_ascii=False,
+                        ),
+                        json.dumps(
+                            list(family.get("family_command_pattern_summary") or []),
+                            ensure_ascii=False,
+                        ),
+                        json.dumps(
+                            list(family.get("family_constraint_summary") or []),
+                            ensure_ascii=False,
+                        ),
+                        family_path,
+                        father_path or None,
+                        json.dumps(dict(family), ensure_ascii=False),
+                    ),
+                )
+        connection.commit()
+    finally:
+        connection.close()
 
 
 def _sanitize_name(name: str, *, default: str) -> str:
@@ -390,13 +593,13 @@ def build_bundle_family_registry(
     family_state_path: Path,
     family_artifact_registry: Mapping[str, object] | None = None,
 ) -> dict[str, object] | None:
-    """Build the monolithic bundle's internal family registry from one family-state file."""
+    """Build the monolithic bundle's internal family registry from one persisted family index."""
 
     resolved_root = root.resolve()
-    resolved_family_state_path = family_state_path.resolve()
+    resolved_family_state_path = resolve_family_index_path(family_state_path)
     if not resolved_family_state_path.is_file():
         return None
-    payload = load_json_object(resolved_family_state_path)
+    payload = load_family_index_payload(resolved_family_state_path)
     raw_families = payload.get("prompt_families")
     if not isinstance(raw_families, list):
         return None
@@ -1195,12 +1398,12 @@ def upload_remote_family_state(
     *,
     family_state_path: Path,
 ) -> dict[str, object] | None:
-    """Upload one family-state index into the remote family-state container when configured."""
+    """Upload one SQLite family index into the remote family-state container when configured."""
 
     config = resolve_azure_artifact_config()
     if config is None or not config.family_state_enabled:
         return None
-    payload = load_json_object(family_state_path)
+    payload = load_family_index_payload(family_state_path)
     resolved_root = root.resolve()
     resolved_family_state_path = family_state_path.resolve()
     store = AzureArtifactStore(config)
@@ -1287,12 +1490,22 @@ def upload_remote_family_state(
         "current_prompt_family_count": prompt_family_count,
         "current_family_record_count": family_record_count,
     }
-    family_state_text = json.dumps(published_payload, indent=2, ensure_ascii=False) + "\n"
-    store.upload_text(
-        container,
-        blob_map["family_state"],
-        family_state_text,
+    sqlite_payload = dict(published_payload)
+    if isinstance(raw_prompt_families, list):
+        sqlite_payload["prompt_families"] = raw_prompt_families
+    temporary_index_path = (
+        resolved_root / DEFAULT_TRAINER_SERVICE_DIR / "_remote-family-index.sqlite3"
     )
+    write_family_index_payload(temporary_index_path, sqlite_payload)
+    try:
+        store.upload_bytes(
+            container,
+            blob_map["family_state"],
+            temporary_index_path.read_bytes(),
+        )
+    finally:
+        if temporary_index_path.exists():
+            temporary_index_path.unlink()
     store.upload_json(container, blob_map["current"], current_payload)
     return {
         "storage_backend": "azure-blob",
@@ -1305,7 +1518,7 @@ def upload_remote_family_state(
 
 
 def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
-    """Download the current remote family-state index into a local cache when configured."""
+    """Download the current remote SQLite family index into a local cache when configured."""
 
     resolved_root = root.resolve()
     config = resolve_azure_artifact_config()
@@ -1325,22 +1538,19 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
         return None
     cache_dir = resolved_root / DEFAULT_REMOTE_FAMILY_STATE_CACHE_DIR / family_state_version
     cache_dir.mkdir(parents=True, exist_ok=True)
-    family_state_path = cache_dir / "family-state.json"
+    family_state_path = cache_dir / "family-index.sqlite3"
     current_path = cache_dir / "current.json"
-    family_state_text = store.download_text(container, family_state_blob)
+    family_state_bytes = store.download_bytes(container, family_state_blob)
     current_path.write_text(
         json.dumps(current_payload, indent=2) + "\n",
         encoding="utf-8",
     )
+    family_state_path.write_bytes(family_state_bytes)
     cached_family_paths: dict[str, str] = {}
     cached_family_member_paths: dict[str, dict[str, object]] = {}
     remote_family_member_blobs: dict[str, dict[str, object]] = {}
-    family_state_payload = json.loads(family_state_text)
-    raw_prompt_families = (
-        family_state_payload.get("prompt_families")
-        if isinstance(family_state_payload, Mapping)
-        else []
-    )
+    family_state_payload = load_family_index_payload(family_state_path)
+    raw_prompt_families = family_state_payload.get("prompt_families")
     for family_index, family_value in enumerate(
         raw_prompt_families if isinstance(raw_prompt_families, list) else []
     ):
@@ -1479,10 +1689,7 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
             raw_prompt_families[family_index] = family_entry
         cached_family_member_paths[prompt_family_id] = local_member_paths
         remote_family_member_blobs[prompt_family_id] = remote_member_blobs
-    family_state_path.write_text(
-        f"{json.dumps(family_state_payload, indent=2)}\n",
-        encoding="utf-8",
-    )
+    write_family_index_payload(family_state_path, family_state_payload)
     return {
         "family_state_found": True,
         "storage_backend": "azure-blob",

@@ -33,7 +33,11 @@ from repo_rag_lab.dspy_training import (
     train_repository_program,
 )
 from repo_rag_lab.runtime_artifacts import load_bundle_manifest
-from repo_rag_lab.training_samples import TrainingExample, load_training_examples
+from repo_rag_lab.training_samples import (
+    TrainingExample,
+    load_family_state_payload,
+    load_training_examples,
+)
 
 
 def test_resolve_dspy_lm_config_prefers_explicit_values(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -872,7 +876,7 @@ def test_train_repository_program_writes_artifacts(
             lineage_metadata={
                 "imported_trace_record_paths": ["artifacts/traces/imported/demo.json"],
                 "new_candidate_count": 1,
-                "family_state_path": "artifacts/trainer/family-state.json",
+                "family_state_path": "artifacts/trainer/family-index.sqlite3",
             },
         ),
         lm_config=DSPyLMConfig(model="openai/test-model"),
@@ -921,7 +925,7 @@ def test_train_repository_program_writes_artifacts(
     assert bundle_lineage["new_candidate_count"] == 1
     assert bundle["retrieval_mode"] is None
     assert bundle["program_path"] == "artifacts/dspy/sample-run/program.json"
-    assert bundle["family_state_path"] == "artifacts/trainer/family-state.json"
+    assert bundle["family_state_path"] == "artifacts/trainer/family-index.sqlite3"
     family_registry = bundle["family_registry"]
     assert isinstance(family_registry, dict)
     assert family_registry["family_count"] == 1
@@ -1236,15 +1240,19 @@ def test_train_repository_program_recompiles_only_dirty_families(
     assert dirty_runtime_artifact["artifact_source"] == "recompiled"
     assert clean_runtime_artifact["artifact_source"] == "carried-forward"
 
-    updated_family_state = json.loads(family_state_path.read_text(encoding="utf-8"))
+    updated_family_state = load_family_state_payload(family_state_path)
     updated_families = {
         family["prompt_family_id"]: family for family in updated_family_state["prompt_families"]
     }
-    assert updated_family_state["family_state_layout"] == "thin-index"
+    assert updated_family_state["family_state_layout"] == "sqlite-index"
     assert updated_families["pf-dirty"]["family_needs_recompile"] is False
     assert updated_families["pf-clean"]["family_needs_recompile"] is False
-    assert "family_runtime_artifact" not in updated_families["pf-dirty"]
-    assert "family_runtime_artifact" not in updated_families["pf-clean"]
+    assert (
+        updated_families["pf-dirty"]["family_runtime_artifact"]["artifact_source"] == "recompiled"
+    )
+    assert updated_families["pf-clean"]["family_runtime_artifact"]["artifact_source"] == (
+        "carried-forward"
+    )
     assert updated_families["pf-dirty"]["family_path"].endswith("/family.json")
     assert updated_families["pf-clean"]["family_path"].endswith("/family.json")
     dirty_family_payload = json.loads(
