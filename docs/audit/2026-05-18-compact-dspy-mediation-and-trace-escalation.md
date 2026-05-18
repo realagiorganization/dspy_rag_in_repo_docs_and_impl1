@@ -13,6 +13,8 @@ This audit note now covers two adjacent runtime refinements from the same day:
 3. the live prompt-executor and CLI surfaces now honor that contract instead of silently reverting
    matched runs back to `feedback_trace` or launching the proxy with stale mediation-budget
    defaults
+4. thin SQLite family-index publishing now preserves carried-forward family replay sidecars instead
+   of collapsing unchanged families down to zero records during incremental publish
 
 ## What Changed
 
@@ -41,6 +43,9 @@ This audit note now covers two adjacent runtime refinements from the same day:
   - essentials count `2`
 - removed the dataset-side worker downgrade that had still been rewriting successful reused family
   traces back to `feedback_trace` after proxy export
+- hardened incremental family-state persistence so a carried-forward family keeps its existing
+  `family_records`, `family_father_record`, `family_runtime_record`, `family_champion_record`, and
+  `family_runtime_artifact` when the materialized payload for that family is otherwise thin
 
 ## Why
 
@@ -65,13 +70,24 @@ proxy still exposed the old `700/280/3` defaults even though the runtime constan
 reduced to `420/180/2`. Fixing those two deployment-facing surfaces restores the intended runtime
 contract.
 
+The next live trainer publish exposed a second bug on the persistence side. The execution path was
+finally exporting matched runs as `full_trace`, and the trainer did publish a new remote family
+version, but the published SQLite index regressed from `11` historical replay records to only `2`.
+Inspection of the sidecar family directories showed the pattern clearly: the matched family kept
+its two replay records, while the five carried-forward families were republished with empty
+`family_records` arrays and missing `father.json` sidecars. That was not a routing problem or a
+compile-time family-selection problem; the generated bundle still reported `training_example_count`
+`9`. The loss happened later, when thin carried-forward payloads were rewritten back to disk. The
+active fix now preserves the existing local sidecars for any carried-forward family whose
+materialized payload is thin, so incremental publish can no longer erase historical replay data.
+
 ## Verification
 
 Executed in the current turn:
 
 - `uv run python -m compileall src tests`
 - `cd ../dataset && pytest tests/unit/test_worker_execution_prompt_repo_rag_cli.py -q`
-- `uv run pytest tests/test_codex_proxy.py -q`
+- `uv run pytest tests/test_training_samples.py tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
 - `uv run repo-rag smoke-test`
 - `cargo build --manifest-path rust-cli/Cargo.toml`
 - `make quality`
@@ -80,13 +96,13 @@ Observed:
 
 - `compileall` passed
 - dataset worker regression slice passed as `24 passed`
-- `tests/test_codex_proxy.py` passed as `27 passed`
+- trainer/utilities/BDD regression slice passed as `104 passed`
 - smoke test passed
 - Rust build passed
 - `make quality` passed with:
-  - `373 passed`
+  - `374 passed`
   - `3 skipped`
-  - total coverage `81.54%`
+  - total coverage `81.59%`
 
 ## Scope Notes
 

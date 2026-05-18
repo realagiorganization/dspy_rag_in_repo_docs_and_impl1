@@ -251,6 +251,10 @@ Implemented locally in this stage:
 - family state now tracks `family_needs_recompile`, trainer-side family artifacts are recompiled
   only for dirty families, and clean families carry their previous runtime artifact references
   forward into the next monolithic bundle
+- incremental publish must preserve existing replay sidecars for clean carried-forward families;
+  a thin materialized family payload is not allowed to erase historical `family_records`,
+  `family_father_record`, or family runtime/champion anchors from the last compatible cached
+  version
 - the generated routing index is now `artifacts/trainer/family-index.sqlite3`; the older
   `family-state.json` is no longer written on the active path
 - trainer pending-recompile detection now treats dirty-family flags as first-class recompile
