@@ -343,14 +343,16 @@ plus the family's feedback-aware success prior and uncertainty penalty. That is 
 embedding centroid, but it now aligns better with the product requirement that prompt families
 should follow latent task intent carried by salient keywords/constraints rather than superficial
 string resemblance alone.
-The newest Phase-1 correction now splits trainer-visible runtime evidence into two explicit signal
-classes. `full_trace` remains the replay-set exemplar that can dirty a family and later drive
-BootstrapFewShot recompilation. `feedback_trace` is now the compact reuse-path artifact emitted
-when a compiled family program handled the turn successfully; it does not expand the replay set by
-default, but it does update family/runtime-artifact success priors and feeds the artifact's
-`predicted_hit_rate`. That split matters because pure “reuse means no trainer input” had been
-freezing the family library: the runtime could succeed repeatedly without teaching the trainer that
-the deployed family artifact was actually good.
+The newest Phase-1 correction keeps two trainer-visible signal classes in the contract, but the
+current active runtime policy is intentionally simpler: successful family reuse now emits
+`full_trace` directly. `full_trace` remains the replay-set exemplar that can dirty a family and
+later drive BootstrapFewShot recompilation. `feedback_trace` stays reserved for future compact
+feedback-only paths and historical compatibility, but the live policy no longer hides matched runs
+behind feedback-only accounting. That change matters because pure “reuse means no trainer input”
+had been freezing the family library: the runtime could succeed repeatedly without teaching the
+trainer that the deployed family artifact was actually good. The current slice therefore keeps all
+matched runs exportable and replay-visible while still forbidding trainer-side pairwise trace
+comparison as the replay gate.
 That success signal is no longer stored as a raw mean alone. Family state now persists one
 `family_success_metric` posterior profile that combines replay-set evidence with compact reuse
 feedback and records `posterior_mean`, `lower_bound`, and `uncertainty` for the current family
@@ -370,6 +372,16 @@ the same family success profile fields that runtime used internally, including
 `family_predicted_hit_rate`, `family_predicted_hit_rate_lower_bound`,
 `family_prediction_uncertainty`, and `family_feedback_count`, instead of only keeping those values
 inside nested runtime trace objects.
+The same runtime path now also injects a much smaller developer mediation block into Codex. Instead
+of repeating a long reformulated prompt plus multiple evidence snippets, the hot path now keeps one
+compact execution line, an optional family id, one short summary, up to two file hints, one
+evidence snippet, and at most one note. That preserves the useful grounding function of the proxy
+without doubling the execution payload as aggressively as the previous mediation format did.
+The same contract is now also explicit about where replay admission decisions are allowed to live:
+trainer should not perform broad trace-to-trace similarity scans or replay-set deduplication as its
+main control loop. Those expensive choices belong on the runtime/Codex Exec side, before trainer
+ingestion, so the trainer can stay focused on family assignment, dirty-family updates, and DSPy
+compilation rather than on costly pairwise trace rejection.
 very metric the family-first contract is supposed to optimize.
 
 A further local slice now supports divergent

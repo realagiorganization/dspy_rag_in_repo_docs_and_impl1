@@ -55,10 +55,10 @@ except ImportError:  # pragma: no cover - optional runtime dependency during sca
 resolve_dspy_lm_config = resolve_dspy_helper_lm_config
 
 _DEFAULT_SNIPPET_LIMIT = 280
-_DEFAULT_PREVIEW_COUNT = 4
-_DEFAULT_ESSENTIAL_COUNT = 3
-_DEFAULT_TOKEN_BUDGET = 700
-_DEFAULT_TRIVIAL_TOKEN_BUDGET = 280
+_DEFAULT_PREVIEW_COUNT = 2
+_DEFAULT_ESSENTIAL_COUNT = 2
+_DEFAULT_TOKEN_BUDGET = 420
+_DEFAULT_TRIVIAL_TOKEN_BUDGET = 180
 _DEFAULT_CACHE_TTL_SECONDS = 3600
 _DEFAULT_FAMILY_EXPLORATION_RATE = 0.05
 _TASK_TOKEN_DEEP_THRESHOLD = 10
@@ -243,39 +243,44 @@ def _build_budgeted_message(
     mediation_mode: str,
     rag_status: str,
     dspy_status: str,
-    task_classification: str,
     summary: str,
     sources: list[str],
     previews: list[dict[str, str]],
     warnings: list[str],
+    prompt_family_id: str | None,
+    family_artifact_selected: bool | None,
     budget_tokens: int,
     essentials_count: int,
 ) -> tuple[str, int]:
-    summary_limit = max(120, min(520, budget_tokens * 3))
+    summary_limit = max(96, min(240, budget_tokens))
     trimmed_summary = _truncate_text(summary, limit=summary_limit)
-    trimmed_previews = _dedupe_previews(previews)[: max(1, essentials_count)]
-    trimmed_reformulated_prompt = _truncate_text(
-        reformulated_prompt,
-        limit=max(96, budget_tokens * 2),
-    )
+    trimmed_previews = _dedupe_previews(previews)[:1]
+    trimmed_reformulated_prompt = _truncate_text(reformulated_prompt, limit=144)
+    source_limit = max(1, min(2, essentials_count))
     lines = [
         "Repo mediation active.",
-        f"Mode: {mediation_mode}",
-        f"Task class: {task_classification}",
-        f"RAG: {rag_status}",
-        f"DSPy: {dspy_status}",
-        f"Reformulated prompt: {trimmed_reformulated_prompt}",
-        "",
-        "Summary:",
-        trimmed_summary,
+        (
+            "Execution: reuse family artifact."
+            if family_artifact_selected and dspy_status == "success"
+            else "Execution: repo-grounded DSPy mediation."
+            if dspy_status == "success"
+            else "Execution: repo-grounded fallback."
+        ),
     ]
+    if prompt_family_id:
+        lines.append(f"Family: {prompt_family_id}")
+    lines.append(f"Mode: {mediation_mode}")
+    if reformulated_prompt.strip():
+        lines.append(f"Prompt: {trimmed_reformulated_prompt}")
+    if trimmed_summary:
+        lines.extend(["", "Summary:", trimmed_summary])
 
     def _candidate_text(extra_lines: list[str]) -> str:
         return "\n".join(lines + extra_lines).strip()
 
     if sources:
-        section = ["", "Inspect first:"]
-        for source in sources[: max(1, essentials_count + 1)]:
+        section = ["", "Files:"]
+        for source in sources[:source_limit]:
             trial = [*section, f"- {source}"]
             if _estimate_token_count(_candidate_text(trial)) > budget_tokens:
                 break
@@ -286,7 +291,10 @@ def _build_budgeted_message(
     if trimmed_previews:
         section = ["", "Evidence:"]
         for preview in trimmed_previews:
-            candidate_line = f"- {preview['source']}: {preview['text']}"
+            candidate_line = (
+                f"- {preview['source']}: "
+                f"{_truncate_text(preview['text'], limit=max(80, budget_tokens // 2))}"
+            )
             trial = [*section, candidate_line]
             if _estimate_token_count(_candidate_text(trial)) > budget_tokens:
                 break
@@ -296,8 +304,8 @@ def _build_budgeted_message(
 
     if warnings:
         section = ["", "Notes:"]
-        for warning in warnings[:2]:
-            candidate_line = f"- {_truncate_text(warning, limit=160)}"
+        for warning in warnings[:1]:
+            candidate_line = f"- {_truncate_text(warning, limit=120)}"
             trial = [*section, candidate_line]
             if _estimate_token_count(_candidate_text(trial)) > budget_tokens:
                 break
@@ -312,10 +320,9 @@ def _build_budgeted_message(
             [
                 "Repo mediation active.",
                 f"Mode: {mediation_mode}",
-                f"Task class: {task_classification}",
-                "",
+                *([f"Family: {prompt_family_id}"] if prompt_family_id else []),
                 "Summary:",
-                _truncate_text(trimmed_summary, limit=max(96, budget_tokens * 2)),
+                _truncate_text(trimmed_summary, limit=max(72, budget_tokens // 2)),
             ]
         ).strip()
         estimated_tokens = _estimate_token_count(message)
@@ -1530,11 +1537,12 @@ def build_codex_mediation(
             mediation_mode=mediation_mode,
             rag_status=rag_status,
             dspy_status=dspy_status,
-            task_classification=task_classification,
             summary=summary,
             sources=sources,
             previews=previews,
             warnings=warnings,
+            prompt_family_id=prompt_family_id,
+            family_artifact_selected=family_artifact_selected,
             budget_tokens=effective_budget,
             essentials_count=effective_essentials,
         )
@@ -1972,52 +1980,25 @@ class _CodexProxyRuntime:
             encoding="utf-8",
         )
 
-    def _prune_turn_traces_for_prompt(self, mediation: CodexMediationResult) -> None:
-        """Drop stale local turn traces once one prompt is satisfied by family reuse."""
-
-        retained_entries: list[str] = []
-        removed_any = False
-        for relative_path in self._turn_trace_entries:
-            trace_path = self.config.artifact_dir / relative_path
-            matches_prompt = False
-            try:
-                payload = json.loads(trace_path.read_text(encoding="utf-8"))
-                if isinstance(payload, dict):
-                    matches_prompt = (
-                        str(payload.get("original_prompt") or "").strip()
-                        == mediation.original_prompt.strip()
-                        and str(payload.get("reformulated_prompt") or "").strip()
-                        == mediation.reformulated_prompt.strip()
-                    )
-            except Exception:
-                matches_prompt = False
-            if matches_prompt:
-                removed_any = True
-                if trace_path.exists():
-                    trace_path.unlink()
-                continue
-            retained_entries.append(relative_path)
-        if removed_any:
-            self._turn_trace_entries = retained_entries
-            self._rewrite_turn_trace_manifest()
-
     def _persist_single_turn_trace(
         self,
         mediation: CodexMediationResult,
         *,
         command_trace: list[Mapping[str, str]],
         trace_role: str = "turn",
+        trainer_signal_kind: str | None = None,
     ) -> Path | None:
-        if mediation.family_artifact_selected and mediation.dspy_status == "success":
-            self._prune_turn_traces_for_prompt(mediation)
         if not self._should_persist_turn_trace(mediation):
             return None
         metric_hits = 1 if mediation.dspy_status == "success" else 0
         metric_total = 1
-        trainer_signal_kind = (
-            "feedback_trace"
-            if mediation.family_artifact_selected and mediation.dspy_status == "success"
-            else "full_trace"
+        resolved_signal_kind = trainer_signal_kind or "full_trace"
+        trainer_signal_reason = (
+            "family-reuse"
+            if resolved_signal_kind == "full_trace"
+            and mediation.family_artifact_selected
+            and mediation.dspy_status == "success"
+            else "fresh-or-fallback"
         )
         trace_payload = {
             "command": "codex-proxy-turn-mediation",
@@ -2072,7 +2053,7 @@ class _CodexProxyRuntime:
                     family_artifact_selected=mediation.family_artifact_selected,
                     mediation_metric_hits=metric_hits,
                     mediation_metric_total=metric_total,
-                    trainer_signal_kind=trainer_signal_kind,
+                    trainer_signal_kind=resolved_signal_kind,
                 )
             ),
             "outcome": {
@@ -2084,6 +2065,8 @@ class _CodexProxyRuntime:
                 "used_baseline_fallback": mediation.dspy_status != "success",
             },
             "mediation": mediation.to_payload(),
+            "trainer_signal_kind": resolved_signal_kind,
+            "trainer_signal_reason": trainer_signal_reason,
         }
         trace_name = hashlib.sha256(
             json.dumps(
@@ -2148,6 +2131,7 @@ class _CodexProxyRuntime:
             mediation,
             command_trace=command_trace,
             trace_role="turn",
+            trainer_signal_kind="full_trace",
         )
         if mediation.family_artifact_selected and mediation.dspy_status == "success":
             return primary_trace_path

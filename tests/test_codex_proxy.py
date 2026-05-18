@@ -274,6 +274,38 @@ def test_augment_responses_payload_inserts_developer_message_after_existing_deve
     assert inserted["content"][0]["text"] == "repo-rag mediation"
 
 
+def test_build_budgeted_message_stays_compact_for_family_reuse() -> None:
+    build_budgeted_message = codex_proxy_module.__dict__["_build_budgeted_message"]
+    message, estimated_tokens = build_budgeted_message(
+        reformulated_prompt=(
+            "Modify the repository to add an automated demo GIF in the README while preserving "
+            "existing structure and avoiding local installs."
+        ),
+        mediation_mode="dspy_rag",
+        rag_status="success",
+        dspy_status="success",
+        summary=(
+            "Repository already contains the README embed, the recorder script, and the GIF asset."
+        ),
+        sources=["README.md", "package.json", "scripts/generate-demo-gif.mjs"],
+        previews=[
+            {"source": "README.md", "text": "README already embeds docs/assets/demo.gif."},
+            {"source": "package.json", "text": "npm run demo:gif exists."},
+        ],
+        warnings=["No rerun required."],
+        prompt_family_id="pf-demo",
+        family_artifact_selected=True,
+        budget_tokens=120,
+        essentials_count=2,
+    )
+
+    assert "Execution: reuse family artifact." in message
+    assert "Family: pf-demo" in message
+    assert "Reformulated prompt:" not in message
+    assert estimated_tokens <= 120
+    assert len(message) < 600
+
+
 def test_running_codex_proxy_forwards_sse_and_injects_mediation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2066,7 +2098,7 @@ def test_running_codex_proxy_handles_mediation_on_one_server_thread(
     assert len(set(seen_threads)) == 1
 
 
-def test_persist_turn_trace_emits_feedback_trace_for_successful_family_reuse_and_dedupes_same_prompt(  # noqa: E501
+def test_persist_turn_trace_emits_full_trace_for_successful_family_reuse_and_dedupes_same_prompt(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2151,20 +2183,22 @@ def test_persist_turn_trace_emits_feedback_trace_for_successful_family_reuse_and
             family_feedback_count=1,
             family_artifact_selected=True,
         )
-        feedback_trace = runtime.persist_turn_trace(successful_family_reuse, command_trace=[])
-        assert feedback_trace is not None
+        full_trace = runtime.persist_turn_trace(successful_family_reuse, command_trace=[])
+        assert full_trace is not None
         assert runtime.turn_trace_entries == [
-            feedback_trace.relative_to(config.artifact_dir).as_posix()
+            first_trace.relative_to(config.artifact_dir).as_posix(),
+            full_trace.relative_to(config.artifact_dir).as_posix(),
         ]
         manifest = json.loads(runtime.turn_trace_manifest_path.read_text(encoding="utf-8"))
         assert manifest["trace_paths"] == runtime.turn_trace_entries
-        payload = json.loads(feedback_trace.read_text(encoding="utf-8"))
-        assert payload["trace"]["trainer_signal_kind"] == "feedback_trace"
+        payload = json.loads(full_trace.read_text(encoding="utf-8"))
+        assert payload["trace"]["trainer_signal_kind"] == "full_trace"
         assert payload["trace"]["family_predicted_hit_rate"] == 0.666667
         assert payload["trace"]["family_predicted_hit_rate_lower_bound"] == 0.364602
         assert payload["trace"]["family_prediction_uncertainty"] == 0.235702
         assert payload["trace"]["family_feedback_count"] == 1
         assert payload["trace_role"] == "turn"
+        assert payload["trainer_signal_reason"] == "family-reuse"
     finally:
         runtime.close()
 

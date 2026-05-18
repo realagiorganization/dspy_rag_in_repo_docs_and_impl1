@@ -186,6 +186,16 @@ Runtime routing rule:
   - coarse shortlist from `family-index.sqlite3`
   - rich family scoring only for the shortlisted families
 - the family index must not store compiled DSPy programs
+- the Codex mediation block should stay compact:
+  - one short execution line
+  - optional `prompt_family_id`
+  - one short summary
+  - at most two file hints
+  - at most one evidence snippet
+- runtime, not trainer, owns the expensive replay-admission decision:
+  - every run may emit a trainer-visible trace
+  - but the decision `feedback_trace` vs `full_trace` must be made before trainer ingestion
+  - trainer must not perform broad trace-to-trace similarity scans just to reject near-duplicates
 
 ## Trainer Cache Contract
 
@@ -228,6 +238,11 @@ Implemented locally in this stage:
   file
 - trainer compilation now emits one family-scoped DSPy artifact per persisted family and records
   those artifacts in bundle metadata as `family_artifact_registry`
+- successful family reuse now emits `full_trace` directly so matched runs always remain eligible
+  for replay-driven family improvement
+- the user contract now explicitly forbids trainer-side replay deduplication-by-comparison as the
+  main control loop; if replay growth must be limited, that limit should be decided on the
+  runtime/Codex Exec side instead
 - remote bundle publish/fetch now includes family runtime `program.json` / `metadata.json` assets
   beside the global compiled program
 - proxy DSPy execution now loads the matched family runtime artifact when available and invokes it
