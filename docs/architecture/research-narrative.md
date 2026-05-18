@@ -359,6 +359,15 @@ container worker in `../dataset` still downgraded successful reused family artif
 mediation defaults even though the runtime constants had already moved to `420/180/2`. Those
 surfaces are now aligned, so a deployed prompt-executor should preserve matched runs as
 `full_trace` and launch the proxy with the compact mediation budget that the repo code expects.
+The next live publish then exposed a different failure mode in the trainer itself: the execution
+path was finally correct, but incremental thin-family persistence republished five carried-forward
+families with empty replay payloads and no `father.json` sidecars, collapsing the published family
+history from `11` replay records down to `2`. That regression happened after materialization, not
+during routing or compile; the newly published bundle still reported the expected training-example
+count. The persistence contract is therefore now stricter: when a carried-forward family reaches
+local publish as a thin payload, the trainer must retain any existing replay sidecars and family
+anchor records from the previously cached compatible version instead of overwriting them with empty
+structures.
 That success signal is no longer stored as a raw mean alone. Family state now persists one
 `family_success_metric` posterior profile that combines replay-set evidence with compact reuse
 feedback and records `posterior_mean`, `lower_bound`, and `uncertainty` for the current family

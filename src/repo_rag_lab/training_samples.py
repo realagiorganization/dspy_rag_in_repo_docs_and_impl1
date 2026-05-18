@@ -2112,6 +2112,37 @@ def _persist_local_family_state(
         active_family_dirs.add(family_dir)
         family_dir.mkdir(parents=True, exist_ok=True)
 
+        # Preserve carried-forward replay records when an intermediate family payload was reduced
+        # to a thin summary during compile/publish bookkeeping. Runtime and trainer contracts do
+        # not treat an empty incoming replay set as an intentional family-history reset.
+        existing_family_path = family_dir / "family.json"
+        existing_replay_records = []
+        existing_family_payload: dict[str, Any] | None = None
+        if existing_family_path.is_file():
+            try:
+                loaded_existing = json.loads(existing_family_path.read_text(encoding="utf-8"))
+            except Exception:
+                loaded_existing = None
+            if isinstance(loaded_existing, dict):
+                existing_family_payload = {
+                    str(key): value for key, value in loaded_existing.items()
+                }
+                existing_replay_records = _family_replay_records(existing_family_payload)
+        if not _family_replay_records(full_family_payload) and existing_replay_records:
+            full_family_payload["family_records"] = existing_replay_records
+            for field_name in (
+                "family_father_record",
+                "family_runtime_record",
+                "family_champion_record",
+                "family_runtime_artifact",
+            ):
+                if (
+                    field_name not in full_family_payload
+                    and isinstance(existing_family_payload, dict)
+                    and field_name in existing_family_payload
+                ):
+                    full_family_payload[field_name] = existing_family_payload[field_name]
+
         family_file_payload = {
             key: value
             for key, value in full_family_payload.items()
