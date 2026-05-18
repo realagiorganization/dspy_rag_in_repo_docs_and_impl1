@@ -10,6 +10,9 @@ This audit note now covers two adjacent runtime refinements from the same day:
    matches
 2. successful family-artifact reuse no longer stays feedback-only; the current active policy emits
    `full_trace` directly for matched runs
+3. the live prompt-executor and CLI surfaces now honor that contract instead of silently reverting
+   matched runs back to `feedback_trace` or launching the proxy with stale mediation-budget
+   defaults
 
 ## What Changed
 
@@ -32,6 +35,12 @@ This audit note now covers two adjacent runtime refinements from the same day:
   - the earlier replay similarity floor and deterministic sampling gate were removed
 - persisted `trainer_signal_reason` alongside the trace so exported artifacts can explain whether a
   trace came from family reuse or fresh/fallback mediation
+- aligned the `serve-codex-proxy` CLI defaults with the active compact mediation contract:
+  - token budget `420`
+  - trivial token budget `180`
+  - essentials count `2`
+- removed the dataset-side worker downgrade that had still been rewriting successful reused family
+  traces back to `feedback_trace` after proxy export
 
 ## Why
 
@@ -49,20 +58,29 @@ product requirement that runtime-side matching must not block potentially better
 reaching later DSPy recompilation, and it keeps admission decisions entirely on the runtime side
 instead of adding trainer-side pairwise replay comparisons.
 
+The live AKS inspection during this follow-up showed why the previous code-only change had not
+taken effect end to end: the prompt-executor worker still contained a post-proxy rule that mapped
+successful reused family artifacts back to `feedback_trace`, and the CLI surface that launches the
+proxy still exposed the old `700/280/3` defaults even though the runtime constants had already been
+reduced to `420/180/2`. Fixing those two deployment-facing surfaces restores the intended runtime
+contract.
+
 ## Verification
 
-Executed across the two local verification passes for this note:
+Executed in the current turn:
 
 - `uv run python -m compileall src tests`
-- `uv run pytest tests/test_codex_proxy.py tests/test_training_samples.py tests/test_runtime_artifacts_azure.py tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+- `cd ../dataset && pytest tests/unit/test_worker_execution_prompt_repo_rag_cli.py -q`
+- `uv run pytest tests/test_codex_proxy.py -q`
 - `uv run repo-rag smoke-test`
 - `cargo build --manifest-path rust-cli/Cargo.toml`
 - `make quality`
 
 Observed:
 
-- broader regression slice passed first as `152 passed`, then as `151 passed` after removing the
-  obsolete sampled-reuse test case
+- `compileall` passed
+- dataset worker regression slice passed as `24 passed`
+- `tests/test_codex_proxy.py` passed as `27 passed`
 - smoke test passed
 - Rust build passed
 - `make quality` passed with:
@@ -74,4 +92,5 @@ Observed:
 
 - This note covers repository-local correctness of the compact mediation payload and trainer signal
   split.
-- It does **not** claim a fresh live AKS run was observed in the same turn.
+- This note now also records the live AKS root cause that explained the mismatch seen in fresh
+  execution artifacts before this fix.

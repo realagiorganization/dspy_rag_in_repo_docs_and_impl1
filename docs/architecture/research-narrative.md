@@ -353,6 +353,12 @@ had been freezing the family library: the runtime could succeed repeatedly witho
 trainer that the deployed family artifact was actually good. The current slice therefore keeps all
 matched runs exportable and replay-visible while still forbidding trainer-side pairwise trace
 comparison as the replay gate.
+The live AKS inspection after that change exposed two remaining deployment-facing mismatches: the
+container worker in `../dataset` still downgraded successful reused family artifacts back to
+`feedback_trace`, and the `serve-codex-proxy` CLI still launched with the old `700/280/3`
+mediation defaults even though the runtime constants had already moved to `420/180/2`. Those
+surfaces are now aligned, so a deployed prompt-executor should preserve matched runs as
+`full_trace` and launch the proxy with the compact mediation budget that the repo code expects.
 That success signal is no longer stored as a raw mean alone. Family state now persists one
 `family_success_metric` posterior profile that combines replay-set evidence with compact reuse
 feedback and records `posterior_mean`, `lower_bound`, and `uncertainty` for the current family
