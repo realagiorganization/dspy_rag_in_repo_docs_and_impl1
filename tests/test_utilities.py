@@ -3513,7 +3513,7 @@ def test_run_trainer_candidates_materializes_yaml_from_imported_traces(tmp_path:
         "publication/README.md",
     ]
     family_state = load_family_index_payload(family_state_path)
-    assert family_state["family_state_kind"] == "repo-rag-trainer-family-state"
+    assert family_state["family_state_kind"] == "repo-rag-trainer-family-index"
 
 
 def test_run_trainer_recompile_merges_candidates_and_reports_training_result(

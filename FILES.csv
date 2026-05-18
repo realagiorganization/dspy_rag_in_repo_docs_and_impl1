@@ -211,10 +211,12 @@ docs/audit/2026-05-16-technical-term-lookup-module.md,docs,markdown,24,1171,Repo
 docs/audit/2026-05-17-ci-and-dataset-repair.md,docs,markdown,84,4494,Repository audit note for 2026 05 17 ci and dataset repair
 docs/audit/2026-05-17-family-trace-count-publish-repair.md,docs,markdown,84,4528,Repository audit note for 2026 05 17 family trace count publish repair
 docs/audit/2026-05-17-live-trainer-queue-mirroring.md,docs,markdown,109,5793,Repository audit note for 2026 05 17 live trainer queue mirroring
+docs/audit/2026-05-17-sqlite-family-index-migration.md,docs,markdown,88,3428,Repository audit note for 2026 05 17 sqlite family index migration
+docs/audit/2026-05-17-stage-level-family-criterion.md,docs,markdown,68,1961,Repository audit note for 2026 05 17 stage level family criterion
 docs/audit/2026-05-17-symmetric-singleton-family-routing.md,docs,markdown,98,4905,Repository audit note for 2026 05 17 symmetric singleton family routing
 docs/audit/2026-05-17-trainer-pending-cycle-recovery.md,docs,markdown,87,4520,Repository audit note for 2026 05 17 trainer pending cycle recovery
 docs/audit/2026-05-17-trainer-remote-baseline-transient-cache-contract.md,docs,markdown,77,3955,Repository audit note for 2026 05 17 trainer remote baseline transient cache contract
-docs/audit/README.md,docs,markdown,15,526,Repository audit note for README
+docs/audit/README.md,docs,markdown,15,511,Repository audit note for README
 docs/guides/hushwheel-fixture-rag-guide.md,docs,markdown,138,5169,RAG Guide For The Hushwheel Fixture
 docs/operations/azure-deployment.md,docs,markdown,111,4901,Azure Deployment Notes
 docs/operations/environment.md,docs,markdown,138,9211,Environment and secret reference for local runtime and deployment workflows
@@ -404,14 +406,14 @@ src/repo_rag_lab/pages_site.py,src,python,390,13635,Generate a MkDocs-ready cata
 src/repo_rag_lab/population_samples.py,src,python,241,8376,Helpers for reviewing and batching starter corpus-population inputs.
 src/repo_rag_lab/retrieval.py,src,python,788,25533,Baseline chunking and lexical retrieval utilities for repository text.
 src/repo_rag_lab/retrieval_profile.py,src,python,236,9527,"Profile-driven retrieval weighting, exclusions, and repo-local overrides."
-src/repo_rag_lab/runtime_artifacts.py,src,python,3165,142445,"Versioned bundle, overlay, and runtime-trace helpers."
+src/repo_rag_lab/runtime_artifacts.py,src,python,3382,153881,"Versioned bundle, overlay, and runtime-trace helpers."
 src/repo_rag_lab/rust_lookup.py,src,python,295,7724,Helpers for the native Rust-backed SQLite lookup index.
 src/repo_rag_lab/semantic_retrieval.py,src,python,214,7407,Azure OpenAI embedding-backed semantic retrieval helpers.
 src/repo_rag_lab/settings.py,src,python,28,699,Shared repository path settings derived from a repository root.
 src/repo_rag_lab/term_extraction.py,src,python,1168,26846,Technical-term extraction utilities for prompt-family routing profiles.
 src/repo_rag_lab/todo_backlog.py,src,python,276,8434,Shared backlog rendering helpers for Markdown and LaTeX surfaces.
 src/repo_rag_lab/trainer_deployment.py,src,python,435,18258,Kubernetes manifest helpers for trainer-side repo-RAG deployment surfaces.
-src/repo_rag_lab/training_samples.py,src,python,3685,150461,Helpers for loading and summarizing starter DSPy training examples.
+src/repo_rag_lab/training_samples.py,src,python,3685,150447,Helpers for loading and summarizing starter DSPy training examples.
 src/repo_rag_lab/utilities.py,src,python,3312,138173,"User-facing utility helpers shared by the CLI, tests, and notebooks."
 src/repo_rag_lab/verification.py,src,python,163,4476,Verification helpers for Makefile and notebook contract checks.
 src/repo_rag_lab/workflow.py,src,python,503,15900,Baseline repository question-answering workflow built on file retrieval.
@@ -475,11 +477,11 @@ tests/test_population_samples.py,tests,python,76,3144,Python module for test pop
 tests/test_project_surfaces.py,tests,python,486,21558,Python module for test project surfaces
 tests/test_repository_rag_bdd.py,tests,python,30,879,Python module for test repository rag bdd
 tests/test_retrieval.py,tests,python,389,13362,Python module for test retrieval
-tests/test_runtime_artifacts_azure.py,tests,python,1701,65737,Python module for test runtime artifacts azure
+tests/test_runtime_artifacts_azure.py,tests,python,1750,67795,Python module for test runtime artifacts azure
 tests/test_rust_lookup.py,tests,python,95,3099,Python module for test rust lookup
 tests/test_term_extraction.py,tests,python,141,4846,Python module for test term extraction
 tests/test_todo_backlog.py,tests,python,103,3505,Python module for test todo backlog
-tests/test_training_samples.py,tests,python,3160,125617,Python module for test training samples
+tests/test_training_samples.py,tests,python,3162,125786,Python module for test training samples
 tests/test_utilities.py,tests,python,4020,156314,Python module for test utilities
 tests/test_verification.py,tests,python,66,3156,Python module for test verification
 tests/test_workflow.py,tests,python,99,3456,Python module for test workflow

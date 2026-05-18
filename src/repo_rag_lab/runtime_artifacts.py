@@ -79,6 +79,7 @@ BundleChannelName = Literal["stable", "canary"]
 BUNDLE_CHANNEL_NAMES: tuple[BundleChannelName, ...] = ("stable", "canary")
 FAMILY_INDEX_DB_SCHEMA_VERSION = 1
 FAMILY_INDEX_DB_KIND = "repo-rag-trainer-family-index"
+FAMILY_INDEX_META_KIND = FAMILY_INDEX_DB_KIND
 
 
 @dataclass(frozen=True)
@@ -202,8 +203,8 @@ def _local_sqlite_build_path() -> Iterator[Path]:
 def _fresh_family_index_payload() -> dict[str, object]:
     return {
         "schema_version": FAMILY_INDEX_DB_SCHEMA_VERSION,
-        "record_kind": "repo-rag-trainer-champion-index",
-        "family_state_kind": "repo-rag-trainer-family-state",
+        "record_kind": FAMILY_INDEX_META_KIND,
+        "family_state_kind": FAMILY_INDEX_META_KIND,
         "family_state_layout": "sqlite-index",
         "generated_at": datetime.now(UTC).isoformat(),
         "prompt_families": [],
@@ -238,18 +239,91 @@ def load_family_index_payload(path: Path) -> dict[str, object]:
                 except json.JSONDecodeError:
                     payload[str(row["key"])] = str(row["value_json"])
             families: list[dict[str, object]] = []
-            row_query = """
+            entry_columns = {
+                str(column_row["name"])
+                for column_row in connection.execute("PRAGMA table_info(family_index_entries)")
+            }
+            legacy_payload_column = "payload_json" in entry_columns
+            row_query = (
+                """
                 SELECT prompt_family_id, payload_json, family_path, father_path, family_record_count
                 FROM family_index_entries
                 ORDER BY prompt_family_id
-            """
+                """
+                if legacy_payload_column
+                else """
+                SELECT prompt_family_id, question, normalized_question, family_father_question,
+                       question_variant_count, family_record_count, family_needs_recompile,
+                       family_father_similarity_mean, family_runtime_score, family_metric_1_mean,
+                       family_feedback_metric_json, family_feedback_count,
+                       family_success_metric_json, context_group_count, prompt_terms_json,
+                       command_terms_json, constraint_terms_json, prompt_term_stats_json,
+                       command_term_stats_json, constraint_term_stats_json, family_path, father_path
+                FROM family_index_entries
+                ORDER BY prompt_family_id
+                """
+            )
             for row in connection.execute(row_query):
-                try:
-                    entry = json.loads(str(row["payload_json"]))
-                except json.JSONDecodeError:
-                    entry = {}
-                if not isinstance(entry, dict):
-                    entry = {}
+                entry: dict[str, object]
+                if legacy_payload_column:
+                    try:
+                        legacy_entry = json.loads(str(row["payload_json"]))
+                    except json.JSONDecodeError:
+                        legacy_entry = {}
+                    if not isinstance(legacy_entry, dict):
+                        entry = {}
+                    else:
+                        entry = {str(key): value for key, value in legacy_entry.items()}
+                else:
+
+                    def _load_json_field(
+                        field_name: str,
+                        fallback: object,
+                        *,
+                        row_data: sqlite3.Row = row,
+                    ) -> object:
+                        raw_value = row_data[field_name]
+                        if raw_value in (None, ""):
+                            return fallback
+                        try:
+                            return json.loads(str(raw_value))
+                        except json.JSONDecodeError:
+                            return fallback
+
+                    entry = {
+                        "question": str(row["question"] or "").strip(),
+                        "normalized_question": str(row["normalized_question"] or "").strip(),
+                        "family_father_question": str(row["family_father_question"] or "").strip()
+                        or None,
+                        "question_variant_count": int(row["question_variant_count"] or 0),
+                        "family_record_count": int(row["family_record_count"] or 0),
+                        "family_needs_recompile": bool(row["family_needs_recompile"] or 0),
+                        "family_father_similarity_mean": row["family_father_similarity_mean"],
+                        "family_runtime_score": row["family_runtime_score"],
+                        "family_metric_1_mean": row["family_metric_1_mean"],
+                        "family_feedback_metric": _load_json_field(
+                            "family_feedback_metric_json", None
+                        ),
+                        "family_feedback_count": int(row["family_feedback_count"] or 0),
+                        "family_success_metric": _load_json_field(
+                            "family_success_metric_json", None
+                        ),
+                        "context_group_count": int(row["context_group_count"] or 0),
+                        "family_prompt_profile_terms": _load_json_field("prompt_terms_json", []),
+                        "family_command_pattern_summary": _load_json_field(
+                            "command_terms_json", []
+                        ),
+                        "family_constraint_summary": _load_json_field("constraint_terms_json", []),
+                        "family_prompt_profile_term_stats": _load_json_field(
+                            "prompt_term_stats_json", {}
+                        ),
+                        "family_command_pattern_term_stats": _load_json_field(
+                            "command_term_stats_json", {}
+                        ),
+                        "family_constraint_term_stats": _load_json_field(
+                            "constraint_term_stats_json", {}
+                        ),
+                    }
                 prompt_family_id = str(row["prompt_family_id"] or "").strip()
                 if prompt_family_id:
                     entry["prompt_family_id"] = prompt_family_id
@@ -272,6 +346,58 @@ def write_family_index_payload(path: Path, payload: Mapping[str, object]) -> Non
 
     resolved_path = path.resolve()
     resolved_path.parent.mkdir(parents=True, exist_ok=True)
+    families = payload.get("prompt_families")
+    if isinstance(families, list):
+        for family in families:
+            if not isinstance(family, Mapping):
+                continue
+            resolved_family_path = _resolve_family_state_family_path(resolved_path, family)
+            if resolved_family_path is None:
+                continue
+            if not any(
+                field_name in family
+                for field_name in (
+                    "family_records",
+                    "family_runtime_artifact",
+                    "family_father_record",
+                    "context_groups",
+                )
+            ):
+                continue
+            resolved_family_path.parent.mkdir(parents=True, exist_ok=True)
+            family_file_payload = {
+                str(key): value
+                for key, value in family.items()
+                if str(key) not in {"family_path", "father_path", "record_paths"}
+            }
+            resolved_family_path.write_text(
+                f"{json.dumps(family_file_payload, indent=2)}\n",
+                encoding="utf-8",
+            )
+            father_payload = _mapping_or_none(family.get("family_father_record"))
+            father_path_text = _string_or_none(family.get("father_path"))
+            if father_payload is not None and father_path_text is not None:
+                resolved_father_path = resolved_path.parent / father_path_text
+                resolved_father_path.parent.mkdir(parents=True, exist_ok=True)
+                resolved_father_path.write_text(
+                    f"{json.dumps(father_payload, indent=2)}\n",
+                    encoding="utf-8",
+                )
+            family_records = _family_state_records_from_payload(family)
+            if family_records:
+                record_dir = resolved_family_path.parent / "records"
+                record_dir.mkdir(parents=True, exist_ok=True)
+                expected_record_paths: set[Path] = set()
+                for record in family_records:
+                    record_path = record_dir / f"{_family_state_record_token(record)}.json"
+                    expected_record_paths.add(record_path)
+                    record_path.write_text(
+                        f"{json.dumps(record, indent=2)}\n",
+                        encoding="utf-8",
+                    )
+                for stale_record_path in record_dir.glob("*.json"):
+                    if stale_record_path not in expected_record_paths:
+                        stale_record_path.unlink()
     with _local_sqlite_build_path() as local_copy_path:
         connection = _connect_family_index(local_copy_path)
         try:
@@ -287,12 +413,22 @@ def write_family_index_payload(path: Path, payload: Mapping[str, object]) -> Non
                     family_father_question TEXT,
                     question_variant_count INTEGER NOT NULL DEFAULT 0,
                     family_record_count INTEGER NOT NULL DEFAULT 0,
+                    family_needs_recompile INTEGER NOT NULL DEFAULT 0,
+                    family_father_similarity_mean REAL,
+                    family_runtime_score REAL,
+                    family_metric_1_mean REAL,
+                    family_feedback_metric_json TEXT,
+                    family_feedback_count INTEGER NOT NULL DEFAULT 0,
+                    family_success_metric_json TEXT,
+                    context_group_count INTEGER NOT NULL DEFAULT 0,
                     prompt_terms_json TEXT NOT NULL,
                     command_terms_json TEXT NOT NULL,
                     constraint_terms_json TEXT NOT NULL,
+                    prompt_term_stats_json TEXT NOT NULL,
+                    command_term_stats_json TEXT NOT NULL,
+                    constraint_term_stats_json TEXT NOT NULL,
                     family_path TEXT NOT NULL,
-                    father_path TEXT,
-                    payload_json TEXT NOT NULL
+                    father_path TEXT
                 )
                 """
             )
@@ -309,8 +445,8 @@ def write_family_index_payload(path: Path, payload: Mapping[str, object]) -> Non
                 str(key): value for key, value in payload.items() if str(key) != "prompt_families"
             }
             meta.setdefault("schema_version", FAMILY_INDEX_DB_SCHEMA_VERSION)
-            meta.setdefault("record_kind", "repo-rag-trainer-champion-index")
-            meta.setdefault("family_state_kind", "repo-rag-trainer-family-state")
+            meta.setdefault("record_kind", FAMILY_INDEX_META_KIND)
+            meta.setdefault("family_state_kind", FAMILY_INDEX_META_KIND)
             meta["family_state_layout"] = "sqlite-index"
             meta.setdefault("generated_at", datetime.now(UTC).isoformat())
             meta["family_index_kind"] = FAMILY_INDEX_DB_KIND
@@ -333,10 +469,15 @@ def write_family_index_payload(path: Path, payload: Mapping[str, object]) -> Non
                         """
                         INSERT INTO family_index_entries(
                             prompt_family_id, question, normalized_question, family_father_question,
-                            question_variant_count, family_record_count, prompt_terms_json,
-                            command_terms_json, constraint_terms_json, family_path, father_path,
-                            payload_json
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            question_variant_count, family_record_count, family_needs_recompile,
+                            family_father_similarity_mean, family_runtime_score,
+                            family_metric_1_mean, family_feedback_metric_json,
+                            family_feedback_count, family_success_metric_json,
+                            context_group_count, prompt_terms_json,
+                            command_terms_json, constraint_terms_json, prompt_term_stats_json,
+                            command_term_stats_json, constraint_term_stats_json, family_path,
+                            father_path
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             prompt_family_id,
@@ -345,6 +486,20 @@ def write_family_index_payload(path: Path, payload: Mapping[str, object]) -> Non
                             str(family.get("family_father_question") or "").strip(),
                             int(family.get("question_variant_count") or 0),
                             int(family.get("family_record_count") or 0),
+                            1 if family.get("family_needs_recompile") else 0,
+                            family.get("family_father_similarity_mean"),
+                            family.get("family_runtime_score"),
+                            family.get("family_metric_1_mean"),
+                            json.dumps(
+                                family.get("family_feedback_metric"),
+                                ensure_ascii=False,
+                            ),
+                            int(family.get("family_feedback_count") or 0),
+                            json.dumps(
+                                family.get("family_success_metric"),
+                                ensure_ascii=False,
+                            ),
+                            int(family.get("context_group_count") or 0),
                             json.dumps(
                                 list(family.get("family_prompt_profile_terms") or []),
                                 ensure_ascii=False,
@@ -357,9 +512,20 @@ def write_family_index_payload(path: Path, payload: Mapping[str, object]) -> Non
                                 list(family.get("family_constraint_summary") or []),
                                 ensure_ascii=False,
                             ),
+                            json.dumps(
+                                dict(family.get("family_prompt_profile_term_stats") or {}),
+                                ensure_ascii=False,
+                            ),
+                            json.dumps(
+                                dict(family.get("family_command_pattern_term_stats") or {}),
+                                ensure_ascii=False,
+                            ),
+                            json.dumps(
+                                dict(family.get("family_constraint_term_stats") or {}),
+                                ensure_ascii=False,
+                            ),
                             family_path,
                             father_path or None,
-                            json.dumps(dict(family), ensure_ascii=False),
                         ),
                     )
             connection.commit()
