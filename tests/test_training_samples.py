@@ -940,7 +940,7 @@ def test_materialize_training_candidates_dedupes_replayed_processed_trace_import
             "trace_kind": "repo-rag-runtime",
             "question": "Add a demo GIF to README",
             "recorded_at": "2026-05-13T12:00:00+00:00",
-            "mode": "codex-proxy-turn-mediation",
+            "mode": "codex-proxy",
             "retrieval_mode": "lexical",
             "sources": [],
             "source_count": 0,
@@ -1084,14 +1084,13 @@ def test_materialize_training_candidates_dedupes_replayed_queue_item_prefixes(
         summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
     )
 
-    assert summary["loaded_candidate_count"] == 2
+    assert summary["loaded_candidate_count"] == 0
+    assert summary["candidate_count"] == 0
+    assert summary["skipped_reasons"]["mediation-only-trace"] == 2
     family_state = load_family_state_payload(
         tmp_path / "artifacts" / "trainer" / "family-state.json"
     )
-    family_payload = family_state["prompt_families"][0]
-    family_records = family_payload["family_records"]
-    assert len(family_records) == 1
-    assert family_records[0]["exact_snapshot_id"].startswith("ts-")
+    assert family_state["prompt_families"] == []
 
 
 def test_resolve_prompt_family_support_matches_best_family_father(tmp_path: Path) -> None:
@@ -1918,7 +1917,7 @@ def test_materialize_training_candidates_preserves_all_imported_full_traces_in_f
                         "question": question,
                         "original_prompt": original_prompt,
                         "reformulated_prompt": reformulated_prompt,
-                        "mode": "codex-proxy-turn-mediation",
+                        "mode": "codex-proxy",
                         "retrieval_mode": "lexical",
                         "sources": [],
                         "source_count": 0,
@@ -2125,7 +2124,7 @@ def test_materialize_training_candidates_uses_symmetric_singleton_family_matchin
                         "question": question,
                         "original_prompt": original_prompt,
                         "reformulated_prompt": reformulated_prompt,
-                        "mode": "codex-proxy-turn-mediation",
+                        "mode": "codex-proxy",
                         "retrieval_mode": "lexical",
                         "sources": [],
                         "source_count": 0,

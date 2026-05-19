@@ -3131,6 +3131,10 @@ def _training_candidate_from_trace_record(
         return None, "missing-answer"
     if include_statuses and acceptance_status and acceptance_status not in include_statuses:
         return None, "excluded-status"
+    source_command = str(payload.get("source_command") or "").strip().lower()
+    trace_mode = str(trace_mapping.get("mode") or "").strip().lower()
+    if source_command == "codex-proxy-turn-mediation" or trace_mode == "codex-proxy-turn-mediation":
+        return None, "mediation-only-trace"
 
     context_snapshot = _trace_context_snapshot(payload, trace_mapping, outcome_mapping)
     original_prompt = str(context_snapshot.get("original_prompt") or "").strip()
