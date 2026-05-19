@@ -46,7 +46,7 @@ This inventory is generated from the current Git index.
 | `docs/architecture/inspired/implementing-rag-with-dspy-technical-guide.md` | docs | markdown | 38 | 1555 | Implementing RAG with DSPy: Technical Guide |
 | `docs/architecture/mcp-discovery.md` | docs | markdown | 54 | 1757 | MCP Discovery Notes |
 | `docs/architecture/package-api.md` | docs | markdown | 127 | 9186 | Package API Notes |
-| `docs/architecture/research-narrative.md` | docs | markdown | 1329 | 103063 | Repository research narrative tying code, docs, and verification together |
+| `docs/architecture/research-narrative.md` | docs | markdown | 1357 | 105464 | Repository research narrative tying code, docs, and verification together |
 | `docs/archive/repo-completeness-checklist.md` | docs | markdown | 238 | 7450 | Archived completeness snapshot kept for workflow and lockfile policy context |
 | `docs/audit/2026-03-15-repo-state.md` | docs | markdown | 151 | 5989 | Repository audit note for 2026 03 15 repo state |
 | `docs/audit/2026-03-17-docs-and-uv-refresh.md` | docs | markdown | 79 | 3977 | Repository audit note for 2026 03 17 docs and uv refresh |
@@ -222,8 +222,9 @@ This inventory is generated from the current Git index.
 | `docs/audit/2026-05-17-symmetric-singleton-family-routing.md` | docs | markdown | 98 | 4905 | Repository audit note for 2026 05 17 symmetric singleton family routing |
 | `docs/audit/2026-05-17-trainer-pending-cycle-recovery.md` | docs | markdown | 87 | 4520 | Repository audit note for 2026 05 17 trainer pending cycle recovery |
 | `docs/audit/2026-05-17-trainer-remote-baseline-transient-cache-contract.md` | docs | markdown | 77 | 3955 | Repository audit note for 2026 05 17 trainer remote baseline transient cache contract |
+| `docs/audit/2026-05-18-compact-dspy-mediation-and-trace-escalation.md` | docs | markdown | 113 | 5529 | Repository audit note for 2026 05 18 compact dspy mediation and trace escalation |
 | `docs/audit/2026-05-18-thin-sqlite-family-index.md` | docs | markdown | 76 | 2610 | Repository audit note for 2026 05 18 thin sqlite family index |
-| `docs/audit/README.md` | docs | markdown | 15 | 568 | Repository audit note for README |
+| `docs/audit/README.md` | docs | markdown | 15 | 547 | Repository audit note for README |
 | `docs/guides/hushwheel-fixture-rag-guide.md` | docs | markdown | 138 | 5169 | RAG Guide For The Hushwheel Fixture |
 | `docs/operations/azure-deployment.md` | docs | markdown | 111 | 4901 | Azure Deployment Notes |
 | `docs/operations/environment.md` | docs | markdown | 138 | 9211 | Environment and secret reference for local runtime and deployment workflows |
@@ -232,8 +233,8 @@ This inventory is generated from the current Git index.
 | `docs/operations/trainer-deployment.md` | docs | markdown | 146 | 5971 | Trainer Deployment Notes |
 | `docs/planning/codex-exec-resume-plan.md` | docs | markdown | 207 | 11561 | Codex Exec Resume Plan |
 | `docs/planning/dataset-integration-plan.md` | docs | markdown | 478 | 33882 | Dataset Integration Plan |
-| `docs/planning/dspy-feedback-trace-training-plan.md` | docs | markdown | 179 | 7067 | DSPy Feedback-Trace Training Plan |
-| `docs/planning/family-first-mipro-runtime-contract.md` | docs | markdown | 565 | 36369 | Family-First DSPy / MIPROv2 Contract |
+| `docs/planning/dspy-feedback-trace-training-plan.md` | docs | markdown | 196 | 8046 | DSPy Feedback-Trace Training Plan |
+| `docs/planning/family-first-mipro-runtime-contract.md` | docs | markdown | 584 | 37732 | Family-First DSPy / MIPROv2 Contract |
 | `docs/planning/per-turn-dspy-mediation-contract.md` | docs | markdown | 115 | 4966 | Per-Turn DSPy Mediation Contract |
 | `docs/planning/repo-hardening-plan.md` | docs | markdown | 71 | 4545 | Repository Hardening Plan |
 | `docs/planning/trainer-context-group-champion-plan.md` | docs | markdown | 119 | 7736 | Trainer Context-Group Champion Plan |
@@ -396,7 +397,7 @@ This inventory is generated from the current Git index.
 | `src/repo_rag_lab/azure_runtime.py` | src | python | 577 | 20123 | Azure runtime normalization, live probes, and cloud-completion helpers. |
 | `src/repo_rag_lab/benchmarks.py` | src | python | 484 | 16524 | Retrieval benchmark helpers for notebook assertions and logging. |
 | `src/repo_rag_lab/cli.py` | src | python | 1371 | 60068 | Command-line entrypoints for the shared repository RAG workflows. |
-| `src/repo_rag_lab/codex_proxy.py` | src | python | 2306 | 91439 | Local streaming proxy that injects repo-RAG + DSPy mediation for Codex. |
+| `src/repo_rag_lab/codex_proxy.py` | src | python | 2269 | 89864 | Local streaming proxy that injects repo-RAG + DSPy mediation for Codex. |
 | `src/repo_rag_lab/corpus.py` | src | python | 181 | 5245 | Repository file loading helpers for the baseline text corpus. |
 | `src/repo_rag_lab/dspy_training.py` | src | python | 1890 | 72051 | DSPy training and artifact helpers for repository-grounded RAG. |
 | `src/repo_rag_lab/dspy_workflow.py` | src | python | 180 | 6518 | DSPy-backed runtime wrappers around the repository retrieval workflow. |
@@ -420,7 +421,7 @@ This inventory is generated from the current Git index.
 | `src/repo_rag_lab/term_extraction.py` | src | python | 1168 | 26846 | Technical-term extraction utilities for prompt-family routing profiles. |
 | `src/repo_rag_lab/todo_backlog.py` | src | python | 276 | 8434 | Shared backlog rendering helpers for Markdown and LaTeX surfaces. |
 | `src/repo_rag_lab/trainer_deployment.py` | src | python | 435 | 18258 | Kubernetes manifest helpers for trainer-side repo-RAG deployment surfaces. |
-| `src/repo_rag_lab/training_samples.py` | src | python | 3685 | 150447 | Helpers for loading and summarizing starter DSPy training examples. |
+| `src/repo_rag_lab/training_samples.py` | src | python | 3720 | 152379 | Helpers for loading and summarizing starter DSPy training examples. |
 | `src/repo_rag_lab/utilities.py` | src | python | 3312 | 138173 | User-facing utility helpers shared by the CLI, tests, and notebooks. |
 | `src/repo_rag_lab/verification.py` | src | python | 163 | 4476 | Verification helpers for Makefile and notebook contract checks. |
 | `src/repo_rag_lab/workflow.py` | src | python | 503 | 15900 | Baseline repository question-answering workflow built on file retrieval. |
@@ -466,7 +467,7 @@ This inventory is generated from the current Git index.
 | `tests/test_azure_runtime.py` | tests | python | 208 | 7540 | Python module for test azure runtime |
 | `tests/test_benchmarks_and_notebook_scaffolding.py` | tests | python | 274 | 11859 | Python module for test benchmarks and notebook scaffolding |
 | `tests/test_cli_and_dspy.py` | tests | python | 1876 | 68608 | Python module for test cli and dspy |
-| `tests/test_codex_proxy.py` | tests | python | 2358 | 87863 | Python module for test codex proxy |
+| `tests/test_codex_proxy.py` | tests | python | 2300 | 85577 | Python module for test codex proxy |
 | `tests/test_dspy_training.py` | tests | python | 1761 | 70610 | Python module for test dspy training |
 | `tests/test_exploratorium_translation.py` | tests | python | 158 | 5935 | Python module for test exploratorium translation |
 | `tests/test_file_summaries.py` | tests | python | 230 | 9110 | Python module for test file summaries |
@@ -488,7 +489,7 @@ This inventory is generated from the current Git index.
 | `tests/test_rust_lookup.py` | tests | python | 95 | 3099 | Python module for test rust lookup |
 | `tests/test_term_extraction.py` | tests | python | 141 | 4846 | Python module for test term extraction |
 | `tests/test_todo_backlog.py` | tests | python | 103 | 3505 | Python module for test todo backlog |
-| `tests/test_training_samples.py` | tests | python | 3162 | 125786 | Python module for test training samples |
+| `tests/test_training_samples.py` | tests | python | 3234 | 128586 | Python module for test training samples |
 | `tests/test_utilities.py` | tests | python | 4020 | 156314 | Python module for test utilities |
 | `tests/test_verification.py` | tests | python | 66 | 3156 | Python module for test verification |
 | `tests/test_workflow.py` | tests | python | 99 | 3456 | Python module for test workflow |

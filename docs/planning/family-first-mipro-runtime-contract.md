@@ -163,6 +163,7 @@ Target blob/container layout:
 
 - `repo-rag-training-traces`
   - append-only raw turn traces, grouped by run/batch timestamp
+  - append-only final execution traces, mirrored into queue/import surfaces for trainer ingestion
 - `repo-rag-training-families`
   - durable family state and replay sets
 - `repo-rag-bundles`
@@ -196,6 +197,14 @@ Runtime routing rule:
   - every run may emit a trainer-visible trace
   - but the decision `feedback_trace` vs `full_trace` must be made before trainer ingestion
   - trainer must not perform broad trace-to-trace similarity scans just to reject near-duplicates
+- worker-side turn-trace batches are audit-only:
+  - `repo_rag_turn_traces/<batch>/...` may still be exported to blob and batch manifests
+  - but trainer queue/import handoff must use the final `repo_rag_trace.json` / exported execution
+    trace, not the intermediary proxy mediation turn traces
+- trainer ingestion must reject mediation-only traces as non-training inputs:
+  - `source_command = codex-proxy-turn-mediation`
+  - or `trace.mode = codex-proxy-turn-mediation`
+  - those records remain valid audit/debug artifacts, but must not seed or rebuild prompt families
 
 ## Trainer Cache Contract
 

@@ -392,6 +392,16 @@ of repeating a long reformulated prompt plus multiple evidence snippets, the hot
 compact execution line, an optional family id, one short summary, up to two file hints, one
 evidence snippet, and at most one note. That preserves the useful grounding function of the proxy
 without doubling the execution payload as aggressively as the previous mediation format did.
+The next live trainer failure clarified a second boundary in the same corridor: append-only proxy
+turn traces and trainer-visible execution traces are not interchangeable. The worker may still
+export `repo_rag_turn_traces/<batch>/...` to preserve mediation lineage and batch-level audit
+history, but trainer queue/import handoff must use the final `repo_rag_trace.json` derived from
+the completed execution outcome. When the worker mistakenly handed the trainer a
+`codex-proxy-turn-mediation` record, the trainer happily built a singleton library around a proxy
+summary turn with empty `command_trace` and no repository sources. The corrected contract is
+therefore explicit: turn-trace batches are audit-only, the final execution trace is the only
+trainer ingestion surface, and trainer now rejects mediation-only traces defensively if one slips
+through anyway.
 The same contract is now also explicit about where replay admission decisions are allowed to live:
 trainer should not perform broad trace-to-trace similarity scans or replay-set deduplication as its
 main control loop. Those expensive choices belong on the runtime/Codex Exec side, before trainer
