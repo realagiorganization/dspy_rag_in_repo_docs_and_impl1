@@ -10,20 +10,24 @@ compact mediation and full-trace policy changes.
 The bug was not in family routing or SQLite publishing. It was in the handoff boundary between the
 prompt-executor and trainer:
 
-1. the worker exported proxy turn-trace batches and then skipped the final trainer-facing
-   execution-trace handoff whenever a batch manifest existed
-2. trainer ingestion still accepted `codex-proxy-turn-mediation` records as if they were normal
-   execution traces
+1. the worker exported proxy turn-trace batches but then accidentally disabled batch queue/import
+   handoff almost all the time
+2. trainer ingestion still accepted raw `codex-proxy-turn-mediation` records as if they were
+   normal execution traces
 
 That combination let a proxy mediation trace seed a brand-new singleton family and overwrite the
 previous stable six-family library.
 
 ## What Changed
 
-- prompt-executor now treats `repo_rag_turn_traces/<batch>/...` as audit-only artifacts
-- the worker always performs final execution-trace export and queue/import handoff after proxy
-  execution, even when a turn-trace batch was also exported
-- the worker no longer records batch queue/import payloads as if they were trainer handoff outputs
+- prompt-executor now preserves the intended hierarchy:
+  - enriched per-turn batch traces are the preferred trainer-ingestion surface
+  - the final single execution trace is only a fallback when no usable batch exists or batch
+    handoff fails
+- the worker no longer disables batch queue/import handoff by default
+- enriched batch traces are normalized out of `codex-proxy-turn-mediation` mode before trainer
+  export so they remain valid execution-stage training traces
+- worker/backend summaries now reflect batch queue/import handoff correctly
 - trainer ingestion now rejects mediation-only records when either of these is true:
   - `source_command = codex-proxy-turn-mediation`
   - `trace.mode = codex-proxy-turn-mediation`
@@ -44,8 +48,9 @@ not.
 
 The repaired invariant is therefore:
 
-- append-only turn traces remain useful for audit/debug/history
-- trainer ingestion uses only final execution traces
+- append-only raw mediation traces remain useful for audit/debug/history
+- enriched per-turn execution traces are the primary trainer-ingestion surface
+- the final single execution trace is fallback-only
 - mediation-only traces are never valid training exemplars
 
 ## Verification
