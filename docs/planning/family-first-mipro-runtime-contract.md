@@ -198,9 +198,11 @@ Runtime routing rule:
   - but the decision `feedback_trace` vs `full_trace` must be made before trainer ingestion
   - trainer must not perform broad trace-to-trace similarity scans just to reject near-duplicates
 - worker-side turn-trace batches are audit-only:
-  - `repo_rag_turn_traces/<batch>/...` may still be exported to blob and batch manifests
-  - but trainer queue/import handoff must use the final `repo_rag_trace.json` / exported execution
-    trace, not the intermediary proxy mediation turn traces
+  - raw proxy mediation drafts are audit/debug artifacts only
+  - but enriched per-turn batch traces from `repo_rag_turn_traces/<batch>/...` are the preferred
+    trainer-ingestion surface when a real batch exists
+  - the final single exported execution trace is a fallback handoff surface only when no usable
+    per-turn batch exists or batch handoff fails
 - trainer ingestion must reject mediation-only traces as non-training inputs:
   - `source_command = codex-proxy-turn-mediation`
   - or `trace.mode = codex-proxy-turn-mediation`
