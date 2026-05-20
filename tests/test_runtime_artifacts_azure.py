@@ -385,11 +385,13 @@ def test_queue_trace_record_and_drain_trace_queue_use_azure_blob_queue(
         "20260508T223000Z",
         Path(str(queued["queue_item_path"])).name,
     )
-    assert queued["prompt_family_band"] == "match"
-    assert queued["trainer_signal_kind"] == "feedback_trace"
-    assert queued["family_predicted_hit_rate"] == 0.666667
-    assert queued["original_prompt"] == "Inspect trainer queue ingestion behavior"
-    assert queued["reformulated_prompt"] == "Inspect how the trainer ingests queued traces."
+    queued_trace_payload = queued["trace_payload"]
+    assert isinstance(queued_trace_payload, dict)
+    assert queued_trace_payload["trace"]["prompt_family_band"] == "match"
+    assert queued_trace_payload["trace"]["trainer_signal_kind"] == "feedback_trace"
+    assert queued_trace_payload["trace"]["family_predicted_hit_rate"] == 0.666667
+    assert "original_prompt" not in queued
+    assert "reformulated_prompt" not in queued
     assert str(queued["queue_item_path"]).startswith("queued/repo-rag-training/")
     assert queued["local_queue_item_path"] == (
         "artifacts/traces/queued/dataset/" + Path(str(queued["queue_item_path"])).name
@@ -409,13 +411,9 @@ def test_queue_trace_record_and_drain_trace_queue_use_azure_blob_queue(
     )
     assert isinstance(queued_blob.get("trace_payload"), dict)
     queued_trace_payload = cast(dict[str, object], queued_blob["trace_payload"])
-    assert queued_blob["prompt_family_band"] == "match"
-    assert queued_blob["trainer_signal_kind"] == "feedback_trace"
-    assert queued_blob["original_prompt"] == "Inspect trainer queue ingestion behavior"
-    assert queued_blob["reformulated_prompt"] == "Inspect how the trainer ingests queued traces."
-    assert queued_trace_payload["prompt_family_band"] == "match"
-    assert queued_trace_payload["trainer_signal_kind"] == "feedback_trace"
-    assert queued_trace_payload["family_predicted_hit_rate"] == 0.666667
+    assert queued_trace_payload["trace"]["prompt_family_band"] == "match"
+    assert queued_trace_payload["trace"]["trainer_signal_kind"] == "feedback_trace"
+    assert queued_trace_payload["trace"]["family_predicted_hit_rate"] == 0.666667
     assert store.messages
 
     drained = drain_trace_queue(tmp_path, queue_name="dataset")
@@ -434,14 +432,14 @@ def test_queue_trace_record_and_drain_trace_queue_use_azure_blob_queue(
     assert imported_path.exists()
     imported_payload = json.loads(imported_path.read_text(encoding="utf-8"))
     assert imported_payload["outcome"]["acceptance_status"] == "accepted"
-    assert imported_payload["original_prompt"] == "Inspect trainer queue ingestion behavior"
-    assert (
-        imported_payload["reformulated_prompt"] == "Inspect how the trainer ingests queued traces."
+    assert imported_payload["trace"]["original_prompt"] == "Inspect trainer queue ingestion behavior"
+    assert imported_payload["trace"]["reformulated_prompt"] == (
+        "Inspect how the trainer ingests queued traces."
     )
     processed_blob_name = str(first_drained_item["processed_queue_item_path"])
     processed_blob = store.download_json("repo-rag-training-traces", processed_blob_name)
-    assert processed_blob["original_prompt"] == "Inspect trainer queue ingestion behavior"
-    assert processed_blob["reformulated_prompt"] == "Inspect how the trainer ingests queued traces."
+    assert "original_prompt" not in processed_blob
+    assert "reformulated_prompt" not in processed_blob
     assert store.deleted_messages == ["msg-1"]
 
 
@@ -688,7 +686,7 @@ def test_restore_processed_trace_records_rebuilds_local_ledger_from_azure_proces
     assert restored_path.exists()
     restored_payload = json.loads(restored_path.read_text(encoding="utf-8"))
     assert restored_payload["trace_record_kind"] == "repo-rag-trace-record"
-    assert restored_payload["question"] == "How does the trainer ingest traces?"
+    assert restored_payload["trace"]["question"] == "How does the trainer ingest traces?"
     assert restored_payload["outcome"]["acceptance_status"] == "accepted"
     assert (
         restored_payload["source_queue_item_path"]
@@ -1403,23 +1401,59 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
     assert all(path.exists() for path in cached_record_paths)
     assert cached_runtime_program_path.exists()
     assert cached_runtime_metadata_path.exists()
-    cached_family_payload = json.loads(cached_family_member.read_text(encoding="utf-8"))
-    assert cached_family_payload["prompt_family_id"] == "pf-demo"
-    assert cached_family_payload["family_record_count"] == 2
-    assert cached_family_payload["family_runtime_artifact"]["program_path"] == str(
-        cached_runtime_paths["program"]
+
+
+def test_fetch_remote_family_state_returns_none_for_broken_current_pointer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _FakeAzureArtifactStore()
+    config = AzureArtifactConfig(
+        account_name="acct",
+        account_key="key",
+        connection_string=None,
+        trace_container="repo-rag-training-traces",
+        bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
+        queue_name="repo-rag-training",
+        family_state_container="repo-rag-training-families",
     )
-    cached_family_state_payload = load_family_index_payload(cached_family_state)
-    assert cached_family_state_payload["family_record_count"] == 2
-    cached_prompt_families = cast(
-        list[dict[str, object]],
-        cached_family_state_payload["prompt_families"],
+
+    def fake_resolve_azure_artifact_config(queue_name: str | None = None) -> AzureArtifactConfig:
+        del queue_name
+        return config
+
+    def fake_azure_artifact_store(cfg: AzureArtifactConfig) -> _FakeAzureArtifactStore:
+        del cfg
+        return store
+
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config",
+        fake_resolve_azure_artifact_config,
     )
-    assert cached_prompt_families[0]["family_record_count"] == 2
-    assert cached_prompt_families[0]["family_path"] == "families/pf-demo/family.json"
-    assert cached_prompt_families[0]["father_path"] == "families/pf-demo/father.json"
-    cached_father_payload = json.loads(cached_father_path.read_text(encoding="utf-8"))
-    assert cached_father_payload["exact_snapshot_id"] == "ts-father"
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
+        fake_azure_artifact_store,
+    )
+
+    store.upload_json(
+        "repo-rag-training-families",
+        family_state_current_blob_name(),
+        {
+            "schema_version": 1,
+            "family_state_kind": "repo-rag-family-state",
+            "updated_at": "2026-05-19T17:00:54.686500+00:00",
+            "current_version": "broken-version",
+            "current_family_state_blob": "versions/broken-version/family-index.sqlite3",
+            "current_family_count": 1,
+            "current_prompt_family_count": 1,
+            "current_family_record_count": 7,
+        },
+    )
+
+    fetched = fetch_remote_family_state(tmp_path)
+
+    assert fetched is None
 
 
 def test_write_family_index_payload_replaces_locked_target_file(tmp_path: Path) -> None:
@@ -1448,6 +1482,13 @@ def test_write_family_index_payload_replaces_locked_target_file(tmp_path: Path) 
         assert locked_connection.execute(
             "SELECT prompt_family_id FROM family_index_entries ORDER BY prompt_family_id"
         ).fetchall() == [("pf-initial",)]
+        columns = {
+            str(row[1])
+            for row in locked_connection.execute("PRAGMA table_info(family_index_entries)")
+        }
+        assert "normalized_question" not in columns
+        assert "family_father_question" not in columns
+        assert "question_variant_count" not in columns
         write_family_index_payload(
             family_state_path,
             {
@@ -1471,6 +1512,103 @@ def test_write_family_index_payload_replaces_locked_target_file(tmp_path: Path) 
     loaded_payload = load_family_index_payload(family_state_path)
     prompt_families = cast(list[dict[str, object]], loaded_payload["prompt_families"])
     assert [str(family["prompt_family_id"]) for family in prompt_families] == ["pf-updated"]
+    assert "normalized_question" not in prompt_families[0]
+    assert "family_father_question" not in prompt_families[0]
+    assert "question_variant_count" not in prompt_families[0]
+
+
+def test_upload_remote_family_state_uploads_father_sidecar_from_compact_local_family_payload(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _FakeAzureArtifactStore()
+    config = AzureArtifactConfig(
+        account_name="acct",
+        account_key="key",
+        connection_string=None,
+        trace_container="repo-rag-training-traces",
+        bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
+        queue_name="repo-rag-training",
+        family_state_container="repo-rag-training-families",
+    )
+    family_state_path = tmp_path / "artifacts" / "trainer" / "family-index.sqlite3"
+    family_state_path.parent.mkdir(parents=True)
+    family_dir = family_state_path.parent / "families" / "pf-demo"
+    family_dir.mkdir(parents=True)
+    (family_dir / "family.json").write_text(
+        json.dumps(
+            {
+                "prompt_family_id": "pf-demo",
+                "question": "Compact family question",
+                "family_father_record_id": "ts-father",
+                "family_records": [
+                    {
+                        "question": "Compact family question",
+                        "exact_snapshot_id": "ts-demo",
+                    }
+                ],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (family_dir / "father.json").write_text(
+        json.dumps(
+            {
+                "question": "Compact family question",
+                "exact_snapshot_id": "ts-father",
+                "metric_hits": 1,
+                "metric_total": 1,
+                "metric_ratio": 1.0,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    write_family_index_payload(
+        family_state_path,
+        {
+            "schema_version": 1,
+            "family_state_kind": "repo-rag-trainer-family-index",
+            "prompt_families": [
+                {
+                    "prompt_family_id": "pf-demo",
+                    "question": "Compact family question",
+                    "family_record_count": 1,
+                    "family_prompt_profile_terms": ["compact"],
+                    "family_command_pattern_summary": [],
+                    "family_constraint_summary": [],
+                    "family_path": "families/pf-demo/family.json",
+                    "father_path": "families/pf-demo/father.json",
+                }
+            ],
+        },
+    )
+
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config",
+        lambda queue_name=None: config,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
+        lambda cfg: store,
+    )
+
+    uploaded = upload_remote_family_state(tmp_path, family_state_path=family_state_path)
+
+    assert uploaded is not None
+    version = str(uploaded["family_state_version"])
+    assert store.blob_exists(
+        "repo-rag-training-families",
+        f"versions/{version}/families/pf-demo/family.json",
+    )
+    assert store.blob_exists(
+        "repo-rag-training-families",
+        f"versions/{version}/families/pf-demo/father.json",
+    )
 
 
 def test_inspect_bundle_channel_supports_staged_worker_bundle_store_layout(

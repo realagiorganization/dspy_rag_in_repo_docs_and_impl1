@@ -392,16 +392,14 @@ def _prepare_local_trainer_family_cache(
 
     if seed_trace_paths:
         normalized_seed_trace_paths = list(seed_trace_paths)
-        materialize_training_candidates(
-            resolved_root,
-            trace_paths=normalized_seed_trace_paths,
-            output_path=DEFAULT_TRAINER_TRAINING_CANDIDATES_PATH,
-            summary_path=DEFAULT_TRAINER_TRAINING_CANDIDATES_SUMMARY_PATH,
-            seed_existing_output=False,
-            upload_remote_state=False,
-        )
+        _clear_local_trainer_family_cache(resolved_root)
+        if local_family_state_path.is_file():
+            local_family_state_path.unlink()
+        cache_source_path = _trainer_cache_source_path(resolved_root)
+        if cache_source_path.is_file():
+            cache_source_path.unlink()
         return {
-            "status": "rebuilt-from-current-cycle-input",
+            "status": "initialized-empty-baseline",
             "family_state_path": _path_text_for_root(local_family_state_path, resolved_root),
             "family_cache_dir": _path_text_for_root(local_family_cache_dir, resolved_root),
             "seed_trace_count": len(normalized_seed_trace_paths),
@@ -413,6 +411,10 @@ def _prepare_local_trainer_family_cache(
                 for path in normalized_seed_trace_paths
             ],
             "remote_family_state_found": False,
+            "note": (
+                "No remote family baseline was available, so the trainer starts from an empty "
+                "family cache and lets the active cycle materialize current traces exactly once."
+            ),
         }
     return {
         "status": "missing-remote-family-state",

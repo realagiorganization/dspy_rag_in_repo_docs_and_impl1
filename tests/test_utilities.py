@@ -316,14 +316,8 @@ def test_prepare_local_trainer_family_cache_rebuilds_from_current_cycle_input_wi
         seed_trace_paths=[Path("artifacts/traces/imported/demo.json")],
     )
 
-    assert payload["status"] == "rebuilt-from-current-cycle-input"
-    assert materialize_calls == [
-        {
-            "trace_paths": [Path("artifacts/traces/imported/demo.json")],
-            "seed_existing_output": False,
-            "upload_remote_state": False,
-        }
-    ]
+    assert payload["status"] == "initialized-empty-baseline"
+    assert materialize_calls == []
 
 
 def test_prepare_local_trainer_family_cache_resets_stale_local_cache_when_remote_missing(
@@ -393,15 +387,9 @@ def test_prepare_local_trainer_family_cache_resets_stale_local_cache_when_remote
         seed_trace_paths=[Path("artifacts/traces/imported/fresh.json")],
     )
 
-    assert payload["status"] == "rebuilt-from-current-cycle-input"
+    assert payload["status"] == "initialized-empty-baseline"
     assert payload["remote_family_state_found"] is False
-    assert materialize_calls == [
-        {
-            "trace_paths": [Path("artifacts/traces/imported/fresh.json")],
-            "seed_existing_output": False,
-            "upload_remote_state": False,
-        }
-    ]
+    assert materialize_calls == []
 
 
 def _write_demo_repo_for_exploratorium(tmp_path: Path) -> None:
@@ -900,11 +888,11 @@ def test_run_trace_export_persists_normalized_record(tmp_path: Path) -> None:
     assert exported["trace_record_kind"] == "repo-rag-trace-record"
     assert exported["trace_storage_kind"] == "exported"
     assert exported["source_command"] == "ask"
-    assert exported["question"] == "What does this repository research?"
     assert exported["artifact_metadata"]["input_paths"] == [str(payload_path)]
     trace_record_path = tmp_path / exported["trace_record_path"]
     assert trace_record_path.exists()
     trace_record = json.loads(trace_record_path.read_text(encoding="utf-8"))
+    assert trace_record["trace"]["question"] == "What does this repository research?"
     assert trace_record["trace"]["evidence_count"] == 1
     assert len(trace_record["trace"]["evidence_fingerprints"]) == 1
 
@@ -962,26 +950,22 @@ def test_run_trace_export_preserves_family_runtime_metadata(tmp_path: Path) -> N
     trace_record_path = tmp_path / exported["trace_record_path"]
     trace_record = json.loads(trace_record_path.read_text(encoding="utf-8"))
 
-    assert trace_record["bundle_version"] == "stable-42"
-    assert trace_record["program_path"] == (
+    assert trace_record["trace"]["bundle_version"] == "stable-42"
+    assert trace_record["trace"]["program_path"] == (
         "artifacts/dspy/remote/stable-42/families/pf-demo/program.json"
     )
-    assert trace_record["prompt_family_id"] == "pf-demo"
-    assert trace_record["prompt_family_similarity"] == 1.0
-    assert trace_record["prompt_family_band"] == "match"
-    assert trace_record["family_runtime_hit_rate"] == 0.8
-    assert trace_record["family_artifact_hit_rate"] == 1.0
-    assert trace_record["family_predicted_hit_rate"] == 0.666667
-    assert trace_record["family_predicted_hit_rate_lower_bound"] == 0.364602
-    assert trace_record["family_prediction_uncertainty"] == 0.235702
-    assert trace_record["family_feedback_count"] == 1
+    assert trace_record["trace"]["prompt_family_id"] == "pf-demo"
+    assert trace_record["trace"]["prompt_family_similarity"] == 1.0
+    assert trace_record["trace"]["prompt_family_band"] == "match"
+    assert trace_record["trace"]["family_runtime_hit_rate"] == 0.8
+    assert trace_record["trace"]["family_artifact_hit_rate"] == 1.0
     assert trace_record["trace"]["family_predicted_hit_rate"] == 0.666667
     assert trace_record["trace"]["family_predicted_hit_rate_lower_bound"] == 0.364602
     assert trace_record["trace"]["family_prediction_uncertainty"] == 0.235702
     assert trace_record["trace"]["family_feedback_count"] == 1
-    assert trace_record["family_artifact_selected"] is True
-    assert trace_record["mediation_metric_hits"] == 1
-    assert trace_record["mediation_metric_total"] == 1
+    assert trace_record["trace"]["family_artifact_selected"] is True
+    assert trace_record["trace"]["mediation_metric_hits"] == 1
+    assert trace_record["trace"]["mediation_metric_total"] == 1
 
 
 def test_run_trace_import_ingests_external_trace_record(tmp_path: Path) -> None:
@@ -1045,7 +1029,6 @@ def test_run_trace_import_ingests_external_trace_record(tmp_path: Path) -> None:
     assert imported["trace_record_kind"] == "repo-rag-trace-record"
     assert imported["trace_storage_kind"] == "imported"
     assert imported["source_command"] == "ask"
-    assert imported["question"] == "Where can you read MCP discovery notes?"
     assert imported["artifact_metadata"]["input_paths"] == [
         str(external_trace_path),
         str(outcome_path),
@@ -1054,6 +1037,8 @@ def test_run_trace_import_ingests_external_trace_record(tmp_path: Path) -> None:
     assert imported["outcome"]["acceptance_status"] == "accepted"
     imported_path = tmp_path / imported["trace_record_path"]
     assert imported_path.exists()
+    imported_record = json.loads(imported_path.read_text(encoding="utf-8"))
+    assert imported_record["trace"]["question"] == "Where can you read MCP discovery notes?"
     assert "artifacts/traces/imported/" in imported["trace_record_path"]
 
 
@@ -1357,16 +1342,11 @@ def test_run_trainer_cycle_drains_queue_and_promotes_bundle(
     assert materialize_calls == [
         {
             "trace_paths": [Path("artifacts/traces/imported/demo.json")],
-            "seed_existing_output": False,
-            "upload_remote_state": False,
-        },
-        {
-            "trace_paths": [Path("artifacts/traces/imported/demo.json")],
             "seed_existing_output": True,
             "upload_remote_state": False,
         },
     ]
-    assert payload["family_cache_preparation"]["status"] == "rebuilt-from-current-cycle-input"
+    assert payload["family_cache_preparation"]["status"] == "initialized-empty-baseline"
     assert payload["durable_trace_recovery"]["status"] == "queue-only-disabled"
     assert payload["durable_trace_recovery"]["restored_count"] == 0
     assert payload["training_candidates"]["candidate_count"] == 1

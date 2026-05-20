@@ -1538,10 +1538,74 @@ def _compile_family_artifacts(
             and isinstance(carried_artifact, Mapping)
             and _family_artifact_payload_is_usable(resolved_root, carried_artifact)
         ):
+            artifact_paths = resolve_family_dspy_artifact_paths(
+                resolved_root,
+                run_name=training_config.run_name,
+                prompt_family_id=prompt_family_id,
+            )
+            previous_program_path = Path(str(carried_artifact.get("program_path") or "").strip())
+            if not previous_program_path.is_absolute():
+                previous_program_path = resolved_root / previous_program_path
+            previous_metadata_path = Path(str(carried_artifact.get("metadata_path") or "").strip())
+            if not previous_metadata_path.is_absolute():
+                previous_metadata_path = resolved_root / previous_metadata_path
+            artifact_paths.artifact_dir.mkdir(parents=True, exist_ok=True)
+            artifact_paths.program_path.write_bytes(previous_program_path.read_bytes())
+            carried_metadata: dict[str, object]
+            if previous_metadata_path.is_file():
+                previous_metadata_payload = json.loads(
+                    previous_metadata_path.read_text(encoding="utf-8")
+                )
+                carried_metadata = (
+                    dict(previous_metadata_payload)
+                    if isinstance(previous_metadata_payload, dict)
+                    else {}
+                )
+            else:
+                carried_metadata = {}
+            relative_artifact_dir = str(artifact_paths.artifact_dir.relative_to(resolved_root))
+            relative_program_path = str(artifact_paths.program_path.relative_to(resolved_root))
+            relative_metadata_path = str(artifact_paths.metadata_path.relative_to(resolved_root))
+            carried_metadata.update(
+                {
+                    "run_name": _sanitize_run_name(training_config.run_name),
+                    "prompt_family_id": prompt_family_id,
+                    "artifact_kind": "repo-rag-family-runtime-artifact",
+                    "artifact_dir": relative_artifact_dir,
+                    "program_path": relative_program_path,
+                    "metadata_path": relative_metadata_path,
+                    "optimizer": str(
+                        carried_metadata.get("optimizer") or training_config.optimizer
+                    ),
+                    "top_k": carried_metadata.get("top_k", training_config.top_k),
+                    "retrieval_mode": carried_metadata.get(
+                        "retrieval_mode", training_config.retrieval_mode
+                    ),
+                    "predicted_hit_rate": _family_predicted_hit_rate(family),
+                    "predicted_hit_rate_lower_bound": _family_predicted_hit_rate_lower_bound(
+                        family
+                    ),
+                    "prediction_uncertainty": _family_prediction_uncertainty(family),
+                    "family_state_path": str(resolved_family_state_path.relative_to(resolved_root)),
+                    "artifact_source": "carried-forward",
+                }
+            )
+            artifact_paths.metadata_path.write_text(
+                f"{json.dumps(carried_metadata, indent=2)}\n",
+                encoding="utf-8",
+            )
             normalized_carried_artifact = {
                 str(key): value for key, value in carried_artifact.items()
             }
-            normalized_carried_artifact["artifact_source"] = "carried-forward"
+            normalized_carried_artifact.update(
+                {
+                    "artifact_dir": relative_artifact_dir,
+                    "program_path": relative_program_path,
+                    "metadata_path": relative_metadata_path,
+                    "artifact_ready": artifact_paths.program_path.is_file(),
+                    "artifact_source": "carried-forward",
+                }
+            )
             family_results[prompt_family_id] = normalized_carried_artifact
             if isinstance(family, dict):
                 _update_family_artifact_state(family, normalized_carried_artifact)

@@ -1223,7 +1223,7 @@ def test_train_repository_program_recompiles_only_dirty_families(
     assert family_artifact_registry["pf-dirty"]["hit_rate"] == 1.0
     assert family_artifact_registry["pf-clean"]["artifact_source"] == "carried-forward"
     assert family_artifact_registry["pf-clean"]["program_path"] == (
-        "artifacts/dspy/previous-run/families/pf-clean/program.json"
+        "artifacts/dspy/family-dirty-run/families/pf-clean/program.json"
     )
     assert result.bundle_path is not None
     bundle = load_bundle_manifest(tmp_path / result.bundle_path)
@@ -1265,7 +1265,7 @@ def test_train_repository_program_recompiles_only_dirty_families(
         "artifacts/dspy/family-dirty-run/families/pf-dirty/program.json"
     )
     assert clean_family_payload["family_runtime_artifact"]["program_path"] == (
-        "artifacts/dspy/previous-run/families/pf-clean/program.json"
+        "artifacts/dspy/family-dirty-run/families/pf-clean/program.json"
     )
 
 

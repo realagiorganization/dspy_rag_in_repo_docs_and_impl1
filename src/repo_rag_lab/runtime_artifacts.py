@@ -252,13 +252,7 @@ def load_family_index_payload(path: Path) -> dict[str, object]:
                 """
                 if legacy_payload_column
                 else """
-                SELECT prompt_family_id, question, normalized_question, family_father_question,
-                       question_variant_count, family_record_count, family_needs_recompile,
-                       family_father_similarity_mean, family_runtime_score, family_metric_1_mean,
-                       family_feedback_metric_json, family_feedback_count,
-                       family_success_metric_json, context_group_count, prompt_terms_json,
-                       command_terms_json, constraint_terms_json, prompt_term_stats_json,
-                       command_term_stats_json, constraint_term_stats_json, family_path, father_path
+                SELECT *
                 FROM family_index_entries
                 ORDER BY prompt_family_id
                 """
@@ -290,12 +284,22 @@ def load_family_index_payload(path: Path) -> dict[str, object]:
                         except json.JSONDecodeError:
                             return fallback
 
+                    question_text = str(row["question"] or "").strip()
+                    normalized_question = (
+                        str(row["normalized_question"] or "").strip()
+                        if "normalized_question" in entry_columns
+                        else ""
+                    )
+                    family_father_question = (
+                        str(row["family_father_question"] or "").strip()
+                        if "family_father_question" in entry_columns
+                        else ""
+                    )
+                    canonical_question = (
+                        question_text or family_father_question or normalized_question
+                    )
                     entry = {
-                        "question": str(row["question"] or "").strip(),
-                        "normalized_question": str(row["normalized_question"] or "").strip(),
-                        "family_father_question": str(row["family_father_question"] or "").strip()
-                        or None,
-                        "question_variant_count": int(row["question_variant_count"] or 0),
+                        "question": canonical_question,
                         "family_record_count": int(row["family_record_count"] or 0),
                         "family_needs_recompile": bool(row["family_needs_recompile"] or 0),
                         "family_father_similarity_mean": row["family_father_similarity_mean"],
@@ -324,6 +328,22 @@ def load_family_index_payload(path: Path) -> dict[str, object]:
                             "constraint_term_stats_json", {}
                         ),
                     }
+                    if (
+                        normalized_question
+                        and canonical_question
+                        and normalized_question != canonical_question.casefold()
+                    ):
+                        entry["normalized_question"] = normalized_question
+                    if (
+                        family_father_question
+                        and canonical_question
+                        and family_father_question != canonical_question
+                    ):
+                        entry["family_father_question"] = family_father_question
+                    if "question_variant_count" in entry_columns:
+                        question_variant_count = int(row["question_variant_count"] or 0)
+                        if question_variant_count > 0:
+                            entry["question_variant_count"] = question_variant_count
                 prompt_family_id = str(row["prompt_family_id"] or "").strip()
                 if prompt_family_id:
                     entry["prompt_family_id"] = prompt_family_id
@@ -409,9 +429,6 @@ def write_family_index_payload(path: Path, payload: Mapping[str, object]) -> Non
                 CREATE TABLE family_index_entries (
                     prompt_family_id TEXT PRIMARY KEY,
                     question TEXT,
-                    normalized_question TEXT,
-                    family_father_question TEXT,
-                    question_variant_count INTEGER NOT NULL DEFAULT 0,
                     family_record_count INTEGER NOT NULL DEFAULT 0,
                     family_needs_recompile INTEGER NOT NULL DEFAULT 0,
                     family_father_similarity_mean REAL,
@@ -434,12 +451,6 @@ def write_family_index_payload(path: Path, payload: Mapping[str, object]) -> Non
             )
             connection.execute(
                 "CREATE INDEX family_index_question_idx ON family_index_entries(question)"
-            )
-            connection.execute(
-                """
-                CREATE INDEX family_index_father_idx
-                ON family_index_entries(family_father_question)
-                """
             )
             meta = {
                 str(key): value for key, value in payload.items() if str(key) != "prompt_families"
@@ -468,8 +479,7 @@ def write_family_index_payload(path: Path, payload: Mapping[str, object]) -> Non
                     connection.execute(
                         """
                         INSERT INTO family_index_entries(
-                            prompt_family_id, question, normalized_question, family_father_question,
-                            question_variant_count, family_record_count, family_needs_recompile,
+                            prompt_family_id, question, family_record_count, family_needs_recompile,
                             family_father_similarity_mean, family_runtime_score,
                             family_metric_1_mean, family_feedback_metric_json,
                             family_feedback_count, family_success_metric_json,
@@ -477,14 +487,16 @@ def write_family_index_payload(path: Path, payload: Mapping[str, object]) -> Non
                             command_terms_json, constraint_terms_json, prompt_term_stats_json,
                             command_term_stats_json, constraint_term_stats_json, family_path,
                             father_path
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             prompt_family_id,
-                            str(family.get("question") or "").strip(),
-                            str(family.get("normalized_question") or "").strip(),
-                            str(family.get("family_father_question") or "").strip(),
-                            int(family.get("question_variant_count") or 0),
+                            str(
+                                family.get("question")
+                                or family.get("family_father_question")
+                                or family.get("normalized_question")
+                                or ""
+                            ).strip(),
                             int(family.get("family_record_count") or 0),
                             1 if family.get("family_needs_recompile") else 0,
                             family.get("family_father_similarity_mean"),
@@ -662,9 +674,33 @@ def _queue_item_dedupe_key(payload: Mapping[str, object] | None) -> str | None:
     source_trace_path = _string_or_none(payload.get("source_trace_path"))
     if source_trace_path is not None:
         return f"source-trace:{source_trace_path}"
-    question = _string_or_none(payload.get("question"))
-    original_prompt = _string_or_none(payload.get("original_prompt"))
-    reformulated_prompt = _string_or_none(payload.get("reformulated_prompt"))
+    trace_payload = _mapping_or_none(payload.get("trace_payload"))
+    trace_mapping = _mapping_or_none(payload.get("trace"))
+    if trace_mapping is None and trace_payload is not None:
+        trace_mapping = _mapping_or_none(trace_payload.get("trace"))
+    question = (
+        _string_or_none(payload.get("question"))
+        or _string_or_none(trace_mapping.get("question") if trace_mapping is not None else None)
+        or _string_or_none(trace_payload.get("question") if trace_payload is not None else None)
+    )
+    original_prompt = (
+        _string_or_none(payload.get("original_prompt"))
+        or _string_or_none(
+            trace_mapping.get("original_prompt") if trace_mapping is not None else None
+        )
+        or _string_or_none(
+            trace_payload.get("original_prompt") if trace_payload is not None else None
+        )
+    )
+    reformulated_prompt = (
+        _string_or_none(payload.get("reformulated_prompt"))
+        or _string_or_none(
+            trace_mapping.get("reformulated_prompt") if trace_mapping is not None else None
+        )
+        or _string_or_none(
+            trace_payload.get("reformulated_prompt") if trace_payload is not None else None
+        )
+    )
     if question is None and original_prompt is None and reformulated_prompt is None:
         return None
     payload_bytes = json.dumps(
@@ -681,6 +717,22 @@ def _queue_item_dedupe_key(payload: Mapping[str, object] | None) -> str | None:
 
 def _utc_now_isoformat() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _remote_blob_materialized(
+    store: object,
+    container: str,
+    blob_name: str,
+) -> bool:
+    """Return whether one uploaded blob is observable when the store supports existence checks."""
+
+    blob_exists = getattr(store, "blob_exists", None)
+    if not callable(blob_exists):
+        return True
+    try:
+        return bool(blob_exists(container, blob_name))
+    except Exception:
+        return False
 
 
 def _family_runtime_metric_payload(record: Mapping[str, object]) -> dict[str, object]:
@@ -711,6 +763,8 @@ def _bundle_family_entry(family_payload: Mapping[str, object]) -> dict[str, obje
     father_question = _string_or_none(family_payload.get("family_father_question"))
     if father_question is None and father_record is not None:
         father_question = _string_or_none(father_record.get("question"))
+    if father_question is None:
+        father_question = _string_or_none(family_payload.get("question"))
     question_variants = _string_list(family_payload.get("question_variants"))
     runtime_metric = (
         _family_runtime_metric_payload(runtime_record) if runtime_record is not None else {}
@@ -779,9 +833,7 @@ def _bundle_family_entry(family_payload: Mapping[str, object]) -> dict[str, obje
     return {
         "prompt_family_id": prompt_family_id,
         "question": _string_or_none(family_payload.get("question")),
-        "normalized_question": _string_or_none(family_payload.get("normalized_question")),
         "question_variants": question_variants,
-        "question_variant_count": _int_or_none(family_payload.get("question_variant_count")),
         "family_prompt_profile_terms": _string_list(
             family_payload.get("family_prompt_profile_terms")
         ),
@@ -793,8 +845,6 @@ def _bundle_family_entry(family_payload: Mapping[str, object]) -> dict[str, obje
         "family_father_similarity_mean": _float_or_none(
             family_payload.get("family_father_similarity_mean")
         ),
-        "family_father_record": father_record,
-        "family_runtime_record": runtime_record,
         "family_runtime_score": _float_or_none(family_payload.get("family_runtime_score")),
         "family_metric_1_mean": family_metric_1_mean,
         "family_runtime_metric": runtime_metric or None,
@@ -937,6 +987,21 @@ def _resolve_family_state_family_path(
     return family_state_path.resolve().parent / candidate
 
 
+def _resolve_family_state_member_path(
+    family_state_path: Path,
+    path_text: object,
+) -> Path | None:
+    """Resolve one thin-index member path relative to its owning family-state file."""
+
+    cleaned = str(path_text or "").strip()
+    if not cleaned:
+        return None
+    candidate = Path(cleaned)
+    if candidate.is_absolute():
+        return candidate
+    return family_state_path.resolve().parent / candidate
+
+
 def _resolved_family_state_family_payload(
     family_state_path: Path,
     family_payload: Mapping[str, object],
@@ -951,6 +1016,22 @@ def _resolved_family_state_family_payload(
             payload = None
         if isinstance(payload, dict):
             merged_payload = {str(key): value for key, value in payload.items()}
+            if "family_father_record" not in merged_payload:
+                resolved_father_path = _resolve_family_state_member_path(
+                    family_state_path,
+                    family_payload.get("father_path"),
+                )
+                if resolved_father_path is not None and resolved_father_path.is_file():
+                    try:
+                        father_payload = json.loads(
+                            resolved_father_path.read_text(encoding="utf-8")
+                        )
+                    except Exception:
+                        father_payload = None
+                    if isinstance(father_payload, dict):
+                        merged_payload["family_father_record"] = {
+                            str(key): value for key, value in father_payload.items()
+                        }
             for field_name in (
                 "prompt_family_id",
                 "family_needs_recompile",
@@ -1400,6 +1481,10 @@ def upload_remote_bundle_channel(
     container = repo_rag_bundle_container(config)
     blob_name = bundle_channel_blob_name(channel)
     store.upload_json(container, blob_name, channel_state)
+    if not _remote_blob_materialized(store, container, blob_name):
+        raise RuntimeError(
+            f"Remote bundle channel upload did not materialize: {container}/{blob_name}"
+        )
     return {
         "storage_backend": "azure-blob",
         "bundle_container": container,
@@ -1425,7 +1510,17 @@ def inspect_remote_bundle_channel(channel: str) -> dict[str, object] | None:
             "storage_backend": "azure-blob",
             "bundle_container": container,
         }
-    payload = store.download_json(container, blob_name)
+    try:
+        payload = store.download_json(container, blob_name)
+    except Exception:
+        return {
+            "channel_found": False,
+            "requested_channel": normalized_channel,
+            "channel_path": blob_name,
+            "storage_backend": "azure-blob",
+            "bundle_container": container,
+            "channel_status": "broken-remote-pointer",
+        }
     return {
         "channel_found": True,
         "requested_channel": normalized_channel,
@@ -1720,10 +1815,19 @@ def upload_remote_family_state(
             blob_map["family_state"],
             temporary_index_path.read_bytes(),
         )
+        if not _remote_blob_materialized(store, container, blob_map["family_state"]):
+            raise RuntimeError(
+                "Remote family index upload did not materialize before current pointer update: "
+                f"{container}/{blob_map['family_state']}"
+            )
     finally:
         if temporary_index_path.exists():
             temporary_index_path.unlink()
     store.upload_json(container, blob_map["current"], current_payload)
+    if not _remote_blob_materialized(store, container, blob_map["current"]):
+        raise RuntimeError(
+            f"Remote family current pointer upload did not materialize: {container}/{blob_map['current']}"
+        )
     return {
         "storage_backend": "azure-blob",
         "family_state_container": container,
@@ -1746,18 +1850,26 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
     current_blob = family_state_current_blob_name()
     if not store.blob_exists(container, current_blob):
         return None
-    current_payload = store.download_json(container, current_blob)
+    try:
+        current_payload = store.download_json(container, current_blob)
+    except Exception:
+        return None
     family_state_version = _string_or_none(current_payload.get("current_version"))
     family_state_blob = _string_or_none(current_payload.get("current_family_state_blob")) or (
         _string_or_none(current_payload.get("current_champion_index_blob"))
     )
     if family_state_version is None or family_state_blob is None:
         return None
+    if not store.blob_exists(container, family_state_blob):
+        return None
     cache_dir = resolved_root / DEFAULT_REMOTE_FAMILY_STATE_CACHE_DIR / family_state_version
     cache_dir.mkdir(parents=True, exist_ok=True)
     family_state_path = cache_dir / "family-index.sqlite3"
     current_path = cache_dir / "current.json"
-    family_state_bytes = store.download_bytes(container, family_state_blob)
+    try:
+        family_state_bytes = store.download_bytes(container, family_state_blob)
+    except Exception:
+        return None
     current_path.write_text(
         json.dumps(current_payload, indent=2) + "\n",
         encoding="utf-8",
@@ -2471,16 +2583,21 @@ def _mirror_trace_signal_fields(payload: Mapping[str, object]) -> dict[str, obje
 
 
 def _trace_record_snapshot(payload: Mapping[str, object]) -> dict[str, object]:
+    trace_mapping = _mapping_or_none(payload.get("trace")) or {}
     return {
-        "question": _string_or_none(payload.get("question")),
-        "original_prompt": _string_or_none(payload.get("original_prompt")),
-        "reformulated_prompt": _string_or_none(payload.get("reformulated_prompt")),
+        "question": _string_or_none(payload.get("question"))
+        or _string_or_none(trace_mapping.get("question")),
+        "original_prompt": _string_or_none(payload.get("original_prompt"))
+        or _string_or_none(trace_mapping.get("original_prompt")),
+        "reformulated_prompt": _string_or_none(payload.get("reformulated_prompt"))
+        or _string_or_none(trace_mapping.get("reformulated_prompt")),
         "answer": _string_or_none(payload.get("answer")),
         "response_text": _string_or_none(payload.get("response_text")),
-        "sources": _string_list(payload.get("sources")),
+        "sources": _string_list(payload.get("sources")) or _string_list(trace_mapping.get("sources")),
         "context": _list_or_empty(payload.get("context")),
         "retrieved_context": _list_or_empty(payload.get("retrieved_context")),
-        "command_trace": _list_or_empty(payload.get("command_trace")),
+        "command_trace": _list_or_empty(payload.get("command_trace"))
+        or _list_or_empty(trace_mapping.get("command_trace")),
         "warnings": _string_list(payload.get("source_warnings") or payload.get("warnings")),
         "artifact_metadata": _mapping_or_none(
             payload.get("source_artifact_metadata") or payload.get("artifact_metadata")
@@ -2560,27 +2677,7 @@ def normalize_trace_record_payload(payload: Mapping[str, object]) -> dict[str, o
         runtime_trace_payload = _mapping_or_none(payload.get("trace"))
         if runtime_trace_payload is None:
             raise ValueError("Trace record payload must include a `trace` object.")
-        snapshot = {
-            "question": _string_or_none(payload.get("question")),
-            "original_prompt": _string_or_none(payload.get("original_prompt")),
-            "reformulated_prompt": _string_or_none(payload.get("reformulated_prompt")),
-            "answer": _string_or_none(payload.get("answer")),
-            "response_text": _string_or_none(payload.get("response_text")),
-            "sources": _string_list(payload.get("sources")),
-            "context": _list_or_empty(payload.get("context")),
-            "retrieved_context": _list_or_empty(payload.get("retrieved_context")),
-            "command_trace": _list_or_empty(payload.get("command_trace")),
-            "warnings": _string_list(payload.get("source_warnings") or payload.get("warnings")),
-            "artifact_metadata": _mapping_or_none(
-                payload.get("source_artifact_metadata") or payload.get("artifact_metadata")
-            )
-            or {
-                "input_paths": [],
-                "generated_paths": [],
-                "related_paths": [],
-            },
-            "error": _mapping_or_none(payload.get("source_error") or payload.get("error")),
-        }
+        snapshot = _trace_record_snapshot(payload)
         normalized_trace = _normalize_runtime_trace(
             _backfill_runtime_trace_evidence(runtime_trace_payload, snapshot)
         )
@@ -2718,39 +2815,10 @@ def _build_trace_record(
         "source_queue_item_path": _string_or_none(source_queue_item_path),
         "source_trace_name": _string_or_none(source_trace_name),
         "source_batch_name": _string_or_none(source_batch_name),
-        "question": _string_or_none(snapshot.get("question"))
-        or _string_or_none(trace.get("question")),
-        "original_prompt": _string_or_none(snapshot.get("original_prompt"))
-        or _string_or_none(trace.get("original_prompt")),
-        "reformulated_prompt": _string_or_none(snapshot.get("reformulated_prompt"))
-        or _string_or_none(trace.get("reformulated_prompt")),
-        "bundle_version": _string_or_none(trace.get("bundle_version")),
-        "program_path": _string_or_none(trace.get("program_path")),
-        "prompt_family_id": _string_or_none(trace.get("prompt_family_id")),
-        "prompt_family_similarity": _float_or_none(trace.get("prompt_family_similarity")),
-        "prompt_family_band": _string_or_none(trace.get("prompt_family_band")),
-        "family_runtime_hit_rate": _float_or_none(trace.get("family_runtime_hit_rate")),
-        "family_artifact_hit_rate": _float_or_none(trace.get("family_artifact_hit_rate")),
-        "family_predicted_hit_rate": _float_or_none(trace.get("family_predicted_hit_rate")),
-        "family_predicted_hit_rate_lower_bound": _float_or_none(
-            trace.get("family_predicted_hit_rate_lower_bound")
-        ),
-        "family_prediction_uncertainty": _float_or_none(trace.get("family_prediction_uncertainty")),
-        "family_feedback_count": _int_or_none(trace.get("family_feedback_count")),
-        "family_artifact_selected": (
-            trace.get("family_artifact_selected")
-            if isinstance(trace.get("family_artifact_selected"), bool)
-            else None
-        ),
-        "mediation_metric_hits": _int_or_none(trace.get("mediation_metric_hits")),
-        "mediation_metric_total": _int_or_none(trace.get("mediation_metric_total")),
-        "trainer_signal_kind": _trainer_signal_kind_or_none(trace.get("trainer_signal_kind")),
         "answer": _string_or_none(snapshot.get("answer")),
         "response_text": _string_or_none(snapshot.get("response_text")),
-        "sources": _string_list(snapshot.get("sources")) or _string_list(trace.get("sources")),
         "context": _list_or_empty(snapshot.get("context")),
         "retrieved_context": _list_or_empty(snapshot.get("retrieved_context")),
-        "command_trace": _list_or_empty(snapshot.get("command_trace")),
         "source_warnings": _string_list(snapshot.get("warnings")),
         "source_artifact_metadata": _mapping_or_none(snapshot.get("artifact_metadata"))
         or {
@@ -3004,8 +3072,8 @@ def queue_trace_record(
     """Persist one queued trainer-side handoff item for later asynchronous trace import."""
 
     resolved_root = root.resolve()
-    mirrored_payload = _mirror_trace_signal_fields(payload)
-    normalized_payload = normalize_trace_record_payload(mirrored_payload)
+    stored_trace_payload = {str(key): value for key, value in payload.items()}
+    normalized_payload = normalize_trace_record_payload(stored_trace_payload)
     normalized_outcome = _mapping_or_none(normalized_payload.get("outcome"))
     if outcome is not None:
         normalized_outcome = _normalize_outcome_payload(outcome)
@@ -3024,9 +3092,8 @@ def queue_trace_record(
     queued_at = _utc_now_isoformat()
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     queue_item_path = queue_dir / f"{timestamp}-{safe_trace_name}.json"
-    snapshot = _mapping_or_none(normalized_payload.get("snapshot")) or {}
     trace = _mapping_or_none(normalized_payload.get("trace")) or {}
-    mirrored_signal_fields = _runtime_trace_signal_fields(mirrored_payload)
+    bundle_version = _string_or_none(trace.get("bundle_version"))
     queue_item: dict[str, object] = {
         "schema_version": TRACE_QUEUE_ITEM_SCHEMA_VERSION,
         "queue_item_kind": TRACE_QUEUE_ITEM_KIND,
@@ -3035,13 +3102,6 @@ def queue_trace_record(
         "queued_at": queued_at,
         "queue_item_path": _relative_to_root(queue_item_path, resolved_root),
         "trace_name": safe_trace_name,
-        "question": _string_or_none(snapshot.get("question"))
-        or _string_or_none(trace.get("question")),
-        "original_prompt": _string_or_none(snapshot.get("original_prompt"))
-        or _string_or_none(trace.get("original_prompt")),
-        "reformulated_prompt": _string_or_none(snapshot.get("reformulated_prompt"))
-        or _string_or_none(trace.get("reformulated_prompt")),
-        "bundle_version": _string_or_none(trace.get("bundle_version")),
         "source_command": _string_or_none(normalized_payload.get("source_command")),
         "source_root": _string_or_none(normalized_payload.get("source_root")),
         "source_trace_path": str(source_trace_path) if source_trace_path is not None else None,
@@ -3050,9 +3110,8 @@ def queue_trace_record(
         ),
         "batch_name": safe_batch_name,
         "batch_trace_path": None,
-        "trace_payload": mirrored_payload,
+        "trace_payload": stored_trace_payload,
         "outcome": normalized_outcome,
-        **mirrored_signal_fields,
     }
 
     local_batch_trace_path: str | None = None
@@ -3084,7 +3143,7 @@ def queue_trace_record(
             "schema_version": TRACE_QUEUE_ITEM_SCHEMA_VERSION,
             "queue_item_kind": TRACE_QUEUE_ITEM_KIND,
             "queue_name": normalized_queue_name,
-            "bundle_version": queue_item.get("bundle_version"),
+            "bundle_version": bundle_version,
             "queued_at": queued_at,
             "blob_name": blob_name,
             "trace_container": container,
@@ -3210,7 +3269,9 @@ def drain_trace_queue(
                         "queue_item_path": blob_name,
                         "processed_queue_item_path": processed_blob,
                         "trace_name": trace_name,
-                        "question": processed_item.get("question"),
+                        "question": _string_or_none(
+                            _mapping_or_none(imported_record.get("trace")).get("question")
+                        ),
                         "imported_trace_record_path": imported_record.get("trace_record_path"),
                         "acceptance_status": (
                             outcome.get("acceptance_status") if outcome is not None else None
@@ -3344,7 +3405,9 @@ def drain_trace_queue(
                     "queue_item_path": _relative_to_root(queued_path, resolved_root),
                     "processed_queue_item_path": _relative_to_root(processed_path, resolved_root),
                     "trace_name": trace_name,
-                    "question": processed_item.get("question"),
+                    "question": _string_or_none(
+                        _mapping_or_none(imported_record.get("trace")).get("question")
+                    ),
                     "imported_trace_record_path": imported_record.get("trace_record_path"),
                     "acceptance_status": (
                         outcome.get("acceptance_status") if outcome is not None else None

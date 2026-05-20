@@ -1310,6 +1310,8 @@ def build_codex_mediation(
             family_runtime_hit_rate = _float_or_none(runtime_metric.get("hit_rate"))
         runtime_artifact = family_entry.get("runtime_artifact")
         if isinstance(runtime_artifact, Mapping):
+            if family_runtime_hit_rate is None:
+                family_runtime_hit_rate = _float_or_none(runtime_artifact.get("hit_rate"))
             family_artifact_hit_rate = _float_or_none(runtime_artifact.get("hit_rate"))
             family_predicted_hit_rate = _float_or_none(runtime_artifact.get("predicted_hit_rate"))
             family_predicted_hit_rate_lower_bound = _float_or_none(
@@ -2003,11 +2005,7 @@ class _CodexProxyRuntime:
         trace_payload = {
             "command": "codex-proxy-turn-mediation",
             "command_status": "success",
-            "question": mediation.reformulated_prompt or mediation.question,
-            "original_prompt": mediation.original_prompt,
-            "reformulated_prompt": mediation.reformulated_prompt,
             "answer": mediation.summary,
-            "sources": mediation.sources,
             "context": [],
             "retrieved_context": [
                 {
@@ -2017,7 +2015,6 @@ class _CodexProxyRuntime:
                 }
                 for preview in mediation.evidence_previews
             ],
-            "command_trace": list(command_trace),
             "trace_role": trace_role,
             "trace": build_runtime_trace(
                 RuntimeTraceContext(
@@ -2065,7 +2062,6 @@ class _CodexProxyRuntime:
                 "used_baseline_fallback": mediation.dspy_status != "success",
             },
             "mediation": mediation.to_payload(),
-            "trainer_signal_kind": resolved_signal_kind,
             "trainer_signal_reason": trainer_signal_reason,
         }
         trace_name = hashlib.sha256(
@@ -2133,8 +2129,6 @@ class _CodexProxyRuntime:
             trace_role="turn",
             trainer_signal_kind="full_trace",
         )
-        if mediation.family_artifact_selected and mediation.dspy_status == "success":
-            return primary_trace_path
         for trace_role, prompt_text in self._lineage_prompts(mediation, command_trace):
             if prompt_text == mediation.original_prompt.strip():
                 continue

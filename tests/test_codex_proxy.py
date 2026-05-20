@@ -2297,3 +2297,107 @@ def test_persist_turn_trace_emits_additional_lineage_trace_for_reformulated_prom
         assert roles == ["turn", "reformulated"]
     finally:
         runtime.close()
+
+
+def test_persist_turn_trace_keeps_lineage_traces_when_family_artifact_reuse_succeeds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.resolve_azure_openai_runtime",
+        lambda env: SimpleNamespace(
+            endpoint="http://127.0.0.1:9",
+            api_key="test-key",
+            api_version="2024-12-01-preview",
+        ),
+    )
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    config = CodexProxyConfig(
+        repository_root=repo,
+        bundle_root=repo,
+        artifact_dir=tmp_path / "artifacts",
+    )
+    runtime = codex_proxy_module.CodexProxyRuntime(config)
+    try:
+        primary = CodexMediationResult(
+            question="Inspect README and validate the demo asset",
+            original_prompt="Validate the demo asset",
+            reformulated_prompt="Inspect README and validate the demo asset",
+            reformulation_status="success",
+            mediation_mode="dspy_rag",
+            rag_status="success",
+            dspy_status="success",
+            dspy_lm_model="azure/gpt-5.4-nano",
+            summary="family reuse succeeded",
+            retrieval_mode="lexical",
+            sources=["README.md"],
+            warnings=[],
+            bundle_version="stable-1",
+            program_path="families/pf-demo/program.json",
+            evidence_previews=[],
+            developer_message="repo mediation",
+            prompt_family_id="pf-demo",
+            prompt_family_similarity=1.0,
+            prompt_family_band="match",
+            family_runtime_hit_rate=1.0,
+            family_artifact_hit_rate=1.0,
+            family_predicted_hit_rate=0.7,
+            family_predicted_hit_rate_lower_bound=0.4,
+            family_prediction_uncertainty=0.2,
+            family_feedback_count=2,
+            family_artifact_selected=True,
+        )
+
+        def fake_build_mediation(
+            original_prompt: str, command_trace: list[Mapping[str, str]]
+        ) -> CodexMediationResult:
+            del command_trace
+            return CodexMediationResult(
+                question=original_prompt,
+                original_prompt=original_prompt,
+                reformulated_prompt=original_prompt,
+                reformulation_status="identity",
+                mediation_mode="dspy_rag",
+                rag_status="success",
+                dspy_status="success",
+                dspy_lm_model="azure/gpt-5.4-nano",
+                summary=f"family reuse for {original_prompt}",
+                retrieval_mode="lexical",
+                sources=["README.md"],
+                warnings=[],
+                bundle_version="stable-1",
+                program_path="families/pf-demo/program.json",
+                evidence_previews=[],
+                developer_message="repo mediation",
+                prompt_family_id="pf-demo",
+                prompt_family_similarity=1.0,
+                prompt_family_band="match",
+                family_runtime_hit_rate=1.0,
+                family_artifact_hit_rate=1.0,
+                family_predicted_hit_rate=0.7,
+                family_predicted_hit_rate_lower_bound=0.4,
+                family_prediction_uncertainty=0.2,
+                family_feedback_count=2,
+                family_artifact_selected=True,
+            )
+
+        monkeypatch.setattr(runtime, "build_mediation", fake_build_mediation, raising=False)
+
+        trace_path = runtime.persist_turn_trace(
+            primary,
+            command_trace=[
+                {"role": "assistant", "text": "Inspect README and validate the demo asset"},
+            ],
+        )
+
+        assert trace_path is not None
+        manifest = json.loads(runtime.turn_trace_manifest_path.read_text(encoding="utf-8"))
+        assert len(manifest["trace_paths"]) == 2
+        roles = []
+        for relative_path in manifest["trace_paths"]:
+            payload = json.loads((config.artifact_dir / relative_path).read_text(encoding="utf-8"))
+            roles.append(payload["trace_role"])
+            assert payload["trace"]["trainer_signal_kind"] == "full_trace"
+        assert roles == ["turn", "reformulated"]
+    finally:
+        runtime.close()

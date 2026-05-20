@@ -596,6 +596,25 @@ At the time of this document:
 - trace export and trace import are now implemented and exposed through `make trace-export` and
   `make trace-import`, so local workers and a future global trainer can exchange normalized trace
   records plus optional worker outcome metadata instead of raw command logs
+- those trainer-visible per-turn trace records must stay prompt-specific and lightweight: each
+  proxy turn still forms its own trace, but those files must not be bloated by duplicating one
+  shared full-run `command_trace`, one shared full-run `outcome`, or one nested full execution
+  snapshot across many traces in the same run, because that makes distinct prompts look
+  artificially similar during family formation
+- more generally, generated repo-rag artifacts now follow a one-owner serialization rule:
+  one datum should have one canonical owner, and wrapper layers must not mirror the same prompt
+  strings, routing metrics, or full records again unless that duplication is required for the
+  artifact to stay self-sufficient. In practice this means command envelopes should not repeat the
+  prompt surface already owned by nested runtime traces, queue items should not mirror the same
+  fields already inside `trace_payload`, `family.json` should not inline records already persisted
+  in `father.json` or `records/*.json`, and bundle family registries should stay compact instead of
+  embedding full family records they do not need for runtime routing. Historical compatibility is
+  not sufficient justification for new duplication: compatibility must be handled at read/translation
+  boundaries instead of by mirroring the same data into every newly generated artifact.
+- that rule also now applies explicitly to the published SQLite family index: one family gets one
+  canonical routing question, not a three-way mirror of `question`, `normalized_question`, and
+  `family_father_question` when those values are materially identical, and compact father sidecars
+  must still be published whenever the thin index advertises `father_path`
 - queued trainer-side trace handoff is now implemented and exposed through `make trace-enqueue`
   and `make trace-drain`, so worker hot paths can stage optimization data without waiting for
   synchronous trainer-side import
@@ -1143,6 +1162,17 @@ valid worker batch exists. That keeps trainer ingestion aligned with the per-tur
 actually produced the family decision instead of silently collapsing back into one coarse ledger
 item.
 
+That handoff contract needed one more correction on `2026-05-19`. The proxy emits
+`repo_rag_turn_traces/<batch>/...` before the upstream Codex response finishes, so the raw batch
+records contain mediation-time summaries rather than the final execution answer. The worker now
+rewrites those batch traces with the final execution answer/evidence before queue handoff, and the
+trainer rejects any `codex-proxy-turn-execution` record that still carries the proxy fallback text
+`No father-backed prompt-family support was found ...`. In the same fix, empty-baseline trainer
+cycles stopped pre-seeding a temporary family index from the current cycle traces before the real
+materialization pass. That restores the intended invariant: whether or not a previous remote
+library exists, the trainer sees the same class of valid execution-stage traces and applies the
+same family-assignment logic.
+
 One more deployment-side defect surfaced immediately after that handoff refactor. A generated
 Python heredoc inside the dataset deploy script carried an unmatched `)` in the trusted-handoff
 helper, so worker execution could finish, Redis could receive the final result, and inline
@@ -1294,6 +1324,11 @@ Git, CI/deployment, cloud/runtime orchestration, frontend media, browser automat
 languages, databases, APIs, data science, neural-network terminology, research/publication work,
 infrastructure/devops, Linux/Windows command surfaces, explicit Kubernetes vocabulary, cloud
 service names, and game-development terminology. The active family summary is no longer chosen by
+an open-ended term bag: the contract is now explicit that `family_prompt_profile_terms` must be
+the top 12 surviving terms after garbage-word filtering, with technical-dictionary terms taking
+priority over generic helper phrasing. If published family profiles are led by narrative filler
+such as `add`, `any`, `changes`, `commands`, `completed`, `ensure`, `files`, `required`, `steps`,
+or `tasks`, that is a contract violation rather than an acceptable quality trade-off.
 raw count ordering alone: a dedicated selector now prefers technical lookup hits, suppresses broad
 narrative terms such as `already`, `contains`, `does`, and `fields`, and is allowed to publish
 fewer than 12 active prompt terms when the remaining candidates are only low-value filler. Prompt
@@ -1322,6 +1357,12 @@ The current fix therefore makes trusted handoff stand down on successful worker 
 well as explicit batch-summary files, mirrors prompt snapshots into trusted batch summaries, passes
 `--batch-name` through worker-side `trace-enqueue`, and suppresses duplicate logical queue items
 inside one drain cycle before they can create extra `processed/...` blobs.
+
+The next trace-handoff correction is stricter about family reuse itself. A successful DSPy family
+match is allowed to change routing, but it is not allowed to hide trace lineage from the trainer.
+The runtime therefore no longer short-circuits helper/lineage trace persistence when
+`family_artifact_selected=true`, and worker-side synthetic batch seeding no longer skips fallback
+turn-trace creation merely because the reused family artifact already answered the prompt.
 
 ## Tensions And Open Work
 

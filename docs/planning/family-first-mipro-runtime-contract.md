@@ -97,6 +97,44 @@ Family correctness is judged against the stage-level semantic contract above:
   reusable stage
 - trainer should prefer stable stage reuse over workflow-local bundling
 
+## Term-Profile Contract
+
+The active `family_prompt_profile_terms` surface is intentionally narrow and must be built by a
+fixed filtering pipeline.
+
+Required contract:
+
+1. Start from the real prompt text carried by the trace surface being routed or trained.
+2. Remove previously defined garbage words, stopwords, and narrative filler first.
+3. Prefer technical terms from the explicit repository term dictionary over generic narrative
+   wording.
+4. Rank the surviving candidates and keep only the top `12` terms for the active prompt-profile
+   surface.
+
+This means:
+
+- `family_prompt_profile_terms` must be a top-12 surface, not an unbounded bag of words
+- the active profile must be produced after garbage-word filtering, not before it
+- technical terms from the explicit dictionary have priority over broad narrative words
+- generic helper wording must not dominate the active family profile
+
+Examples of words that must not dominate the active prompt profile include:
+
+- `add`
+- `any`
+- `cannot`
+- `changes`
+- `commands`
+- `completed`
+- `ensure`
+- `files`
+- `required`
+- `steps`
+- `tasks`
+
+If published `family_prompt_profile_terms` are dominated by words like the list above instead of
+technical task vocabulary, that is a contract violation rather than a subjective quality issue.
+
 ## MIPROv2 Contract
 
 `MIPROv2` is offline optimizer compute, not online per-turn routing compute.
@@ -127,6 +165,55 @@ Every saved turn trace must keep:
 
 Those traces accumulate locally during the run, then move together as one batch into the trainer
 queue and the durable trace store.
+
+Per-trace payload discipline is strict:
+
+- every prompt that reaches the proxy forms its own separate trace
+- the main `codex exec` flow is a trace
+- every auxiliary helper-LM flow is also a separate trace
+- successful DSPy family reuse must not suppress helper or lineage traces; reuse changes routing,
+  not trace visibility
+- per-trace files must contain only prompt-relevant lineage and outcome fields
+- per-trace files must **not** embed shared full-run payload that belongs to the whole execution
+  rather than to that specific prompt
+- forbidden shared payload in per-trace files includes:
+  - one common full-run `command_trace` copied into many traces
+  - one common full-run `outcome` blob with full session/token/debug state copied into many traces
+  - one common nested execution transcript or proxy payload copied into many traces
+- trainer-visible trace files should stay thin enough that different prompts remain distinguishable
+  by their own relevant fields rather than by a duplicated shared run tail
+
+## No-Dup Serialization Contract
+
+Generated artifacts must have one canonical owner per datum.
+
+- if one nested runtime `trace` already owns `question`, `original_prompt`,
+  `reformulated_prompt`, `sources`, `command_trace`, or routing metrics, outer envelopes must not
+  mirror those same values again
+- command envelopes, queue items, processed items, and stored trace records may keep only fields
+  that are not recoverable from the canonical nested owner
+- `family.json` must not inline full `family_father_record` when the same record is already
+  persisted in `father.json` or in `records/*.json`
+- `family.json` must not inline full `family_runtime_record` when one stable record reference is
+  sufficient to resolve it from `records/*.json`
+- `bundle.json` / bundle family registries must not carry full replay records when runtime routing
+  only needs compact family summaries plus the runtime artifact surface
+- derived scalars like `normalized_question` or `question_variant_count` should not be persisted in
+  JSON payloads when they can be recomputed exactly from the canonical stored fields
+- the published SQLite `family-index` must use one canonical routing question per family; it must
+  not persist `question`, `normalized_question`, and `family_father_question` together when the
+  latter two add no information beyond the canonical `question`
+- remote family-state sidecars must stay structurally aligned with the index: if the index exposes
+  `father_path`, the corresponding `father.json` must actually be published rather than dropped by
+  a compact-write path
+
+Duplication is allowed only when removing it would lose information or would make one artifact
+non-self-sufficient for its declared role.
+
+Legacy or historical compatibility is not by itself a valid reason to mirror fields into newly
+generated artifacts. If one surface still needs an older shape, the compatibility shim must be
+kept at read time or at a dedicated translation boundary rather than by bloating every newly
+written trace, family, or bundle file.
 
 ## Trainer Ingestion Contract
 
@@ -203,10 +290,14 @@ Runtime routing rule:
     trainer-ingestion surface when a real batch exists
   - the final single exported execution trace is a fallback handoff surface only when no usable
     per-turn batch exists or batch handoff fails
+  - enrichment must overwrite proxy fallback summaries with the final execution answer/evidence so
+    from-scratch family formation never depends on preexisting family support
 - trainer ingestion must reject mediation-only traces as non-training inputs:
   - `source_command = codex-proxy-turn-mediation`
   - or `trace.mode = codex-proxy-turn-mediation`
   - those records remain valid audit/debug artifacts, but must not seed or rebuild prompt families
+  - trainer must also reject `codex-proxy-turn-execution` traces if their answer still equals the
+    proxy fallback string `No father-backed prompt-family support was found ...`
 
 ## Trainer Cache Contract
 
@@ -224,8 +315,9 @@ Trainer may keep one local internal cache, but that cache is never authoritative
   remote `family_state_version`.
 - If the remote version changes, trainer must discard the active local family cache and adopt the
   new remote version.
-- If no remote version exists, trainer may build one local family state from the current cycle
-  inputs only; that bootstrap stays transient until it is published remotely.
+- If no remote version exists, trainer starts from an empty local family cache and materializes the
+  current cycle traces exactly once; it must not pre-seed a temporary family state from those same
+  traces before the real candidate-materialization pass.
 - Trainer recompiles only dirty families created or updated by the current queued traces. It does
   not reprocess every family on every cycle and it does not rebuild from `processed/...` as an
   active baseline path.
