@@ -1183,6 +1183,21 @@ def _resolve_family_entry_from_routing_index(
     if row is None:
         return None
 
+    if "payload_json" in row.keys():
+        try:
+            payload = json.loads(str(row["payload_json"] or "{}"))
+        except json.JSONDecodeError:
+            payload = {}
+        if not isinstance(payload, dict):
+            return None
+        entry = {str(key): value for key, value in payload.items()}
+        prompt_family_id = str(row["prompt_family_id"] or "").strip()
+        if prompt_family_id and "prompt_family_id" not in entry:
+            entry["prompt_family_id"] = prompt_family_id
+        if "family_record_count" not in entry:
+            entry["family_record_count"] = int(row["family_record_count"] or 0)
+        return entry
+
     def _load_json_column(column_name: str, default: object) -> object:
         try:
             raw = str(row[column_name] or "")
@@ -1201,7 +1216,7 @@ def _resolve_family_entry_from_routing_index(
     prompt_terms = _load_json_column("prompt_terms_json", [])
     command_terms = _load_json_column("command_terms_json", [])
     constraint_terms = _load_json_column("constraint_terms_json", [])
-    return {
+    entry = {
         "prompt_family_id": str(row["prompt_family_id"] or "").strip(),
         "question": str(row["question"] or "").strip(),
         "family_record_count": int(row["family_record_count"] or 0),
@@ -1216,11 +1231,13 @@ def _resolve_family_entry_from_routing_index(
         if isinstance(command_terms, list)
         else [],
         "family_constraint_summary": constraint_terms if isinstance(constraint_terms, list) else [],
-        "family_path": str(row["family_path"] or "").strip(),
-        "father_path": str(row["father_path"] or "").strip(),
     }
-
-
+    if "family_path" in row.keys():
+        entry["family_path"] = str(row["family_path"] or "").strip()
+    if "father_path" in row.keys():
+        entry["father_path"] = str(row["father_path"] or "").strip()
+    return entry
+    return entry
 def _float_or_none(value: object) -> float | None:
     if isinstance(value, bool):
         return None

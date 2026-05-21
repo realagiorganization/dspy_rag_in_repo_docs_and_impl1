@@ -1393,6 +1393,29 @@ The runtime therefore no longer short-circuits helper/lineage trace persistence 
 `family_artifact_selected=true`, and worker-side synthetic batch seeding no longer skips fallback
 turn-trace creation merely because the reused family artifact already answered the prompt.
 
+The next bundle-packaging pass tightens the runtime package itself. `repo-rag-bundles` now carries
+its own SQLite routing index so runtime no longer depends on `repo-rag-training-families` for the
+hot routing path, but that autonomy is now explicitly separated from duplication. The copied
+bundle-local `routing-index.sqlite3` is no longer a raw clone of the trainer family-state index:
+it is a stripped runtime index that omits `family_path` / `father_path` sidecar references that
+only make sense in `repo-rag-training-families`. The same no-dup rule now applies across bundle
+publication surfaces:
+
+- `bundle.json` stays runtime-facing and no longer inlines `family_artifact_registry`
+- `bundle.json` may still expose a family-registry fallback, but only in a routing-sized form
+  without full benchmark case payloads
+- `metadata.json` remains the richer trainer/inspection surface, but its benchmark summaries and
+  family-artifact registry are now compacted to summary-only shapes
+- `published.json` and `channels/stable.json` no longer embed a second full copy of `bundle.json`;
+  they carry only one compact bundle summary plus canonical file paths
+
+The next follow-up hardens provenance and count preservation inside that compact bundle layout.
+Runtime autonomy does not permit metadata drift: the copied bundle-local routing index must keep
+the true `family_record_count` values from the source family-state index, and bundle publication
+must happen only after the remote family-state version is published so `bundle.json`,
+`published.json`, and `channels/stable.json` all record the exact
+`family_state_version_used` that the runtime bundle was built from.
+
 ## Tensions And Open Work
 
 The narrative is coherent, but not complete. The main open tensions are:

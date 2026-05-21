@@ -247,7 +247,7 @@ def load_family_index_payload(path: Path) -> dict[str, object]:
             legacy_payload_column = "payload_json" in entry_columns
             row_query = (
                 """
-                SELECT prompt_family_id, payload_json, family_path, father_path, family_record_count
+                SELECT *
                 FROM family_index_entries
                 ORDER BY prompt_family_id
                 """
@@ -348,10 +348,14 @@ def load_family_index_payload(path: Path) -> dict[str, object]:
                 prompt_family_id = str(row["prompt_family_id"] or "").strip()
                 if prompt_family_id:
                     entry["prompt_family_id"] = prompt_family_id
-                family_path = str(row["family_path"] or "").strip()
+                family_path = (
+                    str(row["family_path"] or "").strip() if "family_path" in row.keys() else ""
+                )
                 if family_path:
                     entry["family_path"] = family_path
-                father_path = str(row["father_path"] or "").strip()
+                father_path = (
+                    str(row["father_path"] or "").strip() if "father_path" in row.keys() else ""
+                )
                 if father_path:
                     entry["father_path"] = father_path
                 entry["family_record_count"] = int(row["family_record_count"] or 0)
@@ -770,6 +774,10 @@ def _bundle_family_entry(family_payload: Mapping[str, object]) -> dict[str, obje
     runtime_metric = (
         _family_runtime_metric_payload(runtime_record) if runtime_record is not None else {}
     )
+    family_records = _family_state_records_from_payload(family_payload)
+    family_record_count = _int_or_none(family_payload.get("family_record_count"))
+    if family_record_count is None:
+        family_record_count = len(family_records)
     family_metric_1_mean = _float_or_none(family_payload.get("family_metric_1_mean"))
     family_feedback_metric = _mapping_or_none(family_payload.get("family_feedback_metric"))
     family_success_metric = _mapping_or_none(family_payload.get("family_success_metric"))
@@ -834,6 +842,7 @@ def _bundle_family_entry(family_payload: Mapping[str, object]) -> dict[str, obje
     return {
         "prompt_family_id": prompt_family_id,
         "question": _string_or_none(family_payload.get("question")),
+        "family_record_count": family_record_count,
         "question_variants": question_variants,
         "family_prompt_profile_terms": _string_list(
             family_payload.get("family_prompt_profile_terms")
@@ -853,6 +862,225 @@ def _bundle_family_entry(family_payload: Mapping[str, object]) -> dict[str, obje
         "family_success_metric": family_success_metric,
         "runtime_artifact": runtime_artifact,
     }
+
+
+def _compact_benchmark_summary(
+    summary: Mapping[str, object] | None,
+) -> dict[str, object] | None:
+    """Return one compact benchmark summary without per-case result payloads."""
+
+    if not isinstance(summary, Mapping):
+        return None
+    compact: dict[str, object] = {}
+    for key in ("case_count", "pass_count", "pass_rate", "skipped_count", "root"):
+        value = summary.get(key)
+        if value is not None:
+            compact[str(key)] = value
+    tag_summaries = summary.get("tag_summaries")
+    if isinstance(tag_summaries, list) and tag_summaries:
+        compact["tag_summaries"] = tag_summaries
+    return compact or None
+
+
+def _compact_runtime_artifact_for_bundle(
+    runtime_artifact: Mapping[str, object] | None,
+) -> dict[str, object] | None:
+    """Return one minimal runtime-artifact payload for bundle routing/selection."""
+
+    if not isinstance(runtime_artifact, Mapping):
+        return None
+    compact: dict[str, object] = {}
+    for key in (
+        "prompt_family_id",
+        "artifact_kind",
+        "artifact_ready",
+        "artifact_source",
+        "artifact_dir",
+        "program_path",
+        "metadata_path",
+        "optimizer",
+        "training_example_count",
+        "benchmark_example_count",
+        "hit_rate",
+        "predicted_hit_rate",
+        "predicted_hit_rate_lower_bound",
+        "prediction_uncertainty",
+        "feedback_count",
+        "benchmark_pass_rate",
+    ):
+        value = runtime_artifact.get(key)
+        if value is not None:
+            compact[str(key)] = value
+    compact_benchmark = _compact_benchmark_summary(
+        _mapping_or_none(runtime_artifact.get("benchmark_summary"))
+    )
+    if compact_benchmark is not None:
+        compact["benchmark_summary"] = compact_benchmark
+    return compact or None
+
+
+def _compact_bundle_family_entry(entry: Mapping[str, object] | None) -> dict[str, object] | None:
+    """Return one bundle family-registry entry with only routing-relevant fields."""
+
+    if not isinstance(entry, Mapping):
+        return None
+    compact = {str(key): value for key, value in entry.items()}
+    question = _string_or_none(compact.get("question"))
+    father_question = _string_or_none(compact.get("family_father_question"))
+    if question is not None and father_question == question:
+        compact.pop("family_father_question", None)
+    question_variants = compact.get("question_variants")
+    if isinstance(question_variants, list):
+        cleaned_variants = _string_list(question_variants)
+        if question is not None:
+            cleaned_variants = [
+                variant for variant in cleaned_variants if variant and variant != question
+            ]
+        if cleaned_variants:
+            compact["question_variants"] = cleaned_variants
+        else:
+            compact.pop("question_variants", None)
+    runtime_artifact = _compact_runtime_artifact_for_bundle(
+        _mapping_or_none(compact.get("runtime_artifact"))
+    )
+    if runtime_artifact is not None:
+        compact["runtime_artifact"] = runtime_artifact
+    else:
+        compact.pop("runtime_artifact", None)
+    return compact
+
+
+def _compact_bundle_lineage(
+    lineage: Mapping[str, object] | None,
+) -> dict[str, object] | None:
+    """Return one compact lineage summary for bundle manifests and metadata."""
+
+    if not isinstance(lineage, Mapping):
+        return None
+    compact: dict[str, object] = {}
+    for key in (
+        "run_family",
+        "resolved_run_name",
+        "family_state_path",
+        "family_state_version",
+        "training_candidates_summary_path",
+        "candidate_count",
+        "family_candidate_count",
+        "dirty_family_count",
+        "dirty_family_ids",
+        "new_candidate_count",
+        "duplicate_count",
+        "replaced_count",
+        "family_count",
+        "prompt_family_count",
+        "prompt_family_ids",
+        "imported_trace_count",
+        "min_new_candidates_for_recompile",
+    ):
+        value = lineage.get(key)
+        if value is not None:
+            compact[str(key)] = value
+    family_record_hashes = lineage.get("family_record_hashes")
+    if isinstance(family_record_hashes, list) and family_record_hashes:
+        compact["family_record_hashes"] = _string_list(family_record_hashes)
+    family_trace_record_paths = lineage.get("family_trace_record_paths")
+    if isinstance(family_trace_record_paths, list):
+        compact["family_trace_record_count"] = len(
+            [value for value in family_trace_record_paths if str(value or "").strip()]
+        )
+    family_exact_snapshot_ids = lineage.get("family_exact_snapshot_ids")
+    if isinstance(family_exact_snapshot_ids, list):
+        compact["family_exact_snapshot_count"] = len(
+            [value for value in family_exact_snapshot_ids if str(value or "").strip()]
+        )
+    imported_trace_record_paths = lineage.get("imported_trace_record_paths")
+    if isinstance(imported_trace_record_paths, list):
+        compact["imported_trace_record_count"] = len(
+            [value for value in imported_trace_record_paths if str(value or "").strip()]
+        )
+    return compact or None
+
+
+def _compact_family_artifact_registry(
+    registry: Mapping[str, object] | None,
+) -> dict[str, object] | None:
+    """Return one compact family-artifact registry for persisted metadata."""
+
+    if not isinstance(registry, Mapping):
+        return None
+    compact_registry: dict[str, object] = {}
+    for family_id, payload in registry.items():
+        normalized_payload = _mapping_or_none(payload)
+        if normalized_payload is None:
+            continue
+        compact: dict[str, object] = {}
+        for key in (
+            "prompt_family_id",
+            "artifact_dir",
+            "program_path",
+            "metadata_path",
+            "optimizer",
+            "training_example_count",
+            "benchmark_example_count",
+            "hit_rate",
+            "predicted_hit_rate",
+            "predicted_hit_rate_lower_bound",
+            "prediction_uncertainty",
+            "artifact_ready",
+            "artifact_source",
+        ):
+            value = normalized_payload.get(key)
+            if value is not None:
+                compact[str(key)] = value
+        compact_benchmark = _compact_benchmark_summary(
+            _mapping_or_none(normalized_payload.get("benchmark_summary"))
+        )
+        if compact_benchmark is not None:
+            compact["benchmark_summary"] = compact_benchmark
+        compact_registry[str(family_id)] = compact
+    return compact_registry or None
+
+
+def _compact_bundle_state_summary(bundle: Mapping[str, object] | None) -> dict[str, object]:
+    """Return one compact bundle summary suitable for published/channel state."""
+
+    if not isinstance(bundle, Mapping):
+        return {}
+    compact: dict[str, object] = {}
+    for key in (
+        "schema_version",
+        "bundle_kind",
+        "run_name",
+        "bundle_version",
+        "bundle_status",
+        "created_at",
+        "artifact_dir",
+        "bundle_path",
+        "program_path",
+        "metadata_path",
+        "routing_index_path",
+        "run_family",
+        "retrieval_mode",
+        "top_k",
+        "benchmark_status",
+        "family_state_path",
+        "family_state_version_used",
+        "family_count",
+        "compiled_program_summary",
+        "provenance",
+    ):
+        value = bundle.get(key)
+        if value is not None:
+            compact[str(key)] = value
+    compact_benchmark = _compact_benchmark_summary(
+        _mapping_or_none(bundle.get("benchmark_summary"))
+    )
+    if compact_benchmark is not None:
+        compact["benchmark_summary"] = compact_benchmark
+    compact_lineage = _compact_bundle_lineage(_mapping_or_none(bundle.get("lineage")))
+    if compact_lineage is not None:
+        compact["lineage"] = compact_lineage
+    return compact
 
 
 def build_bundle_family_registry(
@@ -933,7 +1161,9 @@ def build_bundle_family_registry(
                         }
                     )
                     entry["runtime_artifact"] = runtime_artifact
-            families.append(entry)
+            compact_entry = _compact_bundle_family_entry(entry)
+            if compact_entry is not None:
+                families.append(compact_entry)
     return {
         "schema_version": 1,
         "registry_kind": "repo-rag-family-registry",
@@ -942,6 +1172,107 @@ def build_bundle_family_registry(
         "prompt_family_count": len(families),
         "families": families,
     }
+
+
+def build_bundle_routing_index_payload(
+    root: Path,
+    *,
+    family_state_path: Path,
+    family_artifact_registry: Mapping[str, object] | None = None,
+) -> dict[str, object] | None:
+    """Build one compact runtime routing index payload from a persisted family state."""
+
+    resolved_root = root.resolve()
+    family_registry = build_bundle_family_registry(
+        resolved_root,
+        family_state_path=family_state_path,
+        family_artifact_registry=family_artifact_registry,
+    )
+    if not isinstance(family_registry, Mapping):
+        return None
+    raw_families = family_registry.get("families")
+    if not isinstance(raw_families, list):
+        return None
+    return {
+        "schema_version": FAMILY_INDEX_DB_SCHEMA_VERSION,
+        "record_kind": FAMILY_INDEX_META_KIND,
+        "family_state_kind": "repo-rag-bundle-routing-index",
+        "family_state_layout": "bundle-routing-index",
+        "generated_at": datetime.now(UTC).isoformat(),
+        "source_family_state_path": _relative_to_root(resolve_family_index_path(family_state_path), resolved_root),
+        "prompt_families": [
+            {str(key): value for key, value in family.items()}
+            for family in raw_families
+            if isinstance(family, Mapping)
+        ],
+    }
+
+
+def write_bundle_routing_index_payload(path: Path, payload: Mapping[str, object]) -> None:
+    """Persist one compact bundle-local routing index to SQLite."""
+
+    resolved_path = path.resolve()
+    resolved_path.parent.mkdir(parents=True, exist_ok=True)
+    with _local_sqlite_build_path() as local_copy_path:
+        connection = _connect_family_index(local_copy_path)
+        try:
+            connection.execute(
+                "CREATE TABLE family_index_meta (key TEXT PRIMARY KEY, value_json TEXT NOT NULL)"
+            )
+            connection.execute(
+                """
+                CREATE TABLE family_index_entries (
+                    prompt_family_id TEXT PRIMARY KEY,
+                    payload_json TEXT NOT NULL,
+                    family_record_count INTEGER NOT NULL DEFAULT 0
+                )
+                """
+            )
+            meta = {
+                str(key): value for key, value in payload.items() if str(key) != "prompt_families"
+            }
+            meta.setdefault("schema_version", FAMILY_INDEX_DB_SCHEMA_VERSION)
+            meta.setdefault("record_kind", FAMILY_INDEX_META_KIND)
+            meta.setdefault("family_state_kind", "repo-rag-bundle-routing-index")
+            meta["family_state_layout"] = "bundle-routing-index"
+            meta.setdefault("generated_at", datetime.now(UTC).isoformat())
+            meta["family_index_kind"] = FAMILY_INDEX_DB_KIND
+            for key, value in meta.items():
+                connection.execute(
+                    "INSERT INTO family_index_meta(key, value_json) VALUES(?, ?)",
+                    (key, json.dumps(value, ensure_ascii=False)),
+                )
+            families = payload.get("prompt_families")
+            if isinstance(families, list):
+                for family in families:
+                    if not isinstance(family, Mapping):
+                        continue
+                    prompt_family_id = str(family.get("prompt_family_id") or "").strip()
+                    if not prompt_family_id:
+                        continue
+                    connection.execute(
+                        """
+                        INSERT INTO family_index_entries(
+                            prompt_family_id,
+                            payload_json,
+                            family_record_count
+                        ) VALUES (?, ?, ?)
+                        """,
+                        (
+                            prompt_family_id,
+                            json.dumps(dict(family), ensure_ascii=False),
+                            int(family.get("family_record_count") or 0),
+                        ),
+                    )
+            connection.commit()
+        finally:
+            connection.close()
+        staged_target_path = resolved_path.with_name(f".{resolved_path.name}.tmp")
+        try:
+            staged_target_path.write_bytes(local_copy_path.read_bytes())
+            staged_target_path.replace(resolved_path)
+        finally:
+            staged_target_path.unlink(missing_ok=True)
 
 
 def _family_artifact_blob_names(bundle_version: str, prompt_family_id: str) -> dict[str, str]:
@@ -1224,10 +1555,10 @@ def build_bundle_manifest(
     if not resolved_program_path.is_absolute():
         resolved_program_path = resolved_root / resolved_program_path
 
-    benchmark_summary = _mapping_or_none(metadata.get("benchmark_summary"))
+    benchmark_summary = _compact_benchmark_summary(_mapping_or_none(metadata.get("benchmark_summary")))
     compiled_program_summary = _mapping_or_none(metadata.get("compiled_program_summary"))
     lm = _mapping_or_none(metadata.get("lm"))
-    lineage = _mapping_or_none(metadata.get("lineage"))
+    lineage = _compact_bundle_lineage(_mapping_or_none(metadata.get("lineage")))
     family_artifact_registry = _mapping_or_none(metadata.get("family_artifact_registry"))
     (
         family_state_path,
@@ -1286,7 +1617,6 @@ def build_bundle_manifest(
         "benchmark_status": benchmark_status,
         "benchmark_summary": benchmark_summary,
         "compiled_program_summary": compiled_program_summary,
-        "family_artifact_registry": family_artifact_registry,
         "lm": lm,
         "run_family": _string_or_none(metadata.get("run_family")),
         "lineage": lineage,
@@ -1318,8 +1648,13 @@ def write_bundle_manifest(root: Path, metadata_path: Path) -> dict[str, object]:
     _, resolved_family_state_path, _ = _bundle_family_state_path_from_metadata(resolved_root, metadata)
     staged_routing_index_path = resolved_metadata_path.parent / BUNDLE_ROUTING_INDEX_FILENAME
     if resolved_family_state_path is not None and resolved_family_state_path.is_file():
-        if staged_routing_index_path.resolve() != resolved_family_state_path.resolve():
-            staged_routing_index_path.write_bytes(resolved_family_state_path.read_bytes())
+        routing_payload = build_bundle_routing_index_payload(
+            resolved_root,
+            family_state_path=resolved_family_state_path,
+            family_artifact_registry=_mapping_or_none(metadata.get("family_artifact_registry")),
+        )
+        if routing_payload is not None:
+            write_bundle_routing_index_payload(staged_routing_index_path, routing_payload)
     payload = build_bundle_manifest(resolved_root, metadata, resolved_metadata_path)
     bundle_manifest_path(resolved_metadata_path).write_text(
         f"{json.dumps(payload, indent=2)}\n",
@@ -1444,7 +1779,7 @@ def published_bundle_record_from_state(
         "retrieval_mode": _string_or_none(bundle_summary.get("retrieval_mode")),
         "top_k": _int_or_none(bundle_summary.get("top_k")),
         "note": None,
-        "bundle_summary": bundle_summary,
+        "bundle_summary": _compact_bundle_state_summary(bundle_summary),
         "remote_root": str(root),
     }
 
@@ -2290,7 +2625,7 @@ def publish_bundle(
         "retrieval_mode": _string_or_none(bundle.get("retrieval_mode")),
         "top_k": _int_or_none(bundle.get("top_k")),
         "note": _string_or_none(note),
-        "bundle_summary": bundle,
+        "bundle_summary": _compact_bundle_state_summary(bundle),
     }
     published_path.write_text(f"{json.dumps(record, indent=2)}\n", encoding="utf-8")
     return record
@@ -2400,7 +2735,7 @@ def _build_bundle_channel_state(
         "current_bundle_status": _string_or_none(published_record.get("bundle_status")),
         "current_benchmark_status": _string_or_none(published_record.get("benchmark_status")),
         "current_publish_status": _string_or_none(published_record.get("publish_status")),
-        "current_bundle": bundle_summary,
+        "current_bundle": _compact_bundle_state_summary(bundle_summary),
         "history": list(history),
     }
 

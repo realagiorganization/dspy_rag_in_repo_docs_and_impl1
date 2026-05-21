@@ -1327,6 +1327,21 @@ def _sqlite_family_index_shortlist(
             """
         )
         for row in rows:
+            if "payload_json" in row.keys():
+                try:
+                    payload = json.loads(str(row["payload_json"] or "{}"))
+                except json.JSONDecodeError:
+                    payload = {}
+                if not isinstance(payload, dict):
+                    continue
+                family_entry = {str(key): value for key, value in payload.items()}
+                prompt_family_id = str(row["prompt_family_id"] or "").strip()
+                if prompt_family_id and "prompt_family_id" not in family_entry:
+                    family_entry["prompt_family_id"] = prompt_family_id
+                if "family_record_count" not in family_entry:
+                    family_entry["family_record_count"] = int(row["family_record_count"] or 0)
+                ranked.append((_coarse_prompt_family_similarity(question, family_entry), family_entry))
+                continue
             try:
                 prompt_terms = json.loads(str(row["prompt_terms_json"] or "[]"))
             except json.JSONDecodeError:
@@ -1364,9 +1379,11 @@ def _sqlite_family_index_shortlist(
                 "family_constraint_summary": constraint_terms
                 if isinstance(constraint_terms, list)
                 else [],
-                "family_path": str(row["family_path"] or "").strip(),
-                "father_path": str(row["father_path"] or "").strip(),
             }
+            if "family_path" in row.keys():
+                family_entry["family_path"] = str(row["family_path"] or "").strip()
+            if "father_path" in row.keys():
+                family_entry["father_path"] = str(row["father_path"] or "").strip()
             if (
                 family_father_question
                 and canonical_question

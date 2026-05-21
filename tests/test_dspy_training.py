@@ -923,18 +923,21 @@ def test_train_repository_program_writes_artifacts(
     bundle_lineage = bundle["lineage"]
     assert isinstance(bundle_lineage, dict)
     assert bundle_lineage["new_candidate_count"] == 1
+    assert "imported_trace_record_paths" not in bundle_lineage
     assert bundle["retrieval_mode"] is None
     assert bundle["program_path"] == "artifacts/dspy/sample-run/program.json"
     assert bundle["family_state_path"] == "artifacts/trainer/family-index.sqlite3"
+    assert "family_artifact_registry" not in bundle
     family_registry = bundle["family_registry"]
     assert isinstance(family_registry, dict)
     assert family_registry["family_count"] == 1
     families = family_registry["families"]
     assert isinstance(families, list)
     assert families[0]["prompt_family_id"] == "pf-sample"
-    assert families[0]["family_father_question"] == "What does this repository research?"
-    assert families[0]["family_runtime_metric"]["hit_rate"] == 1.0
+    assert families[0]["question"] == "What does this repository research?"
+    assert "family_father_question" not in families[0]
     runtime_artifact = families[0]["runtime_artifact"]
+    assert runtime_artifact["hit_rate"] == 1.0
     assert runtime_artifact["artifact_ready"] is True
     assert runtime_artifact["artifact_kind"] == "compiled-family-program"
     assert runtime_artifact["program_path"] == (

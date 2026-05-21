@@ -17,7 +17,13 @@ from urllib.parse import urlparse
 from .corpus import load_documents
 from .retrieval import RetrievalMode, chunk_documents, resolve_retrieval_mode, retrieve
 from .retrieval_profile import load_retrieval_profile
-from .runtime_artifacts import resolve_family_index_path, write_bundle_manifest
+from .runtime_artifacts import (
+    _compact_benchmark_summary,
+    _compact_bundle_lineage,
+    _compact_family_artifact_registry,
+    resolve_family_index_path,
+    write_bundle_manifest,
+)
 from .training_samples import (
     TrainingExample,
     load_family_state_payload,
@@ -1912,10 +1918,10 @@ def train_repository_program(
         "top_k": training_config.top_k,
         "retrieval_mode": training_config.retrieval_mode,
         "lm": lm_config.as_metadata(),
-        "benchmark_summary": benchmark_summary,
+        "benchmark_summary": _compact_benchmark_summary(benchmark_summary),
         "compiled_program_summary": compiled_program_summary,
-        "family_artifact_registry": family_artifact_registry or None,
-        "lineage": (
+        "family_artifact_registry": _compact_family_artifact_registry(family_artifact_registry),
+        "lineage": _compact_bundle_lineage(
             dict(training_config.lineage_metadata)
             if isinstance(training_config.lineage_metadata, Mapping)
             else None

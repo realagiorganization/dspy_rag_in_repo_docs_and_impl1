@@ -672,6 +672,23 @@ Not implemented yet:
     for incremental updates, but runtime execution no longer needs it on the hot path just to pick
     a family. After bundle-local routing selects one `prompt_family_id`, the proxy downloads only
     that family's `program.json` / `metadata.json` when they are not already staged locally.
+    Stage 34 follow-up locally: the copied bundle-local `routing-index.sqlite3` is now a stripped
+    runtime index rather than a byte-for-byte copy of the trainer family-state index. It no longer
+    carries `family_path` / `father_path` references to sidecars that are absent from
+    `repo-rag-bundles`; instead it stores only the routing payload that runtime actually needs.
+    The same compaction rule now applies to bundle publication surfaces:
+    - `bundle.json` must not inline `family_artifact_registry`
+    - `bundle.json` may carry `family_registry`, but only in a routing-sized form without full
+      benchmark case results
+    - `metadata.json` may retain trainer-facing `family_artifact_registry`, but only with compact
+      benchmark summaries
+    - `published.json` and channel state such as `channels/stable.json` must store only a compact
+      bundle summary, never a second full copy of `bundle.json`
+    - the copied bundle-local `routing-index.sqlite3` must preserve the source family's
+      `family_record_count`; the runtime bundle must not zero this field during compaction
+    - bundle publication must happen only after the remote family-state version is published so
+      `bundle.json`, `published.json`, and channel state record the exact
+      `family_state_version_used`
 34. Turn `family-state.json` into the thin family index the user asked for.
     Stage 34 locally: persisted trainer state now writes the full family payloads to
     `artifacts/trainer/families/<prompt_family_id>/family.json` plus `father.json` and

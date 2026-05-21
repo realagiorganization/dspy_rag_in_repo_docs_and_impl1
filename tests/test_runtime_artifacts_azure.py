@@ -42,6 +42,7 @@ from repo_rag_lab.runtime_artifacts import (
     restore_processed_trace_records,
     upload_remote_bundle,
     upload_remote_family_state,
+    write_bundle_manifest,
     write_family_index_payload,
 )
 from repo_rag_lab.training_samples import load_family_state_payload
@@ -1389,6 +1390,86 @@ def test_upload_remote_bundle_uploads_family_runtime_artifacts(
         )
         == b"sqlite-bytes"
     )
+
+
+def test_write_bundle_manifest_preserves_family_record_count_in_bundle_routing_index(
+    tmp_path: Path,
+) -> None:
+    family_state_path = tmp_path / "artifacts" / "trainer" / "family-index.sqlite3"
+    family_state_path.parent.mkdir(parents=True, exist_ok=True)
+    family_dir = tmp_path / "artifacts" / "trainer" / "families" / "pf-demo"
+    family_dir.mkdir(parents=True, exist_ok=True)
+    (family_dir / "family.json").write_text(
+        json.dumps(
+            {
+                "prompt_family_id": "pf-demo",
+                "question": "Verify README GIF asset",
+                "family_record_count": 3,
+                "family_prompt_profile_terms": ["gif", "readme", "asset"],
+                "family_command_pattern_summary": [],
+                "family_constraint_summary": [],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    write_family_index_payload(
+        family_state_path,
+        {
+            "schema_version": 1,
+            "family_state_kind": "repo-rag-trainer-family-index",
+            "prompt_families": [
+                {
+                    "prompt_family_id": "pf-demo",
+                    "question": "Verify README GIF asset",
+                    "family_record_count": 3,
+                    "family_prompt_profile_terms": ["gif", "readme", "asset"],
+                    "family_command_pattern_summary": [],
+                    "family_constraint_summary": [],
+                    "family_path": "families/pf-demo/family.json",
+                }
+            ],
+        },
+    )
+
+    bundle_dir = tmp_path / "artifacts" / "dspy" / "sample-run"
+    bundle_dir.mkdir(parents=True, exist_ok=True)
+    (bundle_dir / "program.json").write_text('{"program":"demo"}\n', encoding="utf-8")
+    metadata_path = bundle_dir / "metadata.json"
+    metadata_path.write_text(
+        json.dumps(
+            {
+                "run_name": "sample-run",
+                "bundle_version": "sample-run",
+                "lineage": {
+                    "family_state_path": "artifacts/trainer/family-index.sqlite3",
+                    "family_state_version": "20260521T162716Z",
+                    "family_count": 1,
+                },
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    manifest = write_bundle_manifest(tmp_path, metadata_path)
+    routing_index_path = tmp_path / str(manifest["routing_index_path"])
+    assert routing_index_path.is_file()
+
+    with sqlite3.connect(routing_index_path) as connection:
+        row = connection.execute(
+            """
+            SELECT family_record_count, payload_json
+            FROM family_index_entries
+            WHERE prompt_family_id = 'pf-demo'
+            """
+        ).fetchone()
+    assert row is not None
+    assert int(row[0]) == 3
+    payload = json.loads(str(row[1]))
+    assert payload["family_record_count"] == 3
 
 
 def test_upload_and_fetch_remote_family_state_prefer_family_state_container(

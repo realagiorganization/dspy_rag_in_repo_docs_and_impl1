@@ -598,3 +598,557 @@ Status:
 - `repo-rag-bundles` is now materially closer to a self-sufficient runtime package
 - runtime hot-path routing no longer depends on loading a monolithic bundle registry just to pick
   the family
+
+## 2026-05-21 From-Scratch Live Cycle Verification
+
+Live verification after deleting the previously published family-state and stable bundle showed the
+expected from-scratch behavior.
+
+Pre-cycle remote state:
+
+- `repo-rag-training-families/current.json` was absent (`BlobNotFound`)
+- `repo-rag-bundles/channels/stable.json` was absent (`BlobNotFound`)
+
+Execution run `26216842933_20260521_093234`:
+
+- `prompt_tokens = 37292`
+- `total_tokens = 37292`
+- `use_dspy_requested = true`
+- `bundle_resolved = false`
+- `dspy_status = skipped`
+- `mediation_mode = passthrough`
+
+This confirms the lower token count in that run was not caused by DSPy reuse. The run took a
+shorter verify/no-op path on a repository that already contained the GIF generator, the GIF asset,
+and the README embed, while the expensive fallback branch (`npm install` after `gifenc` missing)
+failed fast on `ENOSPC`.
+
+Trainer evidence for the same run:
+
+- cycle `repo-rag-trainer-cycle-29655935` consumed the queued traces
+- `remote_family_state_found = false`
+- `current_bundle_version = null`
+- `training-candidates-summary.json` reported:
+  - `input_trace_count = 8`
+  - `loaded_candidate_count = 8`
+  - `candidate_count = 6`
+  - `family_count = 6`
+  - `new_prompt_family_count = 6`
+  - `dirty_family_count = 6`
+  - `duplicate_count = 0`
+  - `replaced_count = 1`
+  - `skipped_reasons = {}`
+- `generated-training-summary.json` reported:
+  - `base_example_count = 8`
+  - `candidate_example_count = 6`
+  - `combined_example_count = 14`
+- trainer logs reached the real DSPy compile path, including:
+  - `Bootstrapped 2 full traces after 3 examples for up to 1 rounds, amounting to 3 attempts.`
+
+Published outputs:
+
+- `repo-rag-training-families/current.json` now points to:
+  - `current_version = 20260521T094218Z`
+  - `current_family_count = 6`
+  - `current_family_record_count = 8`
+- `repo-rag-bundles/channels/stable.json` now points to:
+  - `current_bundle_version = 20260521T093925087172Z`
+  - `current_routing_index_path = artifacts/dspy/20260521T093925087172Z/routing-index.sqlite3`
+  - `current_publish_status = published`
+  - `current_family_state_version_used = null`
+
+Status:
+
+- runtime correctly skipped DSPy because no bundle existed yet
+- trainer still entered a real from-scratch cycle and produced both:
+  - a new family-state version
+  - a new stable bundle carrying its own routing index
+
+Verification executed in this turn:
+
+- `uv run python -m compileall src tests`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py`
+- `uv run repo-rag smoke-test`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+
+Observed:
+
+- `compileall` passed
+- `tests/test_utilities.py tests/test_repository_rag_bdd.py` passed as `62 passed`
+- `uv run repo-rag smoke-test` passed
+- `cargo build --manifest-path rust-cli/Cargo.toml` passed
+
+Verification categories not exercised in this turn:
+
+- `make quality`
+- `make coverage`
+- lint
+- type checking
+- notebook execution
+- UI verification
+
+## 2026-05-21 Published Bundle Verification For From-Scratch Cycle
+
+Remote inspection of the first stable bundle published after the from-scratch trainer cycle shows
+that the new bundle version `20260521T093925087172Z` is structurally usable as a runtime package.
+
+Confirmed in blob:
+
+- versioned bundle members exist:
+  - `versions/20260521T093925087172Z/bundle.json`
+  - `versions/20260521T093925087172Z/program.json`
+  - `versions/20260521T093925087172Z/metadata.json`
+  - `versions/20260521T093925087172Z/published.json`
+  - `versions/20260521T093925087172Z/routing-index.sqlite3`
+- all six family artifacts also exist:
+  - `versions/20260521T093925087172Z/families/<prompt_family_id>/program.json`
+  - `versions/20260521T093925087172Z/families/<prompt_family_id>/metadata.json`
+- `channels/stable.json` points at:
+  - `current_bundle_version = 20260521T093925087172Z`
+  - `current_routing_index_path = artifacts/dspy/20260521T093925087172Z/routing-index.sqlite3`
+  - `current_publish_status = published`
+
+Bundle consistency:
+
+- top-level `bundle.json` reports `family_count = 6`
+- embedded `family_registry.family_count = 6`
+- embedded `family_artifact_registry` also contains `6` families
+- the copied `routing-index.sqlite3` contains the same `6` `prompt_family_id` values as the
+  embedded `family_registry`
+
+One structural debt remains:
+
+- the copied routing index still carries `family_path` / `father_path` values such as
+  `families/<id>/family.json` and `families/<id>/father.json`
+- those sidecars are not currently published inside the bundle version; only
+  `families/<id>/{program,metadata}.json` exist there
+
+Current runtime status:
+
+- this is not a hot-path blocker because bundle-local routing uses the thin SQLite fields plus the
+  selected family program artifact, not the absent `family.json` / `father.json` members
+- however, for a stricter notion of bundle autonomy, those stale family-state sidecar paths should
+  eventually be removed from the copied routing index or satisfied by publishing the matching
+  sidecars into the bundle
+
+## 2026-05-21 Bundle Surface Compaction Follow-Up
+
+The first autonomous bundle publish still carried more serialized weight than the runtime contract
+required:
+
+- `bundle.json` still inlined `family_artifact_registry`
+- `bundle.json` and `metadata.json` both carried full benchmark `results`
+- `published.json` stored `bundle_summary = <full bundle.json>`
+- `channels/stable.json` stored `current_bundle = <full bundle.json>`
+- the copied bundle-local `routing-index.sqlite3` still preserved `family_path` /
+  `father_path` references to sidecars that do not exist inside `repo-rag-bundles`
+
+Local repair:
+
+- `bundle.json` now keeps only the runtime-facing bundle manifest, with compact benchmark and
+  lineage summaries and no inline `family_artifact_registry`
+- `metadata.json` now keeps compact benchmark summaries, compact lineage, and a compact
+  `family_artifact_registry` suitable for carry-forward without per-case benchmark payloads
+- `published.json` and `channels/stable.json` now persist only one compact bundle summary rather
+  than a second full copy of `bundle.json`
+- the copied bundle-local `routing-index.sqlite3` is now rebuilt as a stripped runtime index with
+  `payload_json` entries and no `family_path` / `father_path` references
+
+Local reconstruction against the live from-scratch bundle inputs projects the following size
+reductions for the same published version shape:
+
+- `bundle.json`: about `63 KB -> 16 KB`
+- `metadata.json`: about `35 KB -> 8 KB`
+- `published.json`: about `67 KB -> 3.5 KB`
+- `channels/stable.json`: about `67 KB -> 3.9 KB`
+
+The stripped bundle-local routing index now has only:
+
+- `prompt_family_id`
+- `payload_json`
+- `family_record_count`
+
+and one sample entry no longer carries `family_path` / `father_path`.
+
+Verification executed in this follow-up:
+
+- `uv run python -m compileall src tests`
+- `uv run pytest tests/test_dspy_training.py tests/test_runtime_artifacts_azure.py tests/test_codex_proxy.py tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+- `uv run repo-rag smoke-test`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+
+Observed:
+
+- `compileall` passed
+- targeted/local verification passed as `155 passed`
+- smoke test passed
+- Rust build passed
+
+## 2026-05-21 Live From-Scratch Verification After Bundle Routing Copy
+
+Latest verified execution run:
+
+- `26221197956_20260521_110244`
+
+Execution-side behavior matched the expected `from scratch` contract after deleting prior remote
+family-state and stable bundle versions:
+
+- `repo_rag_backend.json` reported:
+  - `use_dspy_requested = true`
+  - `bundle_resolved = false`
+  - `bundle_version = null`
+  - `dspy_status = skipped`
+  - `mediation_mode = passthrough`
+- `redis_results.json` reported:
+  - `prompt_tokens = 21163`
+  - `total_tokens = 21163`
+  - `success = true`
+
+This confirms the runtime did **not** reuse a prior DSPy bundle during the execution run.
+
+Trainer-side publish completed successfully from scratch:
+
+- `repo-rag-training-families/current.json` now points to:
+  - `current_version = 20260521T111104Z`
+  - `current_family_count = 5`
+  - `current_family_record_count = 8`
+- `repo-rag-bundles/channels/stable.json` now points to:
+  - `current_bundle_version = 20260521T110641751838Z`
+  - `current_routing_index_path = artifacts/dspy/20260521T110641751838Z/routing-index.sqlite3`
+  - `current_family_state_version_used = null`
+  - `current_publish_status = published`
+
+The newly published family-state looks internally consistent:
+
+- `family-index.sqlite3` contains `5` entries
+- its `family_record_count` values sum to `8`
+- the family ids are:
+  - `pf-440eb981589fd25a`
+  - `pf-b9d120cda6bd03f8`
+  - `pf-c7c2e0a42d9d87ec`
+  - `pf-dc1f706da0b4f060`
+  - `pf-fbfd71330374ba41`
+
+The newly published bundle now reflects the compact autonomous runtime contract in live storage:
+
+- `bundle.json` size: `19189` bytes
+- `metadata.json` size: `7216` bytes
+- `program.json` size: `11567` bytes
+- `published.json` size: `3454` bytes
+- `routing-index.sqlite3` size: `36864` bytes
+
+Live bundle shape verification:
+
+- `bundle.json` still carries the runtime-facing `family_registry`
+- `bundle.json` no longer carries inline `family_artifact_registry`
+- `metadata.json` carries the compact `family_artifact_registry` used for trainer carry-forward
+- `published.json` stores a compact `bundle_summary`
+- the copied bundle-local `routing-index.sqlite3` now has only:
+  - `prompt_family_id`
+  - `payload_json`
+  - `family_record_count`
+- a sampled `payload_json` row no longer contains `family_path` or `father_path`
+
+Conclusion for this live cycle:
+
+- execution correctly ran without DSPy reuse
+- trainer correctly entered a from-scratch cycle and published new `repo-rag-training-families`
+  and `repo-rag-bundles` versions
+- the newly published bundle is now compact and runtime-autonomous for routing
+
+## 2026-05-21 Incremental No-Op After Missing Trace Export
+
+Latest checked follow-up execution run:
+
+- `26222834610_20260521_113707`
+
+Observed outcome:
+
+- `repo-rag-training-families/current.json` stayed at `20260521T111104Z`
+- `repo-rag-bundles/channels/stable.json` stayed at `20260521T110641751838Z`
+- trainer jobs `repo-rag-trainer-cycle-29656265`, `29656270`, and `29656275` all reported:
+  - `queued_count_before = 0`
+  - `drained_count = 0`
+  - `current_cycle_input_detected = false`
+  - `recompile_status = skipped-no-queued-input`
+  - `pending_recompile.reason = bundle-matches-current-family-set`
+
+This was not an incremental-training decision over fresh traces. It was a no-input trainer cycle.
+
+Execution-side evidence explains why the queue stayed empty:
+
+- `redis_results.json` for `26222834610_20260521_113707` reports a successful run with
+  `prompt_tokens = 21163`
+- the run includes only proxy bootstrap surfaces:
+  - `repo_rag_codex_proxy_ready.json`
+  - `repo_rag_codex_proxy_stderr.log`
+- unlike the immediately previous successful from-scratch run
+  `26221197956_20260521_110244`, this run does **not** include:
+  - `repo_rag_backend.json`
+  - `artifacts/traces/...`
+  - trainer-facing `repo_rag_trace*` or `repo_rag_turn_trace*` exports
+
+Blob state confirms that no new trainer input landed:
+
+- the newest `repo-rag-training-traces/processed/...` objects still stop at the previous run's
+  `20260521T110025Z ... 20260521T110117Z` batch
+- no `processed/...` or `batches/...` objects were created for the `113707` execution
+
+Execution transcript characteristics:
+
+- the run completed as a repo verification/no-op path (`Already done in this checkout.`)
+- `codex_response.txt` shows shell-only verification and no repo-RAG MCP usage
+- `codex_restore_probe.json` shows a resume candidate existed but restore was reset because of
+  `config-payload-mismatch`
+
+Current diagnosis:
+
+- the trainer did not fail to publish an incremental version after processing new traces
+- the execution run failed to export any new trainer-facing traces at all
+- the next debugging target is therefore the execution-side trace handoff path for this
+  shell-only/no-op completion mode
+
+Local repair for that execution-side failure:
+
+- `dataset/docker/prompt-executor/worker_codex_cli_exec.py` no longer hard-codes a `15s`
+  repo-rag proxy startup window
+- the worker now uses a dedicated proxy startup timeout with a `45s` default and optional
+  `DATASET_REPO_RAG_PROXY_STARTUP_TIMEOUT_SEC` override
+- this is intended to prevent false fallback to direct `codex_cli` on cold or blob-backed
+  proxy startup paths where the ready file appears later but the proxy itself is healthy
+
+Local verification for this repair:
+
+- `cd ../dataset && pytest tests/unit/test_worker_codex_cli_exec_small.py -q`
+- `cd ../dataset && python -m compileall docker/prompt-executor`
+
+Observed:
+
+- targeted dataset unit coverage passed as `49 passed`
+- new regression covers a delayed ready-file case that would previously have fallen back
+  prematurely to direct Codex execution
+- Python compileall over `docker/prompt-executor` passed
+
+## 2026-05-21 Live Incremental Trainer In-Flight Verification
+
+Latest checked execution run:
+
+- `26237532287_20260521_162034`
+
+Execution-side status for this run:
+
+- `backend_used = codex_cli_repo_rag_proxy`
+- `bundle_version = 20260521T110641751838Z`
+- `trace_handoff_status = queued`
+- `repo_rag_proxy_status.dspy_status = success`
+- `repo_rag_proxy_status.prompt_family_id = pf-dc1f706da0b4f060`
+
+This confirms the new run did not fall back to direct Codex execution; it reused the published
+bundle-backed repo-rag proxy path and queued fresh traces for trainer ingestion.
+
+Trainer live status while versions were still unchanged in blob:
+
+- active job: `repo-rag-trainer-cycle-29656340`
+- published versions had not yet moved at inspection time:
+  - `repo-rag-training-families/current.json = 20260521T111104Z`
+  - `repo-rag-bundles/channels/stable.json = 20260521T110641751838Z`
+
+In-pod trainer state already shows a real incremental cycle in progress:
+
+- `input_trace_count = 6`
+- `loaded_candidate_count = 6`
+- `candidate_count = 5`
+- `family_count = 5`
+- `dirty_family_count = 3`
+- `new_candidate_count = 0`
+- `duplicate_count = 0`
+- `replaced_count = 0`
+- `skipped_reasons = {}`
+
+Generated-training state:
+
+- `base_example_count = 8`
+- `candidate_example_count = 5`
+- `combined_example_count = 13`
+
+The hydrated family-state inside the running pod already reflects incremental carry-forward:
+
+- previous baseline records from `20260521T105752Z` are present
+- new imported traces from `20260521T161515Z` are present alongside them
+- current in-memory family counts are:
+  - `pf-440eb981589fd25a = 1`
+  - `pf-b9d120cda6bd03f8 = 1`
+  - `pf-c7c2e0a42d9d87ec = 6`
+  - `pf-dc1f706da0b4f060 = 4`
+  - `pf-fbfd71330374ba41 = 2`
+
+The active trainer log also reached DSPy compile:
+
+- `Bootstrapped 2 full traces after 2 examples for up to 1 rounds, amounting to 2 attempts.`
+
+Conclusion at inspection time:
+
+- trainer is working
+- it is running an incremental cycle, not a no-op cycle
+- versions had not yet been published only because the active compile/publish job was still in
+  flight
+
+## 2026-05-21 Published Incremental Bundle Verification
+
+After the in-flight cycle finished, blob pointers moved to:
+
+- `repo-rag-training-families/current.json -> 20260521T162716Z`
+- `repo-rag-bundles/channels/stable.json -> 20260521T162315360070Z`
+
+Execution-side DSPy reuse for the triggering run `26237532287_20260521_162034` was real:
+
+- `backend_used = codex_cli_repo_rag_proxy`
+- `bundle_version = 20260521T110641751838Z`
+- `trace_handoff_status = queued`
+- `repo_rag_proxy_status.dspy_status = success`
+- `repo_rag_proxy_status.prompt_family_id = pf-dc1f706da0b4f060`
+- `repo_rag_proxy_status.prompt_family_similarity = 1.0`
+- `repo_rag_proxy_status.family_artifact_selected = true`
+
+So the execution reused the previously published stable bundle, then trainer produced the next
+incremental family-state and next bundle generation from the queued traces.
+
+Published bundle surface for `20260521T162315360070Z` remains compact:
+
+- `bundle.json = 22913` bytes
+- `metadata.json = 7345` bytes
+- `program.json = 10816` bytes
+- `published.json = 3579` bytes
+- `routing-index.sqlite3 = 40960` bytes
+
+The new bundle is mostly correct structurally:
+
+- `bundle.json.family_count = 5`
+- `metadata.json.family_artifact_registry` contains `5` families
+- bundle-local routing index still has the stripped runtime schema:
+  - `prompt_family_id`
+  - `payload_json`
+  - `family_record_count`
+- payload rows still omit `family_path` / `father_path`
+
+Two metadata defects remain in the published bundle:
+
+1. `family_state_version_used` is still `null` in both:
+   - `bundle.json`
+   - `published.json`
+   - `channels/stable.json`
+   even though this bundle was generated from the newly published incremental family-state version
+   `20260521T162716Z`.
+
+2. The copied bundle-local `routing-index.sqlite3` has incorrect `family_record_count` values:
+   - bundle index rows report `0` for all five families
+   - the source family-state index for `20260521T162716Z` correctly reports:
+     - `pf-440eb981589fd25a = 1`
+     - `pf-b9d120cda6bd03f8 = 1`
+     - `pf-c7c2e0a42d9d87ec = 6`
+     - `pf-dc1f706da0b4f060 = 4`
+     - `pf-fbfd71330374ba41 = 2`
+
+Current assessment:
+
+- DSPy reuse during the triggering execution run worked correctly
+- the incremental trainer cycle completed and published new versions
+- the new bundle is compact and likely still routable because `payload_json` remains intact
+- but the published bundle is not fully correct yet because provenance and `family_record_count`
+  metadata were zeroed/omitted during bundle-local routing-index generation
+
+## 2026-05-21 Bundle Provenance And Routing-Count Repair
+
+Local repair for the published-bundle defects above:
+
+- `_bundle_family_entry(...)` now carries `family_record_count` forward into compact bundle family
+  entries before the stripped bundle-local `routing-index.sqlite3` is written
+- `run_trainer_cycle(...)` now publishes remote family-state before bundle publish and refreshes
+  the local bundle metadata/manifest with the newly published `family_state_version`
+- bundle publish therefore now sees the correct family-state provenance instead of serializing
+  `family_state_version_used = null`
+
+Verification executed in the current turn:
+
+- `uv run python -m compileall src tests`
+- `uv run pytest tests/test_runtime_artifacts_azure.py -q`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+- `uv run pytest tests/test_codex_proxy.py -q`
+- `uv run repo-rag smoke-test`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+
+Observed:
+
+- `compileall` passed
+- `tests/test_runtime_artifacts_azure.py` passed as `28 passed`
+- `tests/test_utilities.py tests/test_repository_rag_bdd.py` passed as `63 passed`
+- `tests/test_codex_proxy.py` passed as `29 passed`
+- smoke test passed
+- Rust build passed
+
+## 2026-05-21 Live Incremental Bundle Verification After Provenance Repair
+
+Latest checked execution run:
+
+- `26241282193_20260521_173126`
+
+Execution-side DSPy reuse for that run was real and used the previously published stable bundle:
+
+- `repo_rag_backend.json` reported:
+  - `backend = codex_cli_repo_rag_proxy`
+  - `use_dspy_requested = true`
+  - `bundle_resolved = true`
+  - `bundle_version = 20260521T162315360070Z`
+  - `dspy_status = success`
+  - `mediation_mode = dspy_rag`
+  - `trace_handoff_status = queued`
+  - `trace_queued = true`
+- `redis_results.json` reported:
+  - `prompt_tokens = 42104`
+  - `total_tokens = 42104`
+
+That run then produced the next published versions:
+
+- `repo-rag-training-families/current.json -> 20260521T173935Z`
+- `repo-rag-bundles/channels/stable.json -> 20260521T173350406407Z`
+
+The new bundle now carries the family-state provenance correctly:
+
+- `channels/stable.json.current_family_state_version_used = 20260521T173935Z`
+- `bundle.json.family_state_version_used = 20260521T173935Z`
+- `published.json.family_state_version_used = 20260521T173935Z`
+- `metadata.json.lineage.family_state_version = 20260521T173935Z`
+
+The copied bundle-local routing index now preserves the same counts as the source family-state
+index:
+
+- `pf-440eb981589fd25a = 1`
+- `pf-b9d120cda6bd03f8 = 1`
+- `pf-c7c2e0a42d9d87ec = 10`
+- `pf-dc1f706da0b4f060 = 6`
+- `pf-fbfd71330374ba41 = 3`
+
+These values match exactly between:
+
+- `repo-rag-bundles/versions/20260521T173350406407Z/routing-index.sqlite3`
+- `repo-rag-training-families/versions/20260521T173935Z/family-index.sqlite3`
+
+The bundle-local routing payload remains stripped as intended:
+
+- payload rows carry routing fields plus `family_record_count`
+- payload rows do **not** carry `family_path`
+- payload rows do **not** carry `father_path`
+
+Observed bundle sizes for the new published version:
+
+- `bundle.json = 27099` bytes
+- `metadata.json = 7603` bytes
+- `published.json = 3918` bytes
+- `program.json = 10816` bytes
+- `routing-index.sqlite3 = 45056` bytes
+
+Status:
+
+- the provenance repair is now reflected in live blob state
+- the bundle-local routing index is both compact and count-correct
+- the triggering execution run reused the previous stable DSPy bundle successfully

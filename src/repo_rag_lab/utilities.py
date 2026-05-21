@@ -70,6 +70,7 @@ from .runtime_artifacts import (
     upload_remote_bundle_channel,
     upload_remote_family_state,
     write_trace_record,
+    write_bundle_manifest,
 )
 from .runtime_artifacts import (
     restore_processed_trace_records as _restore_processed_trace_records_compat,
@@ -176,6 +177,53 @@ def _write_json_artifact(path: Path, payload: Mapping[str, object]) -> None:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"{json.dumps(dict(payload), indent=2)}\n", encoding="utf-8")
+
+
+def _refresh_bundle_family_state_provenance(
+    root: Path,
+    *,
+    run_name: str | None = None,
+    bundle_version: str | None = None,
+    family_state_version: str | None = None,
+    family_state_path: str | None = None,
+) -> dict[str, object] | None:
+    """Update one local bundle manifest so it records the published family-state provenance."""
+
+    resolved_family_state_version = str(family_state_version or "").strip()
+    if not resolved_family_state_version:
+        return None
+    resolved_root = root.resolve()
+    try:
+        _, bundle_payload = resolve_bundle_manifest(
+            resolved_root,
+            run_name=run_name,
+            bundle_version=bundle_version,
+        )
+    except ValueError:
+        return None
+    metadata_path_text = str(bundle_payload.get("metadata_path") or "").strip()
+    if not metadata_path_text:
+        return None
+    metadata_path = Path(metadata_path_text)
+    if not metadata_path.is_absolute():
+        metadata_path = resolved_root / metadata_path
+    if not metadata_path.is_file():
+        return None
+    metadata = load_json_object(metadata_path)
+    lineage_value = metadata.get("lineage")
+    lineage = dict(lineage_value) if isinstance(lineage_value, Mapping) else {}
+    lineage["family_state_version"] = resolved_family_state_version
+    resolved_family_state_path = str(family_state_path or "").strip()
+    if resolved_family_state_path:
+        lineage["family_state_path"] = resolved_family_state_path
+    metadata["lineage"] = lineage
+    metadata_path.write_text(f"{json.dumps(metadata, indent=2)}\n", encoding="utf-8")
+    manifest = write_bundle_manifest(resolved_root, metadata_path)
+    return {
+        "metadata_path": _path_text_for_root(metadata_path, resolved_root),
+        "bundle_path": str(manifest.get("bundle_path") or ""),
+        "family_state_version_used": str(manifest.get("family_state_version_used") or ""),
+    }
 
 
 def _sanitize_training_run_name(name: str, *, default: str = DEFAULT_DSPY_RUN_NAME) -> str:
@@ -2282,33 +2330,6 @@ def run_trainer_cycle(
             "Bundle publish was blocked by trainer-side DSPy benchmark gates."
         )
 
-    if publish_requested and bundle_gate_passed:
-        try:
-            publish_record = publish_bundle(
-                root,
-                run_name=effective_publish_run_name,
-                bundle_version=bundle_version,
-                note=note,
-            )
-            remote_publish = None
-            config = resolve_azure_artifact_config()
-            if config is not None and config.bundles_enabled:
-                remote_publish = upload_remote_bundle(
-                    root,
-                    published_record=publish_record,
-                    config=config,
-                )
-            publish_payload = {
-                **publish_record,
-                "remote_publish": remote_publish,
-            }
-        except Exception as exc:
-            publish_error = {
-                "type": type(exc).__name__,
-                "message": str(exc),
-            }
-            active_cycle_warnings.append("Bundle publish failed during trainer cycle.")
-
     final_recompile_status: str | None = (
         str(recompile_payload.get("recompile_status"))
         if isinstance(recompile_payload, Mapping)
@@ -2336,12 +2357,22 @@ def run_trainer_cycle(
                 )
                 if isinstance(remote_family_state, Mapping):
                     published_family_state_version = str(
-                        remote_family_state.get("family_state_version") or ""
+                    remote_family_state.get("family_state_version") or ""
                     ).strip()
                     if published_family_state_version:
                         _write_trainer_cache_source(
                             root,
                             source_kind="remote-family-state",
+                            family_state_version=published_family_state_version,
+                            family_state_path=_path_text_for_root(
+                                resolved_family_state_path,
+                                root.resolve(),
+                            ),
+                        )
+                        _refresh_bundle_family_state_provenance(
+                            root,
+                            run_name=effective_publish_run_name,
+                            bundle_version=bundle_version,
                             family_state_version=published_family_state_version,
                             family_state_path=_path_text_for_root(
                                 resolved_family_state_path,
@@ -2361,6 +2392,33 @@ def run_trainer_cycle(
                 "Remote family-state publish was deferred because dirty prompt families "
                 "remain uncompiled."
             )
+
+    if publish_requested and bundle_gate_passed:
+        try:
+            publish_record = publish_bundle(
+                root,
+                run_name=effective_publish_run_name,
+                bundle_version=bundle_version,
+                note=note,
+            )
+            remote_publish = None
+            config = resolve_azure_artifact_config()
+            if config is not None and config.bundles_enabled:
+                remote_publish = upload_remote_bundle(
+                    root,
+                    published_record=publish_record,
+                    config=config,
+                )
+            publish_payload = {
+                **publish_record,
+                "remote_publish": remote_publish,
+            }
+        except Exception as exc:
+            publish_error = {
+                "type": type(exc).__name__,
+                "message": str(exc),
+            }
+            active_cycle_warnings.append("Bundle publish failed during trainer cycle.")
 
     if promotion_requested:
         if not gate_passed:

@@ -609,6 +609,11 @@ def test_run_bundle_publish_creates_published_record(tmp_path: Path) -> None:
     assert payload["publish_action"] == "created"
     published_path = tmp_path / payload["published_bundle_path"]
     assert published_path.exists()
+    published = json.loads(published_path.read_text(encoding="utf-8"))
+    bundle_summary = published["bundle_summary"]
+    assert "family_registry" not in bundle_summary
+    assert "family_artifact_registry" not in bundle_summary
+    assert bundle_summary["bundle_version"] == "sample-run"
 
 
 def test_run_bundle_inspection_reads_promoted_channel_state(tmp_path: Path) -> None:
@@ -623,6 +628,8 @@ def test_run_bundle_inspection_reads_promoted_channel_state(tmp_path: Path) -> N
     assert payload["bundle_found"] is True
     assert payload["channel_name"] == "stable"
     assert payload["current_bundle_version"] == "stable-run"
+    assert "family_registry" not in payload["current_bundle"]
+    assert "family_artifact_registry" not in payload["current_bundle"]
 
 
 def test_run_bundle_inspection_prefers_remote_channel_state(
@@ -3427,6 +3434,153 @@ def test_run_trainer_cycle_uploads_remote_bundle_when_publish_succeeds(
             "bundle_container": "repo-rag-bundles",
         }
     ]
+
+
+def test_run_trainer_cycle_records_remote_family_state_provenance_before_bundle_publish(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bundle_path = _write_bundle_manifest(tmp_path, "20260501T170200Z")
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._versioned_training_run_name",
+        lambda run_family, recorded_at=None: "20260501T170200Z",
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.drain_trace_queue",
+        lambda root, queue_name="default", limit=None, keep_queued=False: {
+            "queue_name": queue_name,
+            "queue_found": True,
+            "queued_count_before": 1,
+            "selected_count": 1,
+            "drained_count": 1,
+            "failed_count": 0,
+            "remaining_count": 0,
+            "keep_queued": keep_queued,
+            "status": "success",
+            "items": [{"imported_trace_record_path": "artifacts/traces/imported/one.json"}],
+            "failures": [],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._summarize_imported_trace_records",
+        lambda root, paths: {},
+    )
+    monkeypatch.setattr("repo_rag_lab.utilities.load_training_examples", lambda path: ["example"])
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.build_retrieval_benchmarks",
+        lambda examples: [{"question": "demo"}],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.evaluate_retrieval_quality_suite",
+        lambda root, benchmarks, top_k, top_k_values, retrieval_mode=None: {
+            "retrieval_mode": "idf-rerank",
+            "default_top_k": 4,
+            "default_summary": {
+                "top_k": 4,
+                "pass_rate": 1.0,
+                "source_recall": 1.0,
+                "tag_summaries": [],
+            },
+            "top_k_summaries": [{"top_k": 4, "pass_rate": 1.0, "source_recall": 1.0}],
+        },
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.check_retrieval_quality_thresholds",
+        lambda summary, minimum_pass_rate=None, minimum_source_recall=None: [],
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.materialize_training_candidates",
+        _materialize_training_candidates_stub(
+            candidate_count=1,
+            new_candidate_count=1,
+            prompt_family_count=1,
+            context_group_count=1,
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities._trainer_recompile_payload",
+        lambda *args, **kwargs: {
+            "recompile_status": "compiled",
+            "generated_training": {
+                "output_path": "artifacts/trainer/generated-training.yaml",
+                "summary_path": "artifacts/trainer/generated-training-summary.json",
+            },
+            "training_result": {
+                "run_name": "20260501T170200Z",
+                "bundle_version": "20260501T170200Z",
+                "metadata_path": "artifacts/dspy/20260501T170200Z/metadata.json",
+                "bundle_path": "artifacts/dspy/20260501T170200Z/bundle.json",
+                "benchmark_summary": {"pass_rate": 1.0},
+            },
+        },
+    )
+    monkeypatch.setattr("repo_rag_lab.utilities.resolve_azure_artifact_config", lambda: None)
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.summarize_family_state",
+        lambda path: {
+            "dirty_family_count": 0,
+            "family_state_path": str(path),
+        },
+    )
+
+    call_order: list[str] = []
+
+    def fake_upload_remote_family_state(root: Path, family_state_path: Path) -> dict[str, object]:
+        del root, family_state_path
+        call_order.append("remote-family-state")
+        return {
+            "family_state_path": "artifacts/trainer/family-index.sqlite3",
+            "family_state_version": "20260521T162716Z",
+        }
+
+    def fake_publish_bundle(
+        root: Path,
+        *,
+        run_name: str | None = None,
+        bundle_version: str | None = None,
+        note: str | None = None,
+    ) -> dict[str, object]:
+        del run_name, bundle_version, note
+        call_order.append("publish-bundle")
+        bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+        return {
+            "bundle_version": "20260501T170200Z",
+            "run_name": "20260501T170200Z",
+            "published_bundle_path": "artifacts/dspy/published/20260501T170200Z.json",
+            "bundle_path": "artifacts/dspy/20260501T170200Z/bundle.json",
+            "metadata_path": "artifacts/dspy/20260501T170200Z/metadata.json",
+            "program_path": "artifacts/dspy/20260501T170200Z/program.json",
+            "publish_status": "published",
+            "family_state_version_used": bundle_payload.get("family_state_version_used"),
+        }
+
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.upload_remote_family_state",
+        fake_upload_remote_family_state,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.utilities.publish_bundle",
+        fake_publish_bundle,
+    )
+
+    payload = json.loads(
+        run_trainer_cycle(
+            tmp_path,
+            queue_name="dataset",
+            recompile_run_name="trainer-auto",
+        )
+    )
+
+    refreshed_bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+    refreshed_metadata = json.loads(
+        (tmp_path / "artifacts" / "dspy" / "20260501T170200Z" / "metadata.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert call_order == ["remote-family-state", "publish-bundle"]
+    assert payload["publish"]["family_state_version_used"] == "20260521T162716Z"
+    assert refreshed_bundle["family_state_version_used"] == "20260521T162716Z"
+    assert refreshed_metadata["lineage"]["family_state_version"] == "20260521T162716Z"
 
 
 def test_run_trainer_candidates_materializes_yaml_from_imported_traces(tmp_path: Path) -> None:
