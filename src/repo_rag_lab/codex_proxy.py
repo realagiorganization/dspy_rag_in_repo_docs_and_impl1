@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 import threading
 import time
 from collections.abc import Iterator, Mapping, Sequence
@@ -33,6 +34,7 @@ from .runtime_artifacts import (
     build_bundle_family_registry,
     build_runtime_trace,
     fetch_remote_bundle,
+    fetch_remote_bundle_family_artifact,
     fetch_remote_family_state,
     inspect_bundle_channel,
     inspect_remote_bundle_channel,
@@ -784,6 +786,22 @@ def _staged_bundle_program_candidates(
     ]
 
 
+def _staged_bundle_routing_index_candidates(
+    *,
+    bundle_root: Path,
+    bundle_version: str | None,
+) -> list[Path]:
+    """Return canonical staged routing-index candidates for one bundle version."""
+
+    if bundle_version is None:
+        return []
+    resolved_root = bundle_root.resolve()
+    return [
+        resolved_root / "versions" / bundle_version / "routing-index.sqlite3",
+        resolved_root / "artifacts" / "dspy" / "remote" / bundle_version / "routing-index.sqlite3",
+    ]
+
+
 def _staged_family_program_candidates(
     *,
     bundle_root: Path,
@@ -807,6 +825,128 @@ def _staged_family_program_candidates(
         / safe_family_id
         / "program.json",
     ]
+
+
+def _resolve_bundle_routing_index_path(
+    *,
+    bundle_root: Path,
+    bundle_version: str | None,
+    bundle_channel: str,
+) -> Path | None:
+    """Resolve one bundle-local routing index staged beside the runtime artifacts."""
+
+    def _local_candidate_from_manifest(bundle_payload: Mapping[str, object] | None) -> Path | None:
+        routing_index_path_text = (
+            str(bundle_payload.get("routing_index_path") or "").strip()
+            if isinstance(bundle_payload, Mapping)
+            else ""
+        )
+        if not routing_index_path_text:
+            return None
+        candidate = Path(routing_index_path_text)
+        if not candidate.is_absolute():
+            candidate = (bundle_root / candidate).resolve()
+        if candidate.is_file():
+            return candidate.resolve()
+        return None
+
+    if bundle_version is not None:
+        local_bundle: Mapping[str, object] | None
+        try:
+            _, local_bundle = resolve_bundle_manifest(bundle_root, bundle_version=bundle_version)
+        except ValueError:
+            local_bundle = _load_staged_bundle_manifest(
+                bundle_root=bundle_root,
+                bundle_version=bundle_version,
+            )
+        local_candidate = _local_candidate_from_manifest(local_bundle)
+        if local_candidate is not None:
+            return local_candidate
+        for candidate in _staged_bundle_routing_index_candidates(
+            bundle_root=bundle_root,
+            bundle_version=bundle_version,
+        ):
+            if candidate.is_file():
+                return candidate.resolve()
+        try:
+            remote_bundle = fetch_remote_bundle(
+                bundle_root,
+                bundle_version=bundle_version,
+                channel=None,
+                download_family_artifacts=False,
+            )
+        except Exception:
+            remote_bundle = None
+        remote_candidate = _local_candidate_from_manifest(remote_bundle)
+        if remote_candidate is not None:
+            return remote_candidate
+        return None
+
+    remote_channel_state = inspect_remote_bundle_channel(bundle_channel)
+    if remote_channel_state is not None:
+        staged_bundle_version = (
+            str(remote_channel_state.get("current_bundle_version") or "").strip() or None
+        )
+        if staged_bundle_version is None:
+            return None
+        for candidate in _staged_bundle_routing_index_candidates(
+            bundle_root=bundle_root,
+            bundle_version=staged_bundle_version,
+        ):
+            if candidate.is_file():
+                return candidate.resolve()
+        try:
+            remote_bundle = fetch_remote_bundle(
+                bundle_root,
+                bundle_version=staged_bundle_version,
+                channel=None,
+                download_family_artifacts=False,
+            )
+        except Exception:
+            remote_bundle = None
+        remote_candidate = _local_candidate_from_manifest(remote_bundle)
+        if remote_candidate is not None:
+            return remote_candidate
+        return None
+
+    channel_state = inspect_bundle_channel(bundle_root, channel=bundle_channel)
+    current_bundle = (
+        channel_state.get("current_bundle") if channel_state.get("channel_found") else None
+    )
+    local_candidate = _local_candidate_from_manifest(
+        current_bundle if isinstance(current_bundle, Mapping) else None
+    )
+    if local_candidate is not None:
+        return local_candidate
+    staged_bundle_version = _resolve_bundle_version_hint(
+        bundle_root=bundle_root,
+        bundle_version=None,
+        bundle_channel=bundle_channel,
+    )
+    if staged_bundle_version is not None:
+        staged_bundle_payload = _load_staged_bundle_manifest(
+            bundle_root=bundle_root,
+            bundle_version=staged_bundle_version,
+        )
+        staged_candidate = _local_candidate_from_manifest(staged_bundle_payload)
+        if staged_candidate is not None:
+            return staged_candidate
+        for candidate in _staged_bundle_routing_index_candidates(
+            bundle_root=bundle_root,
+            bundle_version=staged_bundle_version,
+        ):
+            if candidate.is_file():
+                return candidate.resolve()
+    try:
+        remote_bundle = fetch_remote_bundle(
+            bundle_root,
+            bundle_version=None,
+            channel=bundle_channel,
+            download_family_artifacts=False,
+        )
+    except Exception:
+        remote_bundle = None
+    return _local_candidate_from_manifest(remote_bundle)
 
 
 def _build_family_registry_from_state_path(
@@ -855,6 +995,7 @@ def _resolve_bundle_family_registry(
                 bundle_root,
                 bundle_version=bundle_version,
                 channel=None,
+                download_family_artifacts=False,
             )
         except Exception:
             remote_bundle = None
@@ -876,6 +1017,7 @@ def _resolve_bundle_family_registry(
                 bundle_root,
                 bundle_version=staged_bundle_version,
                 channel=None,
+                download_family_artifacts=False,
             )
         except Exception:
             remote_bundle = None
@@ -923,6 +1065,7 @@ def _resolve_bundle_family_registry(
             bundle_root,
             bundle_version=bundle_version,
             channel=None if bundle_version else bundle_channel,
+            download_family_artifacts=False,
         )
     except Exception:
         remote_bundle = None
@@ -987,9 +1130,114 @@ def _resolve_family_runtime_program_path(
     ):
         if candidate.is_file():
             return candidate.resolve()
+    if bundle_version is not None and prompt_family_id:
+        try:
+            remote_artifact = fetch_remote_bundle_family_artifact(
+                bundle_root,
+                bundle_version=bundle_version,
+                prompt_family_id=prompt_family_id,
+            )
+        except Exception:
+            remote_artifact = None
+        program_path_text = (
+            str(remote_artifact.get("program_path") or "").strip()
+            if isinstance(remote_artifact, Mapping)
+            else ""
+        )
+        if program_path_text:
+            resolved_program_path = Path(program_path_text)
+            if not resolved_program_path.is_absolute():
+                resolved_program_path = (bundle_root / resolved_program_path).resolve()
+            if resolved_program_path.is_file():
+                return resolved_program_path.resolve()
     return None
 
 
+def _resolve_family_entry_from_routing_index(
+    *,
+    routing_index_path: Path | None,
+    prompt_family_id: str | None,
+) -> dict[str, object] | None:
+    """Load one thin family entry directly from the bundle-local routing index."""
+
+    if routing_index_path is None or not prompt_family_id:
+        return None
+    resolved_index_path = routing_index_path.resolve()
+    if not resolved_index_path.is_file():
+        return None
+    connection = sqlite3.connect(resolved_index_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        row = connection.execute(
+            """
+            SELECT *
+            FROM family_index_entries
+            WHERE prompt_family_id = ?
+            """,
+            (prompt_family_id,),
+        ).fetchone()
+    except sqlite3.DatabaseError:
+        return None
+    finally:
+        connection.close()
+    if row is None:
+        return None
+
+    if "payload_json" in row.keys():
+        try:
+            payload = json.loads(str(row["payload_json"] or "{}"))
+        except json.JSONDecodeError:
+            payload = {}
+        if not isinstance(payload, dict):
+            return None
+        entry = {str(key): value for key, value in payload.items()}
+        prompt_family_id = str(row["prompt_family_id"] or "").strip()
+        if prompt_family_id and "prompt_family_id" not in entry:
+            entry["prompt_family_id"] = prompt_family_id
+        if "family_record_count" not in entry:
+            entry["family_record_count"] = int(row["family_record_count"] or 0)
+        return entry
+
+    def _load_json_column(column_name: str, default: object) -> object:
+        try:
+            raw = str(row[column_name] or "")
+        except Exception:
+            return default
+        if not raw.strip():
+            return default
+        try:
+            value = json.loads(raw)
+        except json.JSONDecodeError:
+            return default
+        return value
+
+    feedback_metric = _load_json_column("family_feedback_metric_json", {})
+    success_metric = _load_json_column("family_success_metric_json", {})
+    prompt_terms = _load_json_column("prompt_terms_json", [])
+    command_terms = _load_json_column("command_terms_json", [])
+    constraint_terms = _load_json_column("constraint_terms_json", [])
+    entry = {
+        "prompt_family_id": str(row["prompt_family_id"] or "").strip(),
+        "question": str(row["question"] or "").strip(),
+        "family_record_count": int(row["family_record_count"] or 0),
+        "family_father_similarity_mean": _float_or_none(row["family_father_similarity_mean"]),
+        "family_runtime_score": _float_or_none(row["family_runtime_score"]),
+        "family_metric_1_mean": _float_or_none(row["family_metric_1_mean"]),
+        "family_feedback_metric": feedback_metric if isinstance(feedback_metric, Mapping) else {},
+        "family_feedback_count": int(row["family_feedback_count"] or 0),
+        "family_success_metric": success_metric if isinstance(success_metric, Mapping) else {},
+        "family_prompt_profile_terms": prompt_terms if isinstance(prompt_terms, list) else [],
+        "family_command_pattern_summary": command_terms
+        if isinstance(command_terms, list)
+        else [],
+        "family_constraint_summary": constraint_terms if isinstance(constraint_terms, list) else [],
+    }
+    if "family_path" in row.keys():
+        entry["family_path"] = str(row["family_path"] or "").strip()
+    if "father_path" in row.keys():
+        entry["father_path"] = str(row["father_path"] or "").strip()
+    return entry
+    return entry
 def _float_or_none(value: object) -> float | None:
     if isinstance(value, bool):
         return None
@@ -1099,6 +1347,7 @@ def _resolve_program_path_and_bundle_version(
                     bundle_root,
                     bundle_version=resolved_bundle_version,
                     channel=None,
+                    download_family_artifacts=False,
                 )
             except Exception:
                 remote_bundle = None
@@ -1142,6 +1391,7 @@ def _resolve_program_path_and_bundle_version(
             bundle_root,
             bundle_version=bundle_version,
             channel=None if bundle_version else bundle_channel,
+            download_family_artifacts=False,
         )
     except Exception:
         remote_bundle = None
@@ -1214,11 +1464,13 @@ def build_codex_mediation(
         bundle_version=bundle_version,
         bundle_channel=bundle_channel,
     )
-    family_registry = _resolve_bundle_family_registry(
+    bundle_routing_index_path = _resolve_bundle_routing_index_path(
         bundle_root=resolved_bundle_root,
-        bundle_version=bundle_version,
+        bundle_version=resolved_bundle_version,
         bundle_channel=bundle_channel,
     )
+    family_registry: Mapping[str, object] | None = None
+    family_entry: dict[str, object] | None = None
     prompt_family_id: str | None = None
     prompt_family_similarity = 0.0
     prompt_family_band = "new"
@@ -1231,44 +1483,55 @@ def build_codex_mediation(
     family_artifact_selected: bool | None = None
     family_exploration_selected = False
     supported_family = False
-    if isinstance(family_registry, Mapping):
-        support = resolve_prompt_family_support_from_payload(
-            family_lookup_prompt,
-            {"prompt_families": family_registry.get("families", [])},
-        )
+    if bundle_routing_index_path is not None:
+        support = resolve_prompt_family_support(family_lookup_prompt, bundle_routing_index_path)
         prompt_family_id = support.prompt_family_id
         prompt_family_similarity = support.similarity
         prompt_family_band = support.band
         supported_family = support.supported
+        family_entry = _resolve_family_entry_from_routing_index(
+            routing_index_path=bundle_routing_index_path,
+            prompt_family_id=prompt_family_id,
+        )
     else:
-        family_state_path = _get_family_state_path()
-        if family_state_path is not None:
-            synthesized_family_registry = _build_family_registry_from_state_path(
-                repository_root=resolved_root,
-                family_state_path=family_state_path,
+        family_registry = _resolve_bundle_family_registry(
+            bundle_root=resolved_bundle_root,
+            bundle_version=bundle_version,
+            bundle_channel=bundle_channel,
+        )
+        if isinstance(family_registry, Mapping):
+            support = resolve_prompt_family_support_from_payload(
+                family_lookup_prompt,
+                {"prompt_families": family_registry.get("families", [])},
             )
-            if isinstance(synthesized_family_registry, Mapping):
-                family_registry = synthesized_family_registry
-                support = resolve_prompt_family_support_from_payload(
-                    family_lookup_prompt,
-                    {"prompt_families": family_registry.get("families", [])},
-                )
-            else:
-                support = resolve_prompt_family_support(family_lookup_prompt, family_state_path)
             prompt_family_id = support.prompt_family_id
             prompt_family_similarity = support.similarity
             prompt_family_band = support.band
             supported_family = support.supported
         else:
-            warnings.append(
-                "Family state index was unavailable; request will pass through unchanged."
-            )
-    if (
-        prefer_dspy
-        and supported_family
-        and prompt_family_id is not None
-        and isinstance(family_registry, Mapping)
-    ):
+            family_state_path = _get_family_state_path()
+            if family_state_path is not None:
+                synthesized_family_registry = _build_family_registry_from_state_path(
+                    repository_root=resolved_root,
+                    family_state_path=family_state_path,
+                )
+                if isinstance(synthesized_family_registry, Mapping):
+                    family_registry = synthesized_family_registry
+                    support = resolve_prompt_family_support_from_payload(
+                        family_lookup_prompt,
+                        {"prompt_families": family_registry.get("families", [])},
+                    )
+                else:
+                    support = resolve_prompt_family_support(family_lookup_prompt, family_state_path)
+                prompt_family_id = support.prompt_family_id
+                prompt_family_similarity = support.similarity
+                prompt_family_band = support.band
+                supported_family = support.supported
+            else:
+                warnings.append(
+                    "Family state index was unavailable; request will pass through unchanged."
+                )
+    if prefer_dspy and supported_family and prompt_family_id is not None:
         family_state_path = _get_family_state_path()
         resolved_family_program_path = _resolve_family_runtime_program_path(
             repository_root=resolved_root,
@@ -1300,18 +1563,28 @@ def build_codex_mediation(
                     prompt_family_similarity = synthesized_support.similarity
                     prompt_family_band = synthesized_support.band
                     supported_family = True
-    family_entry = _resolve_family_bundle_entry(
-        family_registry=family_registry,
-        prompt_family_id=prompt_family_id,
-    )
+    if family_entry is None:
+        family_entry = _resolve_family_bundle_entry(
+            family_registry=family_registry,
+            prompt_family_id=prompt_family_id,
+        )
     if isinstance(family_entry, Mapping):
         runtime_metric = family_entry.get("family_runtime_metric")
         if isinstance(runtime_metric, Mapping):
             family_runtime_hit_rate = _float_or_none(runtime_metric.get("hit_rate"))
+        feedback_metric = family_entry.get("family_feedback_metric")
+        if family_runtime_hit_rate is None and isinstance(feedback_metric, Mapping):
+            family_runtime_hit_rate = _float_or_none(feedback_metric.get("hit_rate"))
+        if family_runtime_hit_rate is None:
+            family_runtime_hit_rate = _float_or_none(family_entry.get("family_metric_1_mean"))
+        family_artifact_hit_rate = _float_or_none(family_entry.get("family_runtime_score"))
         runtime_artifact = family_entry.get("runtime_artifact")
         if isinstance(runtime_artifact, Mapping):
-            family_artifact_hit_rate = _float_or_none(runtime_artifact.get("hit_rate"))
-            family_predicted_hit_rate = _float_or_none(runtime_artifact.get("predicted_hit_rate"))
+            if family_artifact_hit_rate is None:
+                family_artifact_hit_rate = _float_or_none(runtime_artifact.get("hit_rate"))
+            family_predicted_hit_rate = _float_or_none(
+                runtime_artifact.get("predicted_hit_rate")
+            )
             family_predicted_hit_rate_lower_bound = _float_or_none(
                 runtime_artifact.get("predicted_hit_rate_lower_bound")
             )
@@ -1319,6 +1592,22 @@ def build_codex_mediation(
                 runtime_artifact.get("prediction_uncertainty")
             )
             feedback_count = runtime_artifact.get("feedback_count")
+            if isinstance(feedback_count, int) and not isinstance(feedback_count, bool):
+                family_feedback_count = feedback_count
+        success_metric = family_entry.get("family_success_metric")
+        if isinstance(success_metric, Mapping):
+            if family_predicted_hit_rate is None:
+                family_predicted_hit_rate = _float_or_none(success_metric.get("posterior_mean"))
+            if family_predicted_hit_rate_lower_bound is None:
+                family_predicted_hit_rate_lower_bound = _float_or_none(
+                    success_metric.get("lower_bound")
+                )
+            if family_prediction_uncertainty is None:
+                family_prediction_uncertainty = _float_or_none(
+                    success_metric.get("uncertainty")
+                )
+        if family_feedback_count is None:
+            feedback_count = family_entry.get("family_feedback_count")
             if isinstance(feedback_count, int) and not isinstance(feedback_count, bool):
                 family_feedback_count = feedback_count
 
@@ -2003,11 +2292,7 @@ class _CodexProxyRuntime:
         trace_payload = {
             "command": "codex-proxy-turn-mediation",
             "command_status": "success",
-            "question": mediation.reformulated_prompt or mediation.question,
-            "original_prompt": mediation.original_prompt,
-            "reformulated_prompt": mediation.reformulated_prompt,
             "answer": mediation.summary,
-            "sources": mediation.sources,
             "context": [],
             "retrieved_context": [
                 {
@@ -2017,7 +2302,6 @@ class _CodexProxyRuntime:
                 }
                 for preview in mediation.evidence_previews
             ],
-            "command_trace": list(command_trace),
             "trace_role": trace_role,
             "trace": build_runtime_trace(
                 RuntimeTraceContext(
@@ -2065,7 +2349,6 @@ class _CodexProxyRuntime:
                 "used_baseline_fallback": mediation.dspy_status != "success",
             },
             "mediation": mediation.to_payload(),
-            "trainer_signal_kind": resolved_signal_kind,
             "trainer_signal_reason": trainer_signal_reason,
         }
         trace_name = hashlib.sha256(
@@ -2133,8 +2416,6 @@ class _CodexProxyRuntime:
             trace_role="turn",
             trainer_signal_kind="full_trace",
         )
-        if mediation.family_artifact_selected and mediation.dspy_status == "success":
-            return primary_trace_path
         for trace_role, prompt_text in self._lineage_prompts(mediation, command_trace):
             if prompt_text == mediation.original_prompt.strip():
                 continue

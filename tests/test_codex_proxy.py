@@ -24,6 +24,7 @@ from repo_rag_lab.codex_proxy import (
     running_codex_proxy,
 )
 from repo_rag_lab.retrieval import Chunk, RetrievalMode
+from repo_rag_lab.runtime_artifacts import write_family_index_payload
 
 
 def _payload_mapping(value: object) -> Mapping[str, object]:
@@ -541,6 +542,71 @@ def test_build_codex_mediation_prefers_bundle_family_registry(
         repository_root=repo,
         bundle_root=repo,
         prefer_dspy=False,
+    )
+
+    assert mediation.prompt_family_id == "pf-demo"
+    assert mediation.prompt_family_band == "match"
+    assert mediation.mediation_mode != "passthrough"
+    assert mediation.injected is True
+
+
+def test_build_codex_mediation_prefers_bundle_local_routing_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "README.md").write_text("repo summary\n", encoding="utf-8")
+    bundle_root = tmp_path / "bundle-root"
+    routing_index_path = bundle_root / "versions" / "stable-42" / "routing-index.sqlite3"
+    routing_index_path.parent.mkdir(parents=True)
+    write_family_index_payload(
+        routing_index_path,
+        {
+            "schema_version": 1,
+            "family_state_kind": "repo-rag-trainer-family-state",
+            "prompt_families": [
+                {
+                    "prompt_family_id": "pf-demo",
+                    "question": "Run the failing pytest target and inspect stderr.",
+                    "family_prompt_profile_terms": ["pytest", "stderr", "test"],
+                    "family_command_pattern_summary": ["pytest"],
+                    "family_constraint_summary": ["tests/test_suite.py"],
+                    "family_path": "families/pf-demo/family.json",
+                    "father_path": "families/pf-demo/father.json",
+                    "family_record_count": 1,
+                }
+            ],
+        },
+    )
+
+    def fake_ask_repository(
+        question: str,
+        root: Path,
+        retrieval_mode: RetrievalMode | None = None,
+    ) -> SimpleNamespace:
+        del question, retrieval_mode
+        return SimpleNamespace(
+            context=[Chunk(source=root / "README.md", text="Repository summary text.")],
+            summary="Repository summary text.",
+            retrieval_mode="lexical",
+        )
+
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.ask_repository", fake_ask_repository)
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_bundle_family_registry",
+        lambda **kwargs: pytest.fail("bundle-local routing index should be used first"),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_family_state_path",
+        lambda *args, **kwargs: pytest.fail("family-state fallback should not be used"),
+    )
+
+    mediation = build_codex_mediation(
+        "Run the failing pytest target and inspect stderr.",
+        repository_root=repo,
+        bundle_root=bundle_root,
+        prefer_dspy=False,
+        bundle_version="stable-42",
     )
 
     assert mediation.prompt_family_id == "pf-demo"
@@ -1796,10 +1862,12 @@ def test_resolve_bundle_family_registry_fetches_remote_bundle_for_explicit_versi
         *,
         bundle_version: str | None = None,
         channel: str | None = None,
+        download_family_artifacts: bool = True,
     ) -> dict[str, object]:
         captured["root"] = root
         captured["bundle_version"] = bundle_version
         captured["channel"] = channel
+        captured["download_family_artifacts"] = download_family_artifacts
         return {
             "bundle_version": "stable-42",
             "family_registry": {
@@ -1837,6 +1905,7 @@ def test_resolve_bundle_family_registry_fetches_remote_bundle_for_explicit_versi
         "root": bundle_root,
         "bundle_version": "stable-42",
         "channel": None,
+        "download_family_artifacts": False,
     }
 
 
@@ -2294,6 +2363,110 @@ def test_persist_turn_trace_emits_additional_lineage_trace_for_reformulated_prom
         for relative_path in manifest["trace_paths"]:
             payload = json.loads((config.artifact_dir / relative_path).read_text(encoding="utf-8"))
             roles.append(payload["trace_role"])
+        assert roles == ["turn", "reformulated"]
+    finally:
+        runtime.close()
+
+
+def test_persist_turn_trace_keeps_lineage_traces_when_family_artifact_reuse_succeeds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.resolve_azure_openai_runtime",
+        lambda env: SimpleNamespace(
+            endpoint="http://127.0.0.1:9",
+            api_key="test-key",
+            api_version="2024-12-01-preview",
+        ),
+    )
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    config = CodexProxyConfig(
+        repository_root=repo,
+        bundle_root=repo,
+        artifact_dir=tmp_path / "artifacts",
+    )
+    runtime = codex_proxy_module.CodexProxyRuntime(config)
+    try:
+        primary = CodexMediationResult(
+            question="Inspect README and validate the demo asset",
+            original_prompt="Validate the demo asset",
+            reformulated_prompt="Inspect README and validate the demo asset",
+            reformulation_status="success",
+            mediation_mode="dspy_rag",
+            rag_status="success",
+            dspy_status="success",
+            dspy_lm_model="azure/gpt-5.4-nano",
+            summary="family reuse succeeded",
+            retrieval_mode="lexical",
+            sources=["README.md"],
+            warnings=[],
+            bundle_version="stable-1",
+            program_path="families/pf-demo/program.json",
+            evidence_previews=[],
+            developer_message="repo mediation",
+            prompt_family_id="pf-demo",
+            prompt_family_similarity=1.0,
+            prompt_family_band="match",
+            family_runtime_hit_rate=1.0,
+            family_artifact_hit_rate=1.0,
+            family_predicted_hit_rate=0.7,
+            family_predicted_hit_rate_lower_bound=0.4,
+            family_prediction_uncertainty=0.2,
+            family_feedback_count=2,
+            family_artifact_selected=True,
+        )
+
+        def fake_build_mediation(
+            original_prompt: str, command_trace: list[Mapping[str, str]]
+        ) -> CodexMediationResult:
+            del command_trace
+            return CodexMediationResult(
+                question=original_prompt,
+                original_prompt=original_prompt,
+                reformulated_prompt=original_prompt,
+                reformulation_status="identity",
+                mediation_mode="dspy_rag",
+                rag_status="success",
+                dspy_status="success",
+                dspy_lm_model="azure/gpt-5.4-nano",
+                summary=f"family reuse for {original_prompt}",
+                retrieval_mode="lexical",
+                sources=["README.md"],
+                warnings=[],
+                bundle_version="stable-1",
+                program_path="families/pf-demo/program.json",
+                evidence_previews=[],
+                developer_message="repo mediation",
+                prompt_family_id="pf-demo",
+                prompt_family_similarity=1.0,
+                prompt_family_band="match",
+                family_runtime_hit_rate=1.0,
+                family_artifact_hit_rate=1.0,
+                family_predicted_hit_rate=0.7,
+                family_predicted_hit_rate_lower_bound=0.4,
+                family_prediction_uncertainty=0.2,
+                family_feedback_count=2,
+                family_artifact_selected=True,
+            )
+
+        monkeypatch.setattr(runtime, "build_mediation", fake_build_mediation, raising=False)
+
+        trace_path = runtime.persist_turn_trace(
+            primary,
+            command_trace=[
+                {"role": "assistant", "text": "Inspect README and validate the demo asset"},
+            ],
+        )
+
+        assert trace_path is not None
+        manifest = json.loads(runtime.turn_trace_manifest_path.read_text(encoding="utf-8"))
+        assert len(manifest["trace_paths"]) == 2
+        roles = []
+        for relative_path in manifest["trace_paths"]:
+            payload = json.loads((config.artifact_dir / relative_path).read_text(encoding="utf-8"))
+            roles.append(payload["trace_role"])
+            assert payload["trace"]["trainer_signal_kind"] == "full_trace"
         assert roles == ["turn", "reformulated"]
     finally:
         runtime.close()

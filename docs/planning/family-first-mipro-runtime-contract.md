@@ -97,6 +97,44 @@ Family correctness is judged against the stage-level semantic contract above:
   reusable stage
 - trainer should prefer stable stage reuse over workflow-local bundling
 
+## Term-Profile Contract
+
+The active `family_prompt_profile_terms` surface is intentionally narrow and must be built by a
+fixed filtering pipeline.
+
+Required contract:
+
+1. Start from the real prompt text carried by the trace surface being routed or trained.
+2. Remove previously defined garbage words, stopwords, and narrative filler first.
+3. Prefer technical terms from the explicit repository term dictionary over generic narrative
+   wording.
+4. Rank the surviving candidates and keep only the top `12` terms for the active prompt-profile
+   surface.
+
+This means:
+
+- `family_prompt_profile_terms` must be a top-12 surface, not an unbounded bag of words
+- the active profile must be produced after garbage-word filtering, not before it
+- technical terms from the explicit dictionary have priority over broad narrative words
+- generic helper wording must not dominate the active family profile
+
+Examples of words that must not dominate the active prompt profile include:
+
+- `add`
+- `any`
+- `cannot`
+- `changes`
+- `commands`
+- `completed`
+- `ensure`
+- `files`
+- `required`
+- `steps`
+- `tasks`
+
+If published `family_prompt_profile_terms` are dominated by words like the list above instead of
+technical task vocabulary, that is a contract violation rather than a subjective quality issue.
+
 ## MIPROv2 Contract
 
 `MIPROv2` is offline optimizer compute, not online per-turn routing compute.
@@ -127,6 +165,55 @@ Every saved turn trace must keep:
 
 Those traces accumulate locally during the run, then move together as one batch into the trainer
 queue and the durable trace store.
+
+Per-trace payload discipline is strict:
+
+- every prompt that reaches the proxy forms its own separate trace
+- the main `codex exec` flow is a trace
+- every auxiliary helper-LM flow is also a separate trace
+- successful DSPy family reuse must not suppress helper or lineage traces; reuse changes routing,
+  not trace visibility
+- per-trace files must contain only prompt-relevant lineage and outcome fields
+- per-trace files must **not** embed shared full-run payload that belongs to the whole execution
+  rather than to that specific prompt
+- forbidden shared payload in per-trace files includes:
+  - one common full-run `command_trace` copied into many traces
+  - one common full-run `outcome` blob with full session/token/debug state copied into many traces
+  - one common nested execution transcript or proxy payload copied into many traces
+- trainer-visible trace files should stay thin enough that different prompts remain distinguishable
+  by their own relevant fields rather than by a duplicated shared run tail
+
+## No-Dup Serialization Contract
+
+Generated artifacts must have one canonical owner per datum.
+
+- if one nested runtime `trace` already owns `question`, `original_prompt`,
+  `reformulated_prompt`, `sources`, `command_trace`, or routing metrics, outer envelopes must not
+  mirror those same values again
+- command envelopes, queue items, processed items, and stored trace records may keep only fields
+  that are not recoverable from the canonical nested owner
+- `family.json` must not inline full `family_father_record` when the same record is already
+  persisted in `father.json` or in `records/*.json`
+- `family.json` must not inline full `family_runtime_record` when one stable record reference is
+  sufficient to resolve it from `records/*.json`
+- `bundle.json` / bundle family registries must not carry full replay records when runtime routing
+  only needs compact family summaries plus the runtime artifact surface
+- derived scalars like `normalized_question` or `question_variant_count` should not be persisted in
+  JSON payloads when they can be recomputed exactly from the canonical stored fields
+- the published SQLite `family-index` must use one canonical routing question per family; it must
+  not persist `question`, `normalized_question`, and `family_father_question` together when the
+  latter two add no information beyond the canonical `question`
+- remote family-state sidecars must stay structurally aligned with the index: if the index exposes
+  `father_path`, the corresponding `father.json` must actually be published rather than dropped by
+  a compact-write path
+
+Duplication is allowed only when removing it would lose information or would make one artifact
+non-self-sufficient for its declared role.
+
+Legacy or historical compatibility is not by itself a valid reason to mirror fields into newly
+generated artifacts. If one surface still needs an older shape, the compatibility shim must be
+kept at read time or at a dedicated translation boundary rather than by bloating every newly
+written trace, family, or bundle file.
 
 ## Trainer Ingestion Contract
 
@@ -203,16 +290,25 @@ Runtime routing rule:
     trainer-ingestion surface when a real batch exists
   - the final single exported execution trace is a fallback handoff surface only when no usable
     per-turn batch exists or batch handoff fails
+  - enrichment must overwrite proxy fallback summaries with the final execution answer/evidence so
+    from-scratch family formation never depends on preexisting family support
 - trainer ingestion must reject mediation-only traces as non-training inputs:
   - `source_command = codex-proxy-turn-mediation`
   - or `trace.mode = codex-proxy-turn-mediation`
   - those records remain valid audit/debug artifacts, but must not seed or rebuild prompt families
+  - trainer must also reject `codex-proxy-turn-execution` traces if their answer still equals the
+    proxy fallback string `No father-backed prompt-family support was found ...`
 
 ## Trainer Cache Contract
 
 Trainer may keep one local internal cache, but that cache is never authoritative.
 
 - The only durable baseline is the latest remote version in `repo-rag-training-families`.
+- Every new published family-state version must be computed from exactly two semantic inputs:
+  - the latest remote `repo-rag-training-families` version
+  - the current cycle's imported traces
+- `repo-rag-bundles` is a derivative output of that updated family state; it is not an
+  independent semantic baseline.
 - The trainer PVC is for temporary execution artifacts in the current Codex Exec / trainer run:
   - queued and imported trace files
   - the current in-flight `pending-cycle.json` ledger
@@ -224,11 +320,39 @@ Trainer may keep one local internal cache, but that cache is never authoritative
   remote `family_state_version`.
 - If the remote version changes, trainer must discard the active local family cache and adopt the
   new remote version.
-- If no remote version exists, trainer may build one local family state from the current cycle
-  inputs only; that bootstrap stays transient until it is published remotely.
+- If `current.json` lags behind a newer already-published
+  `versions/<family_state_version>/family-index.sqlite3`, trainer must adopt the newest published
+  remote version rather than the stale pointer.
+- If no remote version exists, trainer starts from an empty local family cache and materializes the
+  current cycle traces exactly once; it must not pre-seed a temporary family state from those same
+  traces before the real candidate-materialization pass.
 - Trainer recompiles only dirty families created or updated by the current queued traces. It does
   not reprocess every family on every cycle and it does not rebuild from `processed/...` as an
   active baseline path.
+
+## Incremental Version Contract
+
+Family-state and bundle publication are incremental by construction.
+
+- Every new family-state version is an append-only superstructure over the previous family-state
+  baseline plus the current imported traces.
+- Imported traces may extend existing families, create new families, or update family summaries,
+  but they must not silently drop prior replay snapshots from the carried-forward baseline.
+- Persisting a new family-state version must therefore merge the carried-forward baseline replay
+  records with the current in-memory family payload append-only by snapshot identity; a reduced
+  intermediate payload is never interpreted as permission to forget older snapshots.
+- Compact `family.json` is not allowed to imply an empty replay-set.
+  - If replay history lives in `families/<prompt_family_id>/records/*.json`, both remote baseline
+    fetch and local trainer hydration must reload those sidecars before merge/persist.
+  - Omitting inline `family_records` from one thin summary is a serialization choice only; it is
+    never a semantic reset of family history.
+- Trainer may merge or deduplicate only the exact same replay snapshot identity
+  (`exact_snapshot_id`, or its deterministic fallback when that field is genuinely absent).
+- Trainer must not replace one prior replay snapshot with a later snapshot merely because both
+  came from a similar logical prompt, the same helper lane, or the same stable source identity.
+- If a new run emits another trace for the same prompt family, that new trace is a new replay
+  member and must remain alongside the older snapshots unless both records are literally the same
+  snapshot.
 
 ## Current Stage
 
@@ -244,9 +368,9 @@ Implemented locally in this stage:
   while preserving `champion_*` aliases for live compatibility
 - bundle drift detection now compares family-state lineage first and only falls back to
   `champion_*` lineage fields for older bundle manifests
-- each published bundle now carries an internal `family_registry`, and the proxy now treats that
-  registry as its primary family lookup source before falling back to the external family-state
-  file
+- each published bundle now carries a copied `routing-index.sqlite3`, and the proxy now treats
+  that bundle-local SQLite index as its primary family lookup source before falling back to the
+  external family-state file
 - trainer compilation now emits one family-scoped DSPy artifact per persisted family and records
   those artifacts in bundle metadata as `family_artifact_registry`
 - successful family reuse now emits `full_trace` directly so matched runs always remain eligible
@@ -478,7 +602,7 @@ Not implemented yet:
     snapshots remain readable as fallback input when the new family-state file is absent.
 22. Close the remaining live runtime gaps found in AKS run `25629990035`.
     Stage 22 locally: proxy now strips forwarded Discord tails, synthesizes family registry
-    support from `family-state.json` when bundle-local registry data is absent, resolves staged
+    support from `family-state.json` when no bundle-local routing surface exists, resolves staged
     mirror `program.json` / `families/<id>/program.json` paths without requiring trainer-side
     artifact paths, and the deploy-stage trusted handoff now skips itself when the worker already
     completed a successful per-turn batch enqueue/import.
@@ -531,15 +655,40 @@ Not implemented yet:
     longer disables `.repo_rag_bundle_store` staging by failing to find
     `tools/pvc_artifact_sync.sh`.
 33. Bridge matched family lookups onto fetched family-state runtime artifacts when bundle-local
-    family registries are stale, and surface the selected family/runtime metadata in exported
-    trace records.
-    Stage 33 locally: bundle-local family registries still win when they point at valid runnable
+    routing metadata is stale, and surface the selected family/runtime metadata in exported trace
+    records.
+    Stage 33 locally: bundle-local routing surfaces still win when they point at valid runnable
     family programs, but the proxy now lazily falls back to the fetched `family-state.json`
-    runtime-artifact path when a matched family registry entry is stale. Trainer-facing exported
+    runtime-artifact path when a matched bundle-local entry is stale. Trainer-facing exported
     trace records now also carry `prompt_family_id`, `prompt_family_similarity`,
     `family_artifact_selected`, `bundle_version`, `program_path`, and `mediation_metric_hits` /
     `mediation_metric_total` as top-level fields instead of hiding them only inside nested runtime
     trace payloads.
+34. Make `repo-rag-bundles` autonomous for runtime routing without turning it into trainer state.
+    Stage 34 locally: every published bundle now stages and uploads one copied
+    `routing-index.sqlite3`, bundle-channel state records its `current_routing_index_path`, and
+    the proxy routes by that bundle-local SQLite file before it ever touches
+    `repo-rag-training-families`. The family-state container remains the trainer source of truth
+    for incremental updates, but runtime execution no longer needs it on the hot path just to pick
+    a family. After bundle-local routing selects one `prompt_family_id`, the proxy downloads only
+    that family's `program.json` / `metadata.json` when they are not already staged locally.
+    Stage 34 follow-up locally: the copied bundle-local `routing-index.sqlite3` is now a stripped
+    runtime index rather than a byte-for-byte copy of the trainer family-state index. It no longer
+    carries `family_path` / `father_path` references to sidecars that are absent from
+    `repo-rag-bundles`; instead it stores only the routing payload that runtime actually needs.
+    The same compaction rule now applies to bundle publication surfaces:
+    - `bundle.json` must not inline `family_artifact_registry`
+    - `bundle.json` may carry `family_registry`, but only in a routing-sized form without full
+      benchmark case results
+    - `metadata.json` may retain trainer-facing `family_artifact_registry`, but only with compact
+      benchmark summaries
+    - `published.json` and channel state such as `channels/stable.json` must store only a compact
+      bundle summary, never a second full copy of `bundle.json`
+    - the copied bundle-local `routing-index.sqlite3` must preserve the source family's
+      `family_record_count`; the runtime bundle must not zero this field during compaction
+    - bundle publication must happen only after the remote family-state version is published so
+      `bundle.json`, `published.json`, and channel state record the exact
+      `family_state_version_used`
 34. Turn `family-state.json` into the thin family index the user asked for.
     Stage 34 locally: persisted trainer state now writes the full family payloads to
     `artifacts/trainer/families/<prompt_family_id>/family.json` plus `father.json` and

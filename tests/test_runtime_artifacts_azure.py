@@ -32,6 +32,7 @@ from repo_rag_lab.azure_artifacts import (
 from repo_rag_lab.runtime_artifacts import (
     drain_trace_queue,
     fetch_remote_bundle,
+    fetch_remote_bundle_family_artifact,
     fetch_remote_family_state,
     inspect_bundle_channel,
     inspect_pending_trainer_inputs,
@@ -41,8 +42,10 @@ from repo_rag_lab.runtime_artifacts import (
     restore_processed_trace_records,
     upload_remote_bundle,
     upload_remote_family_state,
+    write_bundle_manifest,
     write_family_index_payload,
 )
+from repo_rag_lab.training_samples import load_family_state_payload
 
 
 def _sample_trace_payload() -> dict[str, object]:
@@ -385,11 +388,13 @@ def test_queue_trace_record_and_drain_trace_queue_use_azure_blob_queue(
         "20260508T223000Z",
         Path(str(queued["queue_item_path"])).name,
     )
-    assert queued["prompt_family_band"] == "match"
-    assert queued["trainer_signal_kind"] == "feedback_trace"
-    assert queued["family_predicted_hit_rate"] == 0.666667
-    assert queued["original_prompt"] == "Inspect trainer queue ingestion behavior"
-    assert queued["reformulated_prompt"] == "Inspect how the trainer ingests queued traces."
+    queued_trace_payload = queued["trace_payload"]
+    assert isinstance(queued_trace_payload, dict)
+    assert queued_trace_payload["trace"]["prompt_family_band"] == "match"
+    assert queued_trace_payload["trace"]["trainer_signal_kind"] == "feedback_trace"
+    assert queued_trace_payload["trace"]["family_predicted_hit_rate"] == 0.666667
+    assert "original_prompt" not in queued
+    assert "reformulated_prompt" not in queued
     assert str(queued["queue_item_path"]).startswith("queued/repo-rag-training/")
     assert queued["local_queue_item_path"] == (
         "artifacts/traces/queued/dataset/" + Path(str(queued["queue_item_path"])).name
@@ -409,13 +414,9 @@ def test_queue_trace_record_and_drain_trace_queue_use_azure_blob_queue(
     )
     assert isinstance(queued_blob.get("trace_payload"), dict)
     queued_trace_payload = cast(dict[str, object], queued_blob["trace_payload"])
-    assert queued_blob["prompt_family_band"] == "match"
-    assert queued_blob["trainer_signal_kind"] == "feedback_trace"
-    assert queued_blob["original_prompt"] == "Inspect trainer queue ingestion behavior"
-    assert queued_blob["reformulated_prompt"] == "Inspect how the trainer ingests queued traces."
-    assert queued_trace_payload["prompt_family_band"] == "match"
-    assert queued_trace_payload["trainer_signal_kind"] == "feedback_trace"
-    assert queued_trace_payload["family_predicted_hit_rate"] == 0.666667
+    assert queued_trace_payload["trace"]["prompt_family_band"] == "match"
+    assert queued_trace_payload["trace"]["trainer_signal_kind"] == "feedback_trace"
+    assert queued_trace_payload["trace"]["family_predicted_hit_rate"] == 0.666667
     assert store.messages
 
     drained = drain_trace_queue(tmp_path, queue_name="dataset")
@@ -434,14 +435,14 @@ def test_queue_trace_record_and_drain_trace_queue_use_azure_blob_queue(
     assert imported_path.exists()
     imported_payload = json.loads(imported_path.read_text(encoding="utf-8"))
     assert imported_payload["outcome"]["acceptance_status"] == "accepted"
-    assert imported_payload["original_prompt"] == "Inspect trainer queue ingestion behavior"
-    assert (
-        imported_payload["reformulated_prompt"] == "Inspect how the trainer ingests queued traces."
+    assert imported_payload["trace"]["original_prompt"] == "Inspect trainer queue ingestion behavior"
+    assert imported_payload["trace"]["reformulated_prompt"] == (
+        "Inspect how the trainer ingests queued traces."
     )
     processed_blob_name = str(first_drained_item["processed_queue_item_path"])
     processed_blob = store.download_json("repo-rag-training-traces", processed_blob_name)
-    assert processed_blob["original_prompt"] == "Inspect trainer queue ingestion behavior"
-    assert processed_blob["reformulated_prompt"] == "Inspect how the trainer ingests queued traces."
+    assert "original_prompt" not in processed_blob
+    assert "reformulated_prompt" not in processed_blob
     assert store.deleted_messages == ["msg-1"]
 
 
@@ -688,7 +689,7 @@ def test_restore_processed_trace_records_rebuilds_local_ledger_from_azure_proces
     assert restored_path.exists()
     restored_payload = json.loads(restored_path.read_text(encoding="utf-8"))
     assert restored_payload["trace_record_kind"] == "repo-rag-trace-record"
-    assert restored_payload["question"] == "How does the trainer ingest traces?"
+    assert restored_payload["trace"]["question"] == "How does the trainer ingest traces?"
     assert restored_payload["outcome"]["acceptance_status"] == "accepted"
     assert (
         restored_payload["source_queue_item_path"]
@@ -885,6 +886,11 @@ def test_fetch_remote_bundle_downloads_bundle_assets(
         f"versions/{bundle_version}/program.json",
         '{"program":"demo"}\n',
     )
+    store.upload_bytes(
+        "repo-rag-bundles",
+        f"versions/{bundle_version}/routing-index.sqlite3",
+        b"sqlite-family-index",
+    )
     store.upload_json(
         "repo-rag-bundles",
         f"versions/{bundle_version}/published.json",
@@ -922,6 +928,9 @@ def test_fetch_remote_bundle_downloads_bundle_assets(
 
     assert payload is not None
     assert payload["bundle_version"] == bundle_version
+    assert payload["routing_index_path"] == (
+        f"artifacts/dspy/remote/{bundle_version}/routing-index.sqlite3"
+    )
     program_path = tmp_path / str(payload["program_path"])
     assert program_path.exists()
     assert program_path.read_text(encoding="utf-8") == '{"program":"demo"}\n'
@@ -943,6 +952,8 @@ def test_fetch_remote_bundle_downloads_bundle_assets(
     family_program_path = tmp_path / str(runtime_artifact["program_path"])
     assert family_program_path.exists()
     assert family_program_path.read_text(encoding="utf-8") == '{"program":"family-demo"}\n'
+    routing_index_path = tmp_path / str(payload["routing_index_path"])
+    assert routing_index_path.read_bytes() == b"sqlite-family-index"
 
 
 def test_fetch_remote_bundle_tolerates_missing_legacy_published_blob(
@@ -1022,6 +1033,182 @@ def test_fetch_remote_bundle_tolerates_missing_legacy_published_blob(
     assert payload["publish_status"] is None
     assert "published_bundle_path" not in payload
     assert (tmp_path / str(payload["program_path"])).is_file()
+
+
+def test_fetch_remote_bundle_skips_family_artifact_downloads_when_requested(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _FakeAzureArtifactStore()
+    config = AzureArtifactConfig(
+        account_name="acct",
+        account_key="key",
+        connection_string=None,
+        trace_container="repo-rag-training-traces",
+        bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
+        queue_name="repo-rag-training",
+    )
+    bundle_version = "stable-thin"
+    store.upload_json(
+        "repo-rag-bundles",
+        "channels/stable.json",
+        {
+            "schema_version": 1,
+            "channel_kind": "bundle-channel",
+            "channel_name": "stable",
+            "current_bundle_version": bundle_version,
+            "current_run_name": bundle_version,
+        },
+    )
+    store.upload_json(
+        "repo-rag-bundles",
+        f"versions/{bundle_version}/bundle.json",
+        {
+            "schema_version": 1,
+            "bundle_kind": "global",
+            "bundle_version": bundle_version,
+            "run_name": bundle_version,
+            "bundle_status": "ready",
+            "benchmark_status": "pass",
+            "routing_index_path": f"versions/{bundle_version}/routing-index.sqlite3",
+            "family_registry": {
+                "schema_version": 1,
+                "registry_kind": "repo-rag-family-registry",
+                "families": [
+                    {
+                        "prompt_family_id": "pf-demo",
+                        "runtime_artifact": {
+                            "artifact_kind": "compiled-family-program",
+                            "artifact_ready": True,
+                            "program_path": (
+                                f"versions/{bundle_version}/families/pf-demo/program.json"
+                            ),
+                            "metadata_path": (
+                                f"versions/{bundle_version}/families/pf-demo/metadata.json"
+                            ),
+                        },
+                    }
+                ],
+            },
+        },
+    )
+    store.upload_text(
+        "repo-rag-bundles",
+        f"versions/{bundle_version}/metadata.json",
+        "{}\n",
+    )
+    store.upload_text(
+        "repo-rag-bundles",
+        f"versions/{bundle_version}/program.json",
+        '{"program":"demo"}\n',
+    )
+    store.upload_bytes(
+        "repo-rag-bundles",
+        f"versions/{bundle_version}/routing-index.sqlite3",
+        b"sqlite-family-index",
+    )
+    store.upload_text(
+        "repo-rag-bundles",
+        f"versions/{bundle_version}/families/pf-demo/program.json",
+        '{"program":"family-demo"}\n',
+    )
+
+    def fake_resolve_azure_artifact_config(queue_name: str | None = None) -> AzureArtifactConfig:
+        del queue_name
+        return config
+
+    def fake_azure_artifact_store(cfg: AzureArtifactConfig) -> _FakeAzureArtifactStore:
+        del cfg
+        return store
+
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config",
+        fake_resolve_azure_artifact_config,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
+        fake_azure_artifact_store,
+    )
+
+    payload = fetch_remote_bundle(
+        tmp_path,
+        channel="stable",
+        download_family_artifacts=False,
+    )
+
+    assert payload is not None
+    assert payload["routing_index_path"] == (
+        f"artifacts/dspy/remote/{bundle_version}/routing-index.sqlite3"
+    )
+    assert not (
+        tmp_path
+        / "artifacts"
+        / "dspy"
+        / "remote"
+        / bundle_version
+        / "families"
+        / "pf-demo"
+        / "program.json"
+    ).exists()
+
+
+def test_fetch_remote_bundle_family_artifact_downloads_selected_family_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _FakeAzureArtifactStore()
+    config = AzureArtifactConfig(
+        account_name="acct",
+        account_key="key",
+        connection_string=None,
+        trace_container="repo-rag-training-traces",
+        bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
+        queue_name="repo-rag-training",
+    )
+    bundle_version = "stable-selected"
+    store.upload_text(
+        "repo-rag-bundles",
+        f"versions/{bundle_version}/families/pf-demo/program.json",
+        '{"program":"family-demo"}\n',
+    )
+    store.upload_text(
+        "repo-rag-bundles",
+        f"versions/{bundle_version}/families/pf-demo/metadata.json",
+        '{"prompt_family_id":"pf-demo"}\n',
+    )
+
+    def fake_resolve_azure_artifact_config(queue_name: str | None = None) -> AzureArtifactConfig:
+        del queue_name
+        return config
+
+    def fake_azure_artifact_store(cfg: AzureArtifactConfig) -> _FakeAzureArtifactStore:
+        del cfg
+        return store
+
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config",
+        fake_resolve_azure_artifact_config,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
+        fake_azure_artifact_store,
+    )
+
+    payload = fetch_remote_bundle_family_artifact(
+        tmp_path,
+        bundle_version=bundle_version,
+        prompt_family_id="pf-demo",
+    )
+
+    assert payload is not None
+    assert payload["program_path"] == (
+        f"artifacts/dspy/remote/{bundle_version}/families/pf-demo/program.json"
+    )
+    assert (tmp_path / str(payload["program_path"])).read_text(encoding="utf-8") == (
+        '{"program":"family-demo"}\n'
+    )
 
 
 def test_fetch_remote_bundle_falls_back_to_latest_remote_version_when_channel_missing(
@@ -1109,6 +1296,7 @@ def test_upload_remote_bundle_uploads_family_runtime_artifacts(
     bundle_path = bundle_dir / "bundle.json"
     metadata_path = bundle_dir / "metadata.json"
     program_path = bundle_dir / "program.json"
+    routing_index_path = bundle_dir / "routing-index.sqlite3"
     family_program_path = family_dir / "program.json"
     family_metadata_path = family_dir / "metadata.json"
     bundle_path.write_text(
@@ -1121,6 +1309,7 @@ def test_upload_remote_bundle_uploads_family_runtime_artifacts(
                 "bundle_status": "ready",
                 "program_path": "artifacts/dspy/sample-run/program.json",
                 "metadata_path": "artifacts/dspy/sample-run/metadata.json",
+                "routing_index_path": "artifacts/dspy/sample-run/routing-index.sqlite3",
                 "family_registry": {
                     "schema_version": 1,
                     "registry_kind": "repo-rag-family-registry",
@@ -1148,6 +1337,7 @@ def test_upload_remote_bundle_uploads_family_runtime_artifacts(
     )
     metadata_path.write_text('{"run_name":"sample-run"}\n', encoding="utf-8")
     program_path.write_text('{"program":"global"}\n', encoding="utf-8")
+    routing_index_path.write_bytes(b"sqlite-bytes")
     family_program_path.write_text('{"program":"family"}\n', encoding="utf-8")
     family_metadata_path.write_text('{"prompt_family_id":"pf-demo"}\n', encoding="utf-8")
 
@@ -1167,6 +1357,7 @@ def test_upload_remote_bundle_uploads_family_runtime_artifacts(
             "bundle_path": "artifacts/dspy/sample-run/bundle.json",
             "metadata_path": "artifacts/dspy/sample-run/metadata.json",
             "program_path": "artifacts/dspy/sample-run/program.json",
+            "routing_index_path": "artifacts/dspy/sample-run/routing-index.sqlite3",
         },
         config=config,
     )
@@ -1192,6 +1383,93 @@ def test_upload_remote_bundle_uploads_family_runtime_artifacts(
         )
         == '{"prompt_family_id":"pf-demo"}\n'
     )
+    assert (
+        store.download_bytes(
+            "repo-rag-bundles",
+            "versions/stable-42/routing-index.sqlite3",
+        )
+        == b"sqlite-bytes"
+    )
+
+
+def test_write_bundle_manifest_preserves_family_record_count_in_bundle_routing_index(
+    tmp_path: Path,
+) -> None:
+    family_state_path = tmp_path / "artifacts" / "trainer" / "family-index.sqlite3"
+    family_state_path.parent.mkdir(parents=True, exist_ok=True)
+    family_dir = tmp_path / "artifacts" / "trainer" / "families" / "pf-demo"
+    family_dir.mkdir(parents=True, exist_ok=True)
+    (family_dir / "family.json").write_text(
+        json.dumps(
+            {
+                "prompt_family_id": "pf-demo",
+                "question": "Verify README GIF asset",
+                "family_record_count": 3,
+                "family_prompt_profile_terms": ["gif", "readme", "asset"],
+                "family_command_pattern_summary": [],
+                "family_constraint_summary": [],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    write_family_index_payload(
+        family_state_path,
+        {
+            "schema_version": 1,
+            "family_state_kind": "repo-rag-trainer-family-index",
+            "prompt_families": [
+                {
+                    "prompt_family_id": "pf-demo",
+                    "question": "Verify README GIF asset",
+                    "family_record_count": 3,
+                    "family_prompt_profile_terms": ["gif", "readme", "asset"],
+                    "family_command_pattern_summary": [],
+                    "family_constraint_summary": [],
+                    "family_path": "families/pf-demo/family.json",
+                }
+            ],
+        },
+    )
+
+    bundle_dir = tmp_path / "artifacts" / "dspy" / "sample-run"
+    bundle_dir.mkdir(parents=True, exist_ok=True)
+    (bundle_dir / "program.json").write_text('{"program":"demo"}\n', encoding="utf-8")
+    metadata_path = bundle_dir / "metadata.json"
+    metadata_path.write_text(
+        json.dumps(
+            {
+                "run_name": "sample-run",
+                "bundle_version": "sample-run",
+                "lineage": {
+                    "family_state_path": "artifacts/trainer/family-index.sqlite3",
+                    "family_state_version": "20260521T162716Z",
+                    "family_count": 1,
+                },
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    manifest = write_bundle_manifest(tmp_path, metadata_path)
+    routing_index_path = tmp_path / str(manifest["routing_index_path"])
+    assert routing_index_path.is_file()
+
+    with sqlite3.connect(routing_index_path) as connection:
+        row = connection.execute(
+            """
+            SELECT family_record_count, payload_json
+            FROM family_index_entries
+            WHERE prompt_family_id = 'pf-demo'
+            """
+        ).fetchone()
+    assert row is not None
+    assert int(row[0]) == 3
+    payload = json.loads(str(row[1]))
+    assert payload["family_record_count"] == 3
 
 
 def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
@@ -1403,23 +1681,299 @@ def test_upload_and_fetch_remote_family_state_prefer_family_state_container(
     assert all(path.exists() for path in cached_record_paths)
     assert cached_runtime_program_path.exists()
     assert cached_runtime_metadata_path.exists()
-    cached_family_payload = json.loads(cached_family_member.read_text(encoding="utf-8"))
-    assert cached_family_payload["prompt_family_id"] == "pf-demo"
-    assert cached_family_payload["family_record_count"] == 2
-    assert cached_family_payload["family_runtime_artifact"]["program_path"] == str(
-        cached_runtime_paths["program"]
+
+
+def test_fetch_remote_family_state_returns_none_for_broken_current_pointer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _FakeAzureArtifactStore()
+    config = AzureArtifactConfig(
+        account_name="acct",
+        account_key="key",
+        connection_string=None,
+        trace_container="repo-rag-training-traces",
+        bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
+        queue_name="repo-rag-training",
+        family_state_container="repo-rag-training-families",
     )
-    cached_family_state_payload = load_family_index_payload(cached_family_state)
-    assert cached_family_state_payload["family_record_count"] == 2
-    cached_prompt_families = cast(
-        list[dict[str, object]],
-        cached_family_state_payload["prompt_families"],
+
+    def fake_resolve_azure_artifact_config(queue_name: str | None = None) -> AzureArtifactConfig:
+        del queue_name
+        return config
+
+    def fake_azure_artifact_store(cfg: AzureArtifactConfig) -> _FakeAzureArtifactStore:
+        del cfg
+        return store
+
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config",
+        fake_resolve_azure_artifact_config,
     )
-    assert cached_prompt_families[0]["family_record_count"] == 2
-    assert cached_prompt_families[0]["family_path"] == "families/pf-demo/family.json"
-    assert cached_prompt_families[0]["father_path"] == "families/pf-demo/father.json"
-    cached_father_payload = json.loads(cached_father_path.read_text(encoding="utf-8"))
-    assert cached_father_payload["exact_snapshot_id"] == "ts-father"
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
+        fake_azure_artifact_store,
+    )
+
+    store.upload_json(
+        "repo-rag-training-families",
+        family_state_current_blob_name(),
+        {
+            "schema_version": 1,
+            "family_state_kind": "repo-rag-family-state",
+            "updated_at": "2026-05-19T17:00:54.686500+00:00",
+            "current_version": "broken-version",
+            "current_family_state_blob": "versions/broken-version/family-index.sqlite3",
+            "current_family_count": 1,
+            "current_prompt_family_count": 1,
+            "current_family_record_count": 7,
+        },
+    )
+
+    fetched = fetch_remote_family_state(tmp_path)
+
+    assert fetched is None
+
+
+def test_fetch_remote_family_state_prefers_newest_published_version_over_stale_current_pointer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _FakeAzureArtifactStore()
+    config = AzureArtifactConfig(
+        account_name="acct",
+        account_key="key",
+        connection_string=None,
+        trace_container="repo-rag-training-traces",
+        bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
+        queue_name="repo-rag-training",
+        family_state_container="repo-rag-training-families",
+    )
+
+    def fake_resolve_azure_artifact_config(queue_name: str | None = None) -> AzureArtifactConfig:
+        del queue_name
+        return config
+
+    def fake_azure_artifact_store(cfg: AzureArtifactConfig) -> _FakeAzureArtifactStore:
+        del cfg
+        return store
+
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config",
+        fake_resolve_azure_artifact_config,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
+        fake_azure_artifact_store,
+    )
+
+    stale_version = "20260520T123707Z"
+    latest_version = "20260520T185724Z"
+    stale_blob_map = family_state_blob_names(stale_version)
+    latest_blob_map = family_state_blob_names(latest_version)
+    store.upload_json(
+        "repo-rag-training-families",
+        family_state_current_blob_name(),
+        {
+            "schema_version": 1,
+            "family_state_kind": "repo-rag-family-state",
+            "updated_at": "2026-05-20T18:57:30+00:00",
+            "current_version": stale_version,
+            "current_family_state_blob": stale_blob_map["family_state"],
+            "current_family_count": 1,
+            "current_prompt_family_count": 1,
+            "current_family_record_count": 1,
+        },
+    )
+    latest_family_payload = {
+        "schema_version": 1,
+        "record_kind": "repo-rag-trainer-family-index",
+        "family_state_kind": "repo-rag-trainer-family-index",
+        "prompt_families": [
+            {
+                "prompt_family_id": "pf-latest",
+                "question": "Latest family question",
+                "family_father_question": "Latest family question",
+                "family_records": [
+                    {
+                        "question": "Latest family question",
+                        "original_prompt": "Latest family question",
+                        "reformulated_prompt": "Latest family question",
+                        "expected_answer": "Latest answer",
+                        "exact_snapshot_id": "ts-latest",
+                        "prompt_family_id": "pf-latest",
+                        "metric_hits": 1,
+                        "metric_total": 1,
+                        "metric_ratio": 1.0,
+                        "trainer_signal_kind": "full_trace",
+                    }
+                ],
+                "family_record_count": 1,
+                "family_path": "families/pf-latest/family.json",
+                "father_path": "families/pf-latest/father.json",
+            }
+        ],
+    }
+    latest_sqlite_path = tmp_path / "latest-family-index.sqlite3"
+    write_family_index_payload(latest_sqlite_path, latest_family_payload)
+    store.upload_bytes(
+        "repo-rag-training-families",
+        latest_blob_map["family_state"],
+        latest_sqlite_path.read_bytes(),
+    )
+    store.upload_json(
+        "repo-rag-training-families",
+        "versions/20260520T185724Z/families/pf-latest/family.json",
+        latest_family_payload["prompt_families"][0],
+    )
+    store.upload_json(
+        "repo-rag-training-families",
+        "versions/20260520T185724Z/families/pf-latest/father.json",
+        latest_family_payload["prompt_families"][0]["family_records"][0],
+    )
+    store.upload_json(
+        "repo-rag-training-families",
+        "versions/20260520T185724Z/families/pf-latest/records/ts-latest.json",
+        latest_family_payload["prompt_families"][0]["family_records"][0],
+    )
+
+    fetched = fetch_remote_family_state(tmp_path)
+
+    assert fetched is not None
+    assert fetched["family_state_version"] == latest_version
+    cached_path = tmp_path / str(fetched["family_state_path"])
+    cached_payload = load_family_index_payload(cached_path)
+    families = cast(list[dict[str, object]], cached_payload["prompt_families"])
+    assert len(families) == 1
+    assert families[0]["prompt_family_id"] == "pf-latest"
+
+
+def test_fetch_remote_family_state_downloads_compact_family_record_sidecars(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _FakeAzureArtifactStore()
+    config = AzureArtifactConfig(
+        account_name="acct",
+        account_key="key",
+        connection_string=None,
+        trace_container="repo-rag-training-traces",
+        bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
+        queue_name="repo-rag-training",
+        family_state_container="repo-rag-training-families",
+    )
+
+    def fake_resolve_azure_artifact_config(queue_name: str | None = None) -> AzureArtifactConfig:
+        del queue_name
+        return config
+
+    def fake_azure_artifact_store(cfg: AzureArtifactConfig) -> _FakeAzureArtifactStore:
+        del cfg
+        return store
+
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config",
+        fake_resolve_azure_artifact_config,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
+        fake_azure_artifact_store,
+    )
+
+    family_state_version = "20260520T185724Z"
+    blob_map = family_state_blob_names(family_state_version)
+    compact_family_payload = {
+        "schema_version": 1,
+        "record_kind": "repo-rag-trainer-family-index",
+        "family_state_kind": "repo-rag-trainer-family-index",
+        "prompt_families": [
+            {
+                "prompt_family_id": "pf-demo",
+                "question": "Verify README GIF asset",
+                "family_record_count": 2,
+                "family_path": "families/pf-demo/family.json",
+                "father_path": "families/pf-demo/father.json",
+            }
+        ],
+    }
+    compact_sqlite_path = tmp_path / "compact-family-index.sqlite3"
+    write_family_index_payload(compact_sqlite_path, compact_family_payload)
+    store.upload_json(
+        "repo-rag-training-families",
+        family_state_current_blob_name(),
+        {
+            "schema_version": 1,
+            "family_state_kind": "repo-rag-family-state",
+            "updated_at": "2026-05-20T18:57:30+00:00",
+            "current_version": family_state_version,
+            "current_family_state_blob": blob_map["family_state"],
+            "current_family_count": 1,
+            "current_prompt_family_count": 1,
+            "current_family_record_count": 2,
+        },
+    )
+    store.upload_bytes(
+        "repo-rag-training-families",
+        blob_map["family_state"],
+        compact_sqlite_path.read_bytes(),
+    )
+    store.upload_json(
+        "repo-rag-training-families",
+        f"versions/{family_state_version}/families/pf-demo/family.json",
+        {
+            "prompt_family_id": "pf-demo",
+            "question": "Verify README GIF asset",
+            "family_record_count": 2,
+            "family_father_record_id": "ts-a",
+            "family_runtime_record_id": "ts-b",
+        },
+    )
+    store.upload_json(
+        "repo-rag-training-families",
+        f"versions/{family_state_version}/families/pf-demo/father.json",
+        {
+            "question": "Verify README GIF asset",
+            "exact_snapshot_id": "ts-a",
+            "prompt_family_id": "pf-demo",
+            "metric_hits": 1,
+            "metric_total": 1,
+            "metric_ratio": 1.0,
+        },
+    )
+    for snapshot_id in ("ts-a", "ts-b"):
+        store.upload_json(
+            "repo-rag-training-families",
+            f"versions/{family_state_version}/families/pf-demo/records/{snapshot_id}.json",
+            {
+                "question": "Verify README GIF asset",
+                "original_prompt": f"Verify README GIF asset {snapshot_id}",
+                "reformulated_prompt": f"Verify README GIF asset {snapshot_id}",
+                "expected_answer": "The GIF is already embedded.",
+                "exact_snapshot_id": snapshot_id,
+                "prompt_family_id": "pf-demo",
+                "metric_hits": 1,
+                "metric_total": 1,
+                "metric_ratio": 1.0,
+                "trainer_signal_kind": "full_trace",
+            },
+        )
+
+    fetched = fetch_remote_family_state(tmp_path)
+
+    assert fetched is not None
+    cached_path = tmp_path / str(fetched["family_state_path"])
+    hydrated = load_family_state_payload(cached_path)
+    families = cast(list[dict[str, object]], hydrated["prompt_families"])
+    assert len(families) == 1
+    family = families[0]
+    assert family["family_record_count"] == 2
+    assert {record["exact_snapshot_id"] for record in cast(list[dict[str, object]], family["family_records"])} == {
+        "ts-a",
+        "ts-b",
+    }
 
 
 def test_write_family_index_payload_replaces_locked_target_file(tmp_path: Path) -> None:
@@ -1448,6 +2002,13 @@ def test_write_family_index_payload_replaces_locked_target_file(tmp_path: Path) 
         assert locked_connection.execute(
             "SELECT prompt_family_id FROM family_index_entries ORDER BY prompt_family_id"
         ).fetchall() == [("pf-initial",)]
+        columns = {
+            str(row[1])
+            for row in locked_connection.execute("PRAGMA table_info(family_index_entries)")
+        }
+        assert "normalized_question" not in columns
+        assert "family_father_question" not in columns
+        assert "question_variant_count" not in columns
         write_family_index_payload(
             family_state_path,
             {
@@ -1471,6 +2032,103 @@ def test_write_family_index_payload_replaces_locked_target_file(tmp_path: Path) 
     loaded_payload = load_family_index_payload(family_state_path)
     prompt_families = cast(list[dict[str, object]], loaded_payload["prompt_families"])
     assert [str(family["prompt_family_id"]) for family in prompt_families] == ["pf-updated"]
+    assert "normalized_question" not in prompt_families[0]
+    assert "family_father_question" not in prompt_families[0]
+    assert "question_variant_count" not in prompt_families[0]
+
+
+def test_upload_remote_family_state_uploads_father_sidecar_from_compact_local_family_payload(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _FakeAzureArtifactStore()
+    config = AzureArtifactConfig(
+        account_name="acct",
+        account_key="key",
+        connection_string=None,
+        trace_container="repo-rag-training-traces",
+        bundle_container="repo-rag-bundles",
+        champion_container="repo-rag-champions",
+        queue_name="repo-rag-training",
+        family_state_container="repo-rag-training-families",
+    )
+    family_state_path = tmp_path / "artifacts" / "trainer" / "family-index.sqlite3"
+    family_state_path.parent.mkdir(parents=True)
+    family_dir = family_state_path.parent / "families" / "pf-demo"
+    family_dir.mkdir(parents=True)
+    (family_dir / "family.json").write_text(
+        json.dumps(
+            {
+                "prompt_family_id": "pf-demo",
+                "question": "Compact family question",
+                "family_father_record_id": "ts-father",
+                "family_records": [
+                    {
+                        "question": "Compact family question",
+                        "exact_snapshot_id": "ts-demo",
+                    }
+                ],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (family_dir / "father.json").write_text(
+        json.dumps(
+            {
+                "question": "Compact family question",
+                "exact_snapshot_id": "ts-father",
+                "metric_hits": 1,
+                "metric_total": 1,
+                "metric_ratio": 1.0,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    write_family_index_payload(
+        family_state_path,
+        {
+            "schema_version": 1,
+            "family_state_kind": "repo-rag-trainer-family-index",
+            "prompt_families": [
+                {
+                    "prompt_family_id": "pf-demo",
+                    "question": "Compact family question",
+                    "family_record_count": 1,
+                    "family_prompt_profile_terms": ["compact"],
+                    "family_command_pattern_summary": [],
+                    "family_constraint_summary": [],
+                    "family_path": "families/pf-demo/family.json",
+                    "father_path": "families/pf-demo/father.json",
+                }
+            ],
+        },
+    )
+
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.resolve_azure_artifact_config",
+        lambda queue_name=None: config,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.runtime_artifacts.AzureArtifactStore",
+        lambda cfg: store,
+    )
+
+    uploaded = upload_remote_family_state(tmp_path, family_state_path=family_state_path)
+
+    assert uploaded is not None
+    version = str(uploaded["family_state_version"])
+    assert store.blob_exists(
+        "repo-rag-training-families",
+        f"versions/{version}/families/pf-demo/family.json",
+    )
+    assert store.blob_exists(
+        "repo-rag-training-families",
+        f"versions/{version}/families/pf-demo/father.json",
+    )
 
 
 def test_inspect_bundle_channel_supports_staged_worker_bundle_store_layout(
@@ -1707,6 +2365,7 @@ def test_azure_artifact_helper_and_error_paths(
         "bundle": "versions/stable-42/bundle.json",
         "metadata": "versions/stable-42/metadata.json",
         "program": "versions/stable-42/program.json",
+        "routing_index": "versions/stable-42/routing-index.sqlite3",
         "published": "versions/stable-42/published.json",
     }
     assert family_state_blob_names("stable-42") == {

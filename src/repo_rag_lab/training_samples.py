@@ -847,6 +847,25 @@ def _stable_profile_terms_from_counts(
     return select_profile_summary_terms(counts, limit=limit, min_count=min_count)
 
 
+def _family_routing_terms_from_counts(
+    counts: Mapping[str, object],
+    *,
+    limit: int,
+    record_count: int,
+) -> list[str]:
+    """Return one selective routing term surface for families of any size."""
+
+    normalized_counts = _term_count_mapping(counts)
+    if not normalized_counts:
+        return []
+    bounded_record_count = max(0, int(record_count))
+    return _stable_profile_terms_from_counts(
+        normalized_counts,
+        limit=limit,
+        min_count=1 if bounded_record_count <= 1 else _stable_profile_min_count(bounded_record_count),
+    )
+
+
 def _stable_profile_min_count(record_count: int) -> int:
     """Return one family-size-aware stability threshold for routing-profile terms."""
 
@@ -1019,17 +1038,16 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
     for candidate_question in candidate_questions:
         best_similarity = max(best_similarity, _question_similarity(question, candidate_question))
     family_record_count = max(1, len(_family_candidate_records(family_payload)))
-    profile_min_count = _stable_profile_min_count(family_record_count)
     family_prompt_term_counts = _term_counts_from_stats(
         _term_stats_mapping(family_payload.get("family_prompt_profile_term_stats"))
     ) or _term_count_mapping(
         _term_stats_mapping(family_payload.get("family_prompt_profile_term_counts"))
     )
     if family_prompt_term_counts:
-        family_prompt_profile_terms = _stable_profile_terms_from_counts(
+        family_prompt_profile_terms = _family_routing_terms_from_counts(
             family_prompt_term_counts,
             limit=_FAMILY_PROMPT_PROFILE_LIMIT,
-            min_count=profile_min_count,
+            record_count=family_record_count,
         )
     else:
         family_prompt_profile_terms = _profile_terms(
@@ -1045,10 +1063,10 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
         _term_stats_mapping(family_payload.get("family_command_pattern_counts"))
     )
     if family_command_term_counts:
-        family_command_pattern_summary = _stable_profile_terms_from_counts(
+        family_command_pattern_summary = _family_routing_terms_from_counts(
             family_command_term_counts,
             limit=_FAMILY_COMMAND_PROFILE_LIMIT,
-            min_count=profile_min_count,
+            record_count=family_record_count,
         )
     else:
         family_command_pattern_summary = _profile_terms(
@@ -1059,10 +1077,10 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
         _term_stats_mapping(family_payload.get("family_constraint_term_stats"))
     ) or _term_count_mapping(_term_stats_mapping(family_payload.get("family_constraint_counts")))
     if family_constraint_term_counts:
-        family_constraint_summary = _stable_profile_terms_from_counts(
+        family_constraint_summary = _family_routing_terms_from_counts(
             family_constraint_term_counts,
             limit=_FAMILY_CONSTRAINT_PROFILE_LIMIT,
-            min_count=profile_min_count,
+            record_count=family_record_count,
         )
     else:
         family_constraint_summary = _constraint_terms(
@@ -1133,8 +1151,8 @@ def _family_profile_summary(
 ) -> tuple[list[str], list[str], list[str]]:
     """Return stable prompt, command, and constraint summaries for one family payload."""
 
-    family_record_count = max(1, len(_family_candidate_records(family_payload)))
-    profile_min_count = _stable_profile_min_count(family_record_count)
+    family_records = _family_candidate_records(family_payload)
+    family_record_count = max(1, len(family_records))
     candidate_questions = _family_question_variants(family_payload)
     family_routing_question = _family_routing_question(family_payload)
     if family_routing_question:
@@ -1146,10 +1164,10 @@ def _family_profile_summary(
         _term_stats_mapping(family_payload.get("family_prompt_profile_term_counts"))
     )
     if family_prompt_term_counts:
-        family_prompt_profile_terms = _stable_profile_terms_from_counts(
+        family_prompt_profile_terms = _family_routing_terms_from_counts(
             family_prompt_term_counts,
             limit=_FAMILY_PROMPT_PROFILE_LIMIT,
-            min_count=profile_min_count,
+            record_count=family_record_count,
         )
     else:
         family_prompt_profile_terms = _profile_terms(
@@ -1166,10 +1184,10 @@ def _family_profile_summary(
         _term_stats_mapping(family_payload.get("family_command_pattern_counts"))
     )
     if family_command_term_counts:
-        family_command_pattern_summary = _stable_profile_terms_from_counts(
+        family_command_pattern_summary = _family_routing_terms_from_counts(
             family_command_term_counts,
             limit=_FAMILY_COMMAND_PROFILE_LIMIT,
-            min_count=profile_min_count,
+            record_count=family_record_count,
         )
     else:
         family_command_pattern_summary = _profile_terms(
@@ -1181,10 +1199,10 @@ def _family_profile_summary(
         _term_stats_mapping(family_payload.get("family_constraint_term_stats"))
     ) or _term_count_mapping(_term_stats_mapping(family_payload.get("family_constraint_counts")))
     if family_constraint_term_counts:
-        family_constraint_summary = _stable_profile_terms_from_counts(
+        family_constraint_summary = _family_routing_terms_from_counts(
             family_constraint_term_counts,
             limit=_FAMILY_CONSTRAINT_PROFILE_LIMIT,
-            min_count=profile_min_count,
+            record_count=family_record_count,
         )
     else:
         family_constraint_summary = _constraint_terms(
@@ -1303,14 +1321,27 @@ def _sqlite_family_index_shortlist(
     try:
         rows = connection.execute(
             """
-            SELECT prompt_family_id, question, normalized_question, family_father_question,
-                   question_variant_count, family_record_count, prompt_terms_json,
-                   command_terms_json, constraint_terms_json, family_path, father_path
+            SELECT *
             FROM family_index_entries
             ORDER BY prompt_family_id
             """
         )
         for row in rows:
+            if "payload_json" in row.keys():
+                try:
+                    payload = json.loads(str(row["payload_json"] or "{}"))
+                except json.JSONDecodeError:
+                    payload = {}
+                if not isinstance(payload, dict):
+                    continue
+                family_entry = {str(key): value for key, value in payload.items()}
+                prompt_family_id = str(row["prompt_family_id"] or "").strip()
+                if prompt_family_id and "prompt_family_id" not in family_entry:
+                    family_entry["prompt_family_id"] = prompt_family_id
+                if "family_record_count" not in family_entry:
+                    family_entry["family_record_count"] = int(row["family_record_count"] or 0)
+                ranked.append((_coarse_prompt_family_similarity(question, family_entry), family_entry))
+                continue
             try:
                 prompt_terms = json.loads(str(row["prompt_terms_json"] or "[]"))
             except json.JSONDecodeError:
@@ -1323,12 +1354,21 @@ def _sqlite_family_index_shortlist(
                 constraint_terms = json.loads(str(row["constraint_terms_json"] or "[]"))
             except json.JSONDecodeError:
                 constraint_terms = []
+            question_text = str(row["question"] or "").strip()
+            normalized_question = (
+                str(row["normalized_question"] or "").strip()
+                if "normalized_question" in row.keys()
+                else ""
+            )
+            family_father_question = (
+                str(row["family_father_question"] or "").strip()
+                if "family_father_question" in row.keys()
+                else ""
+            )
+            canonical_question = question_text or family_father_question or normalized_question
             family_entry = {
                 "prompt_family_id": str(row["prompt_family_id"] or "").strip(),
-                "question": str(row["question"] or "").strip(),
-                "normalized_question": str(row["normalized_question"] or "").strip(),
-                "family_father_question": str(row["family_father_question"] or "").strip(),
-                "question_variant_count": int(row["question_variant_count"] or 0),
+                "question": canonical_question,
                 "family_record_count": int(row["family_record_count"] or 0),
                 "family_prompt_profile_terms": prompt_terms
                 if isinstance(prompt_terms, list)
@@ -1339,9 +1379,27 @@ def _sqlite_family_index_shortlist(
                 "family_constraint_summary": constraint_terms
                 if isinstance(constraint_terms, list)
                 else [],
-                "family_path": str(row["family_path"] or "").strip(),
-                "father_path": str(row["father_path"] or "").strip(),
             }
+            if "family_path" in row.keys():
+                family_entry["family_path"] = str(row["family_path"] or "").strip()
+            if "father_path" in row.keys():
+                family_entry["father_path"] = str(row["father_path"] or "").strip()
+            if (
+                family_father_question
+                and canonical_question
+                and family_father_question != canonical_question
+            ):
+                family_entry["family_father_question"] = family_father_question
+            if (
+                normalized_question
+                and canonical_question
+                and normalized_question != canonical_question.casefold()
+            ):
+                family_entry["normalized_question"] = normalized_question
+            if "question_variant_count" in row.keys():
+                question_variant_count = int(row["question_variant_count"] or 0)
+                if question_variant_count > 0:
+                    family_entry["question_variant_count"] = question_variant_count
             ranked.append((_coarse_prompt_family_similarity(question, family_entry), family_entry))
     except sqlite3.DatabaseError:
         return []
@@ -1385,7 +1443,9 @@ def _resolve_prompt_family_support_from_families(
         else ""
     )
     family_father_question = (
-        _normalize_question_text(best_family.get("family_father_question"))
+        _normalize_question_text(
+            best_family.get("family_father_question") or best_family.get("question")
+        )
         if isinstance(best_family, Mapping)
         else ""
     )
@@ -1424,11 +1484,13 @@ def _singleton_prompt_family_payload(
         "family_command_pattern_summary": [],
         "family_constraint_summary": [],
         "family_father_question": None,
+        "family_father_record_id": None,
         "family_father_similarity_mean": None,
         "family_father_record": None,
         "family_runtime_artifact": None,
         "family_runtime_context_group_id": None,
         "family_runtime_score": None,
+        "family_runtime_record_id": None,
         "family_runtime_record": None,
         "family_feedback_metric": None,
         "family_feedback_count": 0,
@@ -1451,7 +1513,6 @@ def _refresh_family_profile_summary(family_payload: dict[str, Any]) -> None:
     """Persist one lightweight routing profile derived from stored family traces."""
 
     family_record_count = len(_family_candidate_records(family_payload))
-    profile_min_count = _stable_profile_min_count(family_record_count)
     prompt_term_counts: dict[str, int] = {}
     command_term_counts: dict[str, int] = {}
     constraint_term_counts: dict[str, int] = {}
@@ -1501,20 +1562,20 @@ def _refresh_family_profile_summary(family_payload: dict[str, Any]) -> None:
         command_term_counts
     )
     family_payload["family_constraint_term_stats"] = _term_stats_from_counts(constraint_term_counts)
-    family_payload["family_prompt_profile_terms"] = _stable_profile_terms_from_counts(
+    family_payload["family_prompt_profile_terms"] = _family_routing_terms_from_counts(
         prompt_term_counts,
         limit=_FAMILY_PROMPT_PROFILE_LIMIT,
-        min_count=profile_min_count,
+        record_count=family_record_count,
     )
-    family_payload["family_command_pattern_summary"] = _stable_profile_terms_from_counts(
+    family_payload["family_command_pattern_summary"] = _family_routing_terms_from_counts(
         command_term_counts,
         limit=_FAMILY_COMMAND_PROFILE_LIMIT,
-        min_count=profile_min_count,
+        record_count=family_record_count,
     )
-    family_payload["family_constraint_summary"] = _stable_profile_terms_from_counts(
+    family_payload["family_constraint_summary"] = _family_routing_terms_from_counts(
         constraint_term_counts,
         limit=_FAMILY_CONSTRAINT_PROFILE_LIMIT,
-        min_count=profile_min_count,
+        record_count=family_record_count,
     )
 
 
@@ -1563,6 +1624,7 @@ def _refresh_prompt_family_summary(family_payload: dict[str, Any], question: str
     father_record, father_similarity_mean = _select_family_father_record(family_payload)
     if father_record is not None:
         family_payload["family_father_record"] = father_record
+        family_payload["family_father_record_id"] = _family_record_reference(father_record)
         father_question = _record_routing_question(father_record)
         family_payload["family_father_question"] = father_question or None
         family_payload["family_father_similarity_mean"] = father_similarity_mean
@@ -1571,6 +1633,7 @@ def _refresh_prompt_family_summary(family_payload: dict[str, Any], question: str
         _refresh_family_profile_summary(family_payload)
         return
     family_payload["family_father_record"] = None
+    family_payload["family_father_record_id"] = None
     family_payload["family_father_similarity_mean"] = None
     family_payload["family_father_question"] = normalized_question or None
     if normalized_question:
@@ -1593,6 +1656,12 @@ def _find_or_create_prompt_family(
         question=question,
         candidate_record=candidate_record,
     )
+    preferred_prompt_family_id = str(preferred_family_id or "").strip()
+    if preferred_prompt_family_id:
+        existing_family = family_by_id.get(preferred_prompt_family_id)
+        if existing_family is not None:
+            _refresh_prompt_family_summary(existing_family, question)
+            return existing_family, False
     best_family: dict[str, Any] | None = None
     best_similarity = 0.0
     for family_id in family_order:
@@ -1607,7 +1676,7 @@ def _find_or_create_prompt_family(
         _refresh_prompt_family_summary(best_family, question)
         return best_family, False
 
-    prompt_family_id = str(preferred_family_id or _prompt_family_id(question)).strip()
+    prompt_family_id = str(preferred_prompt_family_id or _prompt_family_id(question)).strip()
     if not prompt_family_id:
         prompt_family_id = _prompt_family_id(question)
     if prompt_family_id in family_by_id:
@@ -1954,12 +2023,17 @@ def _family_state_entry_to_payload(
         family_state_path,
         family_entry.get("family_path"),
     )
+    resolved_family_dir = resolved_family_path.parent if resolved_family_path is not None else None
     if resolved_family_path is not None and resolved_family_path.is_file():
         candidate_payload = json.loads(resolved_family_path.read_text(encoding="utf-8"))
         if isinstance(candidate_payload, dict):
             loaded_payload = {str(key): value for key, value in candidate_payload.items()}
     if loaded_payload is None:
         loaded_payload = {str(key): value for key, value in family_entry.items()}
+    if not _family_replay_records(loaded_payload) and resolved_family_dir is not None:
+        sidecar_records = _load_family_record_sidecars(resolved_family_dir)
+        if sidecar_records:
+            loaded_payload["family_records"] = sidecar_records
     for field_name in (
         "prompt_family_id",
         "family_path",
@@ -2128,11 +2202,21 @@ def _persist_local_family_state(
                     str(key): value for key, value in loaded_existing.items()
                 }
                 existing_replay_records = _family_replay_records(existing_family_payload)
-        if not _family_replay_records(full_family_payload) and existing_replay_records:
-            full_family_payload["family_records"] = existing_replay_records
+                if not existing_replay_records:
+                    existing_replay_records = _load_family_record_sidecars(family_dir)
+                    if existing_replay_records:
+                        existing_family_payload["family_records"] = existing_replay_records
+        current_replay_records = _family_replay_records(full_family_payload)
+        if existing_replay_records:
+            full_family_payload["family_records"] = _merge_family_replay_records_append_only(
+                existing_replay_records,
+                current_replay_records,
+            )
             for field_name in (
                 "family_father_record",
+                "family_father_record_id",
                 "family_runtime_record",
+                "family_runtime_record_id",
                 "family_champion_record",
                 "family_runtime_artifact",
             ):
@@ -2148,6 +2232,30 @@ def _persist_local_family_state(
             for key, value in full_family_payload.items()
             if key not in {"family_path", "father_path", "record_paths", "family_record_count"}
         }
+        father_record = _family_father_record(full_family_payload)
+        runtime_record = _family_runtime_record(full_family_payload)
+        champion_record = _family_champion_record(full_family_payload)
+        family_file_payload["family_father_record_id"] = _family_record_reference(father_record)
+        family_file_payload["family_runtime_record_id"] = _family_record_reference(runtime_record)
+        family_file_payload.pop("family_father_record", None)
+        family_file_payload.pop("family_runtime_record", None)
+        if _family_record_reference(champion_record) == _family_record_reference(runtime_record):
+            family_file_payload.pop("family_champion_record", None)
+        question_text = _normalize_question_text(family_file_payload.get("question"))
+        normalized_question = _normalize_question_text(family_file_payload.get("normalized_question"))
+        if normalized_question and question_text and normalized_question == question_text.casefold():
+            family_file_payload.pop("normalized_question", None)
+        if isinstance(family_file_payload.get("question_variants"), list):
+            family_file_payload["question_variants"] = _family_question_variants(family_file_payload)
+        family_file_payload.pop("question_variant_count", None)
+        father_question = _normalize_question_text(family_file_payload.get("family_father_question"))
+        canonical_father_question = _record_routing_question(father_record or {})
+        if (
+            father_question
+            and canonical_father_question
+            and father_question == canonical_father_question
+        ) or (father_question and question_text and father_question == question_text):
+            family_file_payload.pop("family_father_question", None)
         family_file_payload["family_record_count"] = len(
             _family_replay_records(full_family_payload)
         )
@@ -2158,7 +2266,6 @@ def _persist_local_family_state(
         )
 
         father_path = family_dir / "father.json"
-        father_record = _family_father_record(full_family_payload)
         if father_record is not None:
             father_path.write_text(
                 f"{json.dumps(father_record, indent=2)}\n",
@@ -2277,16 +2384,16 @@ def _load_champion_index(path: Path) -> dict[str, Any]:
         deduped_family_records: list[dict[str, Any]] = []
         deduped_record_index: dict[str, int] = {}
         for record in normalized_family_records:
-            stable_key = _stable_family_replay_key(record)
-            if not stable_key:
+            snapshot_key = _family_record_reference(record)
+            if not snapshot_key:
                 deduped_family_records.append(record)
                 continue
-            existing_index = deduped_record_index.get(stable_key)
+            existing_index = deduped_record_index.get(snapshot_key)
             if existing_index is None:
-                deduped_record_index[stable_key] = len(deduped_family_records)
+                deduped_record_index[snapshot_key] = len(deduped_family_records)
                 deduped_family_records.append(record)
                 continue
-            merged_record = _merge_replayed_candidate_records(
+            merged_record = _merge_equivalent_candidate_records(
                 deduped_family_records[existing_index],
                 record,
             )
@@ -2341,9 +2448,15 @@ def _family_champion_record(family_payload: Mapping[str, Any]) -> dict[str, Any]
     """Return the normalized family champion record, if any."""
 
     record = family_payload.get("family_champion_record")
-    if not isinstance(record, Mapping):
-        return None
-    return _serialize_candidate_record(record)
+    if isinstance(record, Mapping):
+        return _serialize_candidate_record(record)
+    runtime_record = _resolve_family_record_reference(
+        family_payload,
+        family_payload.get("family_runtime_record_id"),
+    )
+    if runtime_record is not None:
+        return runtime_record
+    return None
 
 
 def _family_replay_records(family_payload: Mapping[str, Any] | None) -> list[dict[str, Any]]:
@@ -2370,6 +2483,94 @@ def _family_replay_records(family_payload: Mapping[str, Any] | None) -> list[dic
     return records
 
 
+def _load_family_record_sidecars(family_dir: Path) -> list[dict[str, Any]]:
+    """Load replay-set records from compact `records/*.json` sidecars when present."""
+
+    resolved_family_dir = family_dir.resolve()
+    record_dir = resolved_family_dir / "records"
+    if not record_dir.is_dir():
+        return []
+    records: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for record_path in sorted(record_dir.glob("*.json")):
+        try:
+            raw_payload = json.loads(record_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(raw_payload, Mapping):
+            continue
+        normalized = _serialize_candidate_record(raw_payload)
+        if not _trainer_candidate_record_is_supported(normalized):
+            continue
+        key = str(normalized.get("exact_snapshot_id") or _candidate_record_hash(normalized)).strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        records.append(normalized)
+    return records
+
+
+def _merge_family_replay_records_append_only(
+    existing_records: Sequence[Mapping[str, Any]],
+    current_records: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return one append-only replay-set merge keyed by exact snapshot identity."""
+
+    merged_records: list[dict[str, Any]] = []
+    merged_index: dict[str, int] = {}
+
+    def _append(record: Mapping[str, Any]) -> None:
+        normalized = _serialize_candidate_record(record)
+        if not _trainer_candidate_record_is_supported(normalized):
+            return
+        reference = _family_record_reference(normalized)
+        if reference is None:
+            merged_records.append(normalized)
+            return
+        existing_index = merged_index.get(reference)
+        if existing_index is None:
+            merged_index[reference] = len(merged_records)
+            merged_records.append(normalized)
+            return
+        merged_records[existing_index] = _merge_equivalent_candidate_records(
+            merged_records[existing_index],
+            normalized,
+        )
+
+    for record in existing_records:
+        _append(record)
+    for record in current_records:
+        _append(record)
+    return merged_records
+
+
+def _family_record_reference(record: Mapping[str, Any] | None) -> str | None:
+    """Return the stable persisted identifier for one replay-set record."""
+
+    if not isinstance(record, Mapping):
+        return None
+    normalized = _serialize_candidate_record(record)
+    return (
+        str(normalized.get("exact_snapshot_id") or _candidate_record_hash(normalized)).strip()
+        or None
+    )
+
+
+def _resolve_family_record_reference(
+    family_payload: Mapping[str, Any] | None,
+    reference_value: object,
+) -> dict[str, Any] | None:
+    """Resolve one stored record reference against one family's known records."""
+
+    reference = str(reference_value or "").strip()
+    if not reference or not isinstance(family_payload, Mapping):
+        return None
+    for record in _family_replay_records(family_payload):
+        if _family_record_reference(record) == reference:
+            return record
+    return None
+
+
 def _family_runtime_record(family_payload: Mapping[str, Any] | None) -> dict[str, Any] | None:
     """Return the current family runtime record, falling back to legacy champion state."""
 
@@ -2378,6 +2579,12 @@ def _family_runtime_record(family_payload: Mapping[str, Any] | None) -> dict[str
     record = family_payload.get("family_runtime_record")
     if isinstance(record, Mapping):
         return _serialize_candidate_record(record)
+    resolved_record = _resolve_family_record_reference(
+        family_payload,
+        family_payload.get("family_runtime_record_id"),
+    )
+    if resolved_record is not None:
+        return resolved_record
     return _family_champion_record(family_payload)
 
 
@@ -2495,6 +2702,12 @@ def _family_father_record(family_payload: Mapping[str, Any] | None) -> dict[str,
     record = family_payload.get("family_father_record")
     if isinstance(record, Mapping):
         return _serialize_candidate_record(record)
+    resolved_record = _resolve_family_record_reference(
+        family_payload,
+        family_payload.get("family_father_record_id"),
+    )
+    if resolved_record is not None:
+        return resolved_record
     father_record, _ = _select_family_father_record(family_payload)
     return father_record
 
@@ -2654,6 +2867,7 @@ def _refresh_family_champion(family_payload: dict[str, Any]) -> tuple[bool, str 
         family_payload["family_metric_1_mean"] = None
         family_payload["family_success_metric"] = _family_success_metric(family_payload)
         family_payload["family_runtime_record"] = None
+        family_payload["family_runtime_record_id"] = None
         family_payload["family_champion_context_group_id"] = None
         family_payload["family_champion_score"] = None
         family_payload["family_champion_record"] = None
@@ -2683,6 +2897,7 @@ def _refresh_family_champion(family_payload: dict[str, Any]) -> tuple[bool, str 
     family_payload["family_metric_1_mean"] = _family_metric_1_mean(family_payload)
     family_payload["family_success_metric"] = _family_success_metric(family_payload)
     family_payload["family_runtime_record"] = _serialize_candidate_record(best_runtime_record)
+    family_payload["family_runtime_record_id"] = _family_record_reference(best_runtime_record)
     family_payload["family_runtime_context_group_id"] = runtime_context_group_id
     family_payload["family_champion_context_group_id"] = runtime_context_group_id
     family_payload["family_champion_score"] = runtime_ratio
@@ -3114,7 +3329,6 @@ def _training_candidate_from_trace_record(
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Build one training-candidate record from an imported trace record."""
 
-    question = str(payload.get("question") or "").strip()
     expected_answer, answer_metadata = _normalize_imported_training_answer(
         payload.get("answer"),
         payload.get("response_text"),
@@ -3124,6 +3338,8 @@ def _training_candidate_from_trace_record(
     outcome = payload.get("outcome")
     outcome_mapping = outcome if isinstance(outcome, Mapping) else {}
     acceptance_status = str(outcome_mapping.get("acceptance_status") or "").strip().lower()
+    context_snapshot = _trace_context_snapshot(payload, trace_mapping, outcome_mapping)
+    question = str(context_snapshot.get("question") or "").strip()
 
     if not question:
         return None, "missing-question"
@@ -3135,8 +3351,12 @@ def _training_candidate_from_trace_record(
     trace_mode = str(trace_mapping.get("mode") or "").strip().lower()
     if source_command == "codex-proxy-turn-mediation" or trace_mode == "codex-proxy-turn-mediation":
         return None, "mediation-only-trace"
+    if (
+        source_command == "codex-proxy-turn-execution"
+        and expected_answer.startswith("No father-backed prompt-family support was found")
+    ):
+        return None, "proxy-fallback-answer"
 
-    context_snapshot = _trace_context_snapshot(payload, trace_mapping, outcome_mapping)
     original_prompt = str(context_snapshot.get("original_prompt") or "").strip()
     reformulated_prompt = str(context_snapshot.get("reformulated_prompt") or "").strip()
     question = _routing_question(
@@ -3147,7 +3367,11 @@ def _training_candidate_from_trace_record(
     command_trace = _ordered_unique_command_trace(context_snapshot.get("command_trace", []))
     if not question:
         return None, "missing-question"
-    prompt_family_id = _prompt_family_id(question)
+    prompt_family_id = str(
+        payload.get("prompt_family_id") or trace_mapping.get("prompt_family_id") or ""
+    ).strip()
+    if not prompt_family_id:
+        prompt_family_id = _prompt_family_id(question)
     benchmark_context, benchmark_context_sources = _extract_benchmark_context(payload)
     trace_record_path = str(payload.get("trace_record_path") or "")
     source_identity = _stable_trace_source_identity(
@@ -3251,7 +3475,7 @@ def _upsert_family_replay_record(
     if not isinstance(raw_records, list):
         raw_records = []
         family_payload["family_records"] = raw_records
-    candidate_key = _stable_family_replay_key(normalized)
+    candidate_key = _family_record_reference(normalized)
     if not candidate_key:
         raw_records.append(normalized)
         return
@@ -3259,22 +3483,13 @@ def _upsert_family_replay_record(
         if not isinstance(existing, Mapping):
             continue
         existing_normalized = _serialize_candidate_record(existing)
-        existing_key = _stable_family_replay_key(existing_normalized)
+        existing_key = _family_record_reference(existing_normalized)
         if existing_key != candidate_key:
             continue
-        if (
-            str(existing_normalized.get("exact_snapshot_id") or "").strip()
-            == str(normalized.get("exact_snapshot_id") or "").strip()
-        ):
-            raw_records[index] = _merge_equivalent_candidate_records(
-                existing_normalized,
-                normalized,
-            )
-        else:
-            raw_records[index] = _merge_replayed_candidate_records(
-                existing_normalized,
-                normalized,
-            )
+        raw_records[index] = _merge_equivalent_candidate_records(
+            existing_normalized,
+            normalized,
+        )
         return
     raw_records.append(normalized)
 
@@ -3430,13 +3645,18 @@ def materialize_training_candidates(
             continue
         seen_snapshot_ids.add(exact_snapshot_id)
 
-        family_payload, created_family = _find_or_create_prompt_family(
-            family_by_id,
-            family_order,
-            question=question,
-            candidate_record=record,
-            preferred_family_id=prompt_family_id_hint or None,
-        )
+        if trainer_signal_kind == "feedback_trace" and prompt_family_id_hint in family_by_id:
+            family_payload = family_by_id[prompt_family_id_hint]
+            _refresh_prompt_family_summary(family_payload, question)
+            created_family = False
+        else:
+            family_payload, created_family = _find_or_create_prompt_family(
+                family_by_id,
+                family_order,
+                question=question,
+                candidate_record=record,
+                preferred_family_id=prompt_family_id_hint or None,
+            )
         if created_family:
             new_prompt_family_count += 1
         prompt_family_id = str(family_payload.get("prompt_family_id") or "").strip()

@@ -391,6 +391,7 @@ def bundle_blob_names(bundle_version: str) -> dict[str, str]:
         "bundle": f"{prefix}/bundle.json",
         "metadata": f"{prefix}/metadata.json",
         "program": f"{prefix}/program.json",
+        "routing_index": f"{prefix}/routing-index.sqlite3",
         "published": f"{prefix}/published.json",
     }
 
