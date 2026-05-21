@@ -947,10 +947,13 @@ surfaces across proxy lookup, trainer summaries, remote fetch/upload wrappers, a
 lineage, while still mirroring those same values back through `champion_*` keys so older live
 dataset / AKS wiring can keep running during the migration.
 
-The monolithic bundle also now carries its own internal `family_registry` built from the current
-family-state file. That means runtime family lookup is beginning to move where it belongs: into
-the published bundle itself. The proxy now checks that embedded registry first and only falls back
-to the external family-state file when the current bundle does not yet provide one.
+The runtime autonomy story is now stricter than that earlier registry-only step. Every published
+bundle now carries a copied `routing-index.sqlite3` taken from the family-state that drove bundle
+compilation. That means runtime family lookup has moved where it belongs: into the published
+bundle itself. The proxy now resolves bundle version, stages the bundle-local SQLite routing
+index, and routes by that thin index before it ever touches the external family-state container.
+`repo-rag-training-families` remains the source of truth for trainer-side incremental updates, but
+`repo-rag-bundles` is now the self-sufficient runtime package for routing plus execution.
 
 That family-registry step is no longer only metadata. The local trainer now compiles one
 family-scoped DSPy artifact per persisted family, stores those paths in
@@ -1109,13 +1112,13 @@ The next hotfix pass on `2026-05-10` closes the remaining local gaps from AKS ru
 `25629990035_20260510_134639`. The proxy now treats the staged worker mirror as a first-class
 bundle store: if `bundle.json` still references the original trainer-side `artifacts/dspy/...`
 paths, the runtime can still activate `versions/<bundle_version>/program.json` and
-`versions/<bundle_version>/families/<family_id>/program.json` directly. When the bundle-local
-`family_registry` is missing, the proxy now synthesizes one from `family-state.json` so family
-lookup can still proceed instead of collapsing straight into heuristic-only mediation. The same
-pass also strips the Discord forwarding tail from every prompt-lineage field and teaches the
-deploy-stage trusted handoff to stand down once the worker already emitted a successful per-turn
-batch enqueue/import summary, so the family-first compact trace path is no longer doubled by the
-runner-side legacy queue upload.
+`versions/<bundle_version>/families/<family_id>/program.json` directly. With the later
+bundle-local routing-index work, the bundle no longer needs a monolithic embedded
+`family_registry` just to route. The proxy can route through the copied SQLite index and only
+download the selected family's artifact on demand. The same hotfix line also strips the Discord
+forwarding tail from every prompt-lineage field and teaches the deploy-stage trusted handoff to
+stand down once the worker already emitted a successful per-turn batch enqueue/import summary, so
+the family-first compact trace path is no longer doubled by the runner-side legacy queue upload.
 
 The follow-up local fix set after AKS run `25632110510_20260510_152621` addresses the last three
 execution-stage gaps that were still visible in downloaded artifacts. First, bundle activation no
@@ -1234,12 +1237,38 @@ One more live bug remained after that redesign: replaying the same processed que
 fresh local cache still produced a new imported trace filename, and the trainer treated that new
 filename as a brand-new snapshot. In practice that meant a later trainer cycle could take the same
 logical 25-turn batch and inflate one family from 25 replay records to 50 without ever seeing a
-new worker run. The fix is now explicit in code: imported trace records persist their original
-queued-item identity, trainer snapshot IDs prefer that stable source token over the transient
-imported path, and family-state hydration plus replay upserts dedupe logical replays instead of
-double-counting them. The same pass also stops writing a new remote family-state version when a
-cycle loaded no accepted/candidate records, so empty no-op versions no longer appear as if they
-were meaningful training outputs.
+new worker run. The first fix was explicit identity preservation: imported trace records persist
+their original queued-item identity, and trainer snapshot IDs prefer that stable source token over
+the transient imported path so a literal replay of the same snapshot does not double-count itself.
+The second fix is equally important for incremental learning: once a snapshot has a distinct
+`exact_snapshot_id`, later trainer cycles must carry it forward as part of the family baseline
+rather than replacing it with a newer prompt-level snapshot that happens to share the same logical
+lane or helper source. In other words, version-to-version family history is append-only by
+snapshot identity, not “latest copy wins” by stable source identity. The same pass also stops
+writing a new remote family-state version when a cycle loaded no accepted/candidate records, so
+empty no-op versions no longer appear as if they were meaningful training outputs.
+
+One more live regression clarified that append-only intent must also hold at the persistence layer,
+not only in the candidate merge logic. A trainer cycle can temporarily carry an in-memory family
+payload that contains only the current-cycle subset even though the adopted remote baseline cache
+still contains older replay snapshots. Persist therefore has to union the existing cached replay
+records with the current in-memory family payload append-only by snapshot identity before writing
+the new `family.json`, `records/*.json`, and thin SQLite index. The same hardening now makes remote
+baseline adoption prefer the newest actually published `versions/*/family-index.sqlite3` over a
+stale `current.json` pointer so a lagging pointer cannot trick the next cycle into training on an
+older family-state than the one that is already present in blob storage.
+
+The next live failure showed that append-only persist still is not enough if compact family-state
+fetch and hydration forget where the replay-set actually lives. Once `family.json` became a thin
+summary, the durable replay history often lived only in `families/<prompt_family_id>/records/*.json`.
+Remote family-state fetch was still downloading those record sidecars only when the same records
+were redundantly inlined inside `family.json`, and local trainer hydration likewise trusted the
+thin `family.json` surface without reloading local `records/*.json` sidecars. The result was a
+silent semantic corruption: a trainer cycle could adopt the right family ids from the remote
+baseline while still loading an already-shrunk replay-set into memory, then faithfully republish
+that reduced baseline as the next version. The repaired contract is stricter: compact
+serialization may omit inline `family_records`, but both remote baseline fetch and local family
+hydration must always reconstruct the replay-set from sidecars before family merge or publish.
 
 The newest runtime bridge correction addresses the last mismatch between the user's intended
 metric contract and what the worker actually used in live runs. Forwarded Discord cleanup is now

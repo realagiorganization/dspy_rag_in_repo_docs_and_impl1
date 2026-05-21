@@ -11,7 +11,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Literal
 
 from .azure_artifacts import (
@@ -45,6 +45,7 @@ TRACE_RECORD_SCHEMA_VERSION = 1
 TRACE_QUEUE_ITEM_SCHEMA_VERSION = 1
 OUTCOME_SCHEMA_VERSION = 1
 BUNDLE_FILENAME = "bundle.json"
+BUNDLE_ROUTING_INDEX_FILENAME = "routing-index.sqlite3"
 DEFAULT_PUBLISHED_BUNDLES_DIR = Path("artifacts/dspy/published")
 DEFAULT_BUNDLE_CHANNELS_DIR = Path("artifacts/dspy/channels")
 DEFAULT_OVERLAYS_DIR = Path("artifacts/overlays")
@@ -1139,6 +1140,45 @@ def _bundle_family_runtime_artifacts(
     return artifacts
 
 
+def _bundle_routing_index_path_from_payload(bundle_payload: Mapping[str, object]) -> str | None:
+    """Return the bundle-local routing-index path when the manifest carries one."""
+
+    return _string_or_none(bundle_payload.get("routing_index_path"))
+
+
+def _bundle_family_state_path_from_metadata(
+    root: Path,
+    metadata: Mapping[str, object],
+) -> tuple[str | None, Path | None, str | None]:
+    """Resolve the bundle's source family-state path plus any version token."""
+
+    resolved_root = root.resolve()
+    lineage = _mapping_or_none(metadata.get("lineage"))
+    family_state_path_text = (
+        _string_or_none(lineage.get("family_state_path")) if isinstance(lineage, Mapping) else None
+    ) or (
+        _string_or_none(lineage.get("champion_index_path"))
+        if isinstance(lineage, Mapping)
+        else None
+    )
+    family_state_version = (
+        _string_or_none(lineage.get("family_state_version")) if isinstance(lineage, Mapping) else None
+    )
+    if family_state_path_text is None:
+        return None, None, family_state_version
+    resolved_family_state_path = Path(family_state_path_text)
+    if not resolved_family_state_path.is_absolute():
+        resolved_family_state_path = resolved_root / resolved_family_state_path
+    resolved_family_state_path = resolve_family_index_path(resolved_family_state_path)
+    if family_state_version is None:
+        version_pattern = re.compile(r"^\d{8}T\d{6}Z$")
+        for part in reversed(resolved_family_state_path.parts):
+            if version_pattern.fullmatch(part):
+                family_state_version = part
+                break
+    return family_state_path_text, resolved_family_state_path, family_state_version
+
+
 def bundle_manifest_path(metadata_path: Path) -> Path:
     """Return the bundle-manifest path that belongs to ``metadata_path``."""
 
@@ -1189,13 +1229,11 @@ def build_bundle_manifest(
     lm = _mapping_or_none(metadata.get("lm"))
     lineage = _mapping_or_none(metadata.get("lineage"))
     family_artifact_registry = _mapping_or_none(metadata.get("family_artifact_registry"))
-    family_state_path = (
-        _string_or_none(lineage.get("family_state_path")) if isinstance(lineage, Mapping) else None
-    ) or (
-        _string_or_none(lineage.get("champion_index_path"))
-        if isinstance(lineage, Mapping)
-        else None
-    )
+    (
+        family_state_path,
+        resolved_family_state_path,
+        family_state_version_used,
+    ) = _bundle_family_state_path_from_metadata(resolved_root, metadata)
     family_count = None
     if isinstance(lineage, Mapping):
         raw_family_count = lineage.get("family_count")
@@ -1204,10 +1242,7 @@ def build_bundle_manifest(
         if isinstance(raw_family_count, int):
             family_count = raw_family_count
     family_registry = None
-    if family_state_path is not None:
-        resolved_family_state_path = Path(family_state_path)
-        if not resolved_family_state_path.is_absolute():
-            resolved_family_state_path = resolved_root / resolved_family_state_path
+    if resolved_family_state_path is not None:
         family_registry = build_bundle_family_registry(
             resolved_root,
             family_state_path=resolved_family_state_path,
@@ -1233,6 +1268,7 @@ def build_bundle_manifest(
 
     bundle_status = "ready" if resolved_program_path.exists() else "missing-program"
     top_k = metadata.get("top_k")
+    staged_routing_index_path = resolved_metadata_path.parent / BUNDLE_ROUTING_INDEX_FILENAME
     return {
         "schema_version": BUNDLE_SCHEMA_VERSION,
         "bundle_kind": "global",
@@ -1255,8 +1291,14 @@ def build_bundle_manifest(
         "run_family": _string_or_none(metadata.get("run_family")),
         "lineage": lineage,
         "family_state_path": family_state_path,
+        "family_state_version_used": family_state_version_used,
         "family_count": family_count,
         "family_registry": family_registry,
+        "routing_index_path": (
+            _relative_to_root(staged_routing_index_path, resolved_root)
+            if staged_routing_index_path.is_file()
+            else None
+        ),
         "provenance": {
             "source": "repo-rag",
             "retrieval_profile_path": retrieval_profile_path,
@@ -1273,6 +1315,11 @@ def write_bundle_manifest(root: Path, metadata_path: Path) -> dict[str, object]:
     metadata = json.loads(resolved_metadata_path.read_text(encoding="utf-8"))
     if not isinstance(metadata, dict):
         raise ValueError(f"DSPy artifact metadata must be a JSON object: {resolved_metadata_path}")
+    _, resolved_family_state_path, _ = _bundle_family_state_path_from_metadata(resolved_root, metadata)
+    staged_routing_index_path = resolved_metadata_path.parent / BUNDLE_ROUTING_INDEX_FILENAME
+    if resolved_family_state_path is not None and resolved_family_state_path.is_file():
+        if staged_routing_index_path.resolve() != resolved_family_state_path.resolve():
+            staged_routing_index_path.write_bytes(resolved_family_state_path.read_bytes())
     payload = build_bundle_manifest(resolved_root, metadata, resolved_metadata_path)
     bundle_manifest_path(resolved_metadata_path).write_text(
         f"{json.dumps(payload, indent=2)}\n",
@@ -1386,6 +1433,12 @@ def published_bundle_record_from_state(
         "artifact_dir": _string_or_none(bundle_summary.get("artifact_dir")),
         "program_path": _string_or_none(state.get("current_program_path")),
         "metadata_path": _string_or_none(state.get("current_metadata_path")),
+        "routing_index_path": _string_or_none(state.get("current_routing_index_path"))
+        or _string_or_none(bundle_summary.get("routing_index_path")),
+        "family_state_version_used": _string_or_none(
+            state.get("current_family_state_version_used")
+        )
+        or _string_or_none(bundle_summary.get("family_state_version_used")),
         "bundle_status": _string_or_none(state.get("current_bundle_status")),
         "benchmark_status": _string_or_none(state.get("current_benchmark_status")),
         "retrieval_mode": _string_or_none(bundle_summary.get("retrieval_mode")),
@@ -1411,6 +1464,10 @@ def upload_remote_bundle(
     bundle_path_text = _string_or_none(published_record.get("bundle_path"))
     metadata_path_text = _string_or_none(published_record.get("metadata_path"))
     program_path_text = _string_or_none(published_record.get("program_path"))
+    bundle_summary = _mapping_or_none(published_record.get("bundle_summary")) or {}
+    routing_index_path_text = _string_or_none(published_record.get("routing_index_path")) or (
+        _string_or_none(bundle_summary.get("routing_index_path"))
+    )
     if bundle_version is None or bundle_path_text is None or metadata_path_text is None:
         raise ValueError("Published bundle record is missing one or more required bundle paths.")
 
@@ -1418,6 +1475,9 @@ def upload_remote_bundle(
     bundle_path = resolved_root / bundle_path_text
     metadata_path = resolved_root / metadata_path_text
     program_path = resolved_root / program_path_text if program_path_text is not None else None
+    routing_index_path = (
+        resolved_root / routing_index_path_text if routing_index_path_text is not None else None
+    )
     bundle_payload = load_bundle_manifest(bundle_path)
 
     store.upload_text(container, bundle_blob_map["bundle"], bundle_path.read_text(encoding="utf-8"))
@@ -1431,6 +1491,12 @@ def upload_remote_bundle(
             container,
             bundle_blob_map["program"],
             program_path.read_text(encoding="utf-8"),
+        )
+    if routing_index_path is not None and routing_index_path.is_file():
+        store.upload_bytes(
+            container,
+            bundle_blob_map["routing_index"],
+            routing_index_path.read_bytes(),
         )
     remote_family_artifact_blobs: dict[str, dict[str, str]] = {}
     for prompt_family_id, runtime_artifact in _bundle_family_runtime_artifacts(bundle_payload):
@@ -1576,6 +1642,7 @@ def fetch_remote_bundle(
     *,
     bundle_version: str | None = None,
     channel: str | None = None,
+    download_family_artifacts: bool = True,
 ) -> dict[str, object] | None:
     """Download one remote bundle version into the local worker cache."""
 
@@ -1609,6 +1676,7 @@ def fetch_remote_bundle(
         "bundle_path": cache_dir / BUNDLE_FILENAME,
         "metadata_path": cache_dir / "metadata.json",
         "program_path": cache_dir / "program.json",
+        "routing_index_path": cache_dir / BUNDLE_ROUTING_INDEX_FILENAME,
         "published_bundle_path": cache_dir / "published.json",
     }
     for key in ("bundle_path", "metadata_path", "program_path"):
@@ -1631,45 +1699,56 @@ def fetch_remote_bundle(
         )
         published_payload = load_json_object(local_paths["published_bundle_path"])
     bundle_payload = load_bundle_manifest(local_paths["bundle_path"])
+    if store.blob_exists(container, blob_map["routing_index"]):
+        local_paths["routing_index_path"].write_bytes(
+            store.download_bytes(container, blob_map["routing_index"])
+        )
+        bundle_payload["routing_index_path"] = _relative_to_root(
+            local_paths["routing_index_path"],
+            resolved_root,
+        )
     remote_family_artifact_blobs: dict[str, dict[str, str]] = {}
-    for prompt_family_id, runtime_artifact in _bundle_family_runtime_artifacts(bundle_payload):
-        if not bool(runtime_artifact.get("artifact_ready")):
-            continue
-        family_blob_map = _family_artifact_blob_names(resolved_bundle_version, prompt_family_id)
-        local_family_dir = (
-            cache_dir
-            / "families"
-            / _sanitize_name(
-                prompt_family_id,
-                default="family",
+    if download_family_artifacts:
+        for prompt_family_id, runtime_artifact in _bundle_family_runtime_artifacts(bundle_payload):
+            if not bool(runtime_artifact.get("artifact_ready")):
+                continue
+            family_blob_map = _family_artifact_blob_names(resolved_bundle_version, prompt_family_id)
+            local_family_dir = (
+                cache_dir
+                / "families"
+                / _sanitize_name(
+                    prompt_family_id,
+                    default="family",
+                )
             )
-        )
-        local_family_dir.mkdir(parents=True, exist_ok=True)
-        downloaded_any = False
-        if store.blob_exists(container, family_blob_map["program"]):
-            local_program_path = local_family_dir / "program.json"
-            local_program_path.write_text(
-                store.download_text(container, family_blob_map["program"]),
-                encoding="utf-8",
+            local_family_dir.mkdir(parents=True, exist_ok=True)
+            downloaded_any = False
+            if store.blob_exists(container, family_blob_map["program"]):
+                local_program_path = local_family_dir / "program.json"
+                local_program_path.write_text(
+                    store.download_text(container, family_blob_map["program"]),
+                    encoding="utf-8",
+                )
+                runtime_artifact["program_path"] = _relative_to_root(
+                    local_program_path, resolved_root
+                )
+                downloaded_any = True
+            if store.blob_exists(container, family_blob_map["metadata"]):
+                local_metadata_path = local_family_dir / "metadata.json"
+                local_metadata_path.write_text(
+                    store.download_text(container, family_blob_map["metadata"]),
+                    encoding="utf-8",
+                )
+                runtime_artifact["metadata_path"] = _relative_to_root(
+                    local_metadata_path,
+                    resolved_root,
+                )
+                downloaded_any = True
+            runtime_artifact["artifact_ready"] = downloaded_any and bool(
+                _string_or_none(runtime_artifact.get("program_path"))
             )
-            runtime_artifact["program_path"] = _relative_to_root(local_program_path, resolved_root)
-            downloaded_any = True
-        if store.blob_exists(container, family_blob_map["metadata"]):
-            local_metadata_path = local_family_dir / "metadata.json"
-            local_metadata_path.write_text(
-                store.download_text(container, family_blob_map["metadata"]),
-                encoding="utf-8",
-            )
-            runtime_artifact["metadata_path"] = _relative_to_root(
-                local_metadata_path,
-                resolved_root,
-            )
-            downloaded_any = True
-        runtime_artifact["artifact_ready"] = downloaded_any and bool(
-            _string_or_none(runtime_artifact.get("program_path"))
-        )
-        if downloaded_any:
-            remote_family_artifact_blobs[prompt_family_id] = family_blob_map
+            if downloaded_any:
+                remote_family_artifact_blobs[prompt_family_id] = family_blob_map
     local_paths["bundle_path"].write_text(
         f"{json.dumps(bundle_payload, indent=2)}\n",
         encoding="utf-8",
@@ -1686,9 +1765,17 @@ def fetch_remote_bundle(
         "bundle_path": _relative_to_root(local_paths["bundle_path"], resolved_root),
         "metadata_path": _relative_to_root(local_paths["metadata_path"], resolved_root),
         "program_path": _relative_to_root(local_paths["program_path"], resolved_root),
+        "routing_index_path": (
+            _relative_to_root(local_paths["routing_index_path"], resolved_root)
+            if local_paths["routing_index_path"].is_file()
+            else None
+        ),
         "bundle_status": _string_or_none(bundle_payload.get("bundle_status")),
         "benchmark_status": _string_or_none(bundle_payload.get("benchmark_status")),
         "run_name": _string_or_none(bundle_payload.get("run_name")),
+        "family_state_version_used": _string_or_none(
+            bundle_payload.get("family_state_version_used")
+        ),
         "publish_status": _string_or_none(published_payload.get("publish_status")),
     }
     if local_paths["published_bundle_path"].is_file():
@@ -1698,6 +1785,58 @@ def fetch_remote_bundle(
         )
     if remote_family_artifact_blobs:
         payload["remote_family_artifact_blobs"] = remote_family_artifact_blobs
+    return payload
+
+
+def fetch_remote_bundle_family_artifact(
+    root: Path,
+    *,
+    bundle_version: str,
+    prompt_family_id: str,
+) -> dict[str, object] | None:
+    """Download one remote family runtime artifact into the local bundle cache."""
+
+    resolved_root = root.resolve()
+    config = resolve_azure_artifact_config()
+    if config is None or not config.bundles_enabled:
+        return None
+    store = AzureArtifactStore(config)
+    container = repo_rag_bundle_container(config)
+    family_blob_map = _family_artifact_blob_names(bundle_version, prompt_family_id)
+    if not store.blob_exists(container, family_blob_map["program"]):
+        return None
+    cache_dir = (
+        resolved_root
+        / "artifacts"
+        / "dspy"
+        / "remote"
+        / bundle_version
+        / "families"
+        / _sanitize_name(prompt_family_id, default="family")
+    )
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    local_program_path = cache_dir / "program.json"
+    local_program_path.write_text(
+        store.download_text(container, family_blob_map["program"]),
+        encoding="utf-8",
+    )
+    payload: dict[str, object] = {
+        "bundle_found": True,
+        "storage_backend": "azure-blob",
+        "bundle_container": container,
+        "bundle_version": bundle_version,
+        "prompt_family_id": prompt_family_id,
+        "program_path": _relative_to_root(local_program_path, resolved_root),
+        "artifact_ready": True,
+        "remote_family_artifact_blobs": {prompt_family_id: family_blob_map},
+    }
+    if store.blob_exists(container, family_blob_map["metadata"]):
+        local_metadata_path = cache_dir / "metadata.json"
+        local_metadata_path.write_text(
+            store.download_text(container, family_blob_map["metadata"]),
+            encoding="utf-8",
+        )
+        payload["metadata_path"] = _relative_to_root(local_metadata_path, resolved_root)
     return payload
 
 
@@ -1838,6 +1977,29 @@ def upload_remote_family_state(
     }
 
 
+def _latest_remote_family_state_version_blob(
+    store: AzureArtifactStore,
+    container: str,
+) -> tuple[str | None, str | None]:
+    """Return the newest published versioned family-state blob when present."""
+
+    latest_version: str | None = None
+    latest_blob_name: str | None = None
+    for blob_name in store.list_blobs(container, prefix="versions/"):
+        parts = PurePosixPath(blob_name).parts
+        if len(parts) != 3:
+            continue
+        if parts[0] != "versions" or parts[2] != "family-index.sqlite3":
+            continue
+        candidate_version = str(parts[1]).strip()
+        if not candidate_version:
+            continue
+        if latest_version is None or candidate_version > latest_version:
+            latest_version = candidate_version
+            latest_blob_name = blob_name
+    return latest_version, latest_blob_name
+
+
 def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
     """Download the current remote SQLite family index into a local cache when configured."""
 
@@ -1860,7 +2022,16 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
     )
     if family_state_version is None or family_state_blob is None:
         return None
-    if not store.blob_exists(container, family_state_blob):
+    latest_version, latest_blob_name = _latest_remote_family_state_version_blob(store, container)
+    current_blob_exists = store.blob_exists(container, family_state_blob)
+    if (
+        latest_version is not None
+        and latest_blob_name is not None
+        and latest_version > family_state_version
+    ):
+        family_state_version = latest_version
+        family_state_blob = latest_blob_name
+    elif not current_blob_exists:
         return None
     cache_dir = resolved_root / DEFAULT_REMOTE_FAMILY_STATE_CACHE_DIR / family_state_version
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -1927,18 +2098,43 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
             local_member_paths["father"] = _relative_to_root(local_father_path, resolved_root)
         record_paths: list[str] = []
         record_blob_map: dict[str, str] = {}
-        for record in _family_state_records_from_payload(full_family_payload):
-            record_token = _family_state_record_token(record)
-            record_blob_name = f"{family_blob_map['records_prefix']}/{record_token}.json"
-            local_record_path = family_dir / "records" / f"{record_token}.json"
-            local_record_path.parent.mkdir(parents=True, exist_ok=True)
-            if store.blob_exists(container, record_blob_name):
-                record_text = store.download_text(container, record_blob_name)
-            else:
-                record_text = f"{json.dumps(record, indent=2)}\n"
-            local_record_path.write_text(record_text, encoding="utf-8")
-            record_paths.append(_relative_to_root(local_record_path, resolved_root))
-            record_blob_map[record_token] = record_blob_name
+        inline_records = _family_state_records_from_payload(full_family_payload)
+        remote_record_blob_names = sorted(
+            {
+                blob_name
+                for blob_name in store.list_blobs(
+                    container,
+                    prefix=f"{family_blob_map['records_prefix']}/",
+                )
+                if blob_name.endswith(".json")
+            }
+        )
+        if remote_record_blob_names:
+            for record_blob_name in remote_record_blob_names:
+                record_token = Path(record_blob_name).stem
+                if not record_token:
+                    continue
+                local_record_path = family_dir / "records" / f"{record_token}.json"
+                local_record_path.parent.mkdir(parents=True, exist_ok=True)
+                local_record_path.write_text(
+                    store.download_text(container, record_blob_name),
+                    encoding="utf-8",
+                )
+                record_paths.append(_relative_to_root(local_record_path, resolved_root))
+                record_blob_map[record_token] = record_blob_name
+        else:
+            for record in inline_records:
+                record_token = _family_state_record_token(record)
+                record_blob_name = f"{family_blob_map['records_prefix']}/{record_token}.json"
+                local_record_path = family_dir / "records" / f"{record_token}.json"
+                local_record_path.parent.mkdir(parents=True, exist_ok=True)
+                if store.blob_exists(container, record_blob_name):
+                    record_text = store.download_text(container, record_blob_name)
+                else:
+                    record_text = f"{json.dumps(record, indent=2)}\n"
+                local_record_path.write_text(record_text, encoding="utf-8")
+                record_paths.append(_relative_to_root(local_record_path, resolved_root))
+                record_blob_map[record_token] = record_blob_name
         local_member_paths["record_paths"] = record_paths
         remote_member_blobs["record_blobs"] = record_blob_map
         runtime_artifact = _mapping_or_none(
@@ -2006,6 +2202,8 @@ def fetch_remote_family_state(root: Path) -> dict[str, object] | None:
             )
         family_entry["family_record_count"] = len(record_paths)
         full_family_payload["family_record_count"] = len(record_paths)
+        if record_paths:
+            full_family_payload["record_paths"] = record_paths
         context_groups = full_family_payload.get("context_groups")
         family_entry["context_group_count"] = (
             len(context_groups) if isinstance(context_groups, list) else 0
@@ -2085,6 +2283,8 @@ def publish_bundle(
         "artifact_dir": _string_or_none(bundle.get("artifact_dir")),
         "program_path": _string_or_none(bundle.get("program_path")),
         "metadata_path": _string_or_none(bundle.get("metadata_path")),
+        "routing_index_path": _string_or_none(bundle.get("routing_index_path")),
+        "family_state_version_used": _string_or_none(bundle.get("family_state_version_used")),
         "bundle_status": _string_or_none(bundle.get("bundle_status")),
         "benchmark_status": _string_or_none(bundle.get("benchmark_status")),
         "retrieval_mode": _string_or_none(bundle.get("retrieval_mode")),
@@ -2193,6 +2393,10 @@ def _build_bundle_channel_state(
         "current_bundle_path": _string_or_none(published_record.get("bundle_path")),
         "current_program_path": _string_or_none(published_record.get("program_path")),
         "current_metadata_path": _string_or_none(published_record.get("metadata_path")),
+        "current_routing_index_path": _string_or_none(published_record.get("routing_index_path")),
+        "current_family_state_version_used": _string_or_none(
+            published_record.get("family_state_version_used")
+        ),
         "current_bundle_status": _string_or_none(published_record.get("bundle_status")),
         "current_benchmark_status": _string_or_none(published_record.get("benchmark_status")),
         "current_publish_status": _string_or_none(published_record.get("publish_status")),

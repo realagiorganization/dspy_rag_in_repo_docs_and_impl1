@@ -24,6 +24,7 @@ from repo_rag_lab.codex_proxy import (
     running_codex_proxy,
 )
 from repo_rag_lab.retrieval import Chunk, RetrievalMode
+from repo_rag_lab.runtime_artifacts import write_family_index_payload
 
 
 def _payload_mapping(value: object) -> Mapping[str, object]:
@@ -541,6 +542,71 @@ def test_build_codex_mediation_prefers_bundle_family_registry(
         repository_root=repo,
         bundle_root=repo,
         prefer_dspy=False,
+    )
+
+    assert mediation.prompt_family_id == "pf-demo"
+    assert mediation.prompt_family_band == "match"
+    assert mediation.mediation_mode != "passthrough"
+    assert mediation.injected is True
+
+
+def test_build_codex_mediation_prefers_bundle_local_routing_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "README.md").write_text("repo summary\n", encoding="utf-8")
+    bundle_root = tmp_path / "bundle-root"
+    routing_index_path = bundle_root / "versions" / "stable-42" / "routing-index.sqlite3"
+    routing_index_path.parent.mkdir(parents=True)
+    write_family_index_payload(
+        routing_index_path,
+        {
+            "schema_version": 1,
+            "family_state_kind": "repo-rag-trainer-family-state",
+            "prompt_families": [
+                {
+                    "prompt_family_id": "pf-demo",
+                    "question": "Run the failing pytest target and inspect stderr.",
+                    "family_prompt_profile_terms": ["pytest", "stderr", "test"],
+                    "family_command_pattern_summary": ["pytest"],
+                    "family_constraint_summary": ["tests/test_suite.py"],
+                    "family_path": "families/pf-demo/family.json",
+                    "father_path": "families/pf-demo/father.json",
+                    "family_record_count": 1,
+                }
+            ],
+        },
+    )
+
+    def fake_ask_repository(
+        question: str,
+        root: Path,
+        retrieval_mode: RetrievalMode | None = None,
+    ) -> SimpleNamespace:
+        del question, retrieval_mode
+        return SimpleNamespace(
+            context=[Chunk(source=root / "README.md", text="Repository summary text.")],
+            summary="Repository summary text.",
+            retrieval_mode="lexical",
+        )
+
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.ask_repository", fake_ask_repository)
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_bundle_family_registry",
+        lambda **kwargs: pytest.fail("bundle-local routing index should be used first"),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_family_state_path",
+        lambda *args, **kwargs: pytest.fail("family-state fallback should not be used"),
+    )
+
+    mediation = build_codex_mediation(
+        "Run the failing pytest target and inspect stderr.",
+        repository_root=repo,
+        bundle_root=bundle_root,
+        prefer_dspy=False,
+        bundle_version="stable-42",
     )
 
     assert mediation.prompt_family_id == "pf-demo"
@@ -1796,10 +1862,12 @@ def test_resolve_bundle_family_registry_fetches_remote_bundle_for_explicit_versi
         *,
         bundle_version: str | None = None,
         channel: str | None = None,
+        download_family_artifacts: bool = True,
     ) -> dict[str, object]:
         captured["root"] = root
         captured["bundle_version"] = bundle_version
         captured["channel"] = channel
+        captured["download_family_artifacts"] = download_family_artifacts
         return {
             "bundle_version": "stable-42",
             "family_registry": {
@@ -1837,6 +1905,7 @@ def test_resolve_bundle_family_registry_fetches_remote_bundle_for_explicit_versi
         "root": bundle_root,
         "bundle_version": "stable-42",
         "channel": None,
+        "download_family_artifacts": False,
     }
 
 

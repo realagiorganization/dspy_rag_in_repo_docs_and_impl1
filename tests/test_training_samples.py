@@ -2348,6 +2348,179 @@ def test_persist_local_family_state_preserves_existing_replay_records_when_paylo
     assert family["family_records"][0]["exact_snapshot_id"] == "ts-existing"
 
 
+def test_persist_local_family_state_preserves_existing_replay_records_when_payload_is_subset(
+    tmp_path: Path,
+) -> None:
+    family_state_path = tmp_path / "artifacts" / "trainer" / "family-index.sqlite3"
+    family_dir = family_state_path.parent / "families" / "pf-demo"
+    family_dir.mkdir(parents=True, exist_ok=True)
+    existing_family_payload = {
+        "prompt_family_id": "pf-demo",
+        "question": "Verify README GIF asset",
+        "normalized_question": "verify readme gif asset",
+        "family_father_question": "Verify README GIF asset",
+        "family_records": [
+            {
+                "question": "Verify README GIF asset",
+                "original_prompt": "Verify README GIF asset",
+                "reformulated_prompt": "Verify README GIF asset",
+                "expected_answer": "The GIF is already embedded.",
+                "exact_snapshot_id": "ts-existing-a",
+                "prompt_family_id": "pf-demo",
+                "metric_hits": 1,
+                "metric_total": 1,
+                "metric_ratio": 1.0,
+                "trainer_signal_kind": "full_trace",
+            },
+            {
+                "question": "Verify README GIF asset",
+                "original_prompt": "Verify README GIF asset again",
+                "reformulated_prompt": "Verify README GIF asset again",
+                "expected_answer": "The GIF is already embedded.",
+                "exact_snapshot_id": "ts-existing-b",
+                "prompt_family_id": "pf-demo",
+                "metric_hits": 1,
+                "metric_total": 1,
+                "metric_ratio": 1.0,
+                "trainer_signal_kind": "full_trace",
+            },
+        ],
+        "family_record_count": 2,
+    }
+    (family_dir / "family.json").write_text(
+        json.dumps(existing_family_payload, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    training_samples_module.persist_local_family_state(
+        family_state_path,
+        {
+            "schema_version": 1,
+            "record_kind": "repo-rag-trainer-family-index",
+            "family_state_kind": "repo-rag-trainer-family-index",
+            "prompt_families": [
+                {
+                    "prompt_family_id": "pf-demo",
+                    "question": "Verify README GIF asset",
+                    "normalized_question": "verify readme gif asset",
+                    "family_father_question": "Verify README GIF asset",
+                    "family_records": [
+                        {
+                            "question": "Verify README GIF asset with repo-RAG evidence",
+                            "original_prompt": "Verify README GIF asset with repo-RAG evidence",
+                            "reformulated_prompt": "Verify README GIF asset with repo-RAG evidence",
+                            "expected_answer": "The GIF is already embedded.",
+                            "exact_snapshot_id": "ts-new",
+                            "prompt_family_id": "pf-demo",
+                            "metric_hits": 1,
+                            "metric_total": 1,
+                            "metric_ratio": 1.0,
+                            "trainer_signal_kind": "full_trace",
+                        }
+                    ],
+                    "family_record_count": 1,
+                    "family_needs_recompile": True,
+                }
+            ],
+        },
+    )
+
+    payload = load_family_state_payload(family_state_path)
+    families = payload["prompt_families"]
+    assert isinstance(families, list)
+    assert len(families) == 1
+    family = families[0]
+    assert family["family_record_count"] == 3
+    assert {record["exact_snapshot_id"] for record in family["family_records"]} == {
+        "ts-existing-a",
+        "ts-existing-b",
+        "ts-new",
+    }
+
+
+def test_persist_local_family_state_preserves_existing_sidecar_replay_records_when_family_json_is_compact(
+    tmp_path: Path,
+) -> None:
+    family_state_path = tmp_path / "artifacts" / "trainer" / "family-index.sqlite3"
+    family_dir = family_state_path.parent / "families" / "pf-demo"
+    record_dir = family_dir / "records"
+    record_dir.mkdir(parents=True, exist_ok=True)
+    compact_family_payload = {
+        "prompt_family_id": "pf-demo",
+        "question": "Verify README GIF asset",
+        "family_record_count": 2,
+        "family_father_record_id": "ts-existing-a",
+        "family_runtime_record_id": "ts-existing-b",
+    }
+    (family_dir / "family.json").write_text(
+        json.dumps(compact_family_payload, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    for snapshot_id in ("ts-existing-a", "ts-existing-b"):
+        (record_dir / f"{snapshot_id}.json").write_text(
+            json.dumps(
+                {
+                    "question": "Verify README GIF asset",
+                    "original_prompt": f"Verify README GIF asset {snapshot_id}",
+                    "reformulated_prompt": f"Verify README GIF asset {snapshot_id}",
+                    "expected_answer": "The GIF is already embedded.",
+                    "exact_snapshot_id": snapshot_id,
+                    "prompt_family_id": "pf-demo",
+                    "metric_hits": 1,
+                    "metric_total": 1,
+                    "metric_ratio": 1.0,
+                    "trainer_signal_kind": "full_trace",
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    training_samples_module.persist_local_family_state(
+        family_state_path,
+        {
+            "schema_version": 1,
+            "record_kind": "repo-rag-trainer-family-index",
+            "family_state_kind": "repo-rag-trainer-family-index",
+            "prompt_families": [
+                {
+                    "prompt_family_id": "pf-demo",
+                    "question": "Verify README GIF asset",
+                    "family_records": [
+                        {
+                            "question": "Verify README GIF asset with repo-RAG evidence",
+                            "original_prompt": "Verify README GIF asset with repo-RAG evidence",
+                            "reformulated_prompt": "Verify README GIF asset with repo-RAG evidence",
+                            "expected_answer": "The GIF is already embedded.",
+                            "exact_snapshot_id": "ts-new",
+                            "prompt_family_id": "pf-demo",
+                            "metric_hits": 1,
+                            "metric_total": 1,
+                            "metric_ratio": 1.0,
+                            "trainer_signal_kind": "full_trace",
+                        }
+                    ],
+                    "family_record_count": 1,
+                    "family_needs_recompile": True,
+                }
+            ],
+        },
+    )
+
+    payload = load_family_state_payload(family_state_path)
+    families = payload["prompt_families"]
+    assert isinstance(families, list)
+    assert len(families) == 1
+    family = families[0]
+    assert family["family_record_count"] == 3
+    assert {record["exact_snapshot_id"] for record in family["family_records"]} == {
+        "ts-existing-a",
+        "ts-existing-b",
+        "ts-new",
+    }
+
+
 def test_materialize_training_candidates_attaches_full_trace_to_existing_hinted_family(
     tmp_path: Path,
 ) -> None:
@@ -2468,6 +2641,99 @@ def test_materialize_training_candidates_attaches_full_trace_to_existing_hinted_
     assert {record["prompt_family_id"] for record in family["family_records"]} == {"pf-demo"}
     assert {record["exact_snapshot_id"] for record in family["family_records"]} != {"ts-existing"}
     assert "ts-existing" in {record["exact_snapshot_id"] for record in family["family_records"]}
+
+
+def test_materialize_training_candidates_preserves_prior_snapshots_with_same_source_identity(
+    tmp_path: Path,
+) -> None:
+    trainer_dir = tmp_path / "artifacts" / "trainer"
+    trainer_dir.mkdir(parents=True, exist_ok=True)
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    family_state_path = trainer_dir / "family-state.json"
+    family_state_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "record_kind": "repo-rag-trainer-family-state",
+                "family_state_kind": "repo-rag-trainer-family-state",
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-demo",
+                        "question": "Verify README GIF asset",
+                        "normalized_question": "verify readme gif asset",
+                        "family_father_question": "Verify README GIF asset",
+                        "family_records": [
+                            {
+                                "question": "Verify README GIF asset",
+                                "original_prompt": "Verify README GIF asset",
+                                "reformulated_prompt": "Verify README GIF asset",
+                                "expected_answer": "The GIF is already embedded.",
+                                "exact_snapshot_id": "ts-existing",
+                                "prompt_family_id": "pf-demo",
+                                "metric_hits": 1,
+                                "metric_total": 1,
+                                "metric_ratio": 1.0,
+                                "trainer_signal_kind": "full_trace",
+                                "provenance": {
+                                    "stable_source_identity": "trace:demo-batch:turn-0",
+                                    "recorded_at": "2026-05-20T12:37:07+00:00",
+                                },
+                            }
+                        ],
+                        "family_record_count": 1,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    imported_path = imported_dir / "same-source-new-snapshot.json"
+    imported_path.write_text(
+        json.dumps(
+            {
+                "answer": "The README is wired, but the asset should be refreshed.",
+                "response_text": "The README is wired, but the asset should be refreshed.",
+                "source_trace_name": "turn-0",
+                "source_batch_name": "demo-batch",
+                "trace": {
+                    "question": "Verify README GIF asset",
+                    "original_prompt": "Verify README GIF asset",
+                    "reformulated_prompt": "Verify README GIF asset after refresh",
+                    "recorded_at": "2026-05-20T13:37:07+00:00",
+                    "trainer_signal_kind": "full_trace",
+                    "prompt_family_id": "pf-demo",
+                },
+                "outcome": {
+                    "accepted": True,
+                    "acceptance_status": "candidate",
+                    "execution_status": "success",
+                    "method": "codex_cli",
+                    "backend": "codex_cli_repo_rag_proxy",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        trace_paths=[Path("artifacts/traces/imported/same-source-new-snapshot.json")],
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+        family_state_path=Path("artifacts/trainer/family-state.json"),
+        upload_remote_state=False,
+    )
+
+    payload = load_family_state_payload(family_state_path)
+    family = payload["prompt_families"][0]
+
+    assert summary["loaded_candidate_count"] == 1
+    assert family["prompt_family_id"] == "pf-demo"
+    assert family["family_record_count"] == 2
+    exact_snapshot_ids = {record["exact_snapshot_id"] for record in family["family_records"]}
+    assert "ts-existing" in exact_snapshot_ids
+    assert len(exact_snapshot_ids) == 2
 
 
 def test_materialize_training_candidates_uses_symmetric_singleton_family_matching(

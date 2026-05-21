@@ -319,6 +319,282 @@ Verification for this follow-up:
 
 Observed:
 
+## 2026-05-20 Incremental Replay Carry-Forward Contract
+
+Fresh inspection of `repo-rag-training-families` version `20260520T165809Z` showed a narrower but
+critical incremental-family bug. Trainer did use the previous remote version as baseline, but the
+result was still not a valid append-only family-state update:
+
+- `current.json` pointed at `20260520T165809Z`
+- the previous family-state version in the container was `20260520T123707Z`
+- both versions had the same four family ids, which confirmed that trainer started from the prior
+  baseline rather than rebuilding from scratch
+- however carried-forward replay records changed destructively inside existing families
+- for example `pf-dc1f706da0b4f060` dropped from `5` replay records to `4`, and the surviving
+  records were not the same five snapshots from the previous version
+
+That behavior violates the intended contract:
+
+- new family-state versions must be computed from the prior remote family-state baseline plus the
+  current imported traces
+- previous replay snapshots must remain present unless the incoming trace is literally the same
+  snapshot identity
+- later prompt-level traces from the same logical source are allowed to extend the family, but not
+  to replace older carried-forward snapshots
+
+Local repair:
+
+- family replay upserts now key strictly on `exact_snapshot_id` (or the deterministic fallback
+  snapshot reference when that field is absent)
+- trainer-side family-state normalization also dedupes only by exact snapshot identity
+- the older “logical replay” merge behavior no longer lets a later snapshot overwrite a prior
+  snapshot merely because both share a stable source identity
+
+Verification for this follow-up:
+
+- `uv run python -m compileall src tests`
+- `uv run pytest tests/test_training_samples.py -q`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+- `uv run repo-rag smoke-test`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+
+Observed:
+
 - `compileall` passed
-- `tests/test_training_samples.py` passed as `50 passed`
-- targeted DSPy carry-forward regressions passed as `3 passed`
+- `tests/test_training_samples.py` passed with the new incremental carry-forward regression
+- `tests/test_utilities.py tests/test_repository_rag_bdd.py` passed
+- `uv run repo-rag smoke-test` passed
+- `cargo build --manifest-path rust-cli/Cargo.toml` passed
+
+## 2026-05-20 Live Trainer Status Check
+
+After redeploying the current `repo-rag-runtime` image, live AKS inspection showed trainer working
+through a real queue-triggered cycle again instead of stalling on empty input:
+
+- `repo-rag-trainer-cycle-29655050` drained `7` fresh imported traces
+- the pod-local `training-candidates-summary.json` reported:
+  - `input_trace_count = 7`
+  - `loaded_candidate_count = 7`
+  - `candidate_count = 4`
+  - `family_count = 4`
+  - `dirty_family_ids = ["pf-a87005417d5640cf", "pf-cf4cba34871dd9c2", "pf-d4d2ffa1a8f20d51", "pf-dc1f706da0b4f060"]`
+- the pod-local `generated-training-summary.json` reported:
+  - `base_example_count = 8`
+  - `candidate_example_count = 4`
+  - `combined_example_count = 12`
+
+The same completed cycle then published and promoted new remote artifacts:
+
+- family-state publish summary pointed at `versions/20260520T185724Z/family-index.sqlite3`
+- stable bundle promotion advanced to `bundle_version = 20260520T185402016224Z`
+
+The immediately following cycle `repo-rag-trainer-cycle-29655055` behaved as an expected no-op:
+
+- `queued_count_before = 0`
+- `drained_count = 0`
+- `recompile_status = skipped-no-queued-input`
+- `pending_recompile.reason = bundle-matches-current-family-set`
+- `current_bundle_version = 20260520T185402016224Z`
+
+This confirms the current live trainer posture:
+
+- queue ingestion is active
+- trainer can materialize candidates from imported traces
+- publish/promotion complete without crashing
+- the next scheduled cycle recognizes the freshly published bundle/family set and stays idle
+
+## 2026-05-20 Incremental Baseline and Append-Only Replay Repair
+
+Fresh live inspection of `repo-rag-training-families` after version `20260520T185724Z` showed a
+deeper incremental bug than simple family-id drift:
+
+- the published family ids stayed stable across `20260520T123707Z -> 20260520T185724Z`
+- but the replay-set shrank from `8` snapshots to `7`
+- `pf-dc1f706da0b4f060` dropped from `5` persisted snapshots to `4`
+- trainer logs for the publish cycle showed it had hydrated its local cache from
+  `20260520T123707Z`, so the loss happened during the new publish, not because the prior baseline
+  was absent
+
+Local analysis isolated two concrete failure modes:
+
+1. the persist path only preserved carried-forward replay history when an incoming family payload
+   was completely empty; if the in-memory payload was merely a reduced subset, older snapshots were
+   overwritten instead of unioned append-only with the existing local baseline cache
+2. remote family-state fetch trusted `current.json` too literally; if the pointer lagged behind a
+   newer already-published `versions/*/family-index.sqlite3`, trainer could hydrate from an older
+   baseline than the newest available remote family-state
+
+Local repair:
+
+- `_persist_local_family_state(...)` now merges existing cached replay records with the current
+  in-memory family payload append-only by exact snapshot identity before writing `family.json`,
+  `records/*.json`, and the thin SQLite index
+- `fetch_remote_family_state(...)` now prefers the newest actually published
+  `versions/*/family-index.sqlite3` over an older `current.json` pointer, while still returning
+  `None` for a broken pointer when no newer published baseline exists
+
+Verification for this follow-up:
+
+- `uv run python -m compileall src tests`
+- `uv run pytest tests/test_training_samples.py -q`
+- `uv run pytest tests/test_runtime_artifacts_azure.py -q`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+- `uv run repo-rag smoke-test`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+
+Observed:
+
+- `compileall` passed
+- `tests/test_training_samples.py` passed as `52 passed`
+- `tests/test_runtime_artifacts_azure.py` passed as `24 passed`
+- `tests/test_utilities.py tests/test_repository_rag_bdd.py` passed as `62 passed`
+- `uv run repo-rag smoke-test` passed
+- `cargo build --manifest-path rust-cli/Cargo.toml` passed
+
+## 2026-05-20 Compact Baseline Replay Hydration Repair
+
+Another live regression still violated the incremental family-state contract even after the earlier
+append-only merge repair:
+
+- new versions kept the same prompt-family ids as the previous version
+- but the replay-set still shrank
+- the shrink happened even when no family ids changed and even when the cycle started from a
+  valid remote baseline
+
+The deeper root cause was that compact family-state sidecars were not being hydrated back into the
+trainer cache correctly:
+
+1. `fetch_remote_family_state(...)` downloaded `family.json` and `father.json`, but it only
+   downloaded `records/*.json` when those replay records were already inlined inside the compact
+   `family.json`
+2. compact `family.json` intentionally omits inline `family_records`, so remote baseline fetch
+   frequently cached zero replay records even though the blob container still held a full
+   `records/*.json` replay-set
+3. `_family_state_entry_to_payload(...)` and `_persist_local_family_state(...)` then trusted the
+   thin `family.json` surface and did not reload replay records from local `records/*.json`
+   sidecars when the inline `family_records` field was absent
+
+That meant replay history could disappear before merge logic even ran: trainer loaded a compact
+baseline family as if it contained only its father/runtime summaries, then republished that reduced
+payload as the next remote version.
+
+Local repair:
+
+- `fetch_remote_family_state(...)` now enumerates and downloads remote
+  `versions/<family_state_version>/families/<prompt_family_id>/records/*.json` blobs even when
+  compact `family.json` does not inline replay records
+- `_family_state_entry_to_payload(...)` now reloads local `records/*.json` sidecars whenever the
+  compact `family.json` lacks inline `family_records`
+- `_persist_local_family_state(...)` now also reloads existing local `records/*.json` sidecars
+  before deciding whether the current in-memory family payload is a strict subset
+
+This repairs the actual compact-sidecar baseline path that blob-backed trainer cycles use, instead
+of only the inline-family-record path that earlier unit tests covered.
+
+Verification for this follow-up:
+
+- `uv run python -m compileall src tests`
+- `uv run pytest tests/test_training_samples.py -q`
+- `uv run pytest tests/test_runtime_artifacts_azure.py -q`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py`
+- `uv run repo-rag smoke-test`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+
+Observed:
+
+- `compileall` passed
+- `tests/test_training_samples.py` passed as `53 passed`
+- `tests/test_runtime_artifacts_azure.py` passed as `25 passed`
+- `tests/test_utilities.py tests/test_repository_rag_bdd.py` passed as `62 passed`
+- `uv run repo-rag smoke-test` passed
+- `cargo build --manifest-path rust-cli/Cargo.toml` passed
+
+## 2026-05-21 Remote Family-State Surface Verification
+
+Blob verification against the current published family-state version `20260520T212024Z` confirmed
+that the incremental replay history is now preserved, but the serialization contract is still only
+partially satisfied.
+
+Healthy surfaces:
+
+- `current.json` reports `current_family_count = 4` and `current_family_record_count = 18`
+- `family-index.sqlite3` loads successfully and exposes `4` entries whose
+  `family_record_count` sum is also `18`
+- the hot SQLite index no longer carries the old duplicate prompt columns:
+  `normalized_question`, `family_father_question`, and `question_variant_count`
+- each family still has its expected `records/*.json` sidecars plus runtime-artifact blobs under
+  `versions/20260520T212024Z/families/<prompt_family_id>/...`
+
+Remaining structural problem:
+
+- each published `family.json` still inlines `family_records`
+- each published `family.json` still inlines `family_father_record`
+- each published `family.json` still inlines `family_runtime_artifact`
+- those same payloads already exist as sidecars:
+  `records/*.json`, `father.json`, and `runtime-artifact/{program,metadata}.json`
+
+The result is that published `family.json` files remain much larger than the compact contract
+allows, for example:
+
+- `pf-a87005417d5640cf/family.json` ≈ `56 KB`
+- `pf-cf4cba34871dd9c2/family.json` ≈ `35 KB`
+- `pf-d4d2ffa1a8f20d51/family.json` ≈ `33 KB`
+- `pf-dc1f706da0b4f060/family.json` ≈ `100 KB`
+
+One subtle detail is working as designed:
+
+- SQLite `family_path` / `father_path` members remain relative paths such as
+  `families/<prompt_family_id>/family.json`
+- those paths are resolved relative to the cached family-state root after
+  `fetch_remote_family_state(...)` downloads the versioned blobs
+- they are not intended to be direct blob names at the container root
+
+Status:
+
+- incremental carry-forward for replay records is now healthy
+- the SQLite hot index is now compact enough to satisfy the no-dup prompt-column requirement
+- published `family.json` sidecars still violate the stricter no-dup serialization contract and
+  need one more compaction pass
+
+## 2026-05-21 Bundle-Local Routing Index Verification
+
+Local verification now covers the runtime split between trainer source-of-truth state and runtime
+bundle autonomy.
+
+Implemented:
+
+- bundle publish now stages one copied `routing-index.sqlite3` beside every versioned bundle
+- remote bundle upload now publishes that index as
+  `versions/<bundle_version>/routing-index.sqlite3`
+- fetched bundle caches now retain a local `routing_index_path`
+- runtime proxy now resolves family matches from the bundle-local SQLite index before consulting
+  `repo-rag-training-families`
+- remote family artifacts are no longer downloaded eagerly just to route; the proxy now downloads
+  only the selected `families/<id>/program.json` / `metadata.json` when those files are not
+  already staged locally
+
+Verified locally with:
+
+- `uv run python -m compileall src tests`
+- `uv run pytest tests/test_runtime_artifacts_azure.py tests/test_codex_proxy.py -q`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+- `uv run repo-rag smoke-test`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+
+Observed:
+
+- `tests/test_runtime_artifacts_azure.py tests/test_codex_proxy.py` passed as `56 passed`
+- `tests/test_utilities.py tests/test_repository_rag_bdd.py` passed as `62 passed`
+- the new tests confirm:
+  - remote bundle upload includes `routing-index.sqlite3`
+  - remote bundle fetch can skip eager family artifact downloads while still staging the routing
+    index
+  - the proxy can route from a bundle-local SQLite index without touching fallback family-state
+  - one selected family artifact can be fetched independently on demand
+
+Status:
+
+- `repo-rag-training-families` remains the trainer source of truth
+- `repo-rag-bundles` is now materially closer to a self-sufficient runtime package
+- runtime hot-path routing no longer depends on loading a monolithic bundle registry just to pick
+  the family

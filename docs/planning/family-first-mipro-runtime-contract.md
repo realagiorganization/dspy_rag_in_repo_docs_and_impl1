@@ -304,6 +304,11 @@ Runtime routing rule:
 Trainer may keep one local internal cache, but that cache is never authoritative.
 
 - The only durable baseline is the latest remote version in `repo-rag-training-families`.
+- Every new published family-state version must be computed from exactly two semantic inputs:
+  - the latest remote `repo-rag-training-families` version
+  - the current cycle's imported traces
+- `repo-rag-bundles` is a derivative output of that updated family state; it is not an
+  independent semantic baseline.
 - The trainer PVC is for temporary execution artifacts in the current Codex Exec / trainer run:
   - queued and imported trace files
   - the current in-flight `pending-cycle.json` ledger
@@ -315,12 +320,39 @@ Trainer may keep one local internal cache, but that cache is never authoritative
   remote `family_state_version`.
 - If the remote version changes, trainer must discard the active local family cache and adopt the
   new remote version.
+- If `current.json` lags behind a newer already-published
+  `versions/<family_state_version>/family-index.sqlite3`, trainer must adopt the newest published
+  remote version rather than the stale pointer.
 - If no remote version exists, trainer starts from an empty local family cache and materializes the
   current cycle traces exactly once; it must not pre-seed a temporary family state from those same
   traces before the real candidate-materialization pass.
 - Trainer recompiles only dirty families created or updated by the current queued traces. It does
   not reprocess every family on every cycle and it does not rebuild from `processed/...` as an
   active baseline path.
+
+## Incremental Version Contract
+
+Family-state and bundle publication are incremental by construction.
+
+- Every new family-state version is an append-only superstructure over the previous family-state
+  baseline plus the current imported traces.
+- Imported traces may extend existing families, create new families, or update family summaries,
+  but they must not silently drop prior replay snapshots from the carried-forward baseline.
+- Persisting a new family-state version must therefore merge the carried-forward baseline replay
+  records with the current in-memory family payload append-only by snapshot identity; a reduced
+  intermediate payload is never interpreted as permission to forget older snapshots.
+- Compact `family.json` is not allowed to imply an empty replay-set.
+  - If replay history lives in `families/<prompt_family_id>/records/*.json`, both remote baseline
+    fetch and local trainer hydration must reload those sidecars before merge/persist.
+  - Omitting inline `family_records` from one thin summary is a serialization choice only; it is
+    never a semantic reset of family history.
+- Trainer may merge or deduplicate only the exact same replay snapshot identity
+  (`exact_snapshot_id`, or its deterministic fallback when that field is genuinely absent).
+- Trainer must not replace one prior replay snapshot with a later snapshot merely because both
+  came from a similar logical prompt, the same helper lane, or the same stable source identity.
+- If a new run emits another trace for the same prompt family, that new trace is a new replay
+  member and must remain alongside the older snapshots unless both records are literally the same
+  snapshot.
 
 ## Current Stage
 
@@ -336,9 +368,9 @@ Implemented locally in this stage:
   while preserving `champion_*` aliases for live compatibility
 - bundle drift detection now compares family-state lineage first and only falls back to
   `champion_*` lineage fields for older bundle manifests
-- each published bundle now carries an internal `family_registry`, and the proxy now treats that
-  registry as its primary family lookup source before falling back to the external family-state
-  file
+- each published bundle now carries a copied `routing-index.sqlite3`, and the proxy now treats
+  that bundle-local SQLite index as its primary family lookup source before falling back to the
+  external family-state file
 - trainer compilation now emits one family-scoped DSPy artifact per persisted family and records
   those artifacts in bundle metadata as `family_artifact_registry`
 - successful family reuse now emits `full_trace` directly so matched runs always remain eligible
@@ -570,7 +602,7 @@ Not implemented yet:
     snapshots remain readable as fallback input when the new family-state file is absent.
 22. Close the remaining live runtime gaps found in AKS run `25629990035`.
     Stage 22 locally: proxy now strips forwarded Discord tails, synthesizes family registry
-    support from `family-state.json` when bundle-local registry data is absent, resolves staged
+    support from `family-state.json` when no bundle-local routing surface exists, resolves staged
     mirror `program.json` / `families/<id>/program.json` paths without requiring trainer-side
     artifact paths, and the deploy-stage trusted handoff now skips itself when the worker already
     completed a successful per-turn batch enqueue/import.
@@ -623,15 +655,23 @@ Not implemented yet:
     longer disables `.repo_rag_bundle_store` staging by failing to find
     `tools/pvc_artifact_sync.sh`.
 33. Bridge matched family lookups onto fetched family-state runtime artifacts when bundle-local
-    family registries are stale, and surface the selected family/runtime metadata in exported
-    trace records.
-    Stage 33 locally: bundle-local family registries still win when they point at valid runnable
+    routing metadata is stale, and surface the selected family/runtime metadata in exported trace
+    records.
+    Stage 33 locally: bundle-local routing surfaces still win when they point at valid runnable
     family programs, but the proxy now lazily falls back to the fetched `family-state.json`
-    runtime-artifact path when a matched family registry entry is stale. Trainer-facing exported
+    runtime-artifact path when a matched bundle-local entry is stale. Trainer-facing exported
     trace records now also carry `prompt_family_id`, `prompt_family_similarity`,
     `family_artifact_selected`, `bundle_version`, `program_path`, and `mediation_metric_hits` /
     `mediation_metric_total` as top-level fields instead of hiding them only inside nested runtime
     trace payloads.
+34. Make `repo-rag-bundles` autonomous for runtime routing without turning it into trainer state.
+    Stage 34 locally: every published bundle now stages and uploads one copied
+    `routing-index.sqlite3`, bundle-channel state records its `current_routing_index_path`, and
+    the proxy routes by that bundle-local SQLite file before it ever touches
+    `repo-rag-training-families`. The family-state container remains the trainer source of truth
+    for incremental updates, but runtime execution no longer needs it on the hot path just to pick
+    a family. After bundle-local routing selects one `prompt_family_id`, the proxy downloads only
+    that family's `program.json` / `metadata.json` when they are not already staged locally.
 34. Turn `family-state.json` into the thin family index the user asked for.
     Stage 34 locally: persisted trainer state now writes the full family payloads to
     `artifacts/trainer/families/<prompt_family_id>/family.json` plus `father.json` and

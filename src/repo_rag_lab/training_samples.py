@@ -2006,12 +2006,17 @@ def _family_state_entry_to_payload(
         family_state_path,
         family_entry.get("family_path"),
     )
+    resolved_family_dir = resolved_family_path.parent if resolved_family_path is not None else None
     if resolved_family_path is not None and resolved_family_path.is_file():
         candidate_payload = json.loads(resolved_family_path.read_text(encoding="utf-8"))
         if isinstance(candidate_payload, dict):
             loaded_payload = {str(key): value for key, value in candidate_payload.items()}
     if loaded_payload is None:
         loaded_payload = {str(key): value for key, value in family_entry.items()}
+    if not _family_replay_records(loaded_payload) and resolved_family_dir is not None:
+        sidecar_records = _load_family_record_sidecars(resolved_family_dir)
+        if sidecar_records:
+            loaded_payload["family_records"] = sidecar_records
     for field_name in (
         "prompt_family_id",
         "family_path",
@@ -2180,8 +2185,16 @@ def _persist_local_family_state(
                     str(key): value for key, value in loaded_existing.items()
                 }
                 existing_replay_records = _family_replay_records(existing_family_payload)
-        if not _family_replay_records(full_family_payload) and existing_replay_records:
-            full_family_payload["family_records"] = existing_replay_records
+                if not existing_replay_records:
+                    existing_replay_records = _load_family_record_sidecars(family_dir)
+                    if existing_replay_records:
+                        existing_family_payload["family_records"] = existing_replay_records
+        current_replay_records = _family_replay_records(full_family_payload)
+        if existing_replay_records:
+            full_family_payload["family_records"] = _merge_family_replay_records_append_only(
+                existing_replay_records,
+                current_replay_records,
+            )
             for field_name in (
                 "family_father_record",
                 "family_father_record_id",
@@ -2354,16 +2367,16 @@ def _load_champion_index(path: Path) -> dict[str, Any]:
         deduped_family_records: list[dict[str, Any]] = []
         deduped_record_index: dict[str, int] = {}
         for record in normalized_family_records:
-            stable_key = _stable_family_replay_key(record)
-            if not stable_key:
+            snapshot_key = _family_record_reference(record)
+            if not snapshot_key:
                 deduped_family_records.append(record)
                 continue
-            existing_index = deduped_record_index.get(stable_key)
+            existing_index = deduped_record_index.get(snapshot_key)
             if existing_index is None:
-                deduped_record_index[stable_key] = len(deduped_family_records)
+                deduped_record_index[snapshot_key] = len(deduped_family_records)
                 deduped_family_records.append(record)
                 continue
-            merged_record = _merge_replayed_candidate_records(
+            merged_record = _merge_equivalent_candidate_records(
                 deduped_family_records[existing_index],
                 record,
             )
@@ -2451,6 +2464,67 @@ def _family_replay_records(family_payload: Mapping[str, Any] | None) -> list[dic
         seen.add(key)
         records.append(normalized)
     return records
+
+
+def _load_family_record_sidecars(family_dir: Path) -> list[dict[str, Any]]:
+    """Load replay-set records from compact `records/*.json` sidecars when present."""
+
+    resolved_family_dir = family_dir.resolve()
+    record_dir = resolved_family_dir / "records"
+    if not record_dir.is_dir():
+        return []
+    records: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for record_path in sorted(record_dir.glob("*.json")):
+        try:
+            raw_payload = json.loads(record_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(raw_payload, Mapping):
+            continue
+        normalized = _serialize_candidate_record(raw_payload)
+        if not _trainer_candidate_record_is_supported(normalized):
+            continue
+        key = str(normalized.get("exact_snapshot_id") or _candidate_record_hash(normalized)).strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        records.append(normalized)
+    return records
+
+
+def _merge_family_replay_records_append_only(
+    existing_records: Sequence[Mapping[str, Any]],
+    current_records: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return one append-only replay-set merge keyed by exact snapshot identity."""
+
+    merged_records: list[dict[str, Any]] = []
+    merged_index: dict[str, int] = {}
+
+    def _append(record: Mapping[str, Any]) -> None:
+        normalized = _serialize_candidate_record(record)
+        if not _trainer_candidate_record_is_supported(normalized):
+            return
+        reference = _family_record_reference(normalized)
+        if reference is None:
+            merged_records.append(normalized)
+            return
+        existing_index = merged_index.get(reference)
+        if existing_index is None:
+            merged_index[reference] = len(merged_records)
+            merged_records.append(normalized)
+            return
+        merged_records[existing_index] = _merge_equivalent_candidate_records(
+            merged_records[existing_index],
+            normalized,
+        )
+
+    for record in existing_records:
+        _append(record)
+    for record in current_records:
+        _append(record)
+    return merged_records
 
 
 def _family_record_reference(record: Mapping[str, Any] | None) -> str | None:
@@ -3384,7 +3458,7 @@ def _upsert_family_replay_record(
     if not isinstance(raw_records, list):
         raw_records = []
         family_payload["family_records"] = raw_records
-    candidate_key = _stable_family_replay_key(normalized)
+    candidate_key = _family_record_reference(normalized)
     if not candidate_key:
         raw_records.append(normalized)
         return
@@ -3392,22 +3466,13 @@ def _upsert_family_replay_record(
         if not isinstance(existing, Mapping):
             continue
         existing_normalized = _serialize_candidate_record(existing)
-        existing_key = _stable_family_replay_key(existing_normalized)
+        existing_key = _family_record_reference(existing_normalized)
         if existing_key != candidate_key:
             continue
-        if (
-            str(existing_normalized.get("exact_snapshot_id") or "").strip()
-            == str(normalized.get("exact_snapshot_id") or "").strip()
-        ):
-            raw_records[index] = _merge_equivalent_candidate_records(
-                existing_normalized,
-                normalized,
-            )
-        else:
-            raw_records[index] = _merge_replayed_candidate_records(
-                existing_normalized,
-                normalized,
-            )
+        raw_records[index] = _merge_equivalent_candidate_records(
+            existing_normalized,
+            normalized,
+        )
         return
     raw_records.append(normalized)
 
