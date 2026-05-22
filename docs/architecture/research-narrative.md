@@ -289,9 +289,19 @@ every outbound Codex turn must flow through the same proxy path, the proxy must 
 mediation on champion prompt-family support, unsupported turns must pass through unchanged but
 still become candidate traces, and trainer-side champion replacement is allowed to use only
 `hits / total` plus prompt-family semantic similarity thresholds `0.8` and `0.6`. A newly
-clarified part of that same contract is that every outbound Codex turn must first be rewritten
-from `original_prompt` into `reformulated_prompt`, and the reformulated form becomes the
-prompt-family, champion, trace, and final DSPy-program surface rather than remaining hidden.
+clarified part of that same contract is that the root prompt of one execution turn is no longer
+allowed to be rewritten into a compact mediation prompt before execution starts, and it is also no
+longer allowed to consume one already-published DSPy family artifact on the first turn. For the
+root prompt, `original_prompt` and `reformulated_prompt` must stay identical and pass verbatim
+through the proxy into the orchestrator model context, while the runtime execution contract is now
+delivered in a separate higher-priority developer/system layer instead of being concatenated into
+the user prompt text itself. That root instruction layer now also explicitly says that when the
+prompt asks to develop, implement, fix, correct, update, create, change, or make something, that
+concrete action must dominate estimate/pricing/review clauses unless those clauses are the only
+deliverable. Helper-side reformulation and DSPy family routing are now reserved only for later
+lineage/helper turns after the root prompt is already inside the standard cycle. The root turn
+still becomes a normal trainer-facing trace after execution, but it must be learned from that
+trace later rather than being templated by the current bundle before the run begins.
 The same contract now treats the observable per-turn `command_trace` as equally important
 lineage: when the sequence is available it must be preserved beside the reformulated prompt in
 the trace and champion state, even though not every turn exposes a controllable command path.
@@ -1338,6 +1348,18 @@ and constraint signals and derives the active routing summaries from only the st
 The stability threshold scales with family size, so young families still get a usable profile
 immediately while larger families stop promoting one-off trace vocabulary into the live routing
 surface.
+
+One more subtle incremental-training regression later showed up at the boundary between runtime
+family routing and trainer family creation. Imported traces were already carrying the runtime
+`prompt_family_id` that the proxy had selected, and trainer preserved that field correctly, but it
+then treated the preserved id as a hard attach override for every `full_trace`. In practice that
+meant incremental cycles could keep extending the same existing family ids forever, even when a
+new trace had drifted far enough away that a fresh family should have been created. The corrected
+contract is narrower: for `full_trace`, runtime `prompt_family_id` is only a routing hint. If the
+hinted family still matches by the normal family-similarity threshold, trainer extends it; if the
+hinted family no longer matches, trainer must still be free to create a new family. Only
+`feedback_trace` is allowed to bind directly to the hinted family without a fresh similarity
+decision.
 
 That profile state is now also normalized into one per-term statistics payload instead of being
 spread across separate count and weight structures. Each prompt/command/constraint term can carry

@@ -37,22 +37,43 @@ Examples of stage-level families include:
 
 1. Every outbound request to the model passes through the local proxy.
 2. The proxy extracts `original_prompt` for the current turn.
-3. The helper DSPy model reformulates that prompt into `reformulated_prompt`.
-4. The proxy compares the incoming prompt against **every family father** and computes one
-   similarity score per family.
+3. For the root prompt of one Codex execution turn, the proxy must **not** reformulate the prompt
+   through the helper LM.
+   - `original_prompt` and `reformulated_prompt` must be identical for the root prompt
+   - the root prompt must enter the orchestrator model context verbatim through the proxy
+   - the root prompt's system/developer rules must travel as a separate higher-priority
+     instruction layer, not as text concatenated into the user prompt itself
+   - the root prompt must not be compacted, summarized, or whitespace-collapsed into a shorter
+     mediation form before the first execution turn
+4. The root prompt must also **never** use the DSPy family-routing/runtime path.
+   - no family match is computed for the root prompt
+   - no bundle family artifact is selected for the root prompt
+   - the root prompt still forms an ordinary orchestrator trace for trainer ingestion
+   - root-turn traces therefore remain part of family formation later, but they do not consume the
+     already-published DSPy library at runtime
+5. The root instruction layer must explicitly prioritize concrete action directives.
+   - if the prompt explicitly says to develop, implement, fix, correct, update, create, change,
+     or make something, the orchestrator must treat that as the primary task for the run
+   - estimate/pricing/review clauses may remain as context, but they must not override an explicit
+     execution directive unless they are the only requested deliverable
+6. Helper reformulation is allowed only for later prompt-lineage / helper turns that the proxy
+   derives after the root prompt is already inside the standard execution cycle.
+7. DSPy family routing applies only to those later helper / derived turns.
+8. For helper / derived turns, the proxy compares the incoming prompt against **every family
+   father** and computes one similarity score per family.
    That routing comparison must use `original_prompt`; `reformulated_prompt` belongs to the DSPy
    mediation surface, not to father matching.
-5. `metric 3` is the maximum of those scores.
-6. `metric 2` is the binary family-membership decision derived from that maximum:
+9. `metric 3` is the maximum of those scores.
+10. `metric 2` is the binary family-membership decision derived from that maximum:
    - if `metric 3 >= 0.8`, the prompt belongs to the best-matching family
    - if `metric 3 < 0.8`, the prompt does not belong to any existing family and must create a new
      family later through trainer ingestion
-7. When a family is found, the proxy uses that family's precomputed DSPy runtime artifact from the
-   latest bundle.
-8. When no family is found, the proxy does a fresh meditation path and still records the turn as a
-   new training trace.
-9. `command_trace` is first-class lineage and must be preserved beside `original_prompt` and
-   `reformulated_prompt`.
+11. When a family is found for one helper / derived turn, the proxy uses that family's precomputed
+    DSPy runtime artifact from the latest bundle.
+12. When no family is found for one helper / derived turn, the proxy does a fresh mediation path
+    and still records the turn as a new training trace.
+13. `command_trace` is first-class lineage and must be preserved beside `original_prompt` and
+    `reformulated_prompt`.
 
 There is **no active soft-band branch** on the runtime routing path. The expensive part is already
 the full-family scan, so the decision is:
@@ -338,6 +359,12 @@ Family-state and bundle publication are incremental by construction.
   baseline plus the current imported traces.
 - Imported traces may extend existing families, create new families, or update family summaries,
   but they must not silently drop prior replay snapshots from the carried-forward baseline.
+- For `full_trace` records, a runtime `prompt_family_id` is only a routing hint.
+  - Trainer may reuse that hinted family when the new trace still matches it by the normal family
+    similarity threshold.
+  - Trainer must still create a new family when the hinted family no longer matches the new trace.
+  - Only `feedback_trace` is allowed to bind directly to the existing hinted family without a new
+    similarity decision.
 - Persisting a new family-state version must therefore merge the carried-forward baseline replay
   records with the current in-memory family payload append-only by snapshot identity; a reduced
   intermediate payload is never interpreted as permission to forget older snapshots.

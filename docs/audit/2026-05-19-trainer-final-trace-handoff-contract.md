@@ -177,6 +177,176 @@ So the live status is:
 - but the end-to-end cycle was still in progress and the provisional family split remained more
   fragmented than the stage-level family contract intends
 
+## 2026-05-22 Live Incremental Reuse Follow-Up
+
+Live AKS inspection after execution batch `20260522T145958Z` confirmed two things at once:
+
+- the incremental trainer cycle did finally create a new family when one imported `full_trace`
+  stopped matching its hinted baseline family
+- the execution run still was not a pure "all traces use the previous DSPy family artifact"
+  scenario, because one helper trace fell back to baseline mediation even though the root path
+  reused the prior stable bundle
+
+Live evidence gathered:
+
+- `kubectl get jobs -n repo-rag --sort-by=.metadata.creationTimestamp | tail -n 8`
+- `kubectl exec -n repo-rag repo-rag-trainer-inspect -- sh -c 'cat /mnt/artifacts/dspy/channels/stable.json'`
+- `kubectl exec -n repo-rag repo-rag-trainer-inspect -- sh -c 'sed -n "1,220p" /mnt/artifacts/traces/imported/20260522T150508Z-...-0.json'`
+- `kubectl exec -n repo-rag repo-rag-trainer-inspect -- sh -c 'sed -n "1,220p" /mnt/artifacts/traces/imported/20260522T150509Z-...-1.json'`
+- `kubectl exec -n repo-rag repo-rag-trainer-inspect -- sh -c 'sed -n "1,220p" /mnt/artifacts/traces/imported/20260522T150509Z-...-2.json'`
+- `kubectl exec -n repo-rag repo-rag-trainer-inspect -- sh -c 'sed -n "1,260p" /mnt/artifacts/traces/imported/20260522T150510Z-...-3.json'`
+- `kubectl logs -n repo-rag job/repo-rag-trainer-cycle-29657705`
+- `kubectl cp repo-rag/repo-rag-trainer-inspect:/mnt/artifacts/trainer/family-index.sqlite3 /tmp/family-index-20260522.sqlite3`
+- `sqlite3 -readonly /tmp/family-index-20260522.sqlite3 "select prompt_family_id, family_record_count, question from family_index_entries order by prompt_family_id;"`
+
+Observed:
+
+- new stable bundle version: `20260522T150755015462Z`
+- `current_family_state_version_used = 20260522T151150Z`
+- bundle lineage reported:
+  - `imported_trace_count = 4`
+  - `new_candidate_count = 1`
+  - `dirty_family_count = 3`
+  - `prompt_family_ids = 6`
+- current family index now contains:
+  - `pf-440eb981589fd25a | 1`
+  - `pf-b9d120cda6bd03f8 | 1`
+  - `pf-c7c2e0a42d9d87ec | 3`
+  - `pf-dc1f706da0b4f060 | 6`
+  - `pf-f4bcccb50d73c37a | 1`
+  - `pf-fbfd71330374ba41 | 3`
+- the new family is `pf-f4bcccb50d73c37a` with father:
+  - `Quick repo check done — verifying exact files before I wrap up.`
+
+Execution-side reuse evidence from imported traces:
+
+- three imported traces carried the previous stable bundle version
+  `20260521T222149380506Z`
+- those same traces showed:
+  - `program_loaded = true`
+  - `family_artifact_selected = true`
+  - `used_baseline_fallback = false`
+  - `backend = codex_cli_repo_rag_proxy`
+- one imported helper trace still showed mixed behavior:
+  - `bundle_version = 20260521T222149380506Z`
+  - `family_artifact_selected = true`
+  - `program_loaded = false`
+  - `used_baseline_fallback = true`
+  - `prompt_family_similarity = 0.539112`
+  - `prompt_family_band = new`
+
+Interpretation:
+
+- the root execution path did reuse the previous DSPy bundle; this is not a pure passthrough run
+- incremental family formation also worked better than the prior broken state because it created
+  one genuinely new family
+- however, the reuse path is still not perfectly uniform across all helper traces, because at
+  least one helper trace fell back to baseline mediation rather than loading the selected family
+  program
+
+## 2026-05-22 Live Prompt-Normalization Laziness Follow-Up
+
+The later live execution batch `20260522T154337Z` against
+`realagiorganization/landscaper-crm` exposed a different failure mode: the pipeline did create
+new families, but the root task was normalized into repository review, pricing, and planning work
+instead of directly beginning implementation on the site.
+
+Live evidence gathered:
+
+- `kubectl exec -n repo-rag repo-rag-trainer-inspect -- sh -c 'ls -1t /mnt/artifacts/traces/imported | head -n 12'`
+- `kubectl cp repo-rag/repo-rag-trainer-inspect:/mnt/artifacts/traces/imported/20260522T155008Z-worker-0-prompts_tylers_landscaper-p00000-86c9e8-realagiorganization_landscaper-crm-20260522T154337Z-0.json /tmp/landscaper-latest/trace-0.json`
+- `kubectl cp repo-rag/repo-rag-trainer-inspect:/mnt/artifacts/traces/imported/20260522T155009Z-worker-0-prompts_tylers_landscaper-p00000-86c9e8-realagiorganization_landscaper-crm-20260522T154337Z-1.json /tmp/landscaper-latest/trace-1.json`
+- `kubectl cp repo-rag/repo-rag-trainer-inspect:/mnt/artifacts/traces/imported/20260522T155010Z-worker-0-prompts_tylers_landscaper-p00000-86c9e8-realagiorganization_landscaper-crm-20260522T154337Z-2.json /tmp/landscaper-latest/trace-2.json`
+- `kubectl cp repo-rag/repo-rag-trainer-inspect:/mnt/artifacts/traces/imported/20260522T155010Z-worker-0-prompts_tylers_landscaper-p00000-86c9e8-realagiorganization_landscaper-crm-20260522T154337Z-3.json /tmp/landscaper-latest/trace-3.json`
+
+Observed:
+
+- the current stable bundle became `20260522T155334155226Z`
+- trainer lineage shows:
+  - `imported_trace_count = 11`
+  - `new_candidate_count = 9`
+  - `family_count = 15`
+- so incremental family creation was active for this run
+- however the root imported trace (`...-0.json`) had:
+  - `original_prompt` beginning with a request for effort and pricing assessment:
+    - `Please review ... and give me a plausible take on 1) how long ... 2) how much ...`
+  - only later in the same user prompt came:
+    - `You now have examples of how the site should look ... Start correcting the site according to the requirements`
+  - `reformulated_prompt` then became:
+    - `Review the repository ... and provide an implementation-grounded plan ...`
+  - `program_loaded = false`
+  - `family_artifact_selected = null`
+  - `used_baseline_fallback = true`
+- a secondary mediation trace (`...-1.json`) did reuse DSPy successfully:
+  - `prompt_family_id = pf-dc1f706da0b4f060`
+  - `prompt_family_similarity = 0.866789`
+  - `program_loaded = true`
+  - `family_artifact_selected = true`
+  - `used_baseline_fallback = false`
+- multiple additional helper traces then focused on assessment-style subgoals rather than direct
+  implementation, for example:
+  - pricing and timeline take
+  - code maturity and deliverables assessment
+  - route/script/deploy verification
+  - existing form documentation review
+
+Interpretation:
+
+- DSPy reuse was real in this run, but not at the most important first/root trace
+- the first/root trace fell back and preserved the earliest dominant asks from the raw user
+  message: review the repo, estimate effort, and discuss pricing
+- that fallback reformulation then seeded a chain of helper traces that were internally
+  consistent, but “lazy” relative to the user’s later imperative to begin correcting the site
+- so the pipeline’s laziness here was caused primarily by prompt-normalization priority, not by
+  trainer family assignment alone
+
+## 2026-05-22 Root Prompt Verbatim Contract Repair
+
+The live `landscaper-crm` run showed that the execution path had a deeper runtime bug than family
+reuse alone: the root prompt itself was allowed to pass through the helper reformulation path
+before the first execution turn started. That violated the intended orchestration boundary and let
+an early “review / pricing / timeline take” clause dominate over the later imperative to start
+correcting the site.
+
+Local repair:
+
+- the root Codex prompt now stays verbatim through the proxy
+- for the root prompt only:
+  - `original_prompt == reformulated_prompt`
+  - helper-LM prompt reformulation is disabled
+  - the user prompt is no longer whitespace-collapsed into a compact mediation form before the
+    first execution turn
+- helper reformulation remains available only for later lineage/helper turns after the root prompt
+  is already inside the standard proxy/orchestrator cycle
+- the root developer-message injection no longer adds a truncated `Prompt:` mirror line, so the
+  model sees the user prompt only in its original user-message position instead of through a second
+  shortened proxy copy
+- proxy mediation caches now distinguish root-prompt and helper-prompt entries so the root
+  verbatim path cannot be polluted by helper-turn cache reuse
+
+Verification for this repair:
+
+- `uv run pytest tests/test_codex_proxy.py -q`
+- `uv run python -m compileall src tests`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+- `uv run repo-rag smoke-test`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+
+Observed:
+
+- `tests/test_codex_proxy.py` passed as `30 passed`
+- `compileall` passed
+- `tests/test_utilities.py tests/test_repository_rag_bdd.py` passed as `63 passed`
+- smoke test passed
+- Rust build passed
+
+Scope note:
+
+- this turn fixed the local proxy/orchestrator contract and added a regression for verbatim root
+  prompt handling
+- blob-backed live verification is still required to prove that the next real execution run no
+  longer normalizes the root prompt into a planning/assessment-first task
+
 ## 2026-05-20 Family-State No-Dup Follow-Up
 
 Fresh blob inspection after the compact trace rollout showed that the trace envelopes had shrunk
@@ -268,8 +438,11 @@ Local repair:
 
 - imported trace candidates now preserve `payload.prompt_family_id` / `trace.prompt_family_id`
   whenever the runtime already selected a family
-- trainer now treats an existing `preferred_family_id` as an attach target and extends that family
-  directly instead of creating a new family merely because lexical similarity is low
+- trainer preserves the runtime `preferred_family_id` as a `full_trace` routing hint, but not as a
+  hard attach override
+  - if the hinted family still matches by the normal threshold, trainer extends it
+  - if the hinted family no longer matches, trainer must still be able to create a new family
+  - only `feedback_trace` binds directly to the hinted family without a new similarity decision
 
 Verification for this follow-up:
 
@@ -282,6 +455,52 @@ Observed:
 - `compileall` passed
 - `tests/test_training_samples.py` passed as `50 passed`
 - `tests/test_utilities.py tests/test_repository_rag_bdd.py` passed as `62 passed`
+
+## 2026-05-21 Incremental New-Family Creation Follow-Up
+
+Later live inspection of the `from scratch` family-state version `20260521T111104Z` and the
+incremental family-state version `20260521T173935Z` showed a suspicious pattern:
+
+- the family id set stayed exactly the same across both versions
+- only `family_record_count` changed (`1,1,3,2,1` became `1,1,10,6,3`)
+- no new prompt families appeared at all during later incremental runs
+
+That pattern alone is not always wrong, but the code path confirmed a real trainer bug:
+
+- imported `full_trace` records preserved the runtime `prompt_family_id` hint correctly
+- `_find_or_create_prompt_family(...)` then treated that hinted id as an unconditional attach
+  target whenever the family already existed
+- so a later incremental cycle could never create a new family from a hinted `full_trace`, even
+  when the new trace had drifted far enough away that the normal family-similarity threshold would
+  have rejected the old family
+
+Local repair:
+
+- `preferred_family_id` is now a soft hint for `full_trace`
+  - if the hinted family still matches by the normal family threshold, trainer extends it
+  - if it no longer matches, trainer falls back to normal family search and may create a new
+    family
+- `feedback_trace` remains the only record class that binds directly to the hinted family without
+  a new similarity decision
+- regression coverage now includes both sides of the contract:
+  - hinted `full_trace` that still matches the old family
+  - hinted `full_trace` that must create a new family instead
+
+Verification for this follow-up:
+
+- `uv run python -m compileall src tests`
+- `uv run pytest tests/test_training_samples.py -q`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+- `uv run repo-rag smoke-test`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+
+Observed:
+
+- `compileall` passed
+- `tests/test_training_samples.py` passed as `54 passed`
+- `tests/test_utilities.py tests/test_repository_rag_bdd.py` passed as `63 passed`
+- smoke test passed
+- Rust build passed
 
 ## 2026-05-20 Bundle Carried-Forward Artifact Rebinding
 
@@ -1152,3 +1371,299 @@ Status:
 - the provenance repair is now reflected in live blob state
 - the bundle-local routing index is both compact and count-correct
 - the triggering execution run reused the previous stable DSPy bundle successfully
+
+## 2026-05-22 Live Root-Verbatim Follow-Up
+
+Latest checked execution run:
+
+- `26302660255_20260522_180011`
+
+This run was inspected after the root-prompt verbatim contract repair. The goal was to determine
+whether the pipeline still drifted into repository assessment/planning instead of directly
+continuing site implementation.
+
+Live evidence gathered:
+
+- `az storage blob list --account-name realagistorage --container-name execution-artifacts --prefix executions/ --query 'reverse(sort_by([?ends_with(name, \`redis_results.json\`)], &properties.lastModified))[:8]'`
+- `az storage blob download --account-name realagistorage --container-name execution-artifacts --name executions/26302660255_20260522_180011/redis_results.json`
+- `az storage blob download --account-name realagistorage --container-name execution-artifacts --name executions/26302660255_20260522_180011/all_artifacts.tar.gz`
+- `kubectl cp repo-rag/repo-rag-trainer-inspect:/mnt/artifacts/traces/imported/20260522T180008Z-...-0.json /tmp/landscaper-latest-174814/trace-0.json`
+- `kubectl cp repo-rag/repo-rag-trainer-inspect:/mnt/artifacts/traces/imported/20260522T180009Z-...-1.json /tmp/landscaper-latest-174814/trace-1.json`
+- `kubectl cp repo-rag/repo-rag-trainer-inspect:/mnt/artifacts/traces/imported/20260522T180010Z-...-2.json /tmp/landscaper-latest-174814/trace-2.json`
+- `kubectl cp repo-rag/repo-rag-trainer-inspect:/mnt/artifacts/traces/imported/20260522T180010Z-...-3.json /tmp/landscaper-latest-174814/trace-3.json`
+- `kubectl exec -n repo-rag repo-rag-trainer-inspect -- sh -lc 'cat /mnt/artifacts/dspy/channels/stable.json'`
+- `kubectl exec -n repo-rag repo-rag-trainer-cycle-29657880-7ntvz -- sh -lc 'sed -n "1,220p" /workspace/repo-rag/artifacts/trainer/training-candidates-summary.json'`
+
+Observed execution-side behavior:
+
+- `repo_rag_backend.json` reported:
+  - `backend = codex_cli_repo_rag_proxy`
+  - `bundle_resolved = true`
+  - `bundle_version = 20260522T172801104492Z`
+  - `dspy_status = success`
+  - `mediation_mode = dspy_rag`
+  - `trace_handoff_status = queued`
+- `redis_results.json` reported:
+  - `prompt_tokens = 132003`
+  - `artifacts/traces/...-0.json` through `...-7.json` were all exported
+
+Most important root-trace finding:
+
+- `trace-0.json` now satisfies the repaired root contract:
+  - `trace.original_prompt == trace.reformulated_prompt`
+  - `trace.program_loaded = true`
+  - `trace.family_artifact_selected = true`
+  - `outcome.used_baseline_fallback = false`
+  - `trace.prompt_family_id = pf-4debe1f147146967`
+  - `trace.prompt_family_similarity = 1.0`
+
+That means the previous bug is fixed:
+
+- the root prompt was **not** helper-rewritten
+- the root trace did **not** fall back to baseline mediation
+- the root trace did reuse a previously published DSPy family artifact
+
+However, the run still behaved as assessment-first rather than implementation-first, and the
+reason changed:
+
+- the verbatim root prompt itself still begins with:
+  - `Please review ... give me a plausible take on`
+  - `1) how long ...`
+  - `2) how much ...`
+- the later implementation clause
+  - `You now have examples of how the site should look ... Start correcting the site according to the requirements`
+  remains present, but it appears too late to dominate the root task semantics
+- because the root prompt is now passed through verbatim, DSPy matched it exactly to an existing
+  assessment-oriented family and returned an assessment-style answer:
+  - timing estimate
+  - pricing estimate
+  - risk / pitch framing
+  - optional memo follow-up
+
+Helper traces still reformulated normally and several of them remained planning-style:
+
+- `trace-1.json` rewrote the same client prompt into an explicit
+  `estimate/triage/pricing` mediation query
+- `trace-3.json` through `trace-6.json` were still repo-review / validation / summary helper turns
+  rather than implementation-start turns
+
+So the live interpretation is now:
+
+- the root-verbatim repair worked technically
+- the current lazy behavior is no longer caused by helper rewriting of the root prompt
+- it is caused by the mixed-intent user prompt itself plus exact DSPy reuse of the already learned
+  assessment-family `pf-4debe1f147146967`
+
+Trainer status at inspection time:
+
+- latest published versions were still the previous cycle:
+  - `repo-rag-training-families/current.json -> 20260522T173601Z`
+  - `repo-rag-bundles/channels/stable.json -> 20260522T172801104492Z`
+- a newer trainer job was still running:
+  - `repo-rag-trainer-cycle-29657880`
+- its in-pod `training-candidates-summary.json` already showed:
+  - `input_trace_count = 8`
+  - `loaded_candidate_count = 8`
+  - `new_candidate_count = 3`
+  - `family_count = 19`
+
+So incremental family creation still appears alive, but the freshly imported traces are currently
+teaching mostly assessment / review patterns rather than implementation-start behavior.
+
+## 2026-05-22 Root Prompt Never Uses DSPy Repair
+
+The next local runtime correction tightened the root-turn contract one step further. The earlier
+root-verbatim repair stopped helper LM rewriting of the first prompt, but live evidence showed that
+the root prompt could still match an already-published assessment-oriented DSPy family artifact and
+therefore continue steering the run into review / pricing / effort-estimate behavior. That is not
+allowed by the intended orchestration contract.
+
+The repaired invariant is now:
+
+- the root prompt still passes through the local proxy
+- the root prompt still produces a normal trainer-facing trace after execution
+- but the root prompt never performs family routing and never loads a DSPy family artifact
+- DSPy family routing is reserved only for later helper / derived turns after the orchestrator has
+  already started the run
+
+Local code changes:
+
+- `build_codex_mediation(..., root_prompt=True)` now returns an intentional root passthrough result
+  before any family lookup, repo retrieval, or DSPy program load
+- that result carries:
+  - `original_prompt == reformulated_prompt`
+  - `dspy_status = skipped`
+  - `dspy_bypass_reason = root-prompt-never-uses-dspy`
+  - `family_artifact_selected = false`
+  - no injected mediation block
+- cached root results now preserve `dspy_bypass_reason`
+- turn-trace outcomes now distinguish intentional root DSPy bypass from real baseline fallback, so
+  root traces no longer appear as accidental DSPy failures
+
+Verification executed in this turn:
+
+- `uv run pytest tests/test_codex_proxy.py -q`
+- `uv run python -m compileall src tests`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+- `uv run repo-rag smoke-test`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+
+Observed:
+
+- `tests/test_codex_proxy.py` passed as `31 passed`
+- `compileall` passed
+- `tests/test_utilities.py tests/test_repository_rag_bdd.py` passed as `63 passed`
+- smoke test passed
+- Rust build passed
+
+Verification categories still not exercised in this turn:
+
+- no full `make quality`
+- no coverage run
+- no UI/browser integration run
+- no live AKS redeploy yet for this exact root-no-DSPy repair
+
+## 2026-05-22 Live Result After Root-No-DSPy Redeploy
+
+Live AKS inspection after execution batch `26306410579_20260522_191720` confirmed that the
+root-no-DSPy repair itself now works in production, but it also exposed the next orchestration
+problem clearly: helper-turn generation is still steering the run into estimate / review behavior.
+
+Live evidence gathered:
+
+- downloaded:
+  - `execution-artifacts/executions/26306410579_20260522_191720/redis_results.json`
+  - `execution-artifacts/executions/26306410579_20260522_191720/all_artifacts.tar.gz`
+- inspected:
+  - `repo_rag_backend.json`
+  - `execution.log`
+  - imported traces for batch `20260522T191020Z` copied from the trainer PVC
+  - `repo-rag-bundles/channels/stable.json`
+
+Observed for the root trace `trace-0.json`:
+
+- `trace.original_prompt == trace.reformulated_prompt`
+- `prompt_family_id = null`
+- `prompt_family_similarity = 0.0`
+- `program_loaded = false`
+- `family_artifact_selected = false`
+- `used_baseline_fallback = false`
+- `dspy_bypass_reason = root-prompt-never-uses-dspy`
+
+This is the intended contract:
+
+- the root prompt stayed verbatim
+- the root prompt did not family-match
+- the root prompt did not load a DSPy family artifact
+- the root prompt still produced a normal imported trainer trace
+
+Execution-level backend summary agreed:
+
+- `backend = codex_cli_repo_rag_proxy`
+- `bundle_resolved = false`
+- `bundle_version = null`
+- `dspy_status = skipped`
+- `mediation_mode = passthrough`
+- `trace_handoff_status = queued`
+
+So the earlier defect is fixed: the root prompt is no longer being templated by DSPy.
+
+However, the helper-turn surface still pushed the run toward estimation:
+
+- `trace-1.json` immediately reformulated into a repository-grounded
+  `Review and continue implementing ...` helper prompt but then matched the old assessment family
+  `pf-4debe1f147146967` with:
+  - `program_loaded = true`
+  - `family_artifact_selected = true`
+  - `used_baseline_fallback = false`
+- later helper traces explicitly asked for:
+  - client-facing estimate drafting
+  - deployment-readiness assessment
+  - pricing take
+  - realistic effort estimate
+- sampled answers from `trace-0`, `trace-1`, `trace-3`, `trace-7`, and `trace-8` all began with
+  `**Plausible Take**`
+
+Interpretation:
+
+- the root-no-DSPy repair is working live
+- the run is still becoming assessment-first, but now for a different reason
+- the current failure is no longer root prompt templating
+- it is helper-task spawning / intent prioritization after the root prompt enters the
+  orchestrator
+
+This means the next fix must target helper orchestration:
+
+- mixed-intent prompts with an explicit implementation clause cannot immediately spawn pricing /
+  timeline / triage helper tasks as the dominant next step
+- estimate-style sidecar work must be demoted behind implementation-first execution when the user
+  explicitly says to start correcting the site
+
+## 2026-05-22 Root Developer-Layer Injection Repair
+
+The next local repair moved the runtime execution contract out of the concatenated user prompt and
+into the correct higher-priority developer instruction layer for root Codex requests.
+
+Why this was necessary:
+
+- `dataset` had been building one flat prompt by concatenating:
+  - the user task
+  - execution context
+  - autonomous execution contract
+- that flattening meant the root task and the system rules were traveling in the same user text
+  blob
+- the local proxy already knew how to inject a separate `developer` message for helper mediation,
+  but the root path still left `developer_message=""` and therefore never used that channel
+
+Repaired invariant:
+
+- the root user prompt stays verbatim and uncompressed
+- the root execution contract is sent separately as a `developer` message in the Responses payload
+- the same system rules are therefore no longer duplicated inside the root user prompt
+- the root instruction layer now explicitly says that concrete action directives (`develop`,
+  `implement`, `fix`, `correct`, `update`, `create`, `change`, `make`) must be executed in the
+  current run rather than reduced to estimate/pricing/review output
+
+Local code changes:
+
+- `dataset/docker/prompt-executor/worker_execution.py`
+  - split the execution contract into `_build_execution_system_prompt(...)`
+  - kept `_build_final_prompt(...)` only as the direct-Codex fallback surface
+- `dataset/docker/prompt-executor/worker_execution_prompt.py`
+  - root proxy specs now carry `root_developer_message`
+  - Codex proxy path now sends only the cleaned runtime user prompt, not the concatenated system
+    contract blob
+- `dataset/docker/prompt-executor/worker_codex_cli_exec.py`
+  - proxy sessions now persist `repo_rag_root_developer_message.txt`
+  - `serve-codex-proxy` receives that file via explicit CLI argument
+- `src/repo_rag_lab/codex_proxy.py`
+  - root mediation now returns `developer_message=root_developer_message`
+  - root requests inject that text as a separate `developer` message while still bypassing DSPy
+- `src/repo_rag_lab/cli.py`
+  - `serve-codex-proxy` now accepts `--root-developer-message-file`
+
+Verification executed in this turn:
+
+- `uv run pytest -q tests/test_codex_proxy.py::test_build_codex_mediation_keeps_root_prompt_verbatim tests/test_codex_proxy.py::test_persist_turn_trace_marks_root_bypass_as_not_fallback`
+- `uv run python -m compileall src tests`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+- `uv run repo-rag smoke-test`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+- `cd ../dataset && python -m compileall docker/prompt-executor/worker_execution.py docker/prompt-executor/worker_execution_prompt.py docker/prompt-executor/worker_codex_cli_exec.py`
+- `cd ../dataset && pytest tests/unit/test_worker_execution_prompt_repo_rag_cli.py tests/unit/test_worker_codex_cli_exec_small.py -q`
+
+Observed:
+
+- targeted `tests/test_codex_proxy.py` root-path slice passed as `2 passed`
+- `compileall` passed
+- `tests/test_utilities.py tests/test_repository_rag_bdd.py` passed
+- smoke test passed
+- Rust build passed
+- dataset worker `compileall` passed
+- the targeted `dataset` proxy-spec / proxy-session regression slice passed as `74 passed`
+
+Verification categories still not exercised in this turn:
+
+- no full `make quality`
+- no coverage run
+- no live AKS redeploy yet for this exact root developer-layer injection repair

@@ -107,6 +107,7 @@ class CodexMediationResult:
     program_path: str | None
     evidence_previews: list[dict[str, str]]
     developer_message: str
+    dspy_bypass_reason: str | None = None
     prompt_family_id: str | None = None
     prompt_family_similarity: float = 0.0
     prompt_family_band: str = "new"
@@ -152,6 +153,7 @@ class CodexProxyConfig:
     retrieval_mode: RetrievalMode | None = None
     cache_dir: Path | None = None
     cache_ttl_seconds: int = _DEFAULT_CACHE_TTL_SECONDS
+    root_developer_message: str = ""
 
 
 @dataclass(frozen=True)
@@ -242,6 +244,7 @@ def _dedupe_previews(previews: list[dict[str, str]]) -> list[dict[str, str]]:
 def _build_budgeted_message(
     *,
     reformulated_prompt: str,
+    include_prompt_line: bool = True,
     mediation_mode: str,
     rag_status: str,
     dspy_status: str,
@@ -257,7 +260,7 @@ def _build_budgeted_message(
     summary_limit = max(96, min(240, budget_tokens))
     trimmed_summary = _truncate_text(summary, limit=summary_limit)
     trimmed_previews = _dedupe_previews(previews)[:1]
-    trimmed_reformulated_prompt = _truncate_text(reformulated_prompt, limit=144)
+    prompt_line = reformulated_prompt.strip()
     source_limit = max(1, min(2, essentials_count))
     lines = [
         "Repo mediation active.",
@@ -272,8 +275,8 @@ def _build_budgeted_message(
     if prompt_family_id:
         lines.append(f"Family: {prompt_family_id}")
     lines.append(f"Mode: {mediation_mode}")
-    if reformulated_prompt.strip():
-        lines.append(f"Prompt: {trimmed_reformulated_prompt}")
+    if include_prompt_line and prompt_line:
+        lines.append(f"Prompt: {prompt_line}")
     if trimmed_summary:
         lines.extend(["", "Summary:", trimmed_summary])
 
@@ -405,6 +408,12 @@ def _result_from_payload(payload: dict[str, object]) -> CodexMediationResult | N
             or None,
             evidence_previews=evidence_previews,
             developer_message=str(payload.get("developer_message") or ""),
+            dspy_bypass_reason=(
+                str(payload.get("dspy_bypass_reason")).strip()
+                if payload.get("dspy_bypass_reason") is not None
+                else None
+            )
+            or None,
             prompt_family_id=(
                 str(payload.get("prompt_family_id")).strip()
                 if payload.get("prompt_family_id") is not None
@@ -634,12 +643,16 @@ def reformulate_codex_prompt(
     original_prompt: str,
     *,
     lm_config: DSPyLMConfig | None,
+    allow_reformulation: bool = True,
 ) -> tuple[str, str]:
     """Return the reformulated DSPy helper prompt for one outbound Codex turn."""
 
-    cleaned = " ".join(original_prompt.split()).strip()
-    if not cleaned:
+    stripped = str(original_prompt or "").strip()
+    if not stripped:
         return "", "empty"
+    if not allow_reformulation:
+        return stripped, "root-verbatim"
+    cleaned = " ".join(stripped.split()).strip()
     if lm_config is None or _dspy is None:
         return cleaned, "identity"
     try:
@@ -1415,6 +1428,7 @@ def build_codex_mediation(
     question: str,
     *,
     command_trace: Sequence[Mapping[str, object]] = (),
+    root_prompt: bool = False,
     repository_root: Path,
     bundle_root: Path,
     prefer_dspy: bool = True,
@@ -1427,11 +1441,12 @@ def build_codex_mediation(
     low_signal_min_sources: int = 1,
     family_exploration_rate: float = _DEFAULT_FAMILY_EXPLORATION_RATE,
     retrieval_mode: RetrievalMode | None = None,
+    root_developer_message: str = "",
 ) -> CodexMediationResult:
     """Build one combined repo-grounded mediation block for Codex."""
 
     resolved_root = repository_root.resolve()
-    original_prompt = " ".join(question.split()).strip()
+    original_prompt = str(question or "").strip()
     task_classification = _classify_task(original_prompt)
     effective_budget = (
         max(120, trivial_token_budget)
@@ -1446,8 +1461,38 @@ def build_codex_mediation(
     reformulated_prompt, reformulation_status = reformulate_codex_prompt(
         original_prompt,
         lm_config=lm_config,
+        allow_reformulation=not root_prompt,
     )
     active_prompt = reformulated_prompt or original_prompt
+    if root_prompt:
+        root_message = str(root_developer_message or "").strip()
+        return CodexMediationResult(
+            question=active_prompt,
+            original_prompt=original_prompt,
+            reformulated_prompt=active_prompt,
+            reformulation_status=reformulation_status,
+            mediation_mode="passthrough",
+            rag_status="skipped",
+            dspy_status="skipped",
+            dspy_lm_model=str(getattr(lm_config, "model", "") or "").strip() or None,
+            summary="",
+            retrieval_mode=str(retrieval_mode or "lexical"),
+            sources=[],
+            warnings=[],
+            bundle_version=None,
+            program_path=None,
+            evidence_previews=[],
+            developer_message=root_message,
+            dspy_bypass_reason="root-prompt-never-uses-dspy",
+            prompt_family_id=None,
+            prompt_family_similarity=0.0,
+            prompt_family_band="new",
+            family_artifact_selected=False,
+            task_classification=task_classification,
+            budget_tokens=effective_budget,
+            estimated_tokens=0,
+            injected=bool(root_message),
+        )
     family_lookup_prompt = original_prompt or active_prompt
     family_state_path: Path | None = None
     family_state_checked = False
@@ -1823,6 +1868,7 @@ def build_codex_mediation(
     if not low_signal:
         developer_message, estimated_tokens = _build_budgeted_message(
             reformulated_prompt=active_prompt,
+            include_prompt_line=not root_prompt,
             mediation_mode=mediation_mode,
             rag_status=rag_status,
             dspy_status=dspy_status,
@@ -1973,7 +2019,11 @@ class _CodexProxyHandler(BaseHTTPRequestHandler):
             else:
                 command_trace = []
             if original_prompt:
-                mediation = runtime.build_mediation(original_prompt, command_trace)
+                mediation = runtime.build_mediation(
+                    original_prompt,
+                    command_trace,
+                    root_prompt=True,
+                )
                 runtime.persist_status(mediation, command_trace=command_trace)
                 runtime.persist_turn_trace(mediation, command_trace=command_trace)
                 if mediation.injected and mediation.developer_message.strip():
@@ -2090,12 +2140,21 @@ class _CodexProxyRuntime:
 
         return list(self._turn_trace_entries)
 
-    def _cache_key(self, original_prompt: str, command_trace: list[Mapping[str, str]]) -> str:
+    def _cache_key(
+        self,
+        original_prompt: str,
+        command_trace: list[Mapping[str, str]],
+        *,
+        root_prompt: bool,
+    ) -> str:
         command_trace_token = json.dumps(
             command_trace,
             sort_keys=True,
             ensure_ascii=False,
             separators=(",", ":"),
+        )
+        root_developer_message = (
+            str(self.config.root_developer_message or "").strip() if root_prompt else ""
         )
         identity = "|".join(
             [
@@ -2110,6 +2169,8 @@ class _CodexProxyRuntime:
                 str(self.config.trivial_token_budget),
                 self.corpus_fingerprint,
                 self.retrieval_profile_fingerprint,
+                str(root_prompt),
+                root_developer_message,
                 original_prompt.strip(),
                 command_trace_token,
             ]
@@ -2123,8 +2184,12 @@ class _CodexProxyRuntime:
         self,
         original_prompt: str,
         command_trace: list[Mapping[str, str]],
+        *,
+        root_prompt: bool,
     ) -> CodexMediationResult | None:
-        cache_path = self._cache_path_for_key(self._cache_key(original_prompt, command_trace))
+        cache_path = self._cache_path_for_key(
+            self._cache_key(original_prompt, command_trace, root_prompt=root_prompt)
+        )
         if not cache_path.is_file():
             return None
         if self.cache_ttl_seconds > 0:
@@ -2157,12 +2222,18 @@ class _CodexProxyRuntime:
             program_path=cached.program_path,
             evidence_previews=cached.evidence_previews,
             developer_message=cached.developer_message,
+            dspy_bypass_reason=cached.dspy_bypass_reason,
             prompt_family_id=cached.prompt_family_id,
             prompt_family_similarity=cached.prompt_family_similarity,
             prompt_family_band=cached.prompt_family_band,
             family_runtime_hit_rate=cached.family_runtime_hit_rate,
             family_artifact_hit_rate=cached.family_artifact_hit_rate,
+            family_predicted_hit_rate=cached.family_predicted_hit_rate,
+            family_predicted_hit_rate_lower_bound=cached.family_predicted_hit_rate_lower_bound,
+            family_prediction_uncertainty=cached.family_prediction_uncertainty,
+            family_feedback_count=cached.family_feedback_count,
             family_artifact_selected=cached.family_artifact_selected,
+            family_exploration_selected=cached.family_exploration_selected,
             task_classification=cached.task_classification,
             budget_tokens=cached.budget_tokens,
             estimated_tokens=cached.estimated_tokens,
@@ -2175,8 +2246,12 @@ class _CodexProxyRuntime:
         original_prompt: str,
         command_trace: list[Mapping[str, str]],
         mediation: CodexMediationResult,
+        *,
+        root_prompt: bool,
     ) -> None:
-        cache_path = self._cache_path_for_key(self._cache_key(original_prompt, command_trace))
+        cache_path = self._cache_path_for_key(
+            self._cache_key(original_prompt, command_trace, root_prompt=root_prompt)
+        )
         temp_path = cache_path.with_suffix(".json.tmp")
         payload = {
             "schema_version": 1,
@@ -2190,18 +2265,25 @@ class _CodexProxyRuntime:
         self,
         original_prompt: str,
         command_trace: list[Mapping[str, str]],
+        *,
+        root_prompt: bool = False,
     ) -> CodexMediationResult:
-        cache_key = self._cache_key(original_prompt, command_trace)
+        cache_key = self._cache_key(original_prompt, command_trace, root_prompt=root_prompt)
         cached = self._mediation_cache.get(cache_key)
         if cached is not None:
             return cached
-        cached_disk = self._load_cached_mediation(original_prompt, command_trace)
+        cached_disk = self._load_cached_mediation(
+            original_prompt,
+            command_trace,
+            root_prompt=root_prompt,
+        )
         if cached_disk is not None:
             self._mediation_cache[cache_key] = cached_disk
             return cached_disk
         mediation = build_codex_mediation(
             original_prompt,
             command_trace=command_trace,
+            root_prompt=root_prompt,
             repository_root=self.config.repository_root,
             bundle_root=self.config.bundle_root,
             prefer_dspy=self.config.prefer_dspy,
@@ -2214,9 +2296,15 @@ class _CodexProxyRuntime:
             low_signal_min_sources=self.config.low_signal_min_sources,
             family_exploration_rate=self.config.family_exploration_rate,
             retrieval_mode=self.config.retrieval_mode,
+            root_developer_message=self.config.root_developer_message if root_prompt else "",
         )
         self._mediation_cache[cache_key] = mediation
-        self._store_cached_mediation(original_prompt, command_trace, mediation)
+        self._store_cached_mediation(
+            original_prompt,
+            command_trace,
+            mediation,
+            root_prompt=root_prompt,
+        )
         return mediation
 
     def _turn_trace_dedupe_key(self, mediation: CodexMediationResult) -> str:
@@ -2346,7 +2434,11 @@ class _CodexProxyRuntime:
                 "execution_status": "success",
                 "method": "codex_proxy_mediation",
                 "backend": "repo_rag_codex_proxy",
-                "used_baseline_fallback": mediation.dspy_status != "success",
+                "used_baseline_fallback": (
+                    mediation.dspy_status != "success"
+                    and mediation.dspy_bypass_reason is None
+                ),
+                "dspy_bypass_reason": mediation.dspy_bypass_reason,
             },
             "mediation": mediation.to_payload(),
             "trainer_signal_reason": trainer_signal_reason,
@@ -2419,7 +2511,7 @@ class _CodexProxyRuntime:
         for trace_role, prompt_text in self._lineage_prompts(mediation, command_trace):
             if prompt_text == mediation.original_prompt.strip():
                 continue
-            lineage_mediation = self.build_mediation(prompt_text, [])
+            lineage_mediation = self.build_mediation(prompt_text, [], root_prompt=False)
             self._persist_single_turn_trace(
                 lineage_mediation,
                 command_trace=[],
@@ -2493,6 +2585,7 @@ def serve_codex_proxy(
     cache_dir: Path | None = None,
     cache_ttl_seconds: int = _DEFAULT_CACHE_TTL_SECONDS,
     ready_file: Path | None = None,
+    root_developer_message: str = "",
 ) -> int:
     """Serve the blocking Codex proxy process used by worker-side wrappers."""
 
@@ -2514,6 +2607,7 @@ def serve_codex_proxy(
         retrieval_mode=retrieval_mode,
         cache_dir=cache_dir.resolve() if cache_dir is not None else None,
         cache_ttl_seconds=cache_ttl_seconds,
+        root_developer_message=str(root_developer_message or "").strip(),
     )
     with running_codex_proxy(config) as running:
         if ready_file is not None:
