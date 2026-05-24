@@ -298,10 +298,21 @@ delivered in a separate higher-priority developer/system layer instead of being 
 the user prompt text itself. That root instruction layer now also explicitly says that when the
 prompt asks to develop, implement, fix, correct, update, create, change, or make something, that
 concrete action must dominate estimate/pricing/review clauses unless those clauses are the only
-deliverable. Helper-side reformulation and DSPy family routing are now reserved only for later
-lineage/helper turns after the root prompt is already inside the standard cycle. The root turn
-still becomes a normal trainer-facing trace after execution, but it must be learned from that
-trace later rather than being templated by the current bundle before the run begins.
+deliverable. The next correction then removed helper-side reformulation too: every prompt surface
+now stays verbatim, so `original_prompt == reformulated_prompt` for root turns, helper turns, and
+lineage turns alike. The proxy may still create new helper tasks, but it must do so as explicit
+new tasks rather than by rewriting an existing prompt into a narrower mediation query. DSPy family
+routing is still reserved only for later lineage/helper turns after the root prompt is already
+inside the standard cycle. The root turn still becomes a normal trainer-facing trace after
+execution, but it must be learned from that trace later rather than being templated by the current
+bundle before the run begins. The newest orchestration correction makes that execution intent
+sticky across the whole Codex rollout: once the root prompt contains a concrete execution
+directive, later internal turns are no longer allowed to demote the run into pricing, timeline,
+call-prep, plausible-take, or repository-review work as the main deliverable. Those outputs may
+remain secondary context, but they cannot replace implementation. Documentation-only edits also do
+not satisfy such a run; the orchestrator must inspect the named implementation surfaces and make
+concrete repository changes when needed rather than concluding from existing notes that the task is
+already done.
 The same contract now treats the observable per-turn `command_trace` as equally important
 lineage: when the sequence is available it must be preserved beside the reformulated prompt in
 the trace and champion state, even though not every turn exposes a controllable command path.
@@ -352,7 +363,12 @@ one precision prior, but the dominant signal is now overlap against:
 plus the family's feedback-aware success prior and uncertainty penalty. That is still not a true
 embedding centroid, but it now aligns better with the product requirement that prompt families
 should follow latent task intent carried by salient keywords/constraints rather than superficial
-string resemblance alone.
+string resemblance alone. The latest routing correction made that stricter still by turning
+execution-context mismatch into hard family ineligibility rather than into a small scoring penalty:
+family reuse now requires intent-label overlap, constraint-surface compatibility when pathlike
+anchors are present on both sides, and substantive command-pattern anchor overlap. In other words,
+prompt similarity may rank eligible families, but it may no longer override mismatched execution
+context.
 The newest Phase-1 correction keeps two trainer-visible signal classes in the contract, but the
 current active runtime policy is intentionally simpler: successful family reuse now emits
 `full_trace` directly. `full_trace` remains the replay-set exemplar that can dirty a family and

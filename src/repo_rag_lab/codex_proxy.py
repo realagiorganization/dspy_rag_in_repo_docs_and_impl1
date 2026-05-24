@@ -85,6 +85,54 @@ _REPO_GROUNDING_HINTS = {
     "readme",
     "src",
 }
+_ASSESSMENT_INTENT_HINTS = {
+    "estimate",
+    "estimation",
+    "pricing",
+    "price",
+    "quote",
+    "budget",
+    "timeline",
+    "how long",
+    "how much",
+    "plausible take",
+    "call-prep",
+    "call prep",
+    "talk track",
+    "sales brief",
+    "pricing note",
+}
+_EXECUTION_DIRECTIVE_HINTS = {
+    "continue developing",
+    "continue implementing",
+    "continue to gradually implement",
+    "start correcting",
+    "start fixing",
+    "fix the site",
+    "correct the site",
+    "make changes",
+    "implement the development plan",
+    "no analysis is needed",
+    "start fixing the site",
+}
+_IMPLEMENTATION_SURFACE_HINTS = {
+    "site",
+    "app",
+    "ui",
+    "screen",
+    "page",
+    "pages",
+    "route",
+    "routes",
+    "component",
+    "components",
+    "style",
+    "styles",
+    "css",
+    "deploy",
+    "script",
+    "feature",
+}
 
 
 @dataclass(frozen=True)
@@ -211,6 +259,65 @@ def _classify_task(question: str) -> str:
     if len(tokens) >= _TASK_TOKEN_DEEP_THRESHOLD:
         return "deep"
     return "trivial"
+
+
+def _prompt_has_assessment_clause(text: str) -> bool:
+    lowered = str(text or "").casefold()
+    return bool(lowered) and any(hint in lowered for hint in _ASSESSMENT_INTENT_HINTS)
+
+
+def _prompt_has_execution_directive(text: str) -> bool:
+    lowered = str(text or "").casefold()
+    if not lowered:
+        return False
+    if any(hint in lowered for hint in _EXECUTION_DIRECTIVE_HINTS):
+        return True
+    directive_verbs = (
+        "develop",
+        "implement",
+        "fix",
+        "correct",
+        "update",
+        "create",
+        "change",
+        "build",
+        "modify",
+        "add",
+        "remove",
+    )
+    return any(re.search(rf"\b{re.escape(verb)}\b", lowered) for verb in directive_verbs)
+
+
+def _prompt_targets_implementation_surfaces(text: str) -> bool:
+    lowered = str(text or "").casefold()
+    return bool(lowered) and any(hint in lowered for hint in _IMPLEMENTATION_SURFACE_HINTS)
+
+
+def _merge_developer_messages(*parts: str) -> str:
+    messages = [str(part or "").strip() for part in parts if str(part or "").strip()]
+    return "\n\n".join(messages)
+
+
+def _build_sticky_execution_guard(root_prompt: str) -> str:
+    if not _prompt_has_execution_directive(root_prompt):
+        return ""
+    lines = [
+        "ROOT EXECUTION MODE: implementation-first.",
+        "The root user request contains a concrete execution directive that must be fulfilled in this run.",
+        "Do not turn this session into pricing, timeline, review, plausible-take, call-prep, talk-track, or sales-brief work.",
+        "Use repository inspection only to support immediate implementation changes.",
+        "Documentation-only edits do not satisfy the run when the prompt asks to change the site or app.",
+        "Do not conclude the task is already done based only on existing docs or notes; verify the named implementation surfaces and change them when needed.",
+    ]
+    if _prompt_has_assessment_clause(root_prompt):
+        lines.append(
+            "Earlier estimate/pricing/review clauses are secondary context only and must not override the execution directive."
+        )
+    if _prompt_targets_implementation_surfaces(root_prompt):
+        lines.append(
+            "Prefer concrete changes to app routes, components, styles, scripts, or deployment surfaces over advisory summaries."
+        )
+    return "\n".join(lines).strip()
 
 
 def _looks_like_prompt_text(text: str) -> bool:
@@ -645,40 +752,15 @@ def reformulate_codex_prompt(
     lm_config: DSPyLMConfig | None,
     allow_reformulation: bool = True,
 ) -> tuple[str, str]:
-    """Return the reformulated DSPy helper prompt for one outbound Codex turn."""
+    """Return the stable prompt surface for one outbound Codex turn."""
 
     stripped = str(original_prompt or "").strip()
     if not stripped:
         return "", "empty"
     if not allow_reformulation:
         return stripped, "root-verbatim"
-    cleaned = " ".join(stripped.split()).strip()
-    if lm_config is None or _dspy is None:
-        return cleaned, "identity"
-    try:
-        assert _dspy is not None
-        configure_dspy_lm(lm_config)
-
-        class PromptReformulationSignature(_dspy.Signature):
-            """Rewrite one software-agent prompt into a compact mediation query."""
-
-            original_prompt = _dspy.InputField()
-            reformulated_prompt = _dspy.OutputField(
-                desc=(
-                    "A concise reformulation for repository-grounded DSPy mediation. Preserve "
-                    "the requested task, files, tests, commands, failures, and constraints. Do "
-                    "not solve the task."
-                )
-            )
-
-        reformulator = _dspy.Predict(PromptReformulationSignature)
-        prediction = reformulator(original_prompt=cleaned)
-        reformulated = " ".join(str(getattr(prediction, "reformulated_prompt", "")).split()).strip()
-        if not reformulated:
-            return cleaned, "identity"
-        return reformulated, "dspy"
-    except Exception:
-        return cleaned, "identity"
+    del lm_config
+    return stripped, "verbatim"
 
 
 def _resolve_family_state_path(repository_root: Path, bundle_root: Path) -> Path | None:
@@ -1442,6 +1524,7 @@ def build_codex_mediation(
     family_exploration_rate: float = _DEFAULT_FAMILY_EXPLORATION_RATE,
     retrieval_mode: RetrievalMode | None = None,
     root_developer_message: str = "",
+    session_execution_guard: str = "",
 ) -> CodexMediationResult:
     """Build one combined repo-grounded mediation block for Codex."""
 
@@ -1461,11 +1544,14 @@ def build_codex_mediation(
     reformulated_prompt, reformulation_status = reformulate_codex_prompt(
         original_prompt,
         lm_config=lm_config,
-        allow_reformulation=not root_prompt,
+        allow_reformulation=False,
     )
     active_prompt = reformulated_prompt or original_prompt
     if root_prompt:
-        root_message = str(root_developer_message or "").strip()
+        root_message = _merge_developer_messages(
+            session_execution_guard,
+            str(root_developer_message or "").strip(),
+        )
         return CodexMediationResult(
             question=active_prompt,
             original_prompt=original_prompt,
@@ -1529,7 +1615,13 @@ def build_codex_mediation(
     family_exploration_selected = False
     supported_family = False
     if bundle_routing_index_path is not None:
-        support = resolve_prompt_family_support(family_lookup_prompt, bundle_routing_index_path)
+        support = resolve_prompt_family_support(
+            family_lookup_prompt,
+            bundle_routing_index_path,
+            original_prompt=original_prompt,
+            reformulated_prompt=active_prompt,
+            command_trace=command_trace,
+        )
         prompt_family_id = support.prompt_family_id
         prompt_family_similarity = support.similarity
         prompt_family_band = support.band
@@ -1548,6 +1640,9 @@ def build_codex_mediation(
             support = resolve_prompt_family_support_from_payload(
                 family_lookup_prompt,
                 {"prompt_families": family_registry.get("families", [])},
+                original_prompt=original_prompt,
+                reformulated_prompt=active_prompt,
+                command_trace=command_trace,
             )
             prompt_family_id = support.prompt_family_id
             prompt_family_similarity = support.similarity
@@ -1565,9 +1660,18 @@ def build_codex_mediation(
                     support = resolve_prompt_family_support_from_payload(
                         family_lookup_prompt,
                         {"prompt_families": family_registry.get("families", [])},
+                        original_prompt=original_prompt,
+                        reformulated_prompt=active_prompt,
+                        command_trace=command_trace,
                     )
                 else:
-                    support = resolve_prompt_family_support(family_lookup_prompt, family_state_path)
+                    support = resolve_prompt_family_support(
+                        family_lookup_prompt,
+                        family_state_path,
+                        original_prompt=original_prompt,
+                        reformulated_prompt=active_prompt,
+                        command_trace=command_trace,
+                    )
                 prompt_family_id = support.prompt_family_id
                 prompt_family_similarity = support.similarity
                 prompt_family_band = support.band
@@ -1594,6 +1698,9 @@ def build_codex_mediation(
                 synthesized_support = resolve_prompt_family_support_from_payload(
                     family_lookup_prompt,
                     {"prompt_families": synthesized_family_registry.get("families", [])},
+                    original_prompt=original_prompt,
+                    reformulated_prompt=active_prompt,
+                    command_trace=command_trace,
                 )
                 synthesized_family_program_path = _resolve_family_runtime_program_path(
                     repository_root=resolved_root,
@@ -1661,6 +1768,7 @@ def build_codex_mediation(
             "No father-backed prompt-family support was found for the original prompt; "
             "the request will pass through unchanged."
         )
+        passthrough_message = str(session_execution_guard or "").strip()
         return CodexMediationResult(
             question=active_prompt,
             original_prompt=original_prompt,
@@ -1680,7 +1788,7 @@ def build_codex_mediation(
             bundle_version=resolved_bundle_version,
             program_path=None,
             evidence_previews=[],
-            developer_message="",
+            developer_message=passthrough_message,
             prompt_family_id=prompt_family_id,
             prompt_family_similarity=prompt_family_similarity,
             prompt_family_band=prompt_family_band,
@@ -1694,8 +1802,10 @@ def build_codex_mediation(
             family_exploration_selected=family_exploration_selected,
             task_classification=task_classification,
             budget_tokens=effective_budget,
-            estimated_tokens=0,
-            injected=False,
+            estimated_tokens=_estimate_token_count(passthrough_message)
+            if passthrough_message
+            else 0,
+            injected=bool(passthrough_message),
         )
 
     rag_answer = ask_repository(
@@ -1862,13 +1972,14 @@ def build_codex_mediation(
         and (not summary.strip() or len(summary.strip()) < _LOW_SIGNAL_SUMMARY_LIMIT)
     )
 
-    developer_message = ""
-    estimated_tokens = 0
-    injected = False
+    session_guard = str(session_execution_guard or "").strip()
+    developer_message = session_guard
+    estimated_tokens = _estimate_token_count(session_guard) if session_guard else 0
+    injected = bool(session_guard)
     if not low_signal:
-        developer_message, estimated_tokens = _build_budgeted_message(
+        repo_message, _repo_estimated_tokens = _build_budgeted_message(
             reformulated_prompt=active_prompt,
-            include_prompt_line=not root_prompt,
+            include_prompt_line=False,
             mediation_mode=mediation_mode,
             rag_status=rag_status,
             dspy_status=dspy_status,
@@ -1881,6 +1992,8 @@ def build_codex_mediation(
             budget_tokens=effective_budget,
             essentials_count=effective_essentials,
         )
+        developer_message = _merge_developer_messages(session_guard, repo_message)
+        estimated_tokens = _estimate_token_count(developer_message)
         injected = bool(developer_message)
     else:
         warnings.append(
@@ -2019,6 +2132,7 @@ class _CodexProxyHandler(BaseHTTPRequestHandler):
             else:
                 command_trace = []
             if original_prompt:
+                runtime._update_session_execution_guard(original_prompt)
                 mediation = runtime.build_mediation(
                     original_prompt,
                     command_trace,
@@ -2124,6 +2238,8 @@ class _CodexProxyRuntime:
         write_corpus_manifest(self.corpus_manifest_path, self.corpus_manifest)
         self.corpus_fingerprint = str(self.corpus_manifest.get("corpus_fingerprint") or "").strip()
         self.retrieval_profile_fingerprint = self._compute_retrieval_profile_fingerprint()
+        self.session_root_prompt = ""
+        self.session_execution_guard = ""
 
     def _compute_retrieval_profile_fingerprint(self) -> str:
         profile_path = self.config.repository_root / "config" / "retrieval-profile.json"
@@ -2133,6 +2249,17 @@ class _CodexProxyRuntime:
             return hashlib.sha256(profile_path.read_bytes()).hexdigest()
         except OSError:
             return "unreadable-profile"
+
+    def _update_session_execution_guard(self, prompt: str) -> None:
+        cleaned = str(prompt or "").strip()
+        if not cleaned:
+            return
+        if not self.session_root_prompt:
+            self.session_root_prompt = cleaned
+        if self.session_execution_guard:
+            return
+        candidate = self.session_root_prompt or cleaned
+        self.session_execution_guard = _build_sticky_execution_guard(candidate)
 
     @property
     def turn_trace_entries(self) -> list[str]:
@@ -2297,6 +2424,7 @@ class _CodexProxyRuntime:
             family_exploration_rate=self.config.family_exploration_rate,
             retrieval_mode=self.config.retrieval_mode,
             root_developer_message=self.config.root_developer_message if root_prompt else "",
+            session_execution_guard=self.session_execution_guard,
         )
         self._mediation_cache[cache_key] = mediation
         self._store_cached_mediation(

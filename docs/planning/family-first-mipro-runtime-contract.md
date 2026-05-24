@@ -56,23 +56,47 @@ Examples of stage-level families include:
      or make something, the orchestrator must treat that as the primary task for the run
    - estimate/pricing/review clauses may remain as context, but they must not override an explicit
      execution directive unless they are the only requested deliverable
-6. Helper reformulation is allowed only for later prompt-lineage / helper turns that the proxy
-   derives after the root prompt is already inside the standard execution cycle.
-7. DSPy family routing applies only to those later helper / derived turns.
-8. For helper / derived turns, the proxy compares the incoming prompt against **every family
+6. Prompt reformulation is disabled for **all** prompt surfaces, not only for the root prompt.
+   - for every root turn, helper turn, and lineage turn:
+     - `original_prompt == reformulated_prompt`
+   - the proxy may still create new helper tasks, but it must do so as new explicit tasks rather
+     than by rewriting an existing prompt into a narrower mediation query
+7. When the root prompt contains an explicit execution directive, that execution mode is sticky for
+   the rest of the Codex rollout.
+   - later internal turns must not demote the run into pricing, timeline, call-prep, sales-brief,
+     plausible-take, or repository-review work
+   - those assessment-oriented outputs may exist only as secondary context when the user also
+     asked for implementation
+   - documentation-only edits do not satisfy the run when the user asked to change the site, app,
+     UI, routes, components, scripts, or deployment surfaces
+   - the orchestrator must inspect named implementation surfaces before declaring the task already
+     satisfied
+8. DSPy family routing applies only to later helper / derived turns, but those turns are now
+   routed on their verbatim prompt surface too.
+9. For helper / derived turns, the proxy compares the incoming prompt against **every family
    father** and computes one similarity score per family.
-   That routing comparison must use `original_prompt`; `reformulated_prompt` belongs to the DSPy
-   mediation surface, not to father matching.
-9. `metric 3` is the maximum of those scores.
-10. `metric 2` is the binary family-membership decision derived from that maximum:
+   That routing comparison must use the verbatim prompt surface carried by `original_prompt`;
+   `reformulated_prompt` remains equal to it and must not diverge.
+10. `metric 3` is the maximum of those scores.
+11. `metric 2` is the binary family-membership decision derived from that maximum:
    - if `metric 3 >= 0.8`, the prompt belongs to the best-matching family
    - if `metric 3 < 0.8`, the prompt does not belong to any existing family and must create a new
      family later through trainer ingestion
-11. When a family is found for one helper / derived turn, the proxy uses that family's precomputed
+12. A family is eligible for reuse only when its execution context matches the incoming prompt.
+    Reuse must become **ineligible** rather than merely slightly lower-scored when any of these
+    hard gates fail:
+    - `intent gate`
+      - the family's inferred intent labels must intersect the incoming prompt's inferred labels
+    - `constraint gate`
+      - when both sides expose constraint/pathlike anchors, those anchors must overlap
+    - `command-pattern gate`
+      - the family's command-pattern summary must share substantive anchor terms with the incoming
+        execution surface; one generic overlapping word is not enough
+13. When a family is found for one helper / derived turn, the proxy uses that family's precomputed
     DSPy runtime artifact from the latest bundle.
-12. When no family is found for one helper / derived turn, the proxy does a fresh mediation path
+14. When no family is found for one helper / derived turn, the proxy does a fresh mediation path
     and still records the turn as a new training trace.
-13. `command_trace` is first-class lineage and must be preserved beside `original_prompt` and
+15. `command_trace` is first-class lineage and must be preserved beside `original_prompt` and
     `reformulated_prompt`.
 
 There is **no active soft-band branch** on the runtime routing path. The expensive part is already
@@ -452,8 +476,8 @@ Implemented locally in this stage:
 - worker-side batch handoff for proxy turn traces now overwrites the optimistic proxy draft metrics
   and outcomes with the final run `execution_status`, `acceptance_status`, and real post-run
   `mediation_metric_hits / mediation_metric_total` before `trace-export` / `trace-enqueue`
-- prompt-family routing now prefers `original_prompt` during father matching, while the
-  reformulated prompt remains the runtime mediation surface that the matched family artifact sees
+- prompt-family routing now prefers `original_prompt` during father matching, and the runtime
+  mediation surface is the same verbatim prompt rather than a helper-rewritten variant
 - deploy-stage trusted handoff now prefers the worker turn-trace batch manifest plus exported
   per-turn trace records before it falls back to the old coarse single-trace payload
 - local trainer state now uses `artifacts/trainer/family-state.json` as the primary persisted

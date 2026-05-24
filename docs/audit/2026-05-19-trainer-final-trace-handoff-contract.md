@@ -318,6 +318,152 @@ Local repair:
     first execution turn
 - helper reformulation remains available only for later lineage/helper turns after the root prompt
   is already inside the standard proxy/orchestrator cycle
+
+## 2026-05-24 Live Follow-Up: No Reformulation + Hard Reuse Gates
+
+Local follow-up after the root-verbatim repair introduced two additional runtime changes:
+
+- prompt reformulation is disabled for all prompt surfaces, not only the root prompt
+- family reuse now requires hard eligibility on:
+  - intent
+  - constraint surface
+  - command-pattern surface
+
+Live verification after rebuilding and redeploying image `20260524-105717` used execution batch
+`prompt-exec-1353735964635435100`, run directory
+`/mnt/artifacts/runs/c2ddcdba4fb2400a9288f5428415628b`.
+
+Evidence gathered:
+
+- execution log:
+  - `/mnt/artifacts/runs/c2ddcdba4fb2400a9288f5428415628b/execution_artifacts/prompt-worker-0-lt5lf/execution.log`
+- execution-side backend summary:
+  - `.../artifacts/prompts_tylers_landscaper-p00000-a8903b/repo_rag_backend.json`
+- separated root developer-layer prompt:
+  - `.../artifacts/prompts_tylers_landscaper-p00000-a8903b/repo_rag_root_developer_message.txt`
+- imported traces:
+  - `/mnt/artifacts/traces/imported/20260524T114009Z-...-0.json`
+  - `/mnt/artifacts/traces/imported/20260524T114010Z-...-1.json`
+  - `/mnt/artifacts/traces/imported/20260524T114013Z-...-6.json`
+  - `/mnt/artifacts/traces/imported/20260524T114014Z-...-7.json`
+- current stable bundle channel:
+  - `/mnt/artifacts/dspy/channels/stable.json`
+
+Observed:
+
+- the run started as a fresh Codex execution, not a resumed rollout:
+  - `Codex restore debug [startup]: status=fresh-no-snapshot`
+  - `Codex restore debug [config-payload-mismatch]: status=reset:config-payload-mismatch`
+- root-path repair still holds live:
+  - root imported trace shows `prompt_family_id = null`
+  - `program_loaded = false`
+  - `family_artifact_selected = false`
+  - `used_baseline_fallback = false`
+  - `dspy_bypass_reason = root-prompt-never-uses-dspy`
+  - `trace.original_prompt == trace.reformulated_prompt`
+- helper traces also now preserve verbatim prompt lineage:
+  - imported helper traces `...-1.json`, `...-6.json`, and `...-7.json` all showed
+    `trace.original_prompt == trace.reformulated_prompt`
+  - the helper questions were no longer rewritten copies of the mixed root prompt; instead they
+    appeared as newly generated explicit tasks such as:
+    - `I found prior work already covering the ask. Now I’m checking whether anything still needs code changes and making a tight call-prep deliverable.`
+    - `The repo already has the form docs and demo pipeline. I’m packaging a clean “plausible take” note and verifying deploy hooks rather than rebuilding solved pieces.`
+    - `I’m doing one small improvement: refreshing the call-prep note date and tightening the repo-state wording so it cleanly matches today’s handoff.`
+- execution-side DSPy reuse was blocked for the run:
+  - `repo_rag_backend.json` reported:
+    - `bundle_resolved = false`
+    - `bundle_version = null`
+    - `dspy_status = skipped`
+    - `mediation_mode = passthrough`
+  - representative helper traces ended with:
+    - `family_artifact_selected = false`
+    - `used_baseline_fallback = true`
+    - `prompt_family_band = new`
+- user-visible behavior still remained assessment-first:
+  - `codex_response.txt` still produced pricing / call-prep content
+  - it refreshed `docs/CALL_PLAUSIBLE_TAKE.md` and `docs/REVIEW_PRICING_NOTE.md`
+  - it explicitly said no substantive app changes were needed in that pass
+
+Interpretation:
+
+- the two requested runtime repairs did reach the cluster:
+  - no prompt reformulation now holds for both root and helper turns
+  - the harder routing eligibility checks prevented the old assessment family from being reused
+    automatically for this run
+- but the run still did not move into implementation-first behavior
+- the remaining failure mode is now earlier than DSPy reuse:
+  - the orchestrator itself is still generating assessment/call-prep helper tasks from the mixed
+    prompt
+  - those helper tasks are already explicit and verbatim, so this is no longer a prompt-rewrite
+    bug
+  - and because those helper tasks are context-mismatched, the new hard gates correctly skip DSPy
+    reuse rather than fixing the task selection
+
+Repository-local verification executed in the current turn:
+
+- `uv run python -m compileall src tests`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+- `uv run repo-rag smoke-test`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+
+Observed:
+
+- `compileall` passed
+- `tests/test_utilities.py tests/test_repository_rag_bdd.py` passed as `63 passed`
+- smoke test passed
+- Rust build passed
+
+Scope note:
+
+- this live follow-up proves the no-reformulation and hard-gate changes landed in runtime
+- it does not prove task-selection correctness, because the mixed prompt is still being decomposed
+  into assessment-oriented helper tasks before any useful implementation branch begins
+
+## 2026-05-24 Local Repair: Sticky Execution Mode
+
+The next correction focuses on the remaining live failure mode after no-reformulation and hard
+reuse gates landed: the run was still producing pricing / call-prep output because the root
+developer layer was too soft and the proxy did not keep the root execution directive sticky across
+the rest of the Codex rollout.
+
+Local repair:
+
+- the dataset-side root developer/system prompt now explicitly says:
+  - once a concrete execution directive appears, the whole session stays in execution mode
+  - pricing / timeline / call-prep / talk-track / repository-review subtasks are invalid as the
+    main branch when implementation is also requested
+  - documentation-only edits do not satisfy a site/app change request
+  - the orchestrator must inspect named implementation surfaces before declaring the task already
+    done
+- the proxy runtime now derives one sticky execution guard from the first/root prompt and reuses
+  that guard for every later request in the same Codex rollout
+- even passthrough turns without family support now still receive that execution guard as a
+  developer-layer instruction instead of running entirely unguided
+- helper mediation blocks no longer repeat the current prompt line inside the developer message,
+  which removes one more way to re-amplify an assessment-oriented internal subtask
+
+Repository-local verification executed in the current turn:
+
+- `uv run python -m compileall src tests`
+- `uv run pytest tests/test_codex_proxy.py -q`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+- `uv run repo-rag smoke-test`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+- `cd ../dataset && pytest tests/unit/test_worker_execution_prompt_repo_rag_cli.py tests/unit/test_worker_codex_cli_exec_small.py -q`
+- `cd ../dataset && python -m compileall docker/prompt-executor/worker_execution.py docker/prompt-executor/worker_execution_prompt.py docker/prompt-executor/worker_codex_cli_exec.py`
+
+Observed:
+
+- repo `compileall` passed
+- `tests/test_codex_proxy.py` passed
+- `tests/test_utilities.py tests/test_repository_rag_bdd.py` passed
+- smoke test passed
+- Rust build passed
+- dataset repo-rag worker slices passed
+- dataset compileall passed
+
+Live redeploy and another fresh run are still required to prove that the sticky execution guard is
+strong enough to stop the call-prep / pricing branch in blob-backed production state.
 - the root developer-message injection no longer adds a truncated `Prompt:` mirror line, so the
   model sees the user prompt only in its original user-message position instead of through a second
   shortened proxy copy
@@ -1667,3 +1813,299 @@ Verification categories still not exercised in this turn:
 - no full `make quality`
 - no coverage run
 - no live AKS redeploy yet for this exact root developer-layer injection repair
+
+## 2026-05-24 Live Result After Root Developer-Layer Separation
+
+Live inspection of the newer `prompts_tylers_landscaper` execution run showed that the root
+developer-layer separation repair is now working, but the overall run still stays lazy for two
+other reasons:
+
+1. later repeat cycles continue prior Codex rollout state
+2. helper traces still reinterpret the mixed prompt into pricing/review/verification families
+
+Live evidence gathered:
+
+- `kubectl get jobs -A --sort-by=.metadata.creationTimestamp`
+- `kubectl describe job -n prompt-exec-1353735964635435100 prompt-worker-0`
+- `kubectl run artifact-inspect -n prompt-exec-1353735964635435100 ...`
+- `kubectl exec -n prompt-exec-1353735964635435100 artifact-inspect -- sh -c 'df -h /mnt/artifacts /mnt/cache'`
+- `kubectl cp prompt-exec-1353735964635435100/artifact-inspect:/mnt/artifacts/runs/2bb963e8046843e29ed3cdcfe10e772c/... /tmp/landscaper-runs/...`
+- `kubectl run live-inspect -n repo-rag ...`
+- `kubectl exec -n repo-rag live-inspect -- sh -c 'cat /mnt/artifacts/dspy/channels/stable.json'`
+- `kubectl exec -n repo-rag live-inspect -- sh -c 'sed -n "1,260p" /mnt/artifacts/traces/imported/...r10...-0.json'`
+- `kubectl exec -n repo-rag live-inspect -- sh -c 'sed -n "1,220p" /mnt/artifacts/traces/imported/...r10...-1.json'`
+- `kubectl exec -n repo-rag live-inspect -- sh -c 'sed -n "1,220p" /mnt/artifacts/traces/imported/...r10...-7.json'`
+- `kubectl exec -n repo-rag live-inspect -- sh -c 'sed -n "1,220p" /mnt/artifacts/traces/imported/...r10...-10.json'`
+
+Observed root-path results:
+
+- the worker now stores a separate root instruction file:
+  - `repo_rag_root_developer_message.txt`
+- the persisted prompt artifact for `r10` still contains only the user/Discord bundle, not the
+  autonomous execution contract text
+- imported root trace
+  `20260523T210243Z-worker-0-prompts_tylers_landscaper-p00000-bcb735-r10-...-0.json` shows:
+  - `original_prompt == reformulated_prompt`
+  - `prompt_family_id = null`
+  - `program_loaded = false`
+  - `family_artifact_selected = false`
+  - `used_baseline_fallback = false`
+  - `dspy_bypass_reason = root-prompt-never-uses-dspy`
+
+This confirms the intended root contract now holds in live AKS:
+
+- root prompt is no longer rewritten
+- root prompt no longer uses DSPy
+- root trace is still exported as a normal trainer-facing trace
+- the developer/system layer is no longer duplicated into the user prompt body
+
+However, the same run still stayed lazy because the later turns did not follow the root action
+directive:
+
+- the prompt bundle still begins with the older:
+  - `Please review ...`
+  - `give me a plausible take ...`
+  - `how long ...`
+  - `how much ...`
+- only much later does it say:
+  - `Start correcting the site according to the requirements`
+  - `No analysis is needed, start fixing the site right now`
+
+Helper-trace observations:
+
+- imported helper trace `...r10...-1.json` was reformulated into a planning/estimation query:
+  - `Review the repository ... and use it to ground a planning/estimation response ...`
+  - `program_loaded = true`
+  - `family_artifact_selected = true`
+  - `prompt_family_id = pf-4debe1f147146967`
+  - `prompt_family_similarity = 1.0`
+- later helper traces `...r10...-7.json` and `...r10...-10.json` pivoted into disk-space
+  bootstrap troubleshooting:
+  - answer: `Build validation hit a disk-space blocker during pnpm bootstrap ...`
+  - `program_loaded = false`
+  - `family_artifact_selected = false`
+  - `used_baseline_fallback = true`
+  - new helper families such as `pf-47f24bec7c9d2d25` and `pf-5e7e293c10eb60df`
+
+Session-resume observations:
+
+- this execution namespace processed the same prompt through repeated cycles:
+  - prompt artifact shows `Run 10 of 10`
+  - execution log reports `Processed 10 prompts (10 successful)`
+- cycle `r09` was a fresh `codex exec` because restore reset on usage-growth-threshold:
+  - `restore_status = reset:usage-growth-threshold`
+  - `restored_files = 0`
+  - command: `codex exec --dangerously-bypass-approvals-and-sandbox ...`
+- cycle `r10` did resume the previous rollout:
+  - `restore_status = restored`
+  - `restored_files = 8`
+  - `latest_session_id = rollout-2026-05-23T20-18-59-019e567d-b370-7db1-aa0a-5c76eafd52db`
+  - command: `codex exec resume rollout-2026-05-23T20-18-59-019e567d-b370-7db1-aa0a-5c76eafd52db ...`
+
+Interpretation:
+
+- root developer-layer separation is working
+- root no-DSPy is working
+- but later repeated cycles can still continue an assessment-heavy prior rollout
+- even without resume (`r09`), the mixed prompt still led the model into pricing/call-prep mode
+- therefore session continuation amplifies the problem, but it is not the only cause
+
+Disk-space observations:
+
+- the Azure File PVCs were not full:
+  - `/mnt/artifacts`: `5.0G size`, `89.4M used`, `4.9G available`
+  - `/mnt/cache`: `10.0G size`, `2.8G used`, `7.2G available`
+- the reported `No space left on device` errors came from the Codex rollout recorder under
+  `/dev/shm/codex_home_.../sessions/...jsonl`, not from the blob/PVC mounts:
+  - `codex_rollout::recorder: rollout writer failed for /dev/shm/... No space left on device`
+  - `codex_core::session: failed to record rollout items: thread-store internal error: No space left on device`
+
+So the live failures are now a compound issue:
+
+- root prompt handling is repaired
+- helper orchestration still prioritizes assessment/review over implementation
+- repeat-cycle resume continues prior rollout state
+- `/dev/shm` thread-store exhaustion adds session-recorder instability during long/repeated runs
+
+Current published state at inspection time:
+
+- stable bundle channel:
+  - `current_bundle_version = 20260523T210919371113Z`
+  - `current_family_state_version_used = 20260523T232346Z`
+- bundle lineage:
+  - `family_count = 63`
+  - `imported_trace_count = 33`
+  - `dirty_family_count = 19`
+  - `new_candidate_count = 7`
+
+This means trainer is now incrementally learning the helper-side planning/disk-space branches as
+new families, even though the user-visible failure is still "the site does not get corrected."
+
+Additional repository-native verification executed in the current turn:
+
+- `uv run python -m compileall src tests`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py`
+- `uv run repo-rag smoke-test`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+
+Observed:
+
+- `compileall` passed
+- `tests/test_utilities.py tests/test_repository_rag_bdd.py` passed as `63 passed`
+- smoke test passed
+- Rust build passed
+
+Verification categories still not exercised in this turn:
+
+- no full `make quality`
+- no coverage run
+- no local UI browser run
+- no local dataset test suite
+- no new live redeploy beyond the already inspected artifacts
+
+## 2026-05-24 Local Repair: No Prompt Reformulation + Hard Reuse Gates
+
+The next local correction intentionally tackled only two runtime/trainer issues:
+
+1. automatic prompt reformulation is now disabled everywhere
+2. DSPy family reuse now uses hard execution-context eligibility gates instead of only soft
+   lexical scoring
+
+Why this was necessary:
+
+- live helper traces were still turning mixed prompts into planning/pricing/review queries even
+  after the root prompt itself stopped rewriting
+- those helper rewrites then matched assessment-oriented families with `similarity = 1.0`
+- lexical similarity alone was allowing prompts with different execution context to reuse the same
+  families as long as the wording was close enough
+
+Repaired contract:
+
+- every prompt surface now stays verbatim
+  - `original_prompt == reformulated_prompt` for root turns, helper turns, and lineage turns
+- helper generation may still create new explicit tasks, but the proxy no longer rewrites an
+  existing prompt into a narrower DSPy mediation query
+- family reuse is now ineligible, not merely lower-scored, when:
+  - inferred intent labels do not overlap
+  - both sides expose constraint/path anchors and those anchors do not overlap
+  - command-pattern surfaces do not share substantive anchor terms
+
+Local code changes:
+
+- `src/repo_rag_lab/codex_proxy.py`
+  - `reformulate_codex_prompt(...)` now returns the stable verbatim prompt surface instead of
+    invoking one helper-LM prompt rewrite path
+  - `build_codex_mediation(...)` now disables reformulation for helper turns too
+  - runtime family lookup now passes the full prompt/command context into
+    `resolve_prompt_family_support(...)`
+- `src/repo_rag_lab/training_samples.py`
+  - added one normalized routing-context surface for prompt terms, command-pattern terms,
+    constraint anchors, and inferred intent labels
+  - family routing now performs hard eligibility checks before coarse shortlist scoring and before
+    rich similarity scoring
+  - trainer-side family-to-family comparison uses the same context gates, so incremental family
+    creation and runtime reuse follow the same contract
+
+Targeted regression updates:
+
+- `tests/test_codex_proxy.py`
+  - helper mediation now asserts `allow_reformulation is False`
+  - family runtime artifact execution now expects the original helper prompt to remain the runtime
+    question surface
+- `tests/test_training_samples.py`
+  - added new command-pattern mismatch and constraint-mismatch cases that must now return
+    `band = new`
+  - unsupported cross-context reuse no longer carries one fallback `prompt_family_id`
+
+Verification executed in this turn:
+
+- `uv run python -m compileall src tests`
+- `uv run pytest tests/test_codex_proxy.py tests/test_training_samples.py -q`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+- `uv run repo-rag smoke-test`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+
+Observed:
+
+- `compileall` passed
+- `tests/test_codex_proxy.py tests/test_training_samples.py` passed as `87 passed`
+- `tests/test_utilities.py tests/test_repository_rag_bdd.py` passed as `63 passed`
+- smoke test passed with `command_status = success`
+- Rust build passed
+
+Verification categories still not exercised in this turn:
+
+- no full `make quality`
+- no coverage run
+- no live redeploy yet for this stricter no-reformulation / hard-gate runtime contract
+
+## 2026-05-24 Live Follow-Up: Sticky Guard Landed, Latest Run Resumed, Thread-Store ENOSPC Persists
+
+Latest inspected execution run:
+
+- execution-artifacts run directory:
+  - `runs/79b3a5d9f3394371a5e6f5de7f9b7b4f`
+- prompt artifact:
+  - `prompts_tylers_landscaper-p00000-a8903b`
+
+What the latest live run proved:
+
+- the root/system-layer repair did land:
+  - `repo_rag_root_developer_message.txt` included the sticky execution rules:
+    - once a concrete execution directive appears, keep the session in execution mode
+    - pricing / timeline / call-prep / review subtasks are not valid as the main branch when the
+      prompt also requires implementation
+    - docs-only edits do not satisfy a site/app change request
+- the run was not routed through DSPy:
+  - `repo_rag_backend.json` reported:
+    - `backend = codex_cli_repo_rag_proxy`
+    - `bundle_resolved = false`
+    - `bundle_version = null`
+    - `dspy_status = skipped`
+    - `mediation_mode = passthrough`
+- the run still exported trainer-facing traces:
+  - `trace_exported = true`
+  - `trace_queued = true`
+
+Critical nuance:
+
+- the latest run was not a truly fresh Codex rollout:
+  - `execution.log` showed:
+    - `codex exec resume rollout-2026-05-24T11-32-35-019e59c2-20e5-7583-8dac-79bc073befd7`
+  - `codex_restore_probe.json` confirmed:
+    - `restore_status = restored`
+    - `restored_files = 6`
+    - `latest_session_id = rollout-2026-05-24T11-32-35-019e59c2-20e5-7583-8dac-79bc073befd7`
+
+Interpretation:
+
+- the newest run still inherited prior rollout state
+- that makes it an imperfect proof point for the orchestration repair, because the evaluation is no
+  longer isolated from previous session decisions
+
+User-visible outcome:
+
+- unlike the earlier purely lazy call-prep runs, this latest resumed rollout did make a concrete
+  site change:
+  - `apps/web/src/style.css` gained `direction: ltr` fixes for the floating workspace menu toggle
+- the response also reported a successful deploy and hosted verification
+- so the latest run was no longer `assessment-only`
+- but because it resumed a prior rollout, it still cannot be treated as a clean fresh-run proof of
+  the sticky execution behavior
+
+Persistent operational bug:
+
+- `codex_response.txt` still contained repeated errors of the form:
+  - `failed to record rollout items: thread-store internal error: No space left on device (os error 28)`
+- prior live inspection already showed that the Azure artifact/cache PVCs were not full
+- the remaining evidence still points to Codex thread-store/session recording under its local
+  per-run home area rather than blob/PVC capacity as the bottleneck
+
+Current status:
+
+- root no-rewrite is live
+- sticky execution developer-layer instructions are live
+- latest run did perform a real UI fix
+- DSPy was not reused in that run
+- resume was still active
+- thread-store `ENOSPC` remains unresolved
