@@ -1259,7 +1259,9 @@ def test_singleton_prompt_family_profile_terms_stay_filtered_and_capped() -> Non
     assert "completed" not in terms
 
 
-def test_find_or_create_prompt_family_uses_existing_preferred_family_id_only_when_it_still_matches() -> None:
+def test_find_or_create_prompt_family_uses_existing_preferred_family_id_only_when_it_still_matches() -> (
+    None
+):
     existing_family = training_samples_module._singleton_prompt_family_payload(
         question="Verify README GIF asset"
     )
@@ -1278,7 +1280,9 @@ def test_find_or_create_prompt_family_uses_existing_preferred_family_id_only_whe
             "trainer_signal_kind": "full_trace",
         }
     ]
-    training_samples_module._refresh_prompt_family_summary(existing_family, "Verify README GIF asset")
+    training_samples_module._refresh_prompt_family_summary(
+        existing_family, "Verify README GIF asset"
+    )
     incoming_question = (
         "Calibrate Azure OpenAI notebook smoke-test environment variables and "
         "verify the deployment endpoint."
@@ -2657,8 +2661,7 @@ def test_materialize_training_candidates_attaches_full_trace_to_existing_hinted_
                         "remains embedded correctly."
                     ),
                     "reformulated_prompt": (
-                        "Check the README demo GIF asset and confirm the embed is "
-                        "still correct."
+                        "Check the README demo GIF asset and confirm the embed is still correct."
                     ),
                     "prompt_family_id": "pf-demo",
                     "mode": "codex-proxy-turn-execution",

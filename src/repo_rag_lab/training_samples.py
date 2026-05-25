@@ -890,15 +890,17 @@ def _routing_intent_labels(
     token_pool = {
         *extract_tokens(corpus),
         *(str(term or "").strip().casefold() for term in command_terms if str(term or "").strip()),
-        *(str(term or "").strip().casefold() for term in constraint_terms if str(term or "").strip()),
+        *(
+            str(term or "").strip().casefold()
+            for term in constraint_terms
+            if str(term or "").strip()
+        ),
     }
     labels: list[str] = []
     for label, config in _INTENT_SIGNAL_KEYWORDS.items():
         token_hits = token_pool.intersection(config.get("tokens", ()))
         phrase_hits = [
-            phrase
-            for phrase in config.get("phrases", ())
-            if phrase and phrase.casefold() in corpus
+            phrase for phrase in config.get("phrases", ()) if phrase and phrase.casefold() in corpus
         ]
         if token_hits or phrase_hits:
             labels.append(label)
@@ -1026,10 +1028,15 @@ def _routing_context_is_eligible(
 
     candidate_constraints = _string_list(candidate_context.get("constraint_terms"))
     family_constraints = _string_list(family_context.get("constraint_terms"))
-    if candidate_constraints and family_constraints and _surface_overlap(
-        candidate_constraints,
-        family_constraints,
-    ) <= 0.0:
+    if (
+        candidate_constraints
+        and family_constraints
+        and _surface_overlap(
+            candidate_constraints,
+            family_constraints,
+        )
+        <= 0.0
+    ):
         return False
 
     candidate_command_terms = _string_list(candidate_context.get("command_terms"))
@@ -1151,7 +1158,9 @@ def _family_routing_terms_from_counts(
     return _stable_profile_terms_from_counts(
         normalized_counts,
         limit=limit,
-        min_count=1 if bounded_record_count <= 1 else _stable_profile_min_count(bounded_record_count),
+        min_count=1
+        if bounded_record_count <= 1
+        else _stable_profile_min_count(bounded_record_count),
     )
 
 
@@ -2643,13 +2652,23 @@ def _persist_local_family_state(
         if _family_record_reference(champion_record) == _family_record_reference(runtime_record):
             family_file_payload.pop("family_champion_record", None)
         question_text = _normalize_question_text(family_file_payload.get("question"))
-        normalized_question = _normalize_question_text(family_file_payload.get("normalized_question"))
-        if normalized_question and question_text and normalized_question == question_text.casefold():
+        normalized_question = _normalize_question_text(
+            family_file_payload.get("normalized_question")
+        )
+        if (
+            normalized_question
+            and question_text
+            and normalized_question == question_text.casefold()
+        ):
             family_file_payload.pop("normalized_question", None)
         if isinstance(family_file_payload.get("question_variants"), list):
-            family_file_payload["question_variants"] = _family_question_variants(family_file_payload)
+            family_file_payload["question_variants"] = _family_question_variants(
+                family_file_payload
+            )
         family_file_payload.pop("question_variant_count", None)
-        father_question = _normalize_question_text(family_file_payload.get("family_father_question"))
+        father_question = _normalize_question_text(
+            family_file_payload.get("family_father_question")
+        )
         canonical_father_question = _record_routing_question(father_record or {})
         if (
             father_question
@@ -3752,9 +3771,8 @@ def _training_candidate_from_trace_record(
     trace_mode = str(trace_mapping.get("mode") or "").strip().lower()
     if source_command == "codex-proxy-turn-mediation" or trace_mode == "codex-proxy-turn-mediation":
         return None, "mediation-only-trace"
-    if (
-        source_command == "codex-proxy-turn-execution"
-        and expected_answer.startswith("No father-backed prompt-family support was found")
+    if source_command == "codex-proxy-turn-execution" and expected_answer.startswith(
+        "No father-backed prompt-family support was found"
     ):
         return None, "proxy-fallback-answer"
 

@@ -1199,7 +1199,9 @@ def build_bundle_routing_index_payload(
         "family_state_kind": "repo-rag-bundle-routing-index",
         "family_state_layout": "bundle-routing-index",
         "generated_at": datetime.now(UTC).isoformat(),
-        "source_family_state_path": _relative_to_root(resolve_family_index_path(family_state_path), resolved_root),
+        "source_family_state_path": _relative_to_root(
+            resolve_family_index_path(family_state_path), resolved_root
+        ),
         "prompt_families": [
             {str(key): value for key, value in family.items()}
             for family in raw_families
@@ -1493,7 +1495,9 @@ def _bundle_family_state_path_from_metadata(
         else None
     )
     family_state_version = (
-        _string_or_none(lineage.get("family_state_version")) if isinstance(lineage, Mapping) else None
+        _string_or_none(lineage.get("family_state_version"))
+        if isinstance(lineage, Mapping)
+        else None
     )
     if family_state_path_text is None:
         return None, None, family_state_version
@@ -1555,7 +1559,9 @@ def build_bundle_manifest(
     if not resolved_program_path.is_absolute():
         resolved_program_path = resolved_root / resolved_program_path
 
-    benchmark_summary = _compact_benchmark_summary(_mapping_or_none(metadata.get("benchmark_summary")))
+    benchmark_summary = _compact_benchmark_summary(
+        _mapping_or_none(metadata.get("benchmark_summary"))
+    )
     compiled_program_summary = _mapping_or_none(metadata.get("compiled_program_summary"))
     lm = _mapping_or_none(metadata.get("lm"))
     lineage = _compact_bundle_lineage(_mapping_or_none(metadata.get("lineage")))
@@ -1645,7 +1651,9 @@ def write_bundle_manifest(root: Path, metadata_path: Path) -> dict[str, object]:
     metadata = json.loads(resolved_metadata_path.read_text(encoding="utf-8"))
     if not isinstance(metadata, dict):
         raise ValueError(f"DSPy artifact metadata must be a JSON object: {resolved_metadata_path}")
-    _, resolved_family_state_path, _ = _bundle_family_state_path_from_metadata(resolved_root, metadata)
+    _, resolved_family_state_path, _ = _bundle_family_state_path_from_metadata(
+        resolved_root, metadata
+    )
     staged_routing_index_path = resolved_metadata_path.parent / BUNDLE_ROUTING_INDEX_FILENAME
     if resolved_family_state_path is not None and resolved_family_state_path.is_file():
         routing_payload = build_bundle_routing_index_payload(
@@ -1770,9 +1778,7 @@ def published_bundle_record_from_state(
         "metadata_path": _string_or_none(state.get("current_metadata_path")),
         "routing_index_path": _string_or_none(state.get("current_routing_index_path"))
         or _string_or_none(bundle_summary.get("routing_index_path")),
-        "family_state_version_used": _string_or_none(
-            state.get("current_family_state_version_used")
-        )
+        "family_state_version_used": _string_or_none(state.get("current_family_state_version_used"))
         or _string_or_none(bundle_summary.get("family_state_version_used")),
         "bundle_status": _string_or_none(state.get("current_bundle_status")),
         "benchmark_status": _string_or_none(state.get("current_benchmark_status")),
@@ -3132,7 +3138,8 @@ def _trace_record_snapshot(payload: Mapping[str, object]) -> dict[str, object]:
         or _string_or_none(trace_mapping.get("reformulated_prompt")),
         "answer": _string_or_none(payload.get("answer")),
         "response_text": _string_or_none(payload.get("response_text")),
-        "sources": _string_list(payload.get("sources")) or _string_list(trace_mapping.get("sources")),
+        "sources": _string_list(payload.get("sources"))
+        or _string_list(trace_mapping.get("sources")),
         "context": _list_or_empty(payload.get("context")),
         "retrieved_context": _list_or_empty(payload.get("retrieved_context")),
         "command_trace": _list_or_empty(payload.get("command_trace"))

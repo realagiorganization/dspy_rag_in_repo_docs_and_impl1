@@ -688,6 +688,7 @@ def test_build_codex_mediation_executes_family_runtime_artifact_with_prompt_line
         "repo_rag_lab.codex_proxy.resolve_dspy_lm_config",
         lambda: SimpleNamespace(model="azure/dspy-helper"),
     )
+
     def fake_reformulate(
         prompt: str,
         *,
@@ -2530,7 +2531,10 @@ def test_persist_turn_trace_emits_additional_lineage_trace_for_reformulated_prom
         )
 
         def fake_build_mediation(
-            original_prompt: str, command_trace: list[Mapping[str, str]], *, root_prompt: bool = False
+            original_prompt: str,
+            command_trace: list[Mapping[str, str]],
+            *,
+            root_prompt: bool = False,
         ) -> CodexMediationResult:
             del command_trace
             return CodexMediationResult(
@@ -2630,7 +2634,10 @@ def test_persist_turn_trace_keeps_lineage_traces_when_family_artifact_reuse_succ
         )
 
         def fake_build_mediation(
-            original_prompt: str, command_trace: list[Mapping[str, str]], *, root_prompt: bool = False
+            original_prompt: str,
+            command_trace: list[Mapping[str, str]],
+            *,
+            root_prompt: bool = False,
         ) -> CodexMediationResult:
             del command_trace
             return CodexMediationResult(

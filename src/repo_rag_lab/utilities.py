@@ -2357,7 +2357,7 @@ def run_trainer_cycle(
                 )
                 if isinstance(remote_family_state, Mapping):
                     published_family_state_version = str(
-                    remote_family_state.get("family_state_version") or ""
+                        remote_family_state.get("family_state_version") or ""
                     ).strip()
                     if published_family_state_version:
                         _write_trainer_cache_source(

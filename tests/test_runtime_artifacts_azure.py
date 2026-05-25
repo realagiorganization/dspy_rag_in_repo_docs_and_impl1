@@ -435,7 +435,9 @@ def test_queue_trace_record_and_drain_trace_queue_use_azure_blob_queue(
     assert imported_path.exists()
     imported_payload = json.loads(imported_path.read_text(encoding="utf-8"))
     assert imported_payload["outcome"]["acceptance_status"] == "accepted"
-    assert imported_payload["trace"]["original_prompt"] == "Inspect trainer queue ingestion behavior"
+    assert (
+        imported_payload["trace"]["original_prompt"] == "Inspect trainer queue ingestion behavior"
+    )
     assert imported_payload["trace"]["reformulated_prompt"] == (
         "Inspect how the trainer ingests queued traces."
     )
@@ -1970,7 +1972,10 @@ def test_fetch_remote_family_state_downloads_compact_family_record_sidecars(
     assert len(families) == 1
     family = families[0]
     assert family["family_record_count"] == 2
-    assert {record["exact_snapshot_id"] for record in cast(list[dict[str, object]], family["family_records"])} == {
+    assert {
+        record["exact_snapshot_id"]
+        for record in cast(list[dict[str, object]], family["family_records"])
+    } == {
         "ts-a",
         "ts-b",
     }

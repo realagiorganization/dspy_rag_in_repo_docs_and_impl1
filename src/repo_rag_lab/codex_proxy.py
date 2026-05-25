@@ -1322,9 +1322,7 @@ def _resolve_family_entry_from_routing_index(
         "family_feedback_count": int(row["family_feedback_count"] or 0),
         "family_success_metric": success_metric if isinstance(success_metric, Mapping) else {},
         "family_prompt_profile_terms": prompt_terms if isinstance(prompt_terms, list) else [],
-        "family_command_pattern_summary": command_terms
-        if isinstance(command_terms, list)
-        else [],
+        "family_command_pattern_summary": command_terms if isinstance(command_terms, list) else [],
         "family_constraint_summary": constraint_terms if isinstance(constraint_terms, list) else [],
     }
     if "family_path" in row.keys():
@@ -1333,6 +1331,8 @@ def _resolve_family_entry_from_routing_index(
         entry["father_path"] = str(row["father_path"] or "").strip()
     return entry
     return entry
+
+
 def _float_or_none(value: object) -> float | None:
     if isinstance(value, bool):
         return None
@@ -1734,9 +1734,7 @@ def build_codex_mediation(
         if isinstance(runtime_artifact, Mapping):
             if family_artifact_hit_rate is None:
                 family_artifact_hit_rate = _float_or_none(runtime_artifact.get("hit_rate"))
-            family_predicted_hit_rate = _float_or_none(
-                runtime_artifact.get("predicted_hit_rate")
-            )
+            family_predicted_hit_rate = _float_or_none(runtime_artifact.get("predicted_hit_rate"))
             family_predicted_hit_rate_lower_bound = _float_or_none(
                 runtime_artifact.get("predicted_hit_rate_lower_bound")
             )
@@ -1755,9 +1753,7 @@ def build_codex_mediation(
                     success_metric.get("lower_bound")
                 )
             if family_prediction_uncertainty is None:
-                family_prediction_uncertainty = _float_or_none(
-                    success_metric.get("uncertainty")
-                )
+                family_prediction_uncertainty = _float_or_none(success_metric.get("uncertainty"))
         if family_feedback_count is None:
             feedback_count = family_entry.get("family_feedback_count")
             if isinstance(feedback_count, int) and not isinstance(feedback_count, bool):
@@ -2563,8 +2559,7 @@ class _CodexProxyRuntime:
                 "method": "codex_proxy_mediation",
                 "backend": "repo_rag_codex_proxy",
                 "used_baseline_fallback": (
-                    mediation.dspy_status != "success"
-                    and mediation.dspy_bypass_reason is None
+                    mediation.dspy_status != "success" and mediation.dspy_bypass_reason is None
                 ),
                 "dspy_bypass_reason": mediation.dspy_bypass_reason,
             },
