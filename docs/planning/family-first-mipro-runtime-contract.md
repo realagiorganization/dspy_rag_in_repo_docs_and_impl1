@@ -542,6 +542,10 @@ Implemented locally in this stage:
   `DATASET_CODEX_MAX_RESUMED_RUNS=9` and
   `DATASET_CODEX_PROMPT_TOKEN_GROWTH_RESET_RATIO=2.0`, so repeated verification reruns of one
   queue/slug lane do not keep compounding the same Codex transcript without bound
+- worker-side Codex runtime state now lives on disk-backed `/tmp/codex_home_*` instead of the
+  tiny default `/dev/shm` tmpfs, while the persisted PVC snapshot under
+  `/app/artifacts/_codex_sessions` is pruned down to one latest lane before restore and again
+  after persist so resumed state no longer accumulates arbitrarily across many stale lane dirs
 - local trainer state now follows a remote-baseline lifecycle:
   - trainer first resolves the latest remote `repo-rag-training-families` version
   - a PVC-local family cache may be reused only when metadata proves it already mirrors that same

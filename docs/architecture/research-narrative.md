@@ -266,7 +266,11 @@ refuses to resume when the
 persisted working-directory, repo-root / branch, model-profile, or auth/config digest contract no
 longer matches the current worker, and the AKS worker manifest now pins
 `DATASET_CODEX_SESSION_STATE_DIR` explicitly to `/app/artifacts/_codex_sessions` on the artifacts
-PVC while leaving prompt-scoped execution artifacts under `/tmp/artifacts`. A second local slice now narrows the persisted Codex state to a current minimal durable
+PVC while leaving prompt-scoped execution artifacts under `/tmp/artifacts`. The same worker path
+now creates live `CODEX_HOME` under disk-backed `/tmp/codex_home_*` instead of the default
+`/dev/shm` tmpfs, and it prunes the persisted `_codex_sessions` PVC mirror down to one latest
+lane before restore and again after persist so stale lane directories stop accumulating across
+many resumed runs. A second local slice now narrows the persisted Codex state to a current minimal durable
 allowlist, records repo/model lane metadata, distinguishes `fresh`, `reset`, `resumed`, and
 `resumed-then-reset` worker outcomes, validates restored snapshots against an explicit snapshot
 manifest before attempting resume, and adds explicit reset controls plus repeated-resume-failure

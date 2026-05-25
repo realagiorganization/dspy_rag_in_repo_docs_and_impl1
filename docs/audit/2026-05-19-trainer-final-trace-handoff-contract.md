@@ -2109,3 +2109,152 @@ Current status:
 - DSPy was not reused in that run
 - resume was still active
 - thread-store `ENOSPC` remains unresolved
+
+## 2026-05-24 Fresh Run Follow-Up: First Pass Reset Fresh, Later Repeats Resumed
+
+Latest inspected execution run:
+
+- execution-artifacts run directory:
+  - `runs/e09a8dd6cdf44363a99e4b330cc8af3a`
+- prompt artifact family:
+  - `prompts_tylers_landscaper-p00000-5e1817-r01` through repeated runs
+
+What improved:
+
+- the first execution pass was no longer a straight resume of the previous rollout
+- `codex_restore_probe.json` for `r01` reported:
+  - `restore_status = reset:config-payload-mismatch`
+  - `restore_skip_reason = config-payload-mismatch`
+  - `restored_files = 0`
+- the first pass made a broader implementation change than the earlier single-file hotfix:
+  - `apps/web/src/App.tsx`
+  - `apps/web/src/style.css`
+  - it tightened invoice wording and added a schedule-customer summary block instead of only
+    changing one CSS rule
+
+What did not improve:
+
+- DSPy still did not participate in the run:
+  - `repo_rag_backend.json` for `r01` reported:
+    - `bundle_resolved = false`
+    - `bundle_version = null`
+    - `dspy_status = skipped`
+    - `mediation_mode = passthrough`
+- repeated passes in the same worker cycle still resumed later session state:
+  - `execution.log` showed `r02` starting as:
+    - `Codex restore debug [startup]: status=fresh-no-snapshot`
+    - then `Codex restore debug [completed]: status=restored ... restored=6`
+    - followed by `codex exec resume rollout-2026-05-24T14-52-30-...`
+- `thread-store internal error: No space left on device (os error 28)` remained present in the
+  response transcript
+
+Interpretation:
+
+- the fresh-run repair landed partially:
+  - `r01` did not inherit the previous rollout state directly
+  - the model performed a more substantive app pass
+- but the repeated run contract is still not clean:
+  - later repeats in the same 10-run batch resumed prior rollout state again
+  - that keeps the live evaluation path noisy even after the first pass resets cleanly
+- the operational `ENOSPC` problem in Codex session/thread-store remains separate and unresolved
+
+Trainer/bundle note at inspection time:
+
+- the stable bundle channel still pointed at:
+  - `20260524T141142318433Z`
+- a newer bundle directory existed:
+  - `20260524T201206267850Z`
+- so the fresh execution run had reached artifact generation, but stable promotion had not yet
+  advanced when this note was recorded
+
+## 2026-05-25 Local Runtime Follow-Up: Move Live CODEX_HOME Off `/dev/shm`
+
+Implemented locally in `dataset`:
+
+- live worker `CODEX_HOME` now defaults to disk-backed `/tmp/codex_home_*` instead of the default
+  `/dev/shm` tmpfs
+- persisted session state under `/app/artifacts/_codex_sessions` is now pruned before restore so
+  only the latest lane survives
+- after persist, the worker prunes the PVC mirror again so the just-updated lane is the only
+  retained lane snapshot
+- the runtime contract is therefore now:
+  - live thread-store/session writes happen on `/tmp`
+  - the PVC mirror remains the durable copy
+  - stale lane directories no longer accumulate without bound across resumed runs
+
+Targeted local validation:
+
+- `python -m compileall docker/prompt-executor/worker_codex_cli_helpers.py docker/prompt-executor/worker_codex_cli_exec.py`
+  - pass
+- `pytest tests/unit/test_worker_codex_cli_helpers_more.py tests/unit/test_execute_worker_codex_cli_helpers_runtime.py tests/unit/test_worker_codex_cli_exec_small.py -q`
+  - `94 passed`
+- `pytest tests/unit/test_worker_codex_cli_helpers_branches.py tests/unit/test_execute_worker_prompts_helpers_extra.py -q`
+  - `44 passed`
+
+Status:
+
+- this is only a local code/test confirmation so far
+- live AKS proof still requires a rebuild/deploy plus one more run to confirm that
+  `thread-store internal error: No space left on device` disappears from `codex_response.txt`
+
+## 2026-05-25 Live Verification: `/tmp` CODEX_HOME and Lane Pruning Worked
+
+Latest inspected execution run:
+
+- prompt-exec namespace:
+  - `prompt-exec-1353735964635435100`
+- run slug:
+  - `0fd3e596e73847c589b1cfab64d12dd2`
+- worker image:
+  - `llmpromptsacr.azurecr.io/prompt-executor:20260525-082122`
+
+What confirmed live:
+
+- the worker pruned stale persisted lane state before restore:
+  - `execution.log` recorded
+    `Pruned stale Codex session lanes before restore under /app/artifacts/_codex_sessions: ...`
+- after the run persisted, the worker pruned the prior lane again:
+  - `execution.log` recorded
+    `Pruned stale Codex session lanes after persist under /app/artifacts/_codex_sessions: realagiorganization_landscaper-crm-...-5e1817-...`
+- the PVC mirror now contains only one lane directory:
+  - `/mnt/artifacts/_codex_sessions/realagiorganization_landscaper-crm-...-d800c3-f1e79786`
+- `session-index.json` now also contains only that single lane entry
+- the old `thread-store internal error: No space left on device` strings were absent from the
+  new `codex_response.txt`
+- live runtime state was actually created under `/tmp/codex_home_*`:
+  - imported trace metadata recorded `HOME=/tmp/codex_home_4sk6kht8` in the MCP stderr tail
+
+Execution outcome:
+
+- the run resumed from the one retained prior lane, which is expected under the preserved resume
+  contract:
+  - `restore_status = fork-restored`
+  - `restored_files = 8`
+  - `resume_command_mode = explicit-session-id`
+- the run made real implementation changes and reported deployment/verification instead of only
+  planning text
+- top-level root mediation still correctly bypassed DSPy:
+  - `bundle_resolved = false`
+  - `bundle_version = null`
+  - `dspy_status = skipped`
+- helper traces still reused DSPy where eligible:
+  - 3 of the 4 imported traces had `family_artifact_selected = true` and `program_loaded = true`
+  - 1 helper trace saw `prompt_family_similarity = 0.75123` and did not load the family artifact,
+    which matches the stricter routing gate behavior
+
+What is still not fully complete:
+
+- the trainer cycle for this run was still in progress at inspection time:
+  - `repo-rag-trainer-cycle-29661685` was still `Running`
+- the stable bundle channel had not yet advanced:
+  - `current_bundle_version = 20260524T201206267850Z`
+- the worker log still reported a repo-cache refresh hygiene issue after push:
+  - `fatal: Unable to create ... /.git/index.lock: File exists`
+
+Interpretation:
+
+- the `/tmp` runtime move and one-lane PVC pruning fix worked live
+- the `ENOSPC` symptom that motivated the change appears resolved for this run
+- resume behavior was preserved
+- the remaining open items are no longer about Codex HOME storage; they are trainer completion and
+  repo-cache post-push hygiene
