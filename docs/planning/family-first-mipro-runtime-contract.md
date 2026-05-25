@@ -51,6 +51,12 @@ Examples of stage-level families include:
    - the root prompt still forms an ordinary orchestrator trace for trainer ingestion
    - root-turn traces therefore remain part of family formation later, but they do not consume the
      already-published DSPy library at runtime
+   - worker-side turn-trace enrichment may attach the final execution answer/evidence to that root
+     trace, but it must **not** backfill DSPy provenance from later helper turns into the root
+     record
+   - specifically, root traces must stay `prompt_family_id = null`, `family_artifact_selected =
+     false`, `program_loaded = false`, and `bundle_version = null` even when later helper turns in
+     the same rollout reused a DSPy family artifact successfully
 5. The root instruction layer must explicitly prioritize concrete action directives.
    - if the prompt explicitly says to develop, implement, fix, correct, update, create, change,
      or make something, the orchestrator must treat that as the primary task for the run

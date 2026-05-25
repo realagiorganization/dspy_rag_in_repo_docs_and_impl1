@@ -2258,3 +2258,194 @@ Interpretation:
 - resume behavior was preserved
 - the remaining open items are no longer about Codex HOME storage; they are trainer completion and
   repo-cache post-push hygiene
+
+## 2026-05-25 Latest Live Run Follow-Up: More Real Work, But Still Not Fully on Contract
+
+Latest inspected live lane:
+
+- persisted lane:
+  `realagiorganization_landscaper-crm-cc35233b2f7da589--prompts_tylers_landscaper--p00000-dce184-b1bc1639`
+- latest session id:
+  `rollout-2026-05-25T11-41-14-019e5ef0-69bd-7603-baf9-caa72206db24`
+- latest imported execution batches:
+  - `20260525T110405Z` (`r02`)
+  - `20260525T114106Z` (`r03`)
+
+What worked:
+
+- persisted/live session storage still used `/tmp/codex_home_*`, not `/dev/shm`
+- the latest persisted lane remained singular in `_codex_sessions`
+- the execution session completed successfully and accumulated only successful runs:
+  - `total_run_count = 5`
+  - `successful_run_count = 5`
+- transcript/path evidence shows real implementation work rather than pricing-only drift:
+  - `src/App.tsx`
+  - `src/style.css`
+  - `docs/DEVPLAN.md`
+  - `docs/USAGE.md`
+  - `docs/ENVS.md`
+- latest imported execution answers consistently reported:
+  - UI simplification / calmer visual system
+  - wording / IA cleanup in `App.tsx`
+  - successful `pnpm install`
+  - successful web build
+  - successful Azure build/deploy/smoke path
+
+What did not fully match the intended runtime contract:
+
+1. the top-level/root execution trace still appears to hit DSPy
+   - imported trace
+     `20260525T124257Z-worker-0-prompts_tylers_landscaper-p00000-dce184-r03-...-0.json`
+     carried the full original mixed root prompt
+   - that same trace also showed:
+     - `prompt_family_id = pf-4debe1f147146967`
+     - `prompt_family_similarity = 1.0`
+     - `family_artifact_selected = true`
+     - `used_baseline_fallback = false`
+   - this is not the intended `root-prompt-never-uses-dspy` contract
+
+2. helper/runtime turns were mixed
+   - some later turns reused DSPy successfully, for example:
+     - `prompt_family_id = pf-f76802df9496c1d4`
+     - `family_artifact_selected = true`
+     - `program_loaded = true`
+   - other implementation-adjacent turns still fell back:
+     - `prompt_family_id = pf-9dd72cd3aeb105bf`
+     - `family_artifact_selected = false`
+     - `program_loaded = false`
+     - `used_baseline_fallback = true`
+
+3. the newest trainer cycle was still running at inspection time
+   - active job:
+     - `repo-rag-trainer-cycle-29661785`
+   - live trainer summaries already showed a large ingest:
+     - `input_trace_count = 71`
+     - `loaded_candidate_count = 71`
+     - `candidate_count = 163`
+     - `new_candidate_count = 28`
+     - `dirty_family_count = 51`
+   - but the published stable channel still pointed at the earlier promoted bundle:
+     - `current_bundle_version = 20260525T093830088887Z`
+     - `current_family_state_version_used = 20260525T102354Z`
+   - therefore the latest run had not yet fully converged into a newly published stable bundle
+
+Interpretation:
+
+- the recent fixes materially improved the execution behavior: the agent is doing real UI/app work
+  and the session-storage/ENOSPC issue stayed fixed
+- however, the end-to-end contract is still not fully clean:
+  - root execution still appears to match a DSPy family
+  - helper reuse remains inconsistent
+  - the latest trainer cycle had not yet finished publishing when inspected
+
+## 2026-05-25 Root Trace DSPy Provenance Follow-Up
+
+The root-runtime path itself was already correct in `codex_proxy.py`: root requests returned
+`dspy_status = skipped`, `dspy_bypass_reason = root-prompt-never-uses-dspy`, and
+`prompt_family_id = null`. The remaining defect lived at the worker handoff boundary.
+
+Observed defect:
+
+- worker-side turn-trace enrichment copied DSPy routing/runtime fields from the final execution
+  trace into every batch trace whenever the local trace field was empty
+- that was acceptable for ordinary helper turns, but it incorrectly rewrote the persisted root
+  trace into a fake DSPy hit after the fact
+
+Repair:
+
+- turn-trace enrichment now treats `dspy_bypass_reason = root-prompt-never-uses-dspy` as a hard
+  guard
+- the root trace may still inherit the final execution answer/evidence
+- but it may no longer inherit:
+  - `bundle_version`
+  - `program_path`
+  - `program_loaded`
+  - `prompt_family_id`
+  - `prompt_family_similarity`
+  - `prompt_family_band`
+  - family hit-rate / uncertainty fields
+  - `family_artifact_selected`
+
+Verification in this turn:
+
+- `cd ../dataset && python -m compileall docker/prompt-executor/worker_execution_prompt.py`
+- `cd ../dataset && pytest tests/unit/test_worker_execution_prompt_repo_rag_cli.py -q`
+- `uv run python -m compileall src tests`
+- `uv run pytest tests/test_utilities.py tests/test_repository_rag_bdd.py -q`
+- `uv run repo-rag smoke-test`
+- `cargo build --manifest-path rust-cli/Cargo.toml`
+
+Observed:
+
+- dataset compileall passed
+- dataset regression slice passed with the new root no-DSPy enrichment assertion
+- repo compileall passed
+- `tests/test_utilities.py tests/test_repository_rag_bdd.py` passed
+- smoke test passed
+- Rust build passed
+
+Interpretation:
+
+- root helper/runtime bypass and persisted imported-trace provenance are now aligned again
+- mixed helper reuse is still expected in some runs and is not itself a contract violation when the
+  turn is genuinely outside the closest family's execution context
+
+## 2026-05-25 Fresh Live Run: Root No-DSPy Fix Confirmed
+
+Fresh live inspection after rebuilding and redeploying the latest `dataset` image confirmed that
+the worker-side root handoff repair now survives all the way into imported trainer traces.
+
+Live evidence gathered:
+
+- `kubectl get jobs -A --sort-by=.metadata.creationTimestamp | tail -n 20`
+- `kubectl logs -n repo-rag job/repo-rag-trainer-cycle-29661785 --tail=120`
+- `kubectl exec -n repo-rag repo-rag-trainer-cycle-29661785-sxzs7 -- sh -c 'ls -1 /workspace/repo-rag/artifacts/traces/imported | tail -n 40'`
+- `kubectl exec -n repo-rag repo-rag-trainer-cycle-29661785-sxzs7 -- sh -c 'sed -n "1,260p" /workspace/repo-rag/artifacts/traces/imported/20260525T124257Z-worker-0-prompts_tylers_landscaper-p00000-dce184-r03-realagiorganization_landscaper-crm-20260525T114106Z-0.json'`
+- `kubectl exec -n repo-rag repo-rag-trainer-cycle-29661785-sxzs7 -- sh -c 'sed -n "1,240p" /workspace/repo-rag/artifacts/traces/imported/20260525T124314Z-worker-0-prompts_tylers_landscaper-p00000-dce184-r03-realagiorganization_landscaper-crm-20260525T114106Z-31.json'`
+- `kubectl exec -n repo-rag repo-rag-trainer-cycle-29661785-sxzs7 -- sh -c 'sed -n "1,240p" /workspace/repo-rag/artifacts/traces/imported/20260525T124315Z-worker-0-prompts_tylers_landscaper-p00000-dce184-r03-realagiorganization_landscaper-crm-20260525T114106Z-32.json'`
+- `kubectl exec -n repo-rag repo-rag-trainer-cycle-29661785-sxzs7 -- sh -c 'cat /workspace/repo-rag/artifacts/dspy/channels/stable.json'`
+
+Observed on the imported root trace `...-r03-...-0.json`:
+
+- `prompt_family_id = null`
+- `prompt_family_similarity = 0.0`
+- `prompt_family_band = "new"`
+- `family_artifact_selected = false`
+- `program_loaded = false`
+- `bundle_version = null`
+- `used_baseline_fallback = false`
+- `dspy_bypass_reason = "root-prompt-never-uses-dspy"`
+
+This is now the intended contract exactly: the root trace keeps the final execution answer, but it
+no longer retroactively inherits DSPy family provenance from later helper turns.
+
+Observed on helper turns in the same batch:
+
+- successful helper reuse example `...-32.json`:
+  - `prompt_family_id = pf-f76802df9496c1d4`
+  - `prompt_family_similarity = 0.818516`
+  - `family_artifact_selected = true`
+  - `program_loaded = true`
+  - `used_baseline_fallback = false`
+- fallback helper example `...-31.json`:
+  - `prompt_family_id = pf-9dd72cd3aeb105bf`
+  - `prompt_family_similarity = 0.775358`
+  - `family_artifact_selected = false`
+  - `program_loaded = false`
+  - `used_baseline_fallback = true`
+
+Interpretation:
+
+- the root no-DSPy repair now works end-to-end in live imported traces
+- mixed helper reuse in this run now looks healthy rather than suspicious:
+  - one helper exceeded the current `0.8` family gate and reused DSPy
+  - another helper stayed just below threshold and correctly fell back
+- the execution behavior remained implementation-first and produced real app changes rather than
+  only planning output
+
+What is still not fully complete at inspection time:
+
+- trainer cycle `repo-rag-trainer-cycle-29661785` was still `Running`
+- `stable.json` still pointed to the previously promoted bundle
+  `20260525T093830088887Z`
+- so the run had not yet fully converged into a newly published stable bundle while inspected

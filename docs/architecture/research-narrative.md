@@ -237,6 +237,11 @@ force one entire workflow into one family. A prompt family represents one stable
 code block that can recur across many workflows. That means one workflow may legitimately produce
 multiple families when it moves through different stages, while two unrelated workflows may
 legitimately share one family when they enter the same stage or execute the same logical block.
+One more runtime boundary is now explicit too: the root orchestrator trace is allowed to inherit
+the final execution answer during worker-side handoff, but it is not allowed to inherit DSPy
+family provenance from later helper turns. Root no-DSPy really means no family id, no runtime
+program, and no bundle provenance on the persisted root trace itself, even when subsequent helper
+turns in the same rollout reuse DSPy correctly.
 Recent GIF/recorder inspection runs clarified why this distinction matters: what first looked like
 over-splitting at workflow scope became well-formed stage-level clustering once the families were
 interpreted as reusable steps such as repo-state validation, semantic artifact validation, rerun
