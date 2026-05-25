@@ -334,6 +334,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve_codex_proxy_parser.add_argument("--cache-ttl-seconds", type=int, default=3600)
     serve_codex_proxy_parser.add_argument("--no-dspy", action="store_true")
     serve_codex_proxy_parser.add_argument("--ready-file")
+    serve_codex_proxy_parser.add_argument("--root-developer-message-file")
 
     azure_parser = subparsers.add_parser("azure-manifest")
     azure_parser.add_argument("--root", default=".")
@@ -861,6 +862,14 @@ def main() -> int:
         )
 
     if args.command == "serve-codex-proxy":
+        root_developer_message = ""
+        if args.root_developer_message_file:
+            root_developer_message = (
+                Path(args.root_developer_message_file)
+                .expanduser()
+                .resolve()
+                .read_text(encoding="utf-8")
+            )
         return serve_codex_proxy(
             repository_root=root,
             bundle_root=Path(args.bundle_root).expanduser().resolve(),
@@ -880,6 +889,7 @@ def main() -> int:
             cache_dir=(Path(args.cache_dir).expanduser().resolve() if args.cache_dir else None),
             cache_ttl_seconds=args.cache_ttl_seconds,
             ready_file=(Path(args.ready_file).expanduser().resolve() if args.ready_file else None),
+            root_developer_message=root_developer_message,
         )
 
     if args.command == "azure-manifest":

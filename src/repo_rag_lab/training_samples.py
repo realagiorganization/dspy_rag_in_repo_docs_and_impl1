@@ -89,6 +89,121 @@ _FAMILY_COMMAND_PROFILE_LIMIT = 16
 _FAMILY_CONSTRAINT_PROFILE_LIMIT = 12
 _FAMILY_PROFILE_MIN_COUNT = 2
 _FAMILY_ROUTING_SHORTLIST_TOP_K = 20
+_INTENT_SIGNAL_KEYWORDS: dict[str, dict[str, tuple[str, ...]]] = {
+    "execution": {
+        "tokens": (
+            "build",
+            "change",
+            "correct",
+            "create",
+            "develop",
+            "edit",
+            "execute",
+            "fix",
+            "implement",
+            "make",
+            "modify",
+            "patch",
+            "refresh",
+            "replace",
+            "ship",
+            "update",
+            "write",
+        ),
+        "phrases": (
+            "continue developing",
+            "continue implementation",
+            "finish implementation",
+            "start correcting",
+            "start fixing",
+            "start implementing",
+            "no analysis is needed",
+            "perform the work",
+            "make the change",
+        ),
+    },
+    "assessment": {
+        "tokens": (
+            "assess",
+            "estimate",
+            "estimation",
+            "price",
+            "pricing",
+            "proposal",
+            "quote",
+            "review",
+            "scope",
+            "timeline",
+        ),
+        "phrases": (
+            "call prep",
+            "call-prep",
+            "how long",
+            "how much",
+            "plausible take",
+            "pricing take",
+            "realistic estimate",
+        ),
+    },
+    "docs": {
+        "tokens": (
+            "brief",
+            "doc",
+            "docs",
+            "documentation",
+            "memo",
+            "readme",
+            "script",
+            "writeup",
+        ),
+        "phrases": (
+            "client-facing memo",
+            "one-page memo",
+            "pricing note",
+            "call script",
+        ),
+    },
+    "deploy": {
+        "tokens": (
+            "aks",
+            "azure",
+            "cluster",
+            "deploy",
+            "deployment",
+            "docker",
+            "helm",
+            "ingress",
+            "kubectl",
+            "rollout",
+            "route",
+        ),
+        "phrases": (
+            "deployment readiness",
+            "deployment flow",
+            "routing verification",
+        ),
+    },
+    "troubleshooting": {
+        "tokens": (
+            "bootstrap",
+            "broken",
+            "debug",
+            "enospc",
+            "error",
+            "failing",
+            "failure",
+            "install",
+            "stderr",
+            "troubleshoot",
+        ),
+        "phrases": (
+            "disk space",
+            "no space left on device",
+            "pnpm bootstrap",
+            "npm install",
+        ),
+    },
+}
 
 
 def _coerce_int(value: object) -> int | None:
@@ -756,6 +871,180 @@ def _profile_terms(values: Sequence[object], *, limit: int = 24) -> list[str]:
     return extract_profile_terms(normalized_values, limit=limit)
 
 
+def _context_term_set(values: Sequence[str]) -> set[str]:
+    """Return one normalized set view for context-gating term sequences."""
+
+    return {str(value or "").strip().casefold() for value in values if str(value or "").strip()}
+
+
+def _routing_intent_labels(
+    values: Sequence[object],
+    *,
+    command_terms: Sequence[str] = (),
+    constraint_terms: Sequence[str] = (),
+) -> list[str]:
+    """Return stable intent labels inferred from one prompt/context surface."""
+
+    normalized_values = [_normalize_question_text(value) for value in values]
+    corpus = " ".join(value for value in normalized_values if value).casefold()
+    token_pool = {
+        *extract_tokens(corpus),
+        *(str(term or "").strip().casefold() for term in command_terms if str(term or "").strip()),
+        *(str(term or "").strip().casefold() for term in constraint_terms if str(term or "").strip()),
+    }
+    labels: list[str] = []
+    for label, config in _INTENT_SIGNAL_KEYWORDS.items():
+        token_hits = token_pool.intersection(config.get("tokens", ()))
+        phrase_hits = [
+            phrase
+            for phrase in config.get("phrases", ())
+            if phrase and phrase.casefold() in corpus
+        ]
+        if token_hits or phrase_hits:
+            labels.append(label)
+    return labels
+
+
+def _prompt_routing_context(
+    *,
+    question: object = "",
+    original_prompt: object = "",
+    reformulated_prompt: object = "",
+    command_trace: object = (),
+) -> dict[str, Any]:
+    """Return one normalized routing context for an inbound prompt surface."""
+
+    normalized_question = _normalize_question_text(question)
+    normalized_original = _normalize_question_text(original_prompt)
+    normalized_reformulated = _normalize_question_text(reformulated_prompt)
+    prompt_values = [
+        normalized_question,
+        normalized_original,
+        normalized_reformulated,
+    ]
+    normalized_command_trace = _ordered_unique_command_trace(command_trace)
+    prompt_terms = _profile_terms(prompt_values, limit=_FAMILY_PROMPT_PROFILE_LIMIT)
+    command_terms = _profile_terms(
+        [
+            *prompt_values,
+            *(
+                entry.get("text") or entry.get("command") or entry.get("path") or entry.get("tool")
+                for entry in normalized_command_trace
+            ),
+        ],
+        limit=_FAMILY_COMMAND_PROFILE_LIMIT,
+    )
+    explicit_command_terms = _command_trace_profile_terms(normalized_command_trace)
+    if explicit_command_terms:
+        command_terms = list(
+            dict.fromkeys([*explicit_command_terms, *command_terms])  # preserves order
+        )[:_FAMILY_COMMAND_PROFILE_LIMIT]
+    constraint_terms = _constraint_terms(
+        [
+            *prompt_values,
+            *_command_trace_constraint_terms(normalized_command_trace),
+        ],
+        limit=_FAMILY_CONSTRAINT_PROFILE_LIMIT,
+    )
+    intent_labels = _routing_intent_labels(
+        prompt_values,
+        command_terms=command_terms,
+        constraint_terms=constraint_terms,
+    )
+    return {
+        "question": normalized_question,
+        "original_prompt": normalized_original,
+        "reformulated_prompt": normalized_reformulated,
+        "prompt_terms": prompt_terms,
+        "command_terms": command_terms,
+        "constraint_terms": constraint_terms,
+        "intent_labels": intent_labels,
+    }
+
+
+def _family_routing_context(family_payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Return one normalized routing context for a stored family payload."""
+
+    prompt_terms, command_terms, constraint_terms = _family_profile_summary(family_payload)
+    question_variants = _family_question_variants(family_payload)
+    intent_labels = _routing_intent_labels(
+        [
+            family_payload.get("question"),
+            family_payload.get("normalized_question"),
+            family_payload.get("family_father_question"),
+            *question_variants,
+            *prompt_terms,
+            *command_terms,
+            *constraint_terms,
+        ],
+        command_terms=command_terms,
+        constraint_terms=constraint_terms,
+    )
+    return {
+        "prompt_terms": prompt_terms,
+        "command_terms": command_terms,
+        "constraint_terms": constraint_terms,
+        "intent_labels": intent_labels,
+    }
+
+
+def _routing_context_is_eligible(
+    candidate_context: Mapping[str, Any],
+    family_context: Mapping[str, Any],
+) -> bool:
+    """Return whether one stored family remains eligible for reuse."""
+
+    def _surface_overlap(left: Sequence[str], right: Sequence[str]) -> float:
+        left_terms = _string_list(list(left))
+        right_terms = _string_list(list(right))
+        lexical_overlap = _profile_overlap_similarity(left_terms, right_terms)
+        token_overlap = _profile_overlap_similarity(
+            [token for term in left_terms for token in extract_tokens(term)],
+            [token for term in right_terms for token in extract_tokens(term)],
+        )
+        return max(lexical_overlap, token_overlap)
+
+    def _surface_anchor_count(left: Sequence[str], right: Sequence[str]) -> int:
+        left_tokens = {
+            token.casefold()
+            for term in _string_list(list(left))
+            for token in extract_tokens(term)
+            if token.strip()
+        }
+        right_tokens = {
+            token.casefold()
+            for term in _string_list(list(right))
+            for token in extract_tokens(term)
+            if token.strip()
+        }
+        return len(left_tokens.intersection(right_tokens))
+
+    candidate_intents = _context_term_set(_string_list(candidate_context.get("intent_labels")))
+    family_intents = _context_term_set(_string_list(family_context.get("intent_labels")))
+    if candidate_intents and family_intents and not candidate_intents.intersection(family_intents):
+        return False
+
+    candidate_constraints = _string_list(candidate_context.get("constraint_terms"))
+    family_constraints = _string_list(family_context.get("constraint_terms"))
+    if candidate_constraints and family_constraints and _surface_overlap(
+        candidate_constraints,
+        family_constraints,
+    ) <= 0.0:
+        return False
+
+    candidate_command_terms = _string_list(candidate_context.get("command_terms"))
+    family_command_terms = _string_list(family_context.get("command_terms"))
+    required_command_anchors = 1 if len(family_command_terms) <= 1 else 2
+    if family_command_terms and (
+        _surface_overlap(candidate_command_terms, family_command_terms) <= 0.0
+        or _surface_anchor_count(candidate_command_terms, family_command_terms)
+        < required_command_anchors
+    ):
+        return False
+
+    return True
+
+
 def _increment_term_counts(
     counts: dict[str, int],
     terms: Sequence[str],
@@ -968,14 +1257,18 @@ def _family_question_variants(family_payload: Mapping[str, Any]) -> list[str]:
     return variants
 
 
-def _coarse_prompt_family_similarity(
-    question: str,
+def _coarse_prompt_family_similarity_from_context(
+    candidate_context: Mapping[str, Any],
     family_payload: Mapping[str, Any],
 ) -> float:
     """Return one cheap shortlist score before rich family routing."""
 
-    question_profile_terms = _profile_terms([question])
-    question_constraint_terms = _constraint_terms([question])
+    family_context = _family_routing_context(family_payload)
+    if not _routing_context_is_eligible(candidate_context, family_context):
+        return 0.0
+    question = str(candidate_context.get("question") or "").strip()
+    question_profile_terms = _string_list(candidate_context.get("prompt_terms"))
+    question_constraint_terms = _string_list(candidate_context.get("constraint_terms"))
     family_prompt_terms = _profile_terms(
         [
             family_payload.get("question"),
@@ -1019,9 +1312,28 @@ def _coarse_prompt_family_similarity(
     return round(min(1.0, max(0.0, routing_score)), 6)
 
 
-def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) -> float:
+def _coarse_prompt_family_similarity(
+    question: str,
+    family_payload: Mapping[str, Any],
+) -> float:
+    """Return one question-only coarse routing score for compatibility callers."""
+
+    return _coarse_prompt_family_similarity_from_context(
+        _prompt_routing_context(question=question),
+        family_payload,
+    )
+
+
+def _prompt_family_similarity_from_context(
+    candidate_context: Mapping[str, Any],
+    family_payload: Mapping[str, Any],
+) -> float:
     """Return one profile-first routing score for a prompt against one family."""
 
+    family_context = _family_routing_context(family_payload)
+    if not _routing_context_is_eligible(candidate_context, family_context):
+        return 0.0
+    question = str(candidate_context.get("question") or "").strip()
     candidate_questions = _family_question_variants(family_payload)
     family_father_question = _routing_question(
         question=family_payload.get("family_father_question")
@@ -1090,8 +1402,8 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
             ],
             limit=_FAMILY_CONSTRAINT_PROFILE_LIMIT,
         )
-    question_profile_terms = _profile_terms([question])
-    question_constraint_terms = _constraint_terms([question])
+    question_profile_terms = _string_list(candidate_context.get("prompt_terms"))
+    question_constraint_terms = _string_list(candidate_context.get("constraint_terms"))
     profile_overlap = max(
         _profile_overlap_similarity(question_profile_terms, family_prompt_profile_terms),
         _profile_overlap_similarity(
@@ -1131,6 +1443,15 @@ def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) 
     )
     routing_score = min(1.0, max(0.0, routing_score))
     return round(max(0.0, routing_score), 6)
+
+
+def _prompt_family_similarity(question: str, family_payload: Mapping[str, Any]) -> float:
+    """Return one question-only routing score for compatibility callers."""
+
+    return _prompt_family_similarity_from_context(
+        _prompt_routing_context(question=question),
+        family_payload,
+    )
 
 
 def _family_routing_question(family_payload: Mapping[str, Any]) -> str:
@@ -1226,6 +1547,13 @@ def _family_to_family_similarity(
 ) -> float:
     """Return a symmetric routing score between two family-like payloads."""
 
+    left_context = _family_routing_context(left_family)
+    right_context = _family_routing_context(right_family)
+    if not (
+        _routing_context_is_eligible(left_context, right_context)
+        and _routing_context_is_eligible(right_context, left_context)
+    ):
+        return 0.0
     left_question_variants = _family_question_variants(left_family)
     right_question_variants = _family_question_variants(right_family)
     left_question = _family_routing_question(left_family)
@@ -1288,7 +1616,7 @@ def _family_to_family_similarity(
 
 
 def _shortlist_prompt_families(
-    question: str,
+    candidate_context: Mapping[str, Any],
     families: Sequence[Mapping[str, Any]],
     *,
     top_k: int = _FAMILY_ROUTING_SHORTLIST_TOP_K,
@@ -1298,14 +1626,14 @@ def _shortlist_prompt_families(
     shortlist_limit = max(1, int(top_k))
     ranked: list[tuple[float, Mapping[str, Any]]] = []
     for family in families:
-        score = _coarse_prompt_family_similarity(question, family)
+        score = _coarse_prompt_family_similarity_from_context(candidate_context, family)
         ranked.append((score, family))
     ranked.sort(key=lambda item: item[0], reverse=True)
     return [family for _, family in ranked[:shortlist_limit]]
 
 
 def _sqlite_family_index_shortlist(
-    question: str,
+    candidate_context: Mapping[str, Any],
     family_state_path: Path,
     *,
     top_k: int = _FAMILY_ROUTING_SHORTLIST_TOP_K,
@@ -1340,7 +1668,15 @@ def _sqlite_family_index_shortlist(
                     family_entry["prompt_family_id"] = prompt_family_id
                 if "family_record_count" not in family_entry:
                     family_entry["family_record_count"] = int(row["family_record_count"] or 0)
-                ranked.append((_coarse_prompt_family_similarity(question, family_entry), family_entry))
+                ranked.append(
+                    (
+                        _coarse_prompt_family_similarity_from_context(
+                            candidate_context,
+                            family_entry,
+                        ),
+                        family_entry,
+                    )
+                )
                 continue
             try:
                 prompt_terms = json.loads(str(row["prompt_terms_json"] or "[]"))
@@ -1400,7 +1736,12 @@ def _sqlite_family_index_shortlist(
                 question_variant_count = int(row["question_variant_count"] or 0)
                 if question_variant_count > 0:
                     family_entry["question_variant_count"] = question_variant_count
-            ranked.append((_coarse_prompt_family_similarity(question, family_entry), family_entry))
+            ranked.append(
+                (
+                    _coarse_prompt_family_similarity_from_context(candidate_context, family_entry),
+                    family_entry,
+                )
+            )
     except sqlite3.DatabaseError:
         return []
     finally:
@@ -1412,10 +1753,27 @@ def _sqlite_family_index_shortlist(
 def _resolve_prompt_family_support_from_families(
     question: str,
     families: Sequence[Mapping[str, Any]],
+    *,
+    original_prompt: object = "",
+    reformulated_prompt: object = "",
+    command_trace: object = (),
 ) -> PromptFamilySupport:
     """Resolve prompt-family support from one family sequence with shortlist routing."""
 
     normalized_question = _normalize_question_text(question)
+    has_rich_context = any(
+        (
+            _normalize_question_text(original_prompt),
+            _normalize_question_text(reformulated_prompt),
+            _ordered_unique_command_trace(command_trace),
+        )
+    )
+    candidate_context = _prompt_routing_context(
+        question=normalized_question,
+        original_prompt=original_prompt,
+        reformulated_prompt=reformulated_prompt,
+        command_trace=command_trace,
+    )
     if not normalized_question:
         return PromptFamilySupport(
             question="",
@@ -1429,9 +1787,13 @@ def _resolve_prompt_family_support_from_families(
         )
     best_family: Mapping[str, Any] | None = None
     best_similarity = 0.0
-    shortlisted_families = _shortlist_prompt_families(normalized_question, families)
+    shortlisted_families = _shortlist_prompt_families(candidate_context, families)
     for family in shortlisted_families:
-        similarity = _prompt_family_similarity(normalized_question, family)
+        similarity = (
+            _prompt_family_similarity_from_context(candidate_context, family)
+            if has_rich_context
+            else _prompt_family_similarity(normalized_question, family)
+        )
         if similarity > best_similarity:
             best_family = family
             best_similarity = similarity
@@ -1582,6 +1944,10 @@ def _refresh_family_profile_summary(family_payload: dict[str, Any]) -> None:
 def resolve_prompt_family_support_from_payload(
     question: str,
     payload: Mapping[str, Any],
+    *,
+    original_prompt: object = "",
+    reformulated_prompt: object = "",
+    command_trace: object = (),
 ) -> PromptFamilySupport:
     """Resolve the best stored prompt-family support from one in-memory family payload."""
 
@@ -1589,20 +1955,51 @@ def resolve_prompt_family_support_from_payload(
     if not isinstance(families, list):
         families = []
     mapped_families = [family for family in families if isinstance(family, Mapping)]
-    return _resolve_prompt_family_support_from_families(question, mapped_families)
+    return _resolve_prompt_family_support_from_families(
+        question,
+        mapped_families,
+        original_prompt=original_prompt,
+        reformulated_prompt=reformulated_prompt,
+        command_trace=command_trace,
+    )
 
 
-def resolve_prompt_family_support(question: str, family_state_path: Path) -> PromptFamilySupport:
+def resolve_prompt_family_support(
+    question: str,
+    family_state_path: Path,
+    *,
+    original_prompt: object = "",
+    reformulated_prompt: object = "",
+    command_trace: object = (),
+) -> PromptFamilySupport:
     """Resolve the best stored prompt-family support for one prompt string."""
 
-    sqlite_shortlist = _sqlite_family_index_shortlist(question, family_state_path)
+    candidate_context = _prompt_routing_context(
+        question=question,
+        original_prompt=original_prompt,
+        reformulated_prompt=reformulated_prompt,
+        command_trace=command_trace,
+    )
+    sqlite_shortlist = _sqlite_family_index_shortlist(candidate_context, family_state_path)
     if sqlite_shortlist:
         hydrated_families = [
             _family_state_entry_to_payload(family_state_path, family) for family in sqlite_shortlist
         ]
-        return _resolve_prompt_family_support_from_families(question, hydrated_families)
+        return _resolve_prompt_family_support_from_families(
+            question,
+            hydrated_families,
+            original_prompt=original_prompt,
+            reformulated_prompt=reformulated_prompt,
+            command_trace=command_trace,
+        )
     index_payload = _load_champion_index(family_state_path)
-    return resolve_prompt_family_support_from_payload(question, index_payload)
+    return resolve_prompt_family_support_from_payload(
+        question,
+        index_payload,
+        original_prompt=original_prompt,
+        reformulated_prompt=reformulated_prompt,
+        command_trace=command_trace,
+    )
 
 
 def _refresh_prompt_family_summary(family_payload: dict[str, Any], question: str) -> None:
@@ -1660,8 +2057,10 @@ def _find_or_create_prompt_family(
     if preferred_prompt_family_id:
         existing_family = family_by_id.get(preferred_prompt_family_id)
         if existing_family is not None:
-            _refresh_prompt_family_summary(existing_family, question)
-            return existing_family, False
+            preferred_similarity = _family_to_family_similarity(candidate_family, existing_family)
+            if preferred_similarity >= PROMPT_FAMILY_MATCH_THRESHOLD:
+                _refresh_prompt_family_summary(existing_family, question)
+                return existing_family, False
     best_family: dict[str, Any] | None = None
     best_similarity = 0.0
     for family_id in family_order:
@@ -1676,7 +2075,9 @@ def _find_or_create_prompt_family(
         _refresh_prompt_family_summary(best_family, question)
         return best_family, False
 
-    prompt_family_id = str(preferred_prompt_family_id or _prompt_family_id(question)).strip()
+    prompt_family_id = str(_prompt_family_id(question)).strip()
+    if not prompt_family_id and preferred_prompt_family_id not in family_by_id:
+        prompt_family_id = preferred_prompt_family_id
     if not prompt_family_id:
         prompt_family_id = _prompt_family_id(question)
     if prompt_family_id in family_by_id:

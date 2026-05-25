@@ -643,7 +643,7 @@ def test_build_codex_mediation_executes_family_runtime_artifact_with_prompt_line
         retrieval_mode: RetrievalMode | None = None,
     ) -> SimpleNamespace:
         del retrieval_mode
-        assert question == "Run the failing pytest target and inspect stderr."
+        assert question == "Investigate the failing pytest target and fix the broken test."
         return SimpleNamespace(
             context=[Chunk(source=root / "README.md", text="Repository summary text.")],
             summary="Repository summary text.",
@@ -688,13 +688,19 @@ def test_build_codex_mediation_executes_family_runtime_artifact_with_prompt_line
         "repo_rag_lab.codex_proxy.resolve_dspy_lm_config",
         lambda: SimpleNamespace(model="azure/dspy-helper"),
     )
-    monkeypatch.setattr(
-        "repo_rag_lab.codex_proxy.reformulate_codex_prompt",
-        lambda prompt, *, lm_config=None: (
-            "Run the failing pytest target and inspect stderr.",
-            "success",
-        ),
-    )
+    def fake_reformulate(
+        prompt: str,
+        *,
+        lm_config: object | None = None,
+        allow_reformulation: bool = True,
+    ) -> tuple[str, str]:
+        del lm_config
+        captured["allow_reformulation"] = allow_reformulation
+        if allow_reformulation:
+            return "Run the failing pytest target and inspect stderr.", "success"
+        return prompt, "verbatim"
+
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.reformulate_codex_prompt", fake_reformulate)
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy._resolve_bundle_family_registry",
         lambda **kwargs: {
@@ -757,12 +763,160 @@ def test_build_codex_mediation_executes_family_runtime_artifact_with_prompt_line
     assert mediation.family_artifact_selected is True
     assert captured["program_path"] == family_program_path.resolve()
     assert captured["lm_model"] == "azure/dspy-helper"
+    assert captured["allow_reformulation"] is False
     assert captured["question"] == "Investigate the failing pytest target and fix the broken test."
     assert captured["original_prompt"] == (
         "Investigate the failing pytest target and fix the broken test."
     )
-    assert captured["reformulated_prompt"] == ("Run the failing pytest target and inspect stderr.")
+    assert captured["reformulated_prompt"] == (
+        "Investigate the failing pytest target and fix the broken test."
+    )
     assert captured["command_trace"] == command_trace
+
+
+def test_build_codex_mediation_keeps_root_prompt_verbatim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    captured: dict[str, object] = {}
+    original_prompt = "First line stays.\nSecond line stays exactly."
+
+    def fake_ask_repository(
+        question: str,
+        root: Path,
+        retrieval_mode: RetrievalMode | None = None,
+    ) -> SimpleNamespace:
+        del question, root, retrieval_mode
+        raise AssertionError("root prompt should not trigger repo-RAG retrieval")
+
+    def fake_reformulate(
+        prompt: str,
+        *,
+        lm_config: object | None = None,
+        allow_reformulation: bool = True,
+    ) -> tuple[str, str]:
+        del lm_config
+        captured["reformulate_prompt"] = prompt
+        captured["allow_reformulation"] = allow_reformulation
+        if allow_reformulation:
+            return "This should not happen for root prompts.", "dspy"
+        return prompt, "root-verbatim"
+
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.ask_repository", fake_ask_repository)
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.resolve_dspy_lm_config",
+        lambda: SimpleNamespace(model="azure/dspy-helper"),
+    )
+    monkeypatch.setattr("repo_rag_lab.codex_proxy.reformulate_codex_prompt", fake_reformulate)
+    root_rules = "System rule: if the prompt explicitly says implement or fix, do that work."
+
+    mediation = build_codex_mediation(
+        original_prompt,
+        command_trace=[{"role": "user", "text": original_prompt}],
+        root_prompt=True,
+        repository_root=repo,
+        bundle_root=repo,
+        prefer_dspy=True,
+        root_developer_message=root_rules,
+    )
+
+    assert captured["allow_reformulation"] is False
+    assert mediation.original_prompt == original_prompt
+    assert mediation.reformulated_prompt == original_prompt
+    assert mediation.reformulation_status == "root-verbatim"
+    assert mediation.mediation_mode == "passthrough"
+    assert mediation.dspy_status == "skipped"
+    assert mediation.rag_status == "skipped"
+    assert mediation.dspy_bypass_reason == "root-prompt-never-uses-dspy"
+    assert mediation.family_artifact_selected is False
+    assert mediation.program_path is None
+    assert mediation.sources == []
+    assert mediation.summary == ""
+    assert mediation.developer_message == root_rules
+    assert "Prompt:" not in mediation.developer_message
+    assert mediation.injected is True
+
+
+def test_build_codex_mediation_root_prepends_sticky_execution_guard(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    prompt = "Please review this and start correcting the site right now. No analysis is needed."
+
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.resolve_dspy_lm_config",
+        lambda: SimpleNamespace(model="azure/dspy-helper"),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.reformulate_codex_prompt",
+        lambda prompt, *, lm_config=None, allow_reformulation=True: (
+            prompt,
+            "root-verbatim" if not allow_reformulation else "verbatim",
+        ),
+    )
+
+    mediation = build_codex_mediation(
+        prompt,
+        root_prompt=True,
+        repository_root=repo,
+        bundle_root=repo,
+        prefer_dspy=True,
+        root_developer_message="Base root developer rules.",
+        session_execution_guard=(
+            "ROOT EXECUTION MODE: implementation-first.\nDo not turn this session into pricing work."
+        ),
+    )
+
+    assert mediation.developer_message.startswith("ROOT EXECUTION MODE: implementation-first.")
+    assert "Base root developer rules." in mediation.developer_message
+    assert mediation.injected is True
+
+
+def test_build_codex_mediation_passthrough_without_family_support_still_injects_execution_guard(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.resolve_dspy_lm_config",
+        lambda: SimpleNamespace(model="azure/dspy-helper"),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.reformulate_codex_prompt",
+        lambda prompt, *, lm_config=None, allow_reformulation=True: (
+            prompt,
+            "verbatim",
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy._resolve_bundle_family_registry",
+        lambda **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.fetch_remote_family_state",
+        lambda root: None,
+    )
+
+    mediation = build_codex_mediation(
+        "I found prior work already covering the ask. Now I’m checking whether anything still needs code changes and making a tight call-prep deliverable.",
+        repository_root=repo,
+        bundle_root=repo,
+        prefer_dspy=True,
+        session_execution_guard=(
+            "ROOT EXECUTION MODE: implementation-first.\nDo not turn this session into pricing work."
+        ),
+    )
+
+    assert mediation.mediation_mode == "passthrough"
+    assert mediation.dspy_status == "skipped"
+    assert mediation.developer_message.startswith("ROOT EXECUTION MODE: implementation-first.")
+    assert mediation.injected is True
 
 
 def test_build_codex_mediation_bypasses_family_artifact_for_controlled_exploration(
@@ -825,7 +979,7 @@ def test_build_codex_mediation_bypasses_family_artifact_for_controlled_explorati
     )
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy.reformulate_codex_prompt",
-        lambda prompt, *, lm_config=None: (
+        lambda prompt, *, lm_config=None, allow_reformulation=True: (
             "Run the failing pytest target and inspect stderr.",
             "success",
         ),
@@ -884,6 +1038,61 @@ def test_build_codex_mediation_bypasses_family_artifact_for_controlled_explorati
     assert mediation.program_path == "artifacts/dspy/remote/stable-42/program.json"
     assert captured["program_path"] == global_program_path.resolve()
     assert any("controlled exploration" in warning for warning in mediation.warnings)
+
+
+def test_persist_turn_trace_marks_root_bypass_as_not_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "repo_rag_lab.codex_proxy.resolve_azure_openai_runtime",
+        lambda env: SimpleNamespace(
+            endpoint="http://127.0.0.1:9",
+            api_key="test-key",
+            api_version="2024-12-01-preview",
+        ),
+    )
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    config = CodexProxyConfig(
+        repository_root=repo,
+        bundle_root=repo,
+        artifact_dir=tmp_path / "artifacts",
+    )
+    runtime = codex_proxy_module.CodexProxyRuntime(config)
+    try:
+        mediation = CodexMediationResult(
+            question="Start fixing the site.",
+            original_prompt="Start fixing the site.",
+            reformulated_prompt="Start fixing the site.",
+            reformulation_status="root-verbatim",
+            mediation_mode="passthrough",
+            rag_status="skipped",
+            dspy_status="skipped",
+            dspy_lm_model="azure/gpt-5.4-nano",
+            summary="",
+            retrieval_mode="lexical",
+            sources=[],
+            warnings=[],
+            bundle_version=None,
+            program_path=None,
+            evidence_previews=[],
+            developer_message="",
+            dspy_bypass_reason="root-prompt-never-uses-dspy",
+            prompt_family_id=None,
+            prompt_family_similarity=0.0,
+            prompt_family_band="new",
+            family_artifact_selected=False,
+            injected=False,
+        )
+        trace_path = runtime.persist_turn_trace(mediation, command_trace=[])
+        assert trace_path is not None
+        payload = json.loads(trace_path.read_text(encoding="utf-8"))
+        assert payload["outcome"]["used_baseline_fallback"] is False
+        assert payload["outcome"]["dspy_bypass_reason"] == "root-prompt-never-uses-dspy"
+        assert payload["trace"]["program_loaded"] is False
+    finally:
+        runtime.close()
 
 
 def test_build_codex_mediation_synthesizes_family_registry_from_family_state(
@@ -993,7 +1202,7 @@ def test_build_codex_mediation_synthesizes_family_registry_from_family_state(
     )
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy.reformulate_codex_prompt",
-        lambda prompt, *, lm_config=None: (
+        lambda prompt, *, lm_config=None, allow_reformulation=True: (
             "Run the failing pytest target and inspect stderr.",
             "success",
         ),
@@ -1139,7 +1348,7 @@ def test_build_codex_mediation_falls_back_to_family_state_when_bundle_registry_p
     )
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy.reformulate_codex_prompt",
-        lambda prompt, *, lm_config=None: (
+        lambda prompt, *, lm_config=None, allow_reformulation=True: (
             "Run the failing pytest target and inspect stderr.",
             "success",
         ),
@@ -1258,7 +1467,7 @@ def test_build_codex_mediation_prefers_family_metric_hit_rate_over_benchmark_pas
     )
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy.reformulate_codex_prompt",
-        lambda prompt, *, lm_config=None: (prompt, "identity"),
+        lambda prompt, *, lm_config=None, allow_reformulation=True: (prompt, "identity"),
     )
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy._resolve_program_path_and_bundle_version",
@@ -1380,7 +1589,7 @@ def test_build_codex_mediation_uses_original_prompt_for_family_lookup(
     )
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy.reformulate_codex_prompt",
-        lambda prompt, *, lm_config=None: (
+        lambda prompt, *, lm_config=None, allow_reformulation=True: (
             "Inspect README.md and update documentation gaps.",
             "success",
         ),
@@ -1516,7 +1725,7 @@ def test_build_codex_mediation_skips_family_artifact_when_hit_rate_drops(
     )
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy.reformulate_codex_prompt",
-        lambda prompt, *, lm_config=None: (
+        lambda prompt, *, lm_config=None, allow_reformulation=True: (
             "Run the failing pytest target and inspect stderr.",
             "success",
         ),
@@ -1631,7 +1840,7 @@ def test_build_codex_mediation_uses_lower_bound_baseline_when_present(
     )
     monkeypatch.setattr(
         "repo_rag_lab.codex_proxy.reformulate_codex_prompt",
-        lambda prompt, *, lm_config=None: (
+        lambda prompt, *, lm_config=None, allow_reformulation=True: (
             "Run the failing pytest target and inspect stderr.",
             "success",
         ),
@@ -2030,7 +2239,8 @@ def test_running_codex_proxy_uses_budgeted_disk_cache(
         assert first.status_code == 200
         status_first = json.loads(proxy.status_path.read_text(encoding="utf-8"))
         assert status_first["cache_hit"] is False
-        assert status_first["injected"] is True
+        assert status_first["injected"] is False
+        assert status_first["dspy_bypass_reason"] == "root-prompt-never-uses-dspy"
         assert status_first["estimated_tokens"] <= status_first["budget_tokens"]
         assert status_first["retrieval_mode"] == "lexical"
 
@@ -2044,13 +2254,15 @@ def test_running_codex_proxy_uses_budgeted_disk_cache(
         assert second.status_code == 200
         status_second = json.loads(proxy.status_path.read_text(encoding="utf-8"))
         assert status_second["cache_hit"] is True
+        assert status_second["injected"] is False
+        assert status_second["dspy_bypass_reason"] == "root-prompt-never-uses-dspy"
         assert status_second["estimated_tokens"] <= status_second["budget_tokens"]
         assert status_second["retrieval_mode"] == "lexical"
 
     upstream.shutdown()
     upstream_thread.join(timeout=5)
 
-    assert calls["ask_repository"] == 1
+    assert calls["ask_repository"] == 0
     assert len(captured) == 2
 
 
@@ -2318,7 +2530,7 @@ def test_persist_turn_trace_emits_additional_lineage_trace_for_reformulated_prom
         )
 
         def fake_build_mediation(
-            original_prompt: str, command_trace: list[Mapping[str, str]]
+            original_prompt: str, command_trace: list[Mapping[str, str]], *, root_prompt: bool = False
         ) -> CodexMediationResult:
             del command_trace
             return CodexMediationResult(
@@ -2418,7 +2630,7 @@ def test_persist_turn_trace_keeps_lineage_traces_when_family_artifact_reuse_succ
         )
 
         def fake_build_mediation(
-            original_prompt: str, command_trace: list[Mapping[str, str]]
+            original_prompt: str, command_trace: list[Mapping[str, str]], *, root_prompt: bool = False
         ) -> CodexMediationResult:
             del command_trace
             return CodexMediationResult(

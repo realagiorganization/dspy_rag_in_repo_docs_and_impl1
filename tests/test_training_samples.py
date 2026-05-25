@@ -686,6 +686,64 @@ def test_resolve_prompt_family_support_prefers_family_profile_over_surface_simil
     assert support_from_payload.similarity >= 0.8
 
 
+def test_resolve_prompt_family_support_rejects_command_pattern_context_mismatch() -> None:
+    payload = {
+        "prompt_families": [
+            {
+                "prompt_family_id": "pf-gif",
+                "question": "Generate demo animation assets",
+                "normalized_question": "generate demo animation assets",
+                "family_father_question": "Generate demo animation assets",
+                "family_prompt_profile_terms": [
+                    "demo",
+                    "gif",
+                    "readme",
+                    "asset",
+                    "record",
+                ],
+                "family_command_pattern_summary": ["record", "gif", "readme"],
+                "family_constraint_summary": ["readme.md", "demo.gif"],
+                "family_records": [],
+            }
+        ]
+    }
+
+    support_from_payload = resolve_prompt_family_support_from_payload(
+        "Update README with AKS deployment notes and kubectl rollout guidance.",
+        payload,
+    )
+
+    assert support_from_payload.prompt_family_id is None
+    assert support_from_payload.supported is False
+    assert support_from_payload.band == "new"
+
+
+def test_resolve_prompt_family_support_rejects_constraint_context_mismatch() -> None:
+    payload = {
+        "prompt_families": [
+            {
+                "prompt_family_id": "pf-readme",
+                "question": "Update README.md with a demo GIF",
+                "normalized_question": "update readme.md with a demo gif",
+                "family_father_question": "Update README.md with a demo GIF",
+                "family_prompt_profile_terms": ["readme", "demo", "gif"],
+                "family_command_pattern_summary": ["gif", "readme"],
+                "family_constraint_summary": ["readme.md", "demo.gif"],
+                "family_records": [],
+            }
+        ]
+    }
+
+    support_from_payload = resolve_prompt_family_support_from_payload(
+        "Update docs/ops.md with AKS rollout guidance and kubectl remediation steps.",
+        payload,
+    )
+
+    assert support_from_payload.prompt_family_id is None
+    assert support_from_payload.supported is False
+    assert support_from_payload.band == "new"
+
+
 def test_resolve_prompt_family_support_uses_sqlite_shortlist_before_rich_scoring(
     tmp_path: Path,
 ) -> None:
@@ -1201,7 +1259,7 @@ def test_singleton_prompt_family_profile_terms_stay_filtered_and_capped() -> Non
     assert "completed" not in terms
 
 
-def test_find_or_create_prompt_family_reuses_existing_preferred_family_id() -> None:
+def test_find_or_create_prompt_family_uses_existing_preferred_family_id_only_when_it_still_matches() -> None:
     existing_family = training_samples_module._singleton_prompt_family_payload(
         question="Verify README GIF asset"
     )
@@ -1225,23 +1283,27 @@ def test_find_or_create_prompt_family_reuses_existing_preferred_family_id() -> N
         "Calibrate Azure OpenAI notebook smoke-test environment variables and "
         "verify the deployment endpoint."
     )
+    family_by_id = {"pf-demo": existing_family}
+    family_order = ["pf-demo"]
     similarity = training_samples_module._family_to_family_similarity(
         training_samples_module._singleton_prompt_family_payload(question=incoming_question),
         existing_family,
     )
 
     family, created = training_samples_module._find_or_create_prompt_family(
-        {"pf-demo": existing_family},
-        ["pf-demo"],
+        family_by_id,
+        family_order,
         question=incoming_question,
         candidate_record=None,
         preferred_family_id="pf-demo",
     )
 
     assert similarity < training_samples_module.PROMPT_FAMILY_MATCH_THRESHOLD
-    assert created is False
-    assert family is existing_family
-    assert family["prompt_family_id"] == "pf-demo"
+    assert created is True
+    assert family is not existing_family
+    assert family["prompt_family_id"] != "pf-demo"
+    assert len(family_by_id) == 2
+    assert len(family_order) == 2
 
 
 def test_materialize_training_candidates_dedupes_replayed_queue_item_prefixes(
@@ -1708,7 +1770,7 @@ def test_resolve_prompt_family_support_creates_new_family_below_threshold(tmp_pa
 
     assert support.supported is False
     assert support.band == "new"
-    assert support.prompt_family_id == "pf-readme"
+    assert support.prompt_family_id is None
 
 
 def test_materialize_training_candidates_keeps_persisted_champions_without_benchmark_gate(
@@ -2587,21 +2649,21 @@ def test_materialize_training_candidates_attaches_full_trace_to_existing_hinted_
                     "trace_kind": "repo-rag-runtime",
                     "recorded_at": "2026-05-20T14:45:00+00:00",
                     "question": (
-                        "Calibrate Azure OpenAI notebook smoke-test environment "
-                        "variables and verify the deployment endpoint."
+                        "Verify the README GIF asset and confirm the demo image "
+                        "remains embedded correctly."
                     ),
                     "original_prompt": (
-                        "Calibrate Azure OpenAI notebook smoke-test environment "
-                        "variables and verify the deployment endpoint."
+                        "Verify the README GIF asset and confirm the demo image "
+                        "remains embedded correctly."
                     ),
                     "reformulated_prompt": (
-                        "Check the Azure OpenAI deployment endpoint and smoke-test "
-                        "environment variables for notebooks."
+                        "Check the README demo GIF asset and confirm the embed is "
+                        "still correct."
                     ),
                     "prompt_family_id": "pf-demo",
                     "mode": "codex-proxy-turn-execution",
                     "retrieval_mode": "lexical",
-                    "sources": ["docs/operations/azure-deployment.md"],
+                    "sources": ["README.md"],
                     "source_count": 1,
                     "context_count": 0,
                     "context_field": "retrieved_context",
@@ -2641,6 +2703,125 @@ def test_materialize_training_candidates_attaches_full_trace_to_existing_hinted_
     assert {record["prompt_family_id"] for record in family["family_records"]} == {"pf-demo"}
     assert {record["exact_snapshot_id"] for record in family["family_records"]} != {"ts-existing"}
     assert "ts-existing" in {record["exact_snapshot_id"] for record in family["family_records"]}
+
+
+def test_materialize_training_candidates_creates_new_family_when_hinted_full_trace_no_longer_matches(
+    tmp_path: Path,
+) -> None:
+    trainer_dir = tmp_path / "artifacts" / "trainer"
+    trainer_dir.mkdir(parents=True, exist_ok=True)
+    imported_dir = tmp_path / "artifacts" / "traces" / "imported"
+    imported_dir.mkdir(parents=True, exist_ok=True)
+    family_state_path = trainer_dir / "family-state.json"
+    family_state_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "record_kind": "repo-rag-trainer-family-state",
+                "family_state_kind": "repo-rag-trainer-family-state",
+                "prompt_families": [
+                    {
+                        "prompt_family_id": "pf-demo",
+                        "question": "Verify README GIF asset",
+                        "normalized_question": "verify readme gif asset",
+                        "family_father_question": "Verify README GIF asset",
+                        "family_records": [
+                            {
+                                "question": "Verify README GIF asset",
+                                "original_prompt": "Verify README GIF asset",
+                                "reformulated_prompt": "Verify README GIF asset",
+                                "expected_answer": "The GIF is already embedded.",
+                                "exact_snapshot_id": "ts-existing",
+                                "prompt_family_id": "pf-demo",
+                                "metric_hits": 1,
+                                "metric_total": 1,
+                                "metric_ratio": 1.0,
+                                "trainer_signal_kind": "full_trace",
+                            }
+                        ],
+                        "family_record_count": 1,
+                        "family_father_record": {
+                            "question": "Verify README GIF asset",
+                            "original_prompt": "Verify README GIF asset",
+                            "reformulated_prompt": "Verify README GIF asset",
+                            "expected_answer": "The GIF is already embedded.",
+                            "exact_snapshot_id": "ts-existing",
+                            "prompt_family_id": "pf-demo",
+                            "metric_hits": 1,
+                            "metric_total": 1,
+                            "metric_ratio": 1.0,
+                            "trainer_signal_kind": "full_trace",
+                        },
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (imported_dir / "hinted-unrelated.json").write_text(
+        json.dumps(
+            {
+                "trace_record_kind": "repo-rag-trace-record",
+                "trace_record_path": "artifacts/traces/imported/hinted-unrelated.json",
+                "prompt_family_id": "pf-demo",
+                "answer": "Configured the Azure deployment smoke-test environment.",
+                "trace": {
+                    "schema_version": 1,
+                    "trace_kind": "repo-rag-runtime",
+                    "recorded_at": "2026-05-20T14:45:00+00:00",
+                    "question": (
+                        "Calibrate Azure OpenAI notebook smoke-test environment "
+                        "variables and verify the deployment endpoint."
+                    ),
+                    "original_prompt": (
+                        "Calibrate Azure OpenAI notebook smoke-test environment "
+                        "variables and verify the deployment endpoint."
+                    ),
+                    "reformulated_prompt": (
+                        "Check the Azure OpenAI deployment endpoint and smoke-test "
+                        "environment variables for notebooks."
+                    ),
+                    "prompt_family_id": "pf-demo",
+                    "mode": "codex-proxy-turn-execution",
+                    "retrieval_mode": "lexical",
+                    "sources": ["docs/operations/azure-deployment.md"],
+                    "source_count": 1,
+                    "context_count": 0,
+                    "context_field": "retrieved_context",
+                    "trainer_signal_kind": "full_trace",
+                },
+                "source_command": "codex-proxy-turn-execution",
+                "outcome": {
+                    "acceptance_status": "candidate",
+                    "accepted": None,
+                    "execution_status": "success",
+                    "method": "codex_cli",
+                    "backend": "codex_cli_repo_rag_proxy",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = materialize_training_candidates(
+        tmp_path,
+        trace_paths=[Path("artifacts/traces/imported/hinted-unrelated.json")],
+        output_path=Path("artifacts/trainer/training-candidates.yaml"),
+        summary_path=Path("artifacts/trainer/training-candidates-summary.json"),
+        family_state_path=Path("artifacts/trainer/family-state.json"),
+        upload_remote_state=False,
+    )
+
+    payload = load_family_state_payload(family_state_path)
+    families = payload["prompt_families"]
+
+    assert summary["loaded_candidate_count"] == 1
+    assert summary["candidate_count"] == 2
+    assert len(families) == 2
+    prompt_family_ids = {str(family["prompt_family_id"]) for family in families}
+    assert "pf-demo" in prompt_family_ids
+    assert len(prompt_family_ids - {"pf-demo"}) == 1
 
 
 def test_materialize_training_candidates_preserves_prior_snapshots_with_same_source_identity(

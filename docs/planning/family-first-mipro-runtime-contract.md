@@ -37,22 +37,67 @@ Examples of stage-level families include:
 
 1. Every outbound request to the model passes through the local proxy.
 2. The proxy extracts `original_prompt` for the current turn.
-3. The helper DSPy model reformulates that prompt into `reformulated_prompt`.
-4. The proxy compares the incoming prompt against **every family father** and computes one
-   similarity score per family.
-   That routing comparison must use `original_prompt`; `reformulated_prompt` belongs to the DSPy
-   mediation surface, not to father matching.
-5. `metric 3` is the maximum of those scores.
-6. `metric 2` is the binary family-membership decision derived from that maximum:
+3. For the root prompt of one Codex execution turn, the proxy must **not** reformulate the prompt
+   through the helper LM.
+   - `original_prompt` and `reformulated_prompt` must be identical for the root prompt
+   - the root prompt must enter the orchestrator model context verbatim through the proxy
+   - the root prompt's system/developer rules must travel as a separate higher-priority
+     instruction layer, not as text concatenated into the user prompt itself
+   - the root prompt must not be compacted, summarized, or whitespace-collapsed into a shorter
+     mediation form before the first execution turn
+4. The root prompt must also **never** use the DSPy family-routing/runtime path.
+   - no family match is computed for the root prompt
+   - no bundle family artifact is selected for the root prompt
+   - the root prompt still forms an ordinary orchestrator trace for trainer ingestion
+   - root-turn traces therefore remain part of family formation later, but they do not consume the
+     already-published DSPy library at runtime
+5. The root instruction layer must explicitly prioritize concrete action directives.
+   - if the prompt explicitly says to develop, implement, fix, correct, update, create, change,
+     or make something, the orchestrator must treat that as the primary task for the run
+   - estimate/pricing/review clauses may remain as context, but they must not override an explicit
+     execution directive unless they are the only requested deliverable
+6. Prompt reformulation is disabled for **all** prompt surfaces, not only for the root prompt.
+   - for every root turn, helper turn, and lineage turn:
+     - `original_prompt == reformulated_prompt`
+   - the proxy may still create new helper tasks, but it must do so as new explicit tasks rather
+     than by rewriting an existing prompt into a narrower mediation query
+7. When the root prompt contains an explicit execution directive, that execution mode is sticky for
+   the rest of the Codex rollout.
+   - later internal turns must not demote the run into pricing, timeline, call-prep, sales-brief,
+     plausible-take, or repository-review work
+   - those assessment-oriented outputs may exist only as secondary context when the user also
+     asked for implementation
+   - documentation-only edits do not satisfy the run when the user asked to change the site, app,
+     UI, routes, components, scripts, or deployment surfaces
+   - the orchestrator must inspect named implementation surfaces before declaring the task already
+     satisfied
+8. DSPy family routing applies only to later helper / derived turns, but those turns are now
+   routed on their verbatim prompt surface too.
+9. For helper / derived turns, the proxy compares the incoming prompt against **every family
+   father** and computes one similarity score per family.
+   That routing comparison must use the verbatim prompt surface carried by `original_prompt`;
+   `reformulated_prompt` remains equal to it and must not diverge.
+10. `metric 3` is the maximum of those scores.
+11. `metric 2` is the binary family-membership decision derived from that maximum:
    - if `metric 3 >= 0.8`, the prompt belongs to the best-matching family
    - if `metric 3 < 0.8`, the prompt does not belong to any existing family and must create a new
      family later through trainer ingestion
-7. When a family is found, the proxy uses that family's precomputed DSPy runtime artifact from the
-   latest bundle.
-8. When no family is found, the proxy does a fresh meditation path and still records the turn as a
-   new training trace.
-9. `command_trace` is first-class lineage and must be preserved beside `original_prompt` and
-   `reformulated_prompt`.
+12. A family is eligible for reuse only when its execution context matches the incoming prompt.
+    Reuse must become **ineligible** rather than merely slightly lower-scored when any of these
+    hard gates fail:
+    - `intent gate`
+      - the family's inferred intent labels must intersect the incoming prompt's inferred labels
+    - `constraint gate`
+      - when both sides expose constraint/pathlike anchors, those anchors must overlap
+    - `command-pattern gate`
+      - the family's command-pattern summary must share substantive anchor terms with the incoming
+        execution surface; one generic overlapping word is not enough
+13. When a family is found for one helper / derived turn, the proxy uses that family's precomputed
+    DSPy runtime artifact from the latest bundle.
+14. When no family is found for one helper / derived turn, the proxy does a fresh mediation path
+    and still records the turn as a new training trace.
+15. `command_trace` is first-class lineage and must be preserved beside `original_prompt` and
+    `reformulated_prompt`.
 
 There is **no active soft-band branch** on the runtime routing path. The expensive part is already
 the full-family scan, so the decision is:
@@ -338,6 +383,12 @@ Family-state and bundle publication are incremental by construction.
   baseline plus the current imported traces.
 - Imported traces may extend existing families, create new families, or update family summaries,
   but they must not silently drop prior replay snapshots from the carried-forward baseline.
+- For `full_trace` records, a runtime `prompt_family_id` is only a routing hint.
+  - Trainer may reuse that hinted family when the new trace still matches it by the normal family
+    similarity threshold.
+  - Trainer must still create a new family when the hinted family no longer matches the new trace.
+  - Only `feedback_trace` is allowed to bind directly to the existing hinted family without a new
+    similarity decision.
 - Persisting a new family-state version must therefore merge the carried-forward baseline replay
   records with the current in-memory family payload append-only by snapshot identity; a reduced
   intermediate payload is never interpreted as permission to forget older snapshots.
@@ -425,8 +476,8 @@ Implemented locally in this stage:
 - worker-side batch handoff for proxy turn traces now overwrites the optimistic proxy draft metrics
   and outcomes with the final run `execution_status`, `acceptance_status`, and real post-run
   `mediation_metric_hits / mediation_metric_total` before `trace-export` / `trace-enqueue`
-- prompt-family routing now prefers `original_prompt` during father matching, while the
-  reformulated prompt remains the runtime mediation surface that the matched family artifact sees
+- prompt-family routing now prefers `original_prompt` during father matching, and the runtime
+  mediation surface is the same verbatim prompt rather than a helper-rewritten variant
 - deploy-stage trusted handoff now prefers the worker turn-trace batch manifest plus exported
   per-turn trace records before it falls back to the old coarse single-trace payload
 - local trainer state now uses `artifacts/trainer/family-state.json` as the primary persisted
@@ -491,6 +542,10 @@ Implemented locally in this stage:
   `DATASET_CODEX_MAX_RESUMED_RUNS=9` and
   `DATASET_CODEX_PROMPT_TOKEN_GROWTH_RESET_RATIO=2.0`, so repeated verification reruns of one
   queue/slug lane do not keep compounding the same Codex transcript without bound
+- worker-side Codex runtime state now lives on disk-backed `/tmp/codex_home_*` instead of the
+  tiny default `/dev/shm` tmpfs, while the persisted PVC snapshot under
+  `/app/artifacts/_codex_sessions` is pruned down to one latest lane before restore and again
+  after persist so resumed state no longer accumulates arbitrarily across many stale lane dirs
 - local trainer state now follows a remote-baseline lifecycle:
   - trainer first resolves the latest remote `repo-rag-training-families` version
   - a PVC-local family cache may be reused only when metadata proves it already mirrors that same
